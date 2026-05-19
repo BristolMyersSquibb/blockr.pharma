@@ -1,0 +1,217 @@
+# Patient Profile Viz: Adverse Events Gantt
+#
+# Gantt bars showing AE duration by preferred term, colored by severity.
+# Term labels rendered inside bars for consistent left margin alignment.
+#
+# Data requirements (declared via new_pp_viz()):
+#   adae:
+#     required — AEDECOD, ASTDT (or ASTDTC alias)
+#     optional — AENDT (or AENDTC), AESEV, AEBODSYS (or AESOC), AESER, AEOUT
+#
+# The dispatcher in patient-profile-block.R resolves these via
+# pp_resolve_requires(): aliases are renamed to canonical names before this
+# render runs, so the body can assume canonical column names exist.
+
+#' AE Gantt visualization definition
+#' @noRd
+ae_gantt_viz <- new_pp_viz(
+  id = "ae_gantt",
+  label = "Adverse Events",
+  domain = "Adverse Events",
+  icon = "exclamation-triangle",
+  color = "#7C3AED",
+  description = "Gantt bars showing AE duration by preferred term",
+  tables = "adae",
+  requires = list(adae = list(
+    AEDECOD = NULL,
+    ASTDT   = "ASTDTC"
+  )),
+  optional = list(adae = list(
+    AENDT    = "AENDTC",
+    AESEV    = NULL,
+    AEBODSYS = "AESOC",
+    AESER    = NULL,
+    AEOUT    = NULL
+  )),
+  render = function(dm_obj, time_range, settings = list(),
+                   ref_ms = NA_real_, mode = "date") {
+    tbls <- dm::dm_get_tables(dm_obj)
+    tbl <- as.data.frame(tbls[["adae"]])
+
+    tbl <- tbl[!is.na(tbl$ASTDT), , drop = FALSE]
+    if (nrow(tbl) == 0) return(pp_empty_chart("No AE records"))
+
+      sev_color <- function(sev) {
+        switch(toupper(as.character(sev)),
+          SEVERE   = "#DC2626",
+          MODERATE = "#D97706",
+          MILD     = "#CA8A04",
+          "#9ca3af"
+        )
+      }
+
+      terms <- sort(unique(as.character(tbl$AEDECOD)))
+      has_sev <- "AESEV" %in% colnames(tbl)
+      has_end <- "AENDT" %in% colnames(tbl)
+      has_bodsys <- "AEBODSYS" %in% colnames(tbl)
+      has_serious <- "AESER" %in% colnames(tbl)
+      has_outcome <- "AEOUT" %in% colnames(tbl)
+
+      day_unit <- if (identical(mode, "rday")) 1 else 86400000
+      bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
+        s <- pp_xval(tbl$ASTDT[i], ref_ms, mode)
+        e <- if (has_end && !is.na(tbl$AENDT[i])) {
+          pp_xval(tbl$AENDT[i], ref_ms, mode)
+        } else {
+          s + day_unit
+        }
+        term <- as.character(tbl$AEDECOD[i])
+        lane <- match(term, terms) - 1L
+        sev <- if (has_sev) as.character(tbl$AESEV[i]) else "UNKNOWN"
+        bodsys <- if (has_bodsys) as.character(tbl$AEBODSYS[i]) else ""
+        serious <- if (has_serious) as.character(tbl$AESER[i]) else ""
+        outcome <- if (has_outcome) as.character(tbl$AEOUT[i]) else ""
+        s_lab <- pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
+        e_lab <- if (has_end && !is.na(tbl$AENDT[i])) {
+          pp_xlabel(tbl$AENDT[i], ref_ms, mode)
+        } else {
+          s_lab
+        }
+
+        list(
+          value = list(s, e, lane, term, sev, bodsys, serious, outcome,
+                       s_lab, e_lab),
+          itemStyle = list(color = sev_color(sev))
+        )
+      })
+
+      # AE bars with inside labels
+      series_list <- list(list(
+        type = "custom",
+        name = "Adverse Events",
+        renderItem = htmlwidgets::JS("
+          function(params, api) {
+            var start = api.coord([api.value(0), api.value(2)]);
+            var end   = api.coord([api.value(1), api.value(2)]);
+            var h     = api.size([0, 1])[1] * 0.6;
+            var barW  = Math.max(end[0] - start[0], 4);
+            var rect  = echarts.graphic.clipRectByRect(
+              { x: start[0], y: start[1] - h/2,
+                width: barW, height: h },
+              { x: params.coordSys.x, y: params.coordSys.y,
+                width: params.coordSys.width, height: params.coordSys.height }
+            );
+            if (!rect) return;
+            var term = api.value(3);
+            var children = [{
+              type: 'rect',
+              shape: Object.assign({}, rect, { r: 3 }),
+              style: api.style()
+            }];
+            if (barW > 50) {
+              children.push({
+                type: 'text',
+                style: {
+                  text: term,
+                  x: rect.x + 6,
+                  y: rect.y + rect.height / 2,
+                  fill: '#fff',
+                  fontSize: 10,
+                  fontWeight: 500,
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  textVerticalAlign: 'middle',
+                  truncate: { outerWidth: barW - 12 }
+                }
+              });
+            }
+            return { type: 'group', children: children };
+          }
+        "),
+        encode = list(x = list(0, 1), y = 2),
+        data = bar_data,
+        tooltip = list(
+          formatter = htmlwidgets::JS("
+            function(params) {
+              var v = params.value;
+              var s = v[8] || '';
+              var e = v[9] || '';
+              var term = v[3] || '';
+              var sev = v[4] || '';
+              var bodsys = v[5] || '';
+              var serious = v[6] || '';
+              var outcome = v[7] || '';
+              var sevColors = {
+                'SEVERE': '#DC2626', 'MODERATE': '#D97706', 'MILD': '#CA8A04'
+              };
+              var col = sevColors[sev] || '#90a4ae';
+              var html = '<div style=\"min-width:180px\">';
+              html += '<div style=\"font-size:14px;font-weight:700;margin-bottom:4px\">' +
+                term + '</div>';
+              if (sev) {
+                html += '<span style=\"display:inline-block;background:' + col +
+                  ';color:#fff;padding:1px 8px;border-radius:3px;font-size:11px;' +
+                  'font-weight:600;margin-bottom:4px\">' + sev + '</span><br/>';
+              }
+              if (bodsys) {
+                html += '<span style=\"color:#888;font-size:11px\">' +
+                  bodsys.toUpperCase() + '</span><br/>';
+              }
+              html += '<span style=\"font-size:12px\">' +
+                s + ' \\u2192 ' + e + '</span><br/>';
+              if (serious) {
+                html += '<span style=\"font-size:12px\">Serious: ' +
+                  serious + '</span><br/>';
+              }
+              if (outcome) {
+                html += '<span style=\"font-size:12px\">Outcome: ' +
+                  outcome + '</span>';
+              }
+              html += '</div>';
+              return html;
+            }
+          ")
+        )
+      ))
+
+      chart_height <- max(250, length(terms) * 32 + 80)
+
+      echarts4r::e_charts(height = chart_height) |>
+        echarts4r::e_list(list(
+          backgroundColor = "transparent",
+          tooltip = pp_tooltip(),
+          toolbox = pp_toolbox(),
+          grid = list(
+            left = 60, right = 20, top = 10, bottom = 30,
+            borderColor = "transparent"
+          ),
+          xAxis = pp_time_axis(time_range, ref_ms, mode),
+          yAxis = list(
+            type = "category",
+            data = terms,
+            inverse = TRUE,
+            axisLine = list(show = FALSE),
+            axisTick = list(show = FALSE),
+            axisLabel = list(show = FALSE),
+            splitLine = list(show = FALSE)
+          ),
+          series = series_list
+        )) |>
+        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+    }
+)
+
+#' Minimal empty chart placeholder
+#' @param msg Message to display
+#' @noRd
+pp_empty_chart <- function(msg) {
+  echarts4r::e_charts(height = 80) |>
+    echarts4r::e_list(list(
+      title = list(
+        text = msg,
+        left = "center", top = "center",
+        textStyle = list(fontSize = 13, color = "#9ca3af", fontWeight = 400)
+      ),
+      xAxis = list(show = FALSE),
+      yAxis = list(show = FALSE)
+    ))
+}

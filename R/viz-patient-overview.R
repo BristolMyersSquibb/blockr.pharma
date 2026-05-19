@@ -1,0 +1,409 @@
+# Patient Profile Viz: Patient Overview
+#
+# Multi-lane overview chart (~180px) combining treatment timeline, adverse
+# events, and key milestones in a single compact chart.
+#
+# Lanes:
+#   1. Treatment — green bar from TRTSDT to TRTEDT with arm label
+#   2. Adverse Events — compact overlapping bars colored by severity
+#      (omitted when adae table is missing)
+#   3. Milestones — point markers: treatment start/end, end of study, death
+#
+# Data requirements (declared via new_pp_viz()):
+#   adsl: required TRTSDT, TRTEDT; optional TRT01P, RFENDT (alias EOSDT),
+#         DTHDT (alias DTHDTC), DTHFL
+#   adae (optional table): ASTDT (alias ASTDTC), AENDT (alias AENDTC),
+#         AEDECOD, AESEV, AESER
+
+#' Patient Overview visualization definition
+#' @noRd
+patient_overview_viz <- new_pp_viz(
+  id = "patient_overview",
+  label = "Patient Overview",
+  domain = "Treatment",
+  icon = "capsule",
+  color = "#059669",
+  description = "Treatment period, adverse events & milestones",
+  tables = "adsl",
+  requires = list(adsl = c("TRTSDT", "TRTEDT")),
+  optional = list(
+    adsl = list(
+      TRT01P = NULL,
+      RFENDT = "EOSDT",
+      DTHDT  = "DTHDTC",
+      DTHFL  = NULL
+    ),
+    adae = list(
+      ASTDT   = "ASTDTC",
+      AENDT   = "AENDTC",
+      AEDECOD = NULL,
+      AESEV   = NULL,
+      AESER   = NULL
+    )
+  ),
+  render = function(dm_obj, time_range, settings = list(),
+                   ref_ms = NA_real_, mode = "date") {
+    tbls <- dm::dm_get_tables(dm_obj)
+    adsl <- as.data.frame(tbls[["adsl"]])
+
+    if (nrow(adsl) == 0) return(pp_empty_chart("No ADSL records"))
+
+      sl <- adsl[1, , drop = FALSE]
+      if (is.na(sl$TRTSDT[1]) || is.na(sl$TRTEDT[1])) {
+        return(pp_empty_chart("Missing treatment dates"))
+      }
+
+      trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
+      trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
+      arm_label <- if ("TRT01P" %in% colnames(sl)) {
+        as.character(sl$TRT01P[1])
+      } else {
+        "Treatment"
+      }
+
+      # Determine lanes — omit AE lane when adae missing (or has no records)
+      has_adae <- "adae" %in% names(tbls)
+      if (has_adae) {
+        adae_raw <- as.data.frame(tbls[["adae"]])
+        has_adae <- "ASTDT" %in% colnames(adae_raw) &&
+          nrow(adae_raw[!is.na(adae_raw$ASTDT), , drop = FALSE]) > 0
+      }
+
+      # Short lane labels keep grid.left at 60 (aligned with the other
+      # timeline charts). Tooltips on each item still carry the full
+      # category context (Treatment / AE term / milestone kind).
+      lanes <- c("TRT", if (has_adae) "AE", "MS")
+      lane_full <- c(TRT = "Treatment", AE = "Adverse Events",
+                     MS = "Milestones")
+      lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
+      n_lanes <- length(lanes)
+      chart_height <- 60 + n_lanes * 40
+
+      arm_js <- gsub("'", "\\\\'", arm_label)
+      start_str <- pp_xlabel(sl$TRTSDT[1], ref_ms, mode)
+      end_str <- pp_xlabel(sl$TRTEDT[1], ref_ms, mode)
+
+      # ---------------------------------------------------------------
+      # Treatment lane
+      # ---------------------------------------------------------------
+      trt_series <- list(
+        type = "custom",
+        name = "Treatment",
+        renderItem = htmlwidgets::JS(sprintf("
+          function(params, api) {
+            var start = api.coord([api.value(0), api.value(2)]);
+            var end   = api.coord([api.value(1), api.value(2)]);
+            var h     = api.size([0, 1])[1] * 0.5;
+            var barW  = Math.max(end[0] - start[0], 4);
+            return {
+              type: 'group',
+              children: [{
+                type: 'rect',
+                shape: {
+                  x: start[0], y: start[1] - h/2,
+                  width: barW, height: h, r: 3
+                },
+                style: {
+                  fill: 'rgba(5,150,105,0.2)',
+                  stroke: 'rgba(5,150,105,0.5)',
+                  lineWidth: 1
+                }
+              }, {
+                type: 'text',
+                style: {
+                  text: '%s',
+                  x: start[0] + 8,
+                  y: start[1],
+                  fill: '#059669',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  textVerticalAlign: 'middle',
+                  truncate: { outerWidth: barW - 16 }
+                }
+              }]
+            };
+          }
+        ", arm_js)),
+        data = list(list(
+          value = list(trt_start, trt_end, lane_idx[["TRT"]])
+        )),
+        encode = list(x = list(0, 1), y = 2),
+        tooltip = list(
+          formatter = htmlwidgets::JS(sprintf("
+            function(params) {
+              return '<div style=\"min-width:160px\">' +
+                '<div style=\"font-size:13px;font-weight:600;margin-bottom:4px\">' +
+                '%s</div>' +
+                '<div style=\"font-size:12px;color:#6b7280\">' +
+                '%s \\u2192 %s</div></div>';
+            }
+          ", arm_js, start_str, end_str))
+        )
+      )
+
+      all_series <- list(trt_series)
+
+      # ---------------------------------------------------------------
+      # Adverse Events lane (omitted when adae missing)
+      # ---------------------------------------------------------------
+      if (has_adae) {
+        adae <- adae_raw[!is.na(adae_raw$ASTDT), , drop = FALSE]
+        ae_lane <- lane_idx[["AE"]]
+        has_end <- "AENDT" %in% colnames(adae)
+        has_sev <- "AESEV" %in% colnames(adae)
+        has_ser <- "AESER" %in% colnames(adae)
+        has_term <- "AEDECOD" %in% colnames(adae)
+        day_unit <- if (identical(mode, "rday")) 1 else 86400000
+
+        ae_data <- lapply(seq_len(nrow(adae)), function(i) {
+          s <- pp_xval(adae$ASTDT[i], ref_ms, mode)
+          e <- if (has_end && !is.na(adae$AENDT[i])) {
+            pp_xval(adae$AENDT[i], ref_ms, mode)
+          } else {
+            s + day_unit
+          }
+          sev <- if (has_sev) toupper(as.character(adae$AESEV[i])) else ""
+          ser <- if (has_ser) as.character(adae$AESER[i]) else ""
+          term <- if (has_term) as.character(adae$AEDECOD[i]) else "AE"
+          s_lab <- pp_xlabel(adae$ASTDT[i], ref_ms, mode)
+          e_lab <- if (has_end && !is.na(adae$AENDT[i])) {
+            pp_xlabel(adae$AENDT[i], ref_ms, mode)
+          } else {
+            s_lab
+          }
+          list(value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab))
+        })
+
+        ae_series <- list(
+          type = "custom",
+          name = "Adverse Events",
+          renderItem = htmlwidgets::JS("
+            function(params, api) {
+              var start = api.coord([api.value(0), api.value(2)]);
+              var end   = api.coord([api.value(1), api.value(2)]);
+              var h     = api.size([0, 1])[1] * 0.45;
+              var barW  = Math.max(end[0] - start[0], 4);
+              var sev   = (api.value(4) || '').toUpperCase();
+              var ser   = api.value(5) || '';
+              var sevFill = {
+                'SEVERE':   'rgba(220,38,38,0.7)',
+                'MODERATE': 'rgba(217,119,6,0.7)',
+                'MILD':     'rgba(202,138,4,0.7)'
+              };
+              var sevStroke = {
+                'SEVERE':   'rgba(220,38,38,0.9)',
+                'MODERATE': 'rgba(217,119,6,0.9)',
+                'MILD':     'rgba(202,138,4,0.9)'
+              };
+              var fill   = sevFill[sev]   || 'rgba(156,163,175,0.7)';
+              var stroke = sevStroke[sev]  || 'rgba(156,163,175,0.9)';
+              var children = [{
+                type: 'rect',
+                shape: {
+                  x: start[0], y: start[1] - h/2,
+                  width: barW, height: h, r: 2
+                },
+                style: { fill: fill, stroke: stroke, lineWidth: 1 }
+              }];
+              if (ser === 'Y') {
+                children.push({
+                  type: 'rect',
+                  shape: {
+                    x: start[0], y: start[1] - h/2,
+                    width: barW, height: 2
+                  },
+                  style: { fill: '#DC2626' }
+                });
+              }
+              return { type: 'group', children: children };
+            }
+          "),
+          data = ae_data,
+          encode = list(x = list(0, 1), y = 2),
+          tooltip = list(
+            formatter = htmlwidgets::JS("
+              function(params) {
+                var v = params.value;
+                var s = v[6] || '';
+                var e = v[7] || '';
+                var term = v[3] || '';
+                var sev  = v[4] || '';
+                var ser  = v[5] || '';
+                var sevColors = {
+                  'SEVERE': '#DC2626', 'MODERATE': '#D97706', 'MILD': '#CA8A04'
+                };
+                var col = sevColors[sev] || '#9ca3af';
+                var html = '<div style=\"min-width:160px\">';
+                html += '<div style=\"font-size:13px;font-weight:600;' +
+                  'margin-bottom:2px\">' + term + '</div>';
+                if (sev) {
+                  html += '<span style=\"display:inline-block;background:' +
+                    col + ';color:#fff;padding:1px 6px;border-radius:3px;' +
+                    'font-size:10px;font-weight:600;margin-bottom:3px\">' +
+                    sev + '</span>';
+                  if (ser === 'Y') {
+                    html += ' <span style=\"color:#DC2626;font-size:10px;' +
+                      'font-weight:600\">SERIOUS</span>';
+                  }
+                  html += '<br/>';
+                }
+                html += '<div style=\"font-size:12px;color:#6b7280\">' +
+                  s + ' \\u2192 ' + e + '</div></div>';
+                return html;
+              }
+            ")
+          )
+        )
+
+        all_series <- c(all_series, list(ae_series))
+      }
+
+      # ---------------------------------------------------------------
+      # Milestones lane
+      # ---------------------------------------------------------------
+      ms_lane <- lane_idx[["MS"]]
+      milestone_data <- list()
+
+      # Treatment start (green filled circle)
+      milestone_data <- c(milestone_data, list(list(
+        value = list(trt_start, ms_lane, "trt_start", start_str)
+      )))
+
+      # Treatment end (green hollow circle)
+      milestone_data <- c(milestone_data, list(list(
+        value = list(trt_end, ms_lane, "trt_end", end_str)
+      )))
+
+      # End of study (blue diamond) — RFENDT is canonical, EOSDT aliased
+      if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
+        milestone_data <- c(milestone_data, list(list(
+          value = list(pp_xval(sl$RFENDT[1], ref_ms, mode), ms_lane,
+                       "eos", pp_xlabel(sl$RFENDT[1], ref_ms, mode))
+        )))
+      }
+
+      # Death (red X) — DTHDT is canonical, DTHDTC aliased
+      if ("DTHDT" %in% colnames(sl) && !is.na(sl$DTHDT[1])) {
+        milestone_data <- c(milestone_data, list(list(
+          value = list(pp_xval(sl$DTHDT[1], ref_ms, mode), ms_lane,
+                       "death", pp_xlabel(sl$DTHDT[1], ref_ms, mode))
+        )))
+      } else if ("DTHFL" %in% colnames(sl) &&
+                  !is.na(sl$DTHFL[1]) && sl$DTHFL[1] == "Y") {
+        milestone_data <- c(milestone_data, list(list(
+          value = list(trt_end, ms_lane, "death", "Date unknown")
+        )))
+      }
+
+      ms_series <- list(
+        type = "custom",
+        name = "Milestones",
+        renderItem = htmlwidgets::JS("
+          function(params, api) {
+            var x = api.coord([api.value(0), api.value(1)])[0];
+            var y = api.coord([api.value(0), api.value(1)])[1];
+            var kind = api.value(2);
+            var sz = 6;
+            if (kind === 'trt_start') {
+              return {
+                type: 'circle',
+                shape: { cx: x, cy: y, r: sz },
+                style: { fill: '#059669', stroke: '#fff', lineWidth: 1.5 }
+              };
+            } else if (kind === 'trt_end') {
+              return {
+                type: 'circle',
+                shape: { cx: x, cy: y, r: sz },
+                style: { fill: '#fff', stroke: '#059669', lineWidth: 2 }
+              };
+            } else if (kind === 'eos') {
+              return {
+                type: 'polygon',
+                shape: {
+                  points: [
+                    [x, y - sz], [x + sz, y],
+                    [x, y + sz], [x - sz, y]
+                  ]
+                },
+                style: { fill: '#2563EB', stroke: '#fff', lineWidth: 1.5 }
+              };
+            } else if (kind === 'death') {
+              return {
+                type: 'group',
+                children: [{
+                  type: 'line',
+                  shape: { x1: x-sz, y1: y-sz, x2: x+sz, y2: y+sz },
+                  style: { stroke: '#DC2626', lineWidth: 2.5 }
+                }, {
+                  type: 'line',
+                  shape: { x1: x+sz, y1: y-sz, x2: x-sz, y2: y+sz },
+                  style: { stroke: '#DC2626', lineWidth: 2.5 }
+                }]
+              };
+            }
+          }
+        "),
+        data = milestone_data,
+        encode = list(x = 0, y = 1),
+        tooltip = list(
+          formatter = htmlwidgets::JS("
+            function(params) {
+              var v = params.value;
+              var kind = v[2];
+              var date = v[3] || '';
+              var labels = {
+                'trt_start': 'Treatment Start',
+                'trt_end':   'Treatment End',
+                'eos':       'End of Study',
+                'death':     'Death'
+              };
+              var colors = {
+                'trt_start': '#059669',
+                'trt_end':   '#059669',
+                'eos':       '#2563EB',
+                'death':     '#DC2626'
+              };
+              var label = labels[kind] || kind;
+              var col = colors[kind] || '#6b7280';
+              return '<div style=\"min-width:120px\">' +
+                '<div style=\"font-size:13px;font-weight:600;color:' +
+                col + '\">' + label + '</div>' +
+                '<div style=\"font-size:12px;color:#6b7280\">' +
+                date + '</div></div>';
+            }
+          ")
+        )
+      )
+
+      all_series <- c(all_series, list(ms_series))
+
+      # ---------------------------------------------------------------
+      # Assemble chart
+      # ---------------------------------------------------------------
+      echarts4r::e_charts(height = chart_height) |>
+        echarts4r::e_list(list(
+          backgroundColor = "transparent",
+          tooltip = pp_tooltip(),
+          toolbox = pp_toolbox(),
+          grid = list(
+            left = 60, right = 20, top = 10, bottom = 30,
+            borderColor = "transparent"
+          ),
+          xAxis = pp_time_axis(time_range, ref_ms, mode),
+          yAxis = list(
+            type = "category",
+            data = lanes,
+            inverse = TRUE,
+            axisLine = list(show = FALSE),
+            axisTick = list(show = FALSE),
+            axisLabel = list(
+              color = PP_AXIS_LABEL_COLOR, fontSize = 11, fontWeight = 500
+            ),
+            splitLine = list(show = FALSE)
+          ),
+          series = all_series
+        )) |>
+        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+    }
+)
