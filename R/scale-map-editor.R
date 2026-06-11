@@ -33,7 +33,12 @@ scale_map_editor_ui <- function(id) {
        .bsm-add .form-group, .bsm-add .shiny-input-container {
          margin-bottom: 0; }
        .bsm-add input[type='text'] { font-size: 0.875rem; }
-       .bsm-addvar { margin-top: 0.5rem; }"
+       .bsm-addvar { margin-top: 0.5rem; }
+       /* colourpicker's popup is 173px wide and anchored left:0 to the
+          input; with the 110px swatch at the sidebar's right edge it
+          overflows into the scrollbar. Anchor it right instead so it
+          grows leftward into the sidebar. */
+       .bsm-editor .colourpicker-panel { left: auto; right: 0; }"
     )),
     htmltools::div(
       id = shiny::NS(id, "sm_editor"),
