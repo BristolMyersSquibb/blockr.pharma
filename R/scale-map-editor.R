@@ -49,6 +49,12 @@ scale_map_editor_server <- function(..., session) {
   st$gen <- 0L
   st$registry <- list() # raw input id -> list(var, level)
   st$rendered_sig <- NULL
+  # Bumped on every render. The colour-scanner observer reads it FIRST so a
+  # re-render (new generation of input ids) invalidates the observer and it
+  # re-subscribes to the new inputs — otherwise its reactive deps stay on
+  # the previous generation's ids, which never change again, and swatch
+  # edits after any add/remove go unheard.
+  st$render_count <- shiny::reactiveVal(0L)
 
   current_map <- function() {
     as_scale_map(
@@ -198,6 +204,7 @@ scale_map_editor_server <- function(..., session) {
     )
 
     st$rendered_sig <- structure_sig(map)
+    st$render_count(shiny::isolate(st$render_count()) + 1L)
   }
 
   obs_value <- shiny::observe({
@@ -222,6 +229,7 @@ scale_map_editor_server <- function(..., session) {
   })
 
   obs_colors <- shiny::observe({
+    st$render_count() # re-subscribe to the current generation's inputs
     map <- shiny::isolate(current_map())
     changed <- FALSE
 
