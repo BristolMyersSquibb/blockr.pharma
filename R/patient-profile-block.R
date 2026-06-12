@@ -121,6 +121,10 @@ new_patient_profile_block <- function(selected = NULL,
           # Per-viz settings
           r_viz_settings <- shiny::reactiveVal(viz_settings)
 
+          # Board-level scale map (NULL when the board has no "scale_map"
+          # option). Resolved per render; never stored in block state.
+          r_scale_map <- blockr.theme::board_scale_map()
+
           # Block-level timeline x-axis mode ("date" / "rday")
           r_timeline_mode <- shiny::reactiveVal(timeline_mode)
 
@@ -606,9 +610,18 @@ new_patient_profile_block <- function(selected = NULL,
               ))
             }
 
+            # Board scale map: resolve AE severity colors once and inject
+            # them as a render-time setting for the AE gantt (not persisted
+            # -- r_viz_settings is untouched). Falls back to the viz's own
+            # constants when no map / no binding is present.
+            sev_colors <- pp_sev_scale_colors(r_scale_map(), dm_obj)
+
             chart_tags <- lapply(active_ids, function(viz_id) {
               viz <- avail[[viz_id]]
               viz_settings <- all_settings[[viz_id]] %||% list()
+              if (identical(viz_id, "ae_gantt") && !is.null(sev_colors)) {
+                viz_settings$sev_colors <- sev_colors
+              }
 
               # Resolve declared `requires` / `optional` column dependencies.
               # If a required column (or any alias) is missing, render a

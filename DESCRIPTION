@@ -17,11 +17,13 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     blockr.core,
+    blockr.theme,
     dm,
     dplyr,
     echarts4r,
     htmltools,
     htmlwidgets,
+    rlang,
     shiny
 Suggests:
     pharmaverseadam,

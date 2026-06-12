@@ -41,8 +41,19 @@ ae_gantt_viz <- new_pp_viz(
     tbl <- tbl[!is.na(tbl$ASTDT), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No AE records"))
 
+      # Severity colors: the board scale map (injected as
+      # settings$sev_colors by the block server when an AESEV binding
+      # resolves) beats the built-in constants; absent either way -> grey.
       sev_color <- function(sev) {
-        switch(toupper(as.character(sev)),
+        s <- as.character(sev)
+        fixed <- settings$sev_colors
+        if (!is.null(fixed)) {
+          if (s %in% names(fixed)) return(unname(fixed[[s]]))
+          if (toupper(s) %in% names(fixed)) {
+            return(unname(fixed[[toupper(s)]]))
+          }
+        }
+        switch(toupper(s),
           SEVERE   = "#DC2626",
           MODERATE = "#D97706",
           MILD     = "#CA8A04",
@@ -78,10 +89,11 @@ ae_gantt_viz <- new_pp_viz(
           s_lab
         }
 
+        col <- sev_color(sev)
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
-                       s_lab, e_lab),
-          itemStyle = list(color = sev_color(sev))
+                       s_lab, e_lab, col),
+          itemStyle = list(color = col)
         )
       })
 
@@ -143,7 +155,7 @@ ae_gantt_viz <- new_pp_viz(
               var sevColors = {
                 'SEVERE': '#DC2626', 'MODERATE': '#D97706', 'MILD': '#CA8A04'
               };
-              var col = sevColors[sev] || '#90a4ae';
+              var col = v[10] || sevColors[sev] || '#90a4ae';
               var html = '<div style=\"min-width:180px\">';
               html += '<div style=\"font-size:14px;font-weight:700;margin-bottom:4px\">' +
                 term + '</div>';
@@ -214,4 +226,34 @@ pp_empty_chart <- function(msg) {
       xAxis = list(show = FALSE),
       yAxis = list(show = FALSE)
     ))
+}
+
+#' Resolve AE severity colors from the board scale map
+#'
+#' Returns the resolved color vector for the severity levels present in the
+#' patient's adae (binding "AESEV"), or NULL when there is no map, no
+#' binding, or no severity data — the gantt then uses its built-in constants.
+#' @noRd
+pp_sev_scale_colors <- function(map, dm_obj) {
+  if (is.null(map)) {
+    return(NULL)
+  }
+
+  adae <- tryCatch(
+    dm::dm_get_tables(dm_obj)[["adae"]],
+    error = function(e) NULL
+  )
+
+  if (is.null(adae) || !"AESEV" %in% colnames(adae)) {
+    return(NULL)
+  }
+
+  sev <- unique(as.character(adae$AESEV))
+  sev <- sev[!is.na(sev) & nzchar(sev)]
+
+  if (!length(sev)) {
+    return(NULL)
+  }
+
+  blockr.theme::resolve_scales(map, "AESEV", levels = sev)$color
 }
