@@ -123,7 +123,7 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Board-level scale map (NULL when the board has no "scale_map"
           # option). Resolved per render; never stored in block state.
-          r_scale_map <- board_scale_map()
+          r_scale_map <- blockr.theme::board_scale_map()
 
           # Block-level timeline x-axis mode ("date" / "rday")
           r_timeline_mode <- shiny::reactiveVal(timeline_mode)

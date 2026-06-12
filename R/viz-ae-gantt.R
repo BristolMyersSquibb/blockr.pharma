@@ -255,5 +255,5 @@ pp_sev_scale_colors <- function(map, dm_obj) {
     return(NULL)
   }
 
-  resolve_scales(map, "AESEV", levels = sev)$color
+  blockr.theme::resolve_scales(map, "AESEV", levels = sev)$color
 }
