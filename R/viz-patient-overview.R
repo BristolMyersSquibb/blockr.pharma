@@ -156,6 +156,32 @@ patient_overview_viz <- new_pp_viz(
         has_term <- "AEDECOD" %in% colnames(adae)
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
+        # Severity colors: the board scale map (injected as
+        # settings$sev_colors by the block server when an AESEV binding
+        # resolves) beats the built-in constants — same precedence as the
+        # AE gantt, so both vizs always agree.
+        sev_hex <- c(SEVERE = "#DC2626", MODERATE = "#D97706",
+                     MILD = "#CA8A04")
+        fixed <- settings$sev_colors
+        if (!is.null(fixed)) {
+          vals <- unname(unlist(fixed))
+          names(vals) <- toupper(names(fixed))
+          sev_hex[names(vals)] <- vals
+        }
+        js_color_map <- function(values) {
+          paste0("{", paste(
+            sprintf("'%s': '%s'", names(values), unname(values)),
+            collapse = ", "
+          ), "}")
+        }
+        rgba <- function(hex, alpha) {
+          v <- grDevices::col2rgb(hex)
+          sprintf("rgba(%d,%d,%d,%s)", v[1L], v[2L], v[3L], alpha)
+        }
+        sev_fill_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.7"))
+        sev_stroke_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.9"))
+        sev_hex_js <- js_color_map(sev_hex)
+
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
           s <- pp_xval(adae$ASTDT[i], ref_ms, mode)
           e <- if (has_end && !is.na(adae$AENDT[i])) {
@@ -178,7 +204,7 @@ patient_overview_viz <- new_pp_viz(
         ae_series <- list(
           type = "custom",
           name = "Adverse Events",
-          renderItem = htmlwidgets::JS("
+          renderItem = htmlwidgets::JS(sprintf("
             function(params, api) {
               var start = api.coord([api.value(0), api.value(2)]);
               var end   = api.coord([api.value(1), api.value(2)]);
@@ -186,16 +212,8 @@ patient_overview_viz <- new_pp_viz(
               var barW  = Math.max(end[0] - start[0], 4);
               var sev   = (api.value(4) || '').toUpperCase();
               var ser   = api.value(5) || '';
-              var sevFill = {
-                'SEVERE':   'rgba(220,38,38,0.7)',
-                'MODERATE': 'rgba(217,119,6,0.7)',
-                'MILD':     'rgba(202,138,4,0.7)'
-              };
-              var sevStroke = {
-                'SEVERE':   'rgba(220,38,38,0.9)',
-                'MODERATE': 'rgba(217,119,6,0.9)',
-                'MILD':     'rgba(202,138,4,0.9)'
-              };
+              var sevFill = %s;
+              var sevStroke = %s;
               var fill   = sevFill[sev]   || 'rgba(156,163,175,0.7)';
               var stroke = sevStroke[sev]  || 'rgba(156,163,175,0.9)';
               var children = [{
@@ -218,11 +236,11 @@ patient_overview_viz <- new_pp_viz(
               }
               return { type: 'group', children: children };
             }
-          "),
+          ", sev_fill_js, sev_stroke_js)),
           data = ae_data,
           encode = list(x = list(0, 1), y = 2),
           tooltip = list(
-            formatter = htmlwidgets::JS("
+            formatter = htmlwidgets::JS(sprintf("
               function(params) {
                 var v = params.value;
                 var s = v[6] || '';
@@ -230,9 +248,7 @@ patient_overview_viz <- new_pp_viz(
                 var term = v[3] || '';
                 var sev  = v[4] || '';
                 var ser  = v[5] || '';
-                var sevColors = {
-                  'SEVERE': '#DC2626', 'MODERATE': '#D97706', 'MILD': '#CA8A04'
-                };
+                var sevColors = %s;
                 var col = sevColors[sev] || '#9ca3af';
                 var html = '<div style=\"min-width:160px\">';
                 html += '<div style=\"font-size:13px;font-weight:600;' +
@@ -252,7 +268,7 @@ patient_overview_viz <- new_pp_viz(
                   s + ' \\u2192 ' + e + '</div></div>';
                 return html;
               }
-            ")
+            ", sev_hex_js))
           )
         )
 

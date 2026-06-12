@@ -611,15 +611,16 @@ new_patient_profile_block <- function(selected = NULL,
             }
 
             # Board scale map: resolve AE severity colors once and inject
-            # them as a render-time setting for the AE gantt (not persisted
-            # -- r_viz_settings is untouched). Falls back to the viz's own
-            # constants when no map / no binding is present.
+            # them as a render-time setting for the severity-colored vizs
+            # (not persisted -- r_viz_settings is untouched). Falls back to
+            # each viz's own constants when no map / no binding is present.
             sev_colors <- pp_sev_scale_colors(r_scale_map(), dm_obj)
 
             chart_tags <- lapply(active_ids, function(viz_id) {
               viz <- avail[[viz_id]]
               viz_settings <- all_settings[[viz_id]] %||% list()
-              if (identical(viz_id, "ae_gantt") && !is.null(sev_colors)) {
+              if (viz_id %in% c("ae_gantt", "patient_overview") &&
+                    !is.null(sev_colors)) {
                 viz_settings$sev_colors <- sev_colors
               }
 
