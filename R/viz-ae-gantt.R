@@ -1,9 +1,9 @@
 # Patient Profile Viz: Adverse Events Gantt
 #
 # Gantt bars showing AE duration by preferred term, colored by severity.
-# Each term is labelled once on its lane (inside the bar when wide enough,
-# beside it otherwise) — the y axis stays unlabelled so the x axis keeps
-# its alignment with the other patient-profile panels.
+# Lanes are labelled on the y axis with small ellipsized term names that
+# fit the shared 60px left margin (the x axis must stay aligned with the
+# other patient-profile panels); the bar tooltip shows the full term.
 #
 # Data requirements (declared via new_pp_viz()):
 #   adae:
@@ -71,14 +71,6 @@ ae_gantt_viz <- new_pp_viz(
       has_outcome <- "AEOUT" %in% colnames(tbl)
 
       day_unit <- if (identical(mode, "rday")) 1 else 86400000
-
-      # One label per term, carried by its earliest episode (order() instead
-      # of which.min so character ASTDTC aliases sort too).
-      label_rows <- vapply(terms, function(tm) {
-        idx <- which(as.character(tbl$AEDECOD) == tm)
-        idx[order(tbl$ASTDT[idx])[1L]]
-      }, integer(1))
-
       bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
         s <- pp_xval(tbl$ASTDT[i], ref_ms, mode)
         e <- if (has_end && !is.na(tbl$AENDT[i])) {
@@ -102,7 +94,7 @@ ae_gantt_viz <- new_pp_viz(
         col <- sev_color(sev)
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
-                       s_lab, e_lab, col, as.integer(i %in% label_rows)),
+                       s_lab, e_lab, col),
           itemStyle = list(color = col)
         )
       })
@@ -124,44 +116,11 @@ ae_gantt_viz <- new_pp_viz(
                 width: params.coordSys.width, height: params.coordSys.height }
             );
             if (!rect) return;
-            var term = api.value(3);
-            var children = [{
+            return {
               type: 'rect',
               shape: Object.assign({}, rect, { r: 3 }),
               style: api.style()
-            }];
-            if (api.value(11)) {
-              var fontSize = 10;
-              var style = {
-                text: term,
-                y: rect.y + rect.height / 2,
-                fontSize: fontSize,
-                fontWeight: 500,
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                textVerticalAlign: 'middle'
-              };
-              if (barW > 50) {
-                style.x = rect.x + 6;
-                style.fill = '#fff';
-                style.truncate = { outerWidth: barW - 12 };
-              } else {
-                // Beside the bar, over whatever is there; a white halo
-                // keeps the term readable across gridlines and bars.
-                var estW = term.length * fontSize * 0.62;
-                var sysRight = params.coordSys.x + params.coordSys.width;
-                style.fill = '#374151';
-                style.stroke = '#fff';
-                style.lineWidth = 2;
-                if (rect.x + barW + 6 + estW <= sysRight) {
-                  style.x = rect.x + barW + 6;
-                } else {
-                  style.x = rect.x - 6;
-                  style.textAlign = 'right';
-                }
-              }
-              children.push({ type: 'text', style: style });
-            }
-            return { type: 'group', children: children };
+            };
           }
         "),
         encode = list(x = list(0, 1), y = 2),
@@ -228,7 +187,21 @@ ae_gantt_viz <- new_pp_viz(
             inverse = TRUE,
             axisLine = list(show = FALSE),
             axisTick = list(show = FALSE),
-            axisLabel = list(show = FALSE),
+            # Ellipsized lane labels in the shared 60px left margin (the
+            # grid must stay aligned with the other patient-profile
+            # panels). They only hint at the term; the bar tooltip shows
+            # it in full on hover.
+            axisLabel = list(
+              show = TRUE,
+              fontSize = 9,
+              color = "#6b7280",
+              margin = 4,
+              formatter = htmlwidgets::JS("
+                function(v) {
+                  return v.length > 9 ? v.slice(0, 8) + '…' : v;
+                }
+              ")
+            ),
             splitLine = list(show = FALSE)
           ),
           series = series_list
