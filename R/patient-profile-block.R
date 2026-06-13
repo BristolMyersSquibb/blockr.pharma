@@ -12,10 +12,10 @@
 #'   first available)
 #' @param viz_settings Named list of per-viz settings
 #'   (e.g., `list(adas_trajectory = list(items = "ACTOT"))`)
-#' @param timeline_mode Initial timeline x-axis mode: `"date"` (calendar
-#'   dates) or `"rday"` (relative day from treatment start, ADaM \*DY
-#'   convention). Changeable at runtime via the gear popover in the chart
-#'   area header.
+#' @param timeline_mode Initial timeline x-axis mode: `"rday"` (relative day
+#'   from treatment start, ADaM \*DY convention; the default) or `"date"`
+#'   (calendar dates). Changeable at runtime via the gear popover in the
+#'   chart area header.
 #' @param ... Forwarded to [blockr.core::new_transform_block()]
 #'
 #' @return A transform block of class `patient_profile_block`
@@ -45,9 +45,9 @@
 #' @export
 new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
-                                              timeline_mode = "date",
+                                              timeline_mode = "rday",
                                               ...) {
-  timeline_mode <- match.arg(timeline_mode, c("date", "rday"))
+  timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
 
   # Validate selected viz IDs (static vizs only; findings group IDs
 
