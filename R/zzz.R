@@ -8,6 +8,7 @@
     system.file("css", package = pkgname)
   )
   register_pharma_blocks()
+  register_patient_profile_ai_effect()
   invisible(NULL)
 }
 
