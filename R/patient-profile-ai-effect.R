@@ -4,7 +4,7 @@
 # "N tables, UNCHANGED" -- which looks like the config did nothing even though it
 # changed WHICH visualizations are shown. The meaningful artifact is the CONFIG
 # (`selected` views + `viz_settings`), so this `config_effect()` method describes
-# that instead, the same way the drilldown blocks do in blockr.bi.
+# that instead, the same way the drilldown blocks do in blockr.viz.
 #
 # Registered onto blockr.ai's generic at load (defensive: no hard dependency on
 # blockr.ai, no-op when it is absent or too old to export config_effect).

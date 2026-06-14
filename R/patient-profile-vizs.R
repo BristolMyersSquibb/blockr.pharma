@@ -101,7 +101,7 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
 }
 
 #' Shared echarts toolbox: small, muted icons matching the canonical
-#' drill-down chart styling (blockr.bi/inst/js/drilldown-chart.js).
+#' drill-down chart styling (blockr.viz/inst/js/drilldown-chart.js).
 #'
 #' @noRd
 pp_toolbox <- function() {
