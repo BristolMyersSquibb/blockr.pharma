@@ -16,8 +16,16 @@ register_pharma_blocks <- function() {
   blockr.core::register_blocks(
     "new_patient_profile_block",
     name = "Patient Profile",
-    description =
-      "Stacked clinical charts with searchable sidebar (dm input)",
+    description = paste0(
+      "SINGLE-patient clinical profile (stacked per-patient charts: ADAS ",
+      "trajectory, AE gantt, lab/vital panels) from a dm. The dm input MUST ",
+      "be filtered to ONE subject first: wire an upstream patient selector -- ",
+      "a drilldown chart or drilldown table that emits a USUBJID -- into a ",
+      "dm_filter_by_data(table=\"adsl\", key_col=\"USUBJID\"), then feed that ",
+      "here. NOT a cohort view: for group/treatment-arm trends (e.g. mean ",
+      "ADAS-Cog change from baseline by arm) use a chart block on a pulled ",
+      "table instead, not this block."
+    ),
     category = "plot",
     icon = "person-badge",
     arguments = list(
