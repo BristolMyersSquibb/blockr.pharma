@@ -29,4 +29,6 @@ Suggests:
     pharmaverseadam,
     safetyData,
     testthat (>= 3.0.0)
+Remotes:
+    BristolMyersSquibb/blockr.theme
 Config/testthat/edition: 3
