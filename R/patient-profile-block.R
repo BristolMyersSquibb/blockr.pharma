@@ -80,9 +80,16 @@ new_patient_profile_block <- function(selected = NULL,
             tbls <- dm::dm_get_tables(dm_obj)
             shiny::req("adsl" %in% names(tbls))
             ids <- unique(as.data.frame(tbls[["adsl"]])$USUBJID)
+            # Normalize short prod table names (ae, lb, vs, ...) to their
+            # ADaM canonical names (adae, adlb, advs, ...) so the vizs —
+            # which declare requirements against ADaM names — find their
+            # tables. Done AFTER dm_filter so the FK cascade (which keys
+            # off the original names) still subject-filters child tables.
             if (length(ids) == 1L) {
               list(
-                dm     = dm::dm_filter(dm_obj, adsl = USUBJID == ids[[1L]]),
+                dm     = pp_normalize_table_aliases(
+                  dm::dm_filter(dm_obj, adsl = USUBJID == ids[[1L]])
+                ),
                 picked = ids[[1L]],
                 total  = 1L,
                 single = TRUE
@@ -91,7 +98,7 @@ new_patient_profile_block <- function(selected = NULL,
               # Keep the dm unfiltered so the viz sidebar still
               # populates; the chart area shows the placeholder.
               list(
-                dm     = dm_obj,
+                dm     = pp_normalize_table_aliases(dm_obj),
                 picked = NA_character_,
                 total  = length(ids),
                 single = FALSE
@@ -506,7 +513,30 @@ new_patient_profile_block <- function(selected = NULL,
                       "Date"
                     }
                   )
-                )
+                ),
+                # Data coverage: visuals that can't render for this data,
+                # with the reason (missing table or required column). Lets
+                # users see what's collected without each one having to be
+                # selected first. Hidden behind the gear, not permanent.
+                {
+                  cov <- pp_coverage_report(scoped$dm, r_all_vizs())
+                  shiny::tagList(
+                    shiny::div(class = "pp-popover-divider"),
+                    shiny::div(class = "pp-popover-section-label",
+                      "Data coverage"),
+                    if (length(cov) == 0L) {
+                      shiny::div(class = "pp-coverage-ok",
+                        "All visuals available")
+                    } else {
+                      lapply(cov, function(c) {
+                        shiny::div(class = "pp-coverage-item",
+                          shiny::span(class = "pp-coverage-label", c$label),
+                          shiny::span(class = "pp-coverage-reason", c$reason)
+                        )
+                      })
+                    }
+                  )
+                }
               )
             )
 

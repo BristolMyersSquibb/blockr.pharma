@@ -61,6 +61,96 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
   )
 }
 
+#' Standard short CDISC -> ADaM canonical table-name aliases
+#'
+#' Prod studies frequently ship ADaM-shaped data under short SDTM-style
+#' domain names (`ae`, `lb`, `vs`, ...) rather than the ADaM names
+#' (`adae`, `adlb`, `advs`, ...). The patient-profile vizs declare their
+#' data requirements against the ADaM names, so this map lets a viz find
+#' its table regardless of which naming the sponsor used. Each entry is
+#' `canonical = c(alias, ...)`.
+#'
+#' @return Named list of canonical -> alias character vectors.
+#' @noRd
+pp_table_aliases <- function() {
+  list(
+    adae = "ae",
+    adcm = "cm",
+    adex = "ex",
+    adlb = "lb",
+    advs = "vs",
+    adeg = "eg"
+  )
+}
+
+#' Rename known short CDISC table names to their ADaM canonical names
+#'
+#' For each `canonical = c(alias, ...)` entry: if the canonical table is
+#' absent from the dm but an alias table is present, rename the alias to
+#' the canonical name. An existing canonical table always wins (no
+#' overwrite). Tables with no alias entry pass through untouched.
+#'
+#' Call this AFTER any FK-cascade filtering (e.g. `dm::dm_filter()`): the
+#' rebuilt dm is flat (relational keys/FKs are dropped), but viz renderers
+#' only pull tables by name via `dm::dm_get_tables()`, so this is
+#' sufficient downstream.
+#'
+#' @param dm_obj A `dm` object.
+#' @param aliases Named list of canonical -> alias vectors (see
+#'   [pp_table_aliases()]).
+#' @return A `dm`. Unchanged (same object) when no alias rename applied.
+#' @noRd
+pp_normalize_table_aliases <- function(dm_obj, aliases = pp_table_aliases()) {
+  tbls <- dm::dm_get_tables(dm_obj)
+  renamed <- FALSE
+  for (canonical in names(aliases)) {
+    if (canonical %in% names(tbls)) next
+    hit <- aliases[[canonical]][aliases[[canonical]] %in% names(tbls)]
+    if (length(hit) >= 1L) {
+      use <- hit[[1L]]
+      names(tbls)[names(tbls) == use] <- canonical
+      renamed <- TRUE
+    }
+  }
+  if (!renamed) return(dm_obj)
+  do.call(dm::dm, lapply(tbls, as.data.frame))
+}
+
+#' Compute a data-coverage report for a set of vizs against a dm
+#'
+#' For each viz, determine whether it can render against `dm_obj` and, if
+#' not, a short human-readable reason. Used to populate the gear-popover
+#' "Data coverage" diagnostics so users can see which visuals are
+#' unavailable for the current data and why — a missing source table or a
+#' missing required column.
+#'
+#' @param dm_obj A `dm` object (already table-alias-normalized).
+#' @param vizs Named list of `pp_viz` definitions.
+#' @return List of `list(id, label, reason)`, one per viz that cannot
+#'   render (empty list when all can).
+#' @noRd
+pp_coverage_report <- function(dm_obj, vizs) {
+  tbl_names <- names(dm::dm_get_tables(dm_obj))
+  out <- list()
+  add <- function(v, reason) {
+    out[[length(out) + 1L]] <<- list(id = v$id, label = v$label,
+                                     reason = reason)
+  }
+  for (v in vizs) {
+    missing_tbls <- setdiff(v$tables, tbl_names)
+    if (length(missing_tbls)) {
+      add(v, paste0("needs table ", paste(missing_tbls, collapse = ", ")))
+      next
+    }
+    res <- pp_resolve_requires(dm_obj, v)
+    if (!isTRUE(res$ok)) {
+      # res$msg is "<label> unavailable: missing <cols>"; keep the cols.
+      add(v, sub("^.*unavailable: missing ", "missing ", res$msg))
+    }
+  }
+  out
+}
+
 #' Resolve required / optional column declarations against a dm
 #'
 #' Walks `viz$requires` and `viz$optional`. For each declared canonical

@@ -710,3 +710,44 @@
   color: #d1d5db;
   cursor: not-allowed;
 }
+
+/* Data-coverage diagnostics (gear popover): which visuals can't render
+   for the current data, and why. */
+.pp-popover-divider {
+  height: 1px;
+  background: #f0f1f3;
+  margin: 6px 2px;
+}
+
+.pp-popover-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  padding: 2px 6px 4px;
+}
+
+.pp-coverage-ok {
+  font-size: 11px;
+  color: #6b7280;
+  padding: 2px 6px 4px;
+}
+
+.pp-coverage-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 6px;
+}
+
+.pp-coverage-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.pp-coverage-reason {
+  font-size: 11px;
+  color: #9ca3af;
+}
