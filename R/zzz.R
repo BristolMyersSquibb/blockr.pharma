@@ -12,8 +12,10 @@
   invisible(NULL)
 }
 
+#' @importFrom blockr.core register_blocks new_block_args new_block_arg
+#'   arg_array arg_string
 register_pharma_blocks <- function() {
-  blockr.core::register_blocks(
+  register_blocks(
     "new_patient_profile_block",
     name = "Patient Profile",
     description = paste0(
@@ -28,6 +30,7 @@ register_pharma_blocks <- function() {
     ),
     category = "plot",
     icon = "person-badge",
+    guidance = pp_block_guidance(),
     arguments = list(
       pp_block_arguments()
     ),
@@ -39,9 +42,9 @@ register_pharma_blocks <- function() {
 #' Build arguments metadata for the patient profile block
 #' @noRd
 pp_block_arguments <- function() {
-  structure(
-    c(
-      selected = paste0(
+  new_block_args(
+    selected = new_block_arg(
+      paste0(
         "Array of visualization IDs to display. ",
         "Static IDs: ",
         "\"patient_overview\" (treatment period + AE bars + milestones from ADSL/adae), ",
@@ -72,7 +75,16 @@ pp_block_arguments <- function() {
         "Set to the IDs the user wants to see. patient_overview is ",
         "usually kept as the first element."
       ),
-      viz_settings = paste0(
+      example = list(
+        "patient_overview", "liver_panel", "blood_pressure"
+      ),
+      type = arg_array(arg_string())
+    ),
+    # An arbitrary-key map (keys are viz IDs, values are setting objects of
+    # varying shape). The JSON-Schema subset has no open-ended object, so
+    # `type` is left unset and the consumer infers the map from the example.
+    viz_settings = new_block_arg(
+      paste0(
         "Object with per-visualization settings. Keys are viz IDs, values ",
         "are setting objects. Only set for vizs that have controls. ",
         "Available settings: ",
@@ -85,19 +97,20 @@ pp_block_arguments <- function() {
         "ortho_bp: {visits: array of visit names}. ",
         "questionnaire_heatmap: {domain: \"adqsadas\" or \"adqsnpix\", ",
         "value: \"AVAL\" or \"CHG\"}."
-      )
-    ),
-    examples = list(
-      selected = list(
-        "patient_overview", "liver_panel", "blood_pressure"
       ),
-      viz_settings = list(
+      example = list(
         liver_panel = list(items = list("ALT", "AST")),
         adas_trajectory = list(items = list("ACTOT"), chg = FALSE),
         questionnaire_heatmap = list(domain = "adqsadas", value = "AVAL")
       )
-    ),
-    prompt = paste(
+    )
+  )
+}
+
+#' Construction guidance for the patient profile block
+#' @noRd
+pp_block_guidance <- function() {
+  paste(
       "This block displays stacked clinical visualizations for a single",
       "patient. The user controls WHICH vizs are shown via `selected`",
       "and HOW they look via `viz_settings`.",
@@ -178,5 +191,4 @@ pp_block_arguments <- function() {
       "about labs, comment on notable values or trends. The user sees",
       "your explanation as a chat message — make it clinically useful."
     )
-  )
 }

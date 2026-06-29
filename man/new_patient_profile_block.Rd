@@ -9,7 +9,7 @@
 new_patient_profile_block(
   selected = NULL,
   viz_settings = list(),
-  timeline_mode = "date",
+  timeline_mode = "rday",
   ...
 )
 
@@ -24,10 +24,10 @@ first available)}
 \item{viz_settings}{Named list of per-viz settings
 (e.g., \code{list(adas_trajectory = list(items = "ACTOT"))})}
 
-\item{timeline_mode}{Initial timeline x-axis mode: \code{"date"} (calendar
-dates) or \code{"rday"} (relative day from treatment start, ADaM \*DY
-convention). Changeable at runtime via the gear popover in the chart
-area header.}
+\item{timeline_mode}{Initial timeline x-axis mode: \code{"rday"} (relative day
+from treatment start, ADaM \*DY convention; the default) or \code{"date"}
+(calendar dates). Changeable at runtime via the gear popover in the
+chart area header.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 
