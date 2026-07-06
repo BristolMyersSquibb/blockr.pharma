@@ -1,25 +1,39 @@
-# Clinical Explorer demo — local launcher.
+# Clinical Explorer — cross-filter, drilldown chart/table, patient profile and
+# swim-lane plot over the ADaM safety tables (the demo shown at R/Medicine 2026).
 #
-# Deserializes the bundled board JSON (the same demo shown at R/Medicine 2026)
-# and serves it. Run with:
+# Deserializes the bundled board JSON and serves it. Run with:
 #
 #   source(system.file("examples/clinical-explorer.R", package = "blockr.pharma"))
 
-pkgload::load_all("blockr.core")
-pkgload::load_all("blockr.dock")
-pkgload::load_all("blockr.dag")
-pkgload::load_all("blockr.dplyr")
-pkgload::load_all("blockr.ggplot")
-pkgload::load_all("blockr.io")
-pkgload::load_all("blockr.viz")
-pkgload::load_all("blockr.dm")
-pkgload::load_all("blockr.pharma")
-pkgload::load_all("blockr.extra")
-pkgload::load_all("blockr.session")
+# ---- Package loading (dual: installed vs local source) ---------------------
+# `dev_local = FALSE` (the default, and what ships) attaches the INSTALLED
+# packages with library(). Set it to TRUE -- or source this file from the
+# dev/clinical-explorer.R wrapper -- to load every blockr package from its LOCAL
+# source checkout with pkgload::load_all(). One board, two loaders, no drift.
+if (!exists("dev_local")) dev_local <- FALSE
+
+blockr_pkgs <- c(
+  "blockr.core",
+  "blockr.dock",
+  "blockr.dag",
+  "blockr.dplyr",
+  "blockr.ggplot",
+  "blockr.io",
+  "blockr.viz",
+  "blockr.dm",
+  "blockr.pharma",   # patient profile, swim-lane plot, the ADaM dm data block
+  "blockr.extra",
+  "blockr.session"
+)
+
+for (pkg in blockr_pkgs) {
+  if (dev_local) pkgload::load_all(pkg, quiet = TRUE)
+  else library(pkg, character.only = TRUE)
+}
 
 # The board's `data` block rebuilds its dm from safetyData (the ADaM example
 # tables adsl/adae/adlbc/advs), so that package must be installed.
-library("safetyData")
+library(safetyData)   # ADaM example tables adsl/adae/adlbc/advs
 
 # The pinned demo board references blocks from the packages loaded above, so
 # they must be attached for blockr_deser() to find their constructors. The
