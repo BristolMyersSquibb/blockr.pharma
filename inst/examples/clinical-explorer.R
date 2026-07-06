@@ -42,6 +42,7 @@ library(safetyData)   # ADaM example tables adsl/adae/adlbc/advs
 
 options(
   blockr.dock_is_locked = FALSE,
+  blockr.html_table_preview = TRUE,
   blockr.eval_parent_env = asNamespace("stats"),
   # blockr.session: build the board from the request URL (board_name / user /
   # version handle) so named projects are shareable / bookmarkable.
