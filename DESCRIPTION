@@ -17,6 +17,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     blockr.core,
+    blockr.dplyr,
     blockr.theme,
     dm,
     dplyr,
@@ -31,5 +32,6 @@ Suggests:
     testthat (>= 3.0.0)
 Remotes:
     BristolMyersSquibb/blockr.core,
+    BristolMyersSquibb/blockr.dplyr,
     BristolMyersSquibb/blockr.theme
 Config/testthat/edition: 3
