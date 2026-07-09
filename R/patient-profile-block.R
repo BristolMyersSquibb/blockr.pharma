@@ -4,9 +4,13 @@
 #' charts, vitals, questionnaires) with a searchable sidebar for toggling
 #' vizs on/off and per-viz controls.
 #'
-#' Input: a dm object (already subject-filtered by upstream blocks).
-#' The block renders all selected visualizations in a scrollable chart area,
-#' with aligned time axes. The sidebar lets users toggle which vizs are shown.
+#' Input: a dm object. When it carries exactly one subject (an upstream
+#' drill-down has committed to a patient) the profile renders that subject
+#' straight away. When it carries a cohort, the header picker selects one
+#' subject within it and the block filters the dm down to that patient, so
+#' the charts and the block's own output never disagree. Until a patient is
+#' picked the block is a pass-through and the chart area shows a placeholder:
+#' whose data this is is never guessed.
 #'
 #' @param selected Initial viz IDs to show (default: patient_overview +
 #'   first available)
@@ -16,6 +20,11 @@
 #'   from treatment start, ADaM \*DY convention; the default) or `"date"`
 #'   (calendar dates). Changeable at runtime via the gear popover in the
 #'   chart area header.
+#' @param subject USUBJID to display, as a length-1 character. Only meaningful
+#'   when the incoming dm carries more than one subject; a single-subject dm
+#'   always renders its one subject. Ignored (and cleared) when the value is
+#'   absent from the incoming cohort. Defaults to `NULL`, i.e. no patient
+#'   chosen.
 #' @param ... Forwarded to [blockr.core::new_transform_block()]
 #'
 #' @return A transform block of class `patient_profile_block`
@@ -36,9 +45,19 @@
 #'   advs = advs[advs$USUBJID == one, ]
 #' )
 #'
+#' # `data` is keyed by block input name; a bare dm would be splatted into
+#' # one argument per table.
 #' blockr.core::serve(
 #'   new_patient_profile_block(selected = c("patient_overview", "ae_gantt")),
-#'   data = pp_dm
+#'   data = list(data = pp_dm)
+#' )
+#'
+#' # Or hand it the whole cohort and pick a patient in the header. Passing
+#' # `subject` preselects one; omit it to start on the picker.
+#' cohort <- dm(adsl = adsl, adae = adae, advs = advs)
+#' blockr.core::serve(
+#'   new_patient_profile_block(subject = one),
+#'   data = list(data = cohort)
 #' )
 #' }
 #'
@@ -46,8 +65,10 @@
 new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
                                               timeline_mode = "rday",
+                                              subject = NULL,
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
+  subject <- pp_validate_subject(subject)
 
   # Validate selected viz IDs (static vizs only; findings group IDs
 
@@ -66,32 +87,77 @@ new_patient_profile_block <- function(selected = NULL,
       shiny::moduleServer(
         id,
         function(input, output, session) {
-          # Single-patient guard. The profile is by definition a
-          # per-patient view. It renders only when the incoming dm
-          # carries exactly one subject (an upstream drill-down has
-          # committed to a patient). If the cohort still has zero or
-          # many subjects we do NOT auto-pick the first one — `single`
-          # is FALSE and the UI shows a "No single patient selected"
-          # placeholder instead. dm_filter cascades via FKs, so every
-          # downstream read of a scoped dm sees the single-patient dm.
+          # Currently picked USUBJID: character(0) when no patient chosen.
+          r_subject <- shiny::reactiveVal(subject)
+
+          # The incoming cohort. This is the universe the picker selects
+          # within: an upstream drill-down narrows it, the picker never
+          # widens it, so the two can never conflict.
+          r_cohort <- shiny::reactive({
+            pp_subject_choices(data())
+          })
+
+          # Stale-selection guard. When the upstream cohort changes and the
+          # picked subject is no longer in it, clear the pick rather than
+          # falling back to another patient. `subject` is in
+          # `allow_empty_state` precisely so this clear does not wedge the
+          # block.
+          shiny::observeEvent(r_cohort(), {
+            cur <- r_subject()
+            if (length(cur) == 1L && !cur %in% r_cohort()$ids) {
+              r_subject(character())
+            }
+          }, ignoreNULL = FALSE)
+
+          # Pick a patient from the header popover.
+          # Blockr.Select writes its value straight to the container's input id.
+          shiny::observeEvent(input$pp_subject, {
+            sel <- as.character(input$pp_subject)
+            if (length(sel) == 1L && sel %in% r_cohort()$ids) {
+              r_subject(sel)
+            }
+          })
+
+          # Step to the previous / next patient in cohort order. Wraps, and
+          # steps in from either end when nothing is picked yet.
+          shiny::observeEvent(input$step_subject, {
+            dir <- suppressWarnings(as.integer(input$step_subject))
+            ids <- r_cohort()$ids
+            if (is.na(dir) || dir == 0L || length(ids) < 2L) return()
+            cur <- r_subject()
+            at <- if (length(cur) == 1L) match(cur, ids) else NA_integer_
+            nxt <- if (is.na(at)) {
+              if (dir > 0L) 1L else length(ids)
+            } else {
+              ((at - 1L + dir) %% length(ids)) + 1L
+            }
+            r_subject(ids[[nxt]])
+          })
+
+          # The profile is by definition a per-patient view. It renders when
+          # the incoming dm carries exactly one subject, or when the picker
+          # has committed to one of many. Otherwise `single` is FALSE and the
+          # chart area shows a placeholder. dm_filter cascades via FKs, so
+          # every downstream read of a scoped dm sees the single-patient dm.
           r_scoped_dm <- shiny::reactive({
             dm_obj <- data()
             shiny::req(inherits(dm_obj, "dm"))
             tbls <- dm::dm_get_tables(dm_obj)
             shiny::req("adsl" %in% names(tbls))
-            ids <- unique(as.data.frame(tbls[["adsl"]])$USUBJID)
+            ids <- pp_subject_ids(dm_obj)
+            picked <- pp_resolve_subject(ids, r_subject())
             # Normalize short prod table names (ae, lb, vs, ...) to their
             # ADaM canonical names (adae, adlb, advs, ...) so the vizs —
             # which declare requirements against ADaM names — find their
             # tables. Done AFTER dm_filter so the FK cascade (which keys
             # off the original names) still subject-filters child tables.
-            if (length(ids) == 1L) {
+            if (!is.na(picked)) {
               list(
                 dm     = pp_normalize_table_aliases(
-                  dm::dm_filter(dm_obj, adsl = USUBJID == ids[[1L]])
+                  dm::dm_filter(dm_obj, adsl = USUBJID == picked)
                 ),
-                picked = ids[[1L]],
-                total  = 1L,
+                picked = picked,
+                total  = length(ids),
                 single = TRUE
               )
             } else {
@@ -104,6 +170,22 @@ new_patient_profile_block <- function(selected = NULL,
                 single = FALSE
               )
             }
+          })
+
+          # The incoming dm with table aliases normalized, unscoped by
+          # subject. Data-coverage diagnostics are a property of the tables
+          # and columns the study collected, not of which patient is on
+          # screen, so they read from here and the header bar stays
+          # independent of `r_subject`.
+          r_norm_dm <- shiny::reactive({
+            dm_obj <- data()
+            shiny::req(inherits(dm_obj, "dm"))
+            pp_normalize_table_aliases(dm_obj)
+          })
+
+          r_cohort_vizs <- shiny::reactive({
+            dm_obj <- r_norm_dm()
+            c(patient_profile_static_vizs(), pp_findings_vizs(dm_obj))
           })
 
           # All vizs: static + dynamic findings groups from dm data
@@ -206,6 +288,49 @@ new_patient_profile_block <- function(selected = NULL,
             r_available()
             session$sendCustomMessage(
               session$ns("sync_selected"), sel
+            )
+          })
+
+          # Ship the cohort to the client's Blockr.Select. `options` are
+          # {value = USUBJID, label = "Placebo · 63F"} pairs: the component
+          # renders the value, then the label as a muted
+          # `.blockr-select__opt-label`. Only sent when the cohort itself
+          # changes, so stepping through patients does not re-ship 2000 rows.
+          shiny::observe({
+            co <- r_cohort()
+            picked <- pp_resolve_subject(co$ids, shiny::isolate(r_subject()))
+            opts <- unname(Map(
+              function(v, l) list(value = v, label = l),
+              co$ids, co$meta
+            ))
+            session$sendCustomMessage(
+              session$ns("subject_picker"),
+              list(
+                id      = session$ns("pp_subject"),
+                options = opts,
+                selected = if (is.na(picked)) "" else picked,
+                locked  = length(co$ids) <= 1L,
+                static  = if (length(co$ids) == 1L) {
+                  co$labels[[1L]]
+                } else {
+                  "No patients"
+                }
+              )
+            )
+          })
+
+          # Push a selection the server made (the prev/next steppers, or a
+          # cleared stale pick) back into the already-mounted select. Carries
+          # no options: the client reuses the ones it has.
+          shiny::observe({
+            co <- r_cohort()
+            picked <- pp_resolve_subject(co$ids, r_subject())
+            session$sendCustomMessage(
+              session$ns("subject_value"),
+              list(
+                id = session$ns("pp_subject"),
+                selected = if (is.na(picked)) "" else picked
+              )
             )
           })
 
@@ -437,17 +562,22 @@ new_patient_profile_block <- function(selected = NULL,
             shiny::div(class = "pp-chart-controls", tags)
           }
 
-          # Header bar (cohort hint + gear popover) — depends only on
-          # the dm, NOT on r_timeline_mode. This keeps the popover from
-          # being rebuilt (and closing) every time the user flips the
-          # toggle. The button text + data-tl-mode are kept in sync by
-          # the optimistic JS handler.
+          # Header bar (subject picker + gear popover) — depends on the
+          # cohort, NOT on r_timeline_mode or r_subject. This keeps either
+          # popover from being rebuilt (and closing) when the user flips the
+          # timeline toggle or picks a patient. Both button labels are kept
+          # in sync by optimistic JS plus a confirming custom message.
           output$header_bar <- shiny::renderUI({
-            scoped <- r_scoped_dm()
+            co <- r_cohort()
             ns <- session$ns
-            ref_ms <- r_ref_ms()
             init_mode <- shiny::isolate(r_timeline_mode())
-            gear_disabled <- is.na(ref_ms)
+            # Whether relative-day mode is possible at all is a property of
+            # the study (does ADSL carry TRTSDT), not of the patient on
+            # screen. Read it from the unscoped dm: routing through
+            # `r_ref_ms()` would make the header depend on `r_subject`, and
+            # every pick would rebuild the header and slam both popovers shut.
+            gear_disabled <- is.na(pp_compute_ref_ms(r_norm_dm()))
+
 
             gear_tag <- shiny::div(
               class = "pp-gear-wrap",
@@ -519,7 +649,7 @@ new_patient_profile_block <- function(selected = NULL,
                 # users see what's collected without each one having to be
                 # selected first. Hidden behind the gear, not permanent.
                 {
-                  cov <- pp_coverage_report(scoped$dm, r_all_vizs())
+                  cov <- pp_coverage_report(r_norm_dm(), r_cohort_vizs())
                   shiny::tagList(
                     shiny::div(class = "pp-popover-divider"),
                     shiny::div(class = "pp-popover-section-label",
@@ -540,27 +670,15 @@ new_patient_profile_block <- function(selected = NULL,
               )
             )
 
+            # The header row now carries only the gear. The subject picker
+            # lives in the static UI (see `ui=` below) so its Blockr.Select
+            # container is present before the mount message arrives.
             shiny::div(
               class = paste(
-                "pp-cohort-hint d-flex justify-content-between",
-                "align-items-center mb-2"
+                "pp-cohort-hint d-flex justify-content-end",
+                "align-items-center"
               ),
-              if (isTRUE(scoped$single)) {
-                shiny::span("Showing", class = "text-muted small")
-              } else {
-                shiny::span("No single patient selected",
-                            class = "text-muted small")
-              },
-              shiny::div(
-                class = "d-flex align-items-center gap-2",
-                if (isTRUE(scoped$single)) {
-                  shiny::span(
-                    scoped$picked,
-                    class = "small fw-medium"
-                  )
-                },
-                gear_tag
-              )
+              gear_tag
             )
           })
 
@@ -571,8 +689,8 @@ new_patient_profile_block <- function(selected = NULL,
             scoped <- r_scoped_dm()
             dm_obj <- scoped$dm
             shiny::req(inherits(dm_obj, "dm"))
-            # The profile needs exactly one patient. Until an upstream
-            # drill-down narrows the cohort to one, show an info
+            # The profile needs exactly one patient. Until the header picker
+            # or an upstream drill-down commits to one, show an info
             # placeholder rather than auto-picking the first subject.
             if (!isTRUE(scoped$single)) {
               return(shiny::div(class = "pp-empty-state",
@@ -589,13 +707,13 @@ new_patient_profile_block <- function(selected = NULL,
                   ))
                 ),
                 shiny::p(class = "pp-empty-state-text",
-                  "No single patient selected"),
+                  "No patient selected"),
                 shiny::p(class = "pp-empty-state-hint",
                   if (isTRUE(scoped$total > 1L)) {
-                    paste0("Drill down on a chart to pick one of ",
-                           scoped$total, " patients")
+                    paste0("Pick one of ", scoped$total,
+                           " patients above, or drill down on a chart")
                   } else {
-                    "Drill down on a chart to pick a patient"
+                    "No patient data in the incoming tables"
                   })
               ))
             }
@@ -694,13 +812,28 @@ new_patient_profile_block <- function(selected = NULL,
           })
 
           list(
+            # Unconfigured, the block passes the cohort straight through.
+            # Once a patient is picked it filters, so a downstream block can
+            # never show 254 people while the charts show one. The subject is
+            # re-checked against the live cohort here rather than trusted
+            # from state: a stale id would otherwise filter to zero rows for
+            # the instant before the stale-selection guard fires.
             expr = shiny::reactive({
-              quote(identity(data))
+              sel <- r_subject()
+              ids <- pp_subject_ids(data())
+              if (length(sel) != 1L || !sel %in% ids) {
+                return(quote(identity(data)))
+              }
+              bquote(
+                dm::dm_filter(data, adsl = USUBJID == .(subject)),
+                list(subject = sel)
+              )
             }),
             state = list(
               selected = r_selected,
               viz_settings = r_viz_settings,
-              timeline_mode = r_timeline_mode
+              timeline_mode = r_timeline_mode,
+              subject = r_subject
             )
           )
         }
@@ -713,6 +846,13 @@ new_patient_profile_block <- function(selected = NULL,
           rel = "stylesheet",
           href = "blockr-pharma/css/patient-profile.css"
         ),
+        # Blockr.Select: the shared single-select primitive. Its dropdown is
+        # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
+        # `overflow-y: auto` — a hand-rolled absolute popover gets clipped and
+        # scrolls away with the chart list. blockr_blocks_css_dep() carries the
+        # canonical `.blockr-field--required-empty` amber cue.
+        blockr.dplyr::blockr_blocks_css_dep(),
+        blockr.dplyr::blockr_select_dep(),
         shiny::div(
           class = "pp-layout", id = ns("pp_layout"),
 
@@ -785,11 +925,43 @@ new_patient_profile_block <- function(selected = NULL,
             ))
           ),
 
-          # Chart area: stable header bar (gear popover) + dynamic chart list.
-          # Splitting these keeps the popover open across mode toggles,
-          # because flipping r_timeline_mode only invalidates chart_area.
+          # Chart area: a static subject picker, the dynamic header bar (gear
+          # popover) and the dynamic chart list. The picker is static so its
+          # Blockr.Select container exists before the mount message lands, and
+          # so that stepping through patients never rebuilds it. The header bar
+          # is split off so flipping r_timeline_mode only invalidates
+          # chart_area and the gear popover stays open.
           shiny::div(class = "pp-chart-area",
-            shiny::uiOutput(ns("header_bar")),
+            shiny::div(class = "pp-chart-toolbar",
+              # Required-empty: the control carries the amber cue and nothing
+              # else. No help line — the "Select a patient" placeholder is
+              # already the message, and no banner: this is attention, not
+              # error. Steppers flank the select and never move, because the
+              # control is a fixed width, so a long arm name ellipsizes rather
+              # than shunting the arrows sideways as you page through patients.
+              shiny::div(class = "pp-subject-picker", id = ns("pp_picker"),
+                shiny::tags$button(
+                  class = "pp-subject-step",
+                  id = ns("pp_subject_prev"),
+                  type = "button",
+                  `data-dir` = "-1",
+                  title = "Previous patient",
+                  shiny::HTML("&lsaquo;")
+                ),
+                shiny::div(class = "pp-subject-select", id = ns("pp_subject")),
+                shiny::span(class = "pp-subject-static",
+                            id = ns("pp_subject_static")),
+                shiny::tags$button(
+                  class = "pp-subject-step",
+                  id = ns("pp_subject_next"),
+                  type = "button",
+                  `data-dir` = "1",
+                  title = "Next patient",
+                  shiny::HTML("&rsaquo;")
+                )
+              ),
+              shiny::uiOutput(ns("header_bar"))
+            ),
             shiny::uiOutput(ns("chart_area"))
           )
         ),
@@ -812,6 +984,88 @@ new_patient_profile_block <- function(selected = NULL,
             var tlModeInputId = '", ns("timeline_mode"), "';
             var gearBtnId = '", ns("pp_gear_btn"), "';
             var gearPopoverId = '", ns("pp_gear_popover"), "';
+
+            var pickerId = '", ns("pp_picker"), "';
+            var subjectContainerId = '", ns("pp_subject"), "';
+            var subjectStaticId = '", ns("pp_subject_static"), "';
+            var stepSubjectInputId = '", ns("step_subject"), "';
+            var subjectPickerMsgId = '", ns("subject_picker"), "';
+            var subjectValueMsgId = '", ns("subject_value"), "';
+
+            // Required-empty amber cue on the control itself.
+            // `.blockr-field--required-empty` is the canonical class from
+            // blockr-blocks.css; it paints the .blockr-select__control of the
+            // --bordered variant. A locked cohort is never 'empty'.
+            function syncRequiredEmpty(locked) {
+              var root = document.getElementById(subjectContainerId);
+              var empty = !locked && !!root && !!root._ppPicker &&
+                          root._ppPicker.getValue() === '';
+              $('#' + subjectContainerId)
+                .toggleClass('blockr-field--required-empty', empty);
+            }
+
+            // Mount Blockr.Select once, then setOptions() on later messages —
+            // the same lifecycle blockr.dm's table picker uses. `allowEmpty`
+            // is what keeps '' alive across setOptions(): without it the
+            // component slides the selection onto the first patient whenever
+            // the cohort changes, which is exactly the silent auto-pick this
+            // block exists to avoid.
+            Shiny.addCustomMessageHandler(subjectPickerMsgId, function(msg) {
+              if (!msg) return;
+              var root = document.getElementById(msg.id);
+              if (!root) return;
+              var opts = Array.isArray(msg.options) ? msg.options : [];
+
+              // Cache the option list: setOptions(null, ...) would clear it,
+              // so the value-only message below has to hand it back verbatim.
+              root._ppOptions = opts;
+
+              if (!root._ppPicker) {
+                root._ppPicker = Blockr.Select.single(root, {
+                  options: opts,
+                  selected: msg.selected || '',
+                  allowEmpty: true,
+                  placeholder: 'Select a patient',
+                  onChange: function(value) {
+                    Shiny.setInputValue(msg.id, value, {priority: 'event'});
+                    syncRequiredEmpty($('#' + pickerId).hasClass('is-locked'));
+                  }
+                });
+                // Standalone control, so the bordered 42px variant, as in
+                // blockr.dm's table picker. The amber cue paints this border.
+                root._ppPicker.el.classList.add('blockr-select--bordered');
+              } else {
+                root._ppPicker.setOptions(opts, msg.selected || '');
+              }
+
+              // Zero or one subject: nothing to choose. Show a plain label
+              // instead of a dropdown that affords a choice which does not
+              // exist, and hide the steppers with it.
+              var $picker = $('#' + pickerId);
+              $picker.toggleClass('is-locked', !!msg.locked);
+              $('#' + subjectStaticId).text(msg.locked ? (msg.static || '') : '');
+              syncRequiredEmpty(!!msg.locked);
+            });
+
+            // A selection the server made (steppers, or a cleared stale pick).
+            // Carries no options; reuse the ones the component already holds.
+            Shiny.addCustomMessageHandler(subjectValueMsgId, function(msg) {
+              if (!msg) return;
+              var root = document.getElementById(msg.id);
+              if (!root || !root._ppPicker) return;
+              if (root._ppPicker.getValue() === (msg.selected || '')) return;
+              root._ppPicker.setOptions(root._ppOptions || [], msg.selected || '');
+              syncRequiredEmpty($('#' + pickerId).hasClass('is-locked'));
+            });
+
+            // Prev / next patient
+            $(document).on('click', '#' + pickerId + ' .pp-subject-step',
+              function(e) {
+                e.stopPropagation();
+                var dir = parseInt($(this).attr('data-dir'), 10);
+                if (!dir) return;
+                Shiny.setInputValue(stepSubjectInputId, dir, {priority: 'event'});
+              });
 
             // Toggle gear popover open/close
             $(document).on('click', '#' + gearBtnId, function(e) {
@@ -1078,9 +1332,12 @@ new_patient_profile_block <- function(selected = NULL,
       }
     },
     # `selected` may legitimately be empty (no viz chosen, or no single
-    # patient yet) — the UI shows a grey placeholder, not an error.
-    allow_empty_state = c("selected", "viz_settings"),
-    external_ctrl = c("selected", "viz_settings", "timeline_mode"),
+    # patient yet) — the UI shows a grey placeholder, not an error. Same for
+    # `subject`: the stale-selection guard clears it whenever the picked
+    # patient leaves the cohort, and clearing a field that is not listed
+    # here wedges the block.
+    allow_empty_state = c("selected", "viz_settings", "subject"),
+    external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject"),
     class = c("patient_profile_block", "dm_block"),
     ...
   )

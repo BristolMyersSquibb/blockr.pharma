@@ -10,6 +10,7 @@ new_patient_profile_block(
   selected = NULL,
   viz_settings = list(),
   timeline_mode = "rday",
+  subject = NULL,
   ...
 )
 
@@ -28,6 +29,12 @@ first available)}
 from treatment start, ADaM \*DY convention; the default) or \code{"date"}
 (calendar dates). Changeable at runtime via the gear popover in the
 chart area header.}
+
+\item{subject}{USUBJID to display, as a length-1 character. Only meaningful
+when the incoming dm carries more than one subject; a single-subject dm
+always renders its one subject. Ignored (and cleared) when the value is
+absent from the incoming cohort. Defaults to \code{NULL}, i.e. no patient
+chosen.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 
@@ -48,9 +55,13 @@ charts, vitals, questionnaires) with a searchable sidebar for toggling
 vizs on/off and per-viz controls.
 }
 \details{
-Input: a dm object (already subject-filtered by upstream blocks).
-The block renders all selected visualizations in a scrollable chart area,
-with aligned time axes. The sidebar lets users toggle which vizs are shown.
+Input: a dm object. When it carries exactly one subject (an upstream
+drill-down has committed to a patient) the profile renders that subject
+straight away. When it carries a cohort, the header picker selects one
+subject within it and the block filters the dm down to that patient, so
+the charts and the block's own output never disagree. Until a patient is
+picked the block is a pass-through and the chart area shows a placeholder:
+whose data this is is never guessed.
 }
 \examples{
 # Construct the block
@@ -68,9 +79,19 @@ pp_dm <- dm(
   advs = advs[advs$USUBJID == one, ]
 )
 
+# `data` is keyed by block input name; a bare dm would be splatted into
+# one argument per table.
 blockr.core::serve(
   new_patient_profile_block(selected = c("patient_overview", "ae_gantt")),
-  data = pp_dm
+  data = list(data = pp_dm)
+)
+
+# Or hand it the whole cohort and pick a patient in the header. Passing
+# `subject` preselects one; omit it to start on the picker.
+cohort <- dm(adsl = adsl, adae = adae, advs = advs)
+blockr.core::serve(
+  new_patient_profile_block(subject = one),
+  data = list(data = cohort)
 )
 }
 

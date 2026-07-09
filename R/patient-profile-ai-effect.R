@@ -33,6 +33,22 @@ config_effect.patient_profile_block <- function(block, args, data = NULL, ...) {
     parts <- c(parts, paste0("timeline=", tm))
   }
 
+  # Which patient is on screen is the most consequential thing this block's
+  # config decides, so report it, and report an id that is not in the cohort
+  # as the no-op it will be: the block discards it and renders a placeholder.
+  subj <- as.character(args$subject %||% "")[1]
+  if (!is.na(subj) && nzchar(subj)) {
+    known <- tryCatch(pp_subject_ids(data), error = function(e) character())
+    if (length(known) && !subj %in% known) {
+      parts <- c(parts, paste0(
+        "patient=", subj, " -- NOT a USUBJID in adsl, so no patient will be ",
+        "shown; pick one from unique(adsl$USUBJID)"
+      ))
+    } else {
+      parts <- c(parts, paste0("patient=", subj))
+    }
+  }
+
   desc <- paste0("patient profile configured: ", paste(parts, collapse = "; "))
 
   # Flag IDs that are neither a known static viz nor a known findings group.

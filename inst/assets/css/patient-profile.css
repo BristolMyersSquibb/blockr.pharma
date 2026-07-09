@@ -751,3 +751,79 @@
   font-size: 11px;
   color: #9ca3af;
 }
+
+/* --- Subject picker (choose the patient within the incoming cohort) ---
+   The control is Blockr.Select (blockr.dplyr) in its standalone `--bordered`
+   42px variant, as in blockr.dm's table picker. It owns its own DOM and
+   portals its dropdown to <body>; we do not restyle its internals. The
+   required-empty amber cue comes from blockr-blocks.css via
+   `.blockr-field--required-empty` on the container. No help line beneath it:
+   the "Select a patient" placeholder already says what is wanted. */
+
+.pp-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* Gear row: match the control's height so the two sit on one baseline. */
+.pp-chart-toolbar .pp-cohort-hint {
+  height: 42px;
+}
+
+.pp-subject-picker {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Fixed width, sized so the longest real label ("01-701-1028 · Xanomeline
+   High Dose · 71M", 39 chars) fits without truncating. Fixed rather than
+   content-sized so the steppers never shift as you page through the cohort. */
+.pp-subject-select {
+  width: 360px;
+}
+
+.pp-subject-picker.is-locked .pp-subject-select,
+.pp-subject-picker.is-locked .pp-subject-step {
+  display: none;
+}
+
+/* Zero or one subject: a plain label, no affordance. */
+.pp-subject-static {
+  display: none;
+  align-items: center;
+  height: 42px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--blockr-grey-700, #374151);
+}
+
+.pp-subject-picker.is-locked .pp-subject-static {
+  display: inline-flex;
+}
+
+.pp-subject-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 42px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--blockr-grey-400, #9ca3af);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.pp-subject-step:hover {
+  background: var(--blockr-grey-100, #f3f4f6);
+  color: var(--blockr-color-text-primary, #111827);
+}
