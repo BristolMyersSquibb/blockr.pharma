@@ -1,9 +1,27 @@
 # Patient (subject) selection helpers for the patient profile block.
 #
+# pp_arm_column()       — which ADSL column holds the treatment/arm label
 # pp_subject_ids()      — USUBJIDs present in a dm's adsl, cheap, no reqs
 # pp_subject_choices()  — ids + human labels ("01-701-1015 · Placebo · 63F")
 # pp_validate_subject() — ctor-side normalization of the `subject` argument
 # pp_resolve_subject()  — which USUBJID the profile should render, if any
+
+#' Resolve the ADSL column holding the treatment / arm label
+#'
+#' Every consumer of the arm label (the subject picker's meta line, the
+#' overview's treatment lane) must agree on the column, or the same subject is
+#' labelled two ways in one profile. `arm_var` is the study's declared choice
+#' and always wins; the fallback chain covers conformant ADaM when nothing is
+#' declared.
+#'
+#' @param cols Column names of ADSL.
+#' @param arm_var Study-declared arm column, or `NULL`.
+#' @return A single column name, or `NULL` when none is present.
+#' @noRd
+pp_arm_column <- function(cols, arm_var = NULL) {
+  hit <- intersect(c(arm_var, "ARM", "ACTARM", "TRT01P", "TRT01A"), cols)
+  if (length(hit)) hit[[1L]] else NULL
+}
 
 #' USUBJIDs present in a dm
 #'
@@ -38,9 +56,10 @@ pp_subject_ids <- function(dm_obj) {
 #' always the same length as `ids`, with `""` where no column was available.
 #'
 #' @param dm_obj A `dm` object.
+#' @param arm_var Study-declared arm column, passed to [pp_arm_column()].
 #' @return `list(ids, labels, meta)`, three character vectors of equal length.
 #' @noRd
-pp_subject_choices <- function(dm_obj) {
+pp_subject_choices <- function(dm_obj, arm_var = NULL) {
   ids <- pp_subject_ids(dm_obj)
   if (length(ids) == 0L) {
     return(list(ids = character(), labels = character(), meta = character()))
@@ -60,7 +79,7 @@ pp_subject_choices <- function(dm_obj) {
   }
 
   blank <- rep("", length(ids))
-  arm <- col(c("ARM", "ACTARM", "TRT01P", "TRT01A")) %||% blank
+  arm <- col(pp_arm_column(colnames(adsl), arm_var)) %||% blank
   age <- col("AGE")
   sex <- col("SEX")
   demo <- if (!is.null(age) && !is.null(sex)) {

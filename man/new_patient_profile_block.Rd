@@ -11,6 +11,7 @@ new_patient_profile_block(
   viz_settings = list(),
   timeline_mode = "rday",
   subject = NULL,
+  arm_var = NULL,
   ...
 )
 
@@ -35,6 +36,12 @@ when the incoming dm carries more than one subject; a single-subject dm
 always renders its one subject. Ignored (and cleared) when the value is
 absent from the incoming cohort. Defaults to \code{NULL}, i.e. no patient
 chosen.}
+
+\item{arm_var}{ADSL column holding the treatment / arm label, as a length-1
+character. Studies that do not ship the ADaM arm variables can name their
+own column here (e.g. \code{"TRT"}); it is used by both the subject picker and
+the treatment lane, so the two cannot disagree. Defaults to \code{NULL}, which
+falls back to the first of \code{ARM}, \code{ACTARM}, \code{TRT01P}, \code{TRT01A} present.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 

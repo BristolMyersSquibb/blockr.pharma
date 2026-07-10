@@ -1,10 +1,12 @@
 # Patient Profile Viz: Orthostatic Blood Pressure
 #
-# Connected dot-plot showing BP at 3 positions (lying, standing 1min, 3min).
+# Connected dot-plot showing BP by body position. Which positions appear
+# depends on the data: ADaM studies encode position in ATPT as a timepoint
+# phrase, SDTM-shaped studies use the VSPOS position variable.
 # Controls: visits (checkbox of available visits).
 #
 # Data requirements (declared via new_pp_viz()):
-#   advs: required PARAMCD, AVAL, ATPT; optional AVISIT
+#   advs: required PARAMCD, AVAL, ATPT (or VSPOS); optional AVISIT
 
 #' Orthostatic BP visualization definition
 #' @noRd
@@ -16,7 +18,11 @@ ortho_bp_viz <- new_pp_viz(
   color = "#0891B2",
   description = "Blood pressure by position (lying, standing 1min, 3min)",
   tables = "advs",
-  requires = list(advs = c("PARAMCD", "AVAL", "ATPT")),
+  requires = list(advs = list(
+    PARAMCD = NULL,
+    AVAL    = NULL,
+    ATPT    = "VSPOS"
+  )),
   optional = list(advs = list(AVISIT = NULL)),
   controls = list(
     visits = list(
@@ -38,17 +44,29 @@ ortho_bp_viz <- new_pp_viz(
 
       has_avisit <- "AVISIT" %in% colnames(bp)
 
-      # Position categories (short labels mapped from ATPT)
+      # Position categories. ADaM studies spell the position out as an ATPT
+      # timepoint phrase; SDTM studies use the VSPOS controlled terms, which
+      # pp_resolve_requires() has already renamed to ATPT by this point.
       pos_map <- c(
         "AFTER LYING DOWN FOR 5 MINUTES" = "Lying",
         "AFTER STANDING FOR 1 MINUTE" = "Standing 1m",
-        "AFTER STANDING FOR 3 MINUTES" = "Standing 3m"
+        "AFTER STANDING FOR 3 MINUTES" = "Standing 3m",
+        "SUPINE" = "Lying",
+        "SEMI-RECUMBENT" = "Semi-recumbent",
+        "SITTING" = "Sitting",
+        "STANDING" = "Standing"
       )
-      bp$position <- pos_map[trimws(bp$ATPT)]
+      bp$position <- pos_map[toupper(trimws(bp$ATPT))]
       bp <- bp[!is.na(bp$position), , drop = FALSE]
       if (nrow(bp) == 0) return(pp_empty_chart("No recognized BP positions"))
 
-      positions <- c("Lying", "Standing 1m", "Standing 3m")
+      # Ordered by increasing orthostatic challenge, restricted to what the
+      # study actually recorded: a study may carry two positions, or five.
+      positions <- intersect(
+        c("Lying", "Semi-recumbent", "Sitting", "Standing",
+          "Standing 1m", "Standing 3m"),
+        unique(bp$position)
+      )
 
       # Available visits
       if (has_avisit) {
@@ -99,8 +117,12 @@ ortho_bp_viz <- new_pp_viz(
             mean(rows$AVAL, na.rm = TRUE)
           }, numeric(1))
 
+          # Carry the category index explicitly: dropping a missing position
+          # from a scalar-valued series would slide every later value one
+          # category to the left.
           data_points <- lapply(seq_along(positions), function(pi) {
             if (is.na(vals[pi])) return(NULL)
+            val <- unname(vals[pi])
             tt <- paste0(
               '<div style="min-width:140px">',
               '<div style="font-size:13px;font-weight:600;margin-bottom:2px">',
@@ -109,9 +131,9 @@ ortho_bp_viz <- new_pp_viz(
               '<span style="color:#6b7280">Position:</span> ',
               positions[pi],
               '<br/><span style="color:#6b7280">Value:</span> <b>',
-              round(vals[pi], 1), '</b> mmHg</div></div>'
+              round(val, 1), '</b> mmHg</div></div>'
             )
-            list(value = vals[pi], tooltip_text = tt)
+            list(value = list(pi - 1L, val), tooltip_text = tt)
           })
           data_points <- Filter(Negate(is.null), data_points)
 

@@ -55,8 +55,9 @@ patient_overview_viz <- new_pp_viz(
 
       trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
-      arm_label <- if ("TRT01P" %in% colnames(sl)) {
-        as.character(sl$TRT01P[1])
+      arm_col <- pp_arm_column(colnames(sl), settings$arm_var)
+      arm_label <- if (!is.null(arm_col)) {
+        as.character(sl[[arm_col]][1])
       } else {
         "Treatment"
       }

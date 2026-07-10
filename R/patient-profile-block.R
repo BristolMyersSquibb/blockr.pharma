@@ -25,6 +25,11 @@
 #'   always renders its one subject. Ignored (and cleared) when the value is
 #'   absent from the incoming cohort. Defaults to `NULL`, i.e. no patient
 #'   chosen.
+#' @param arm_var ADSL column holding the treatment / arm label, as a length-1
+#'   character. Studies that do not ship the ADaM arm variables can name their
+#'   own column here (e.g. `"TRT"`); it is used by both the subject picker and
+#'   the treatment lane, so the two cannot disagree. Defaults to `NULL`, which
+#'   falls back to the first of `ARM`, `ACTARM`, `TRT01P`, `TRT01A` present.
 #' @param ... Forwarded to [blockr.core::new_transform_block()]
 #'
 #' @return A transform block of class `patient_profile_block`
@@ -66,9 +71,14 @@ new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
                                               timeline_mode = "rday",
                                               subject = NULL,
+                                              arm_var = NULL,
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
+  stopifnot(
+    is.null(arm_var) ||
+      (is.character(arm_var) && length(arm_var) == 1L && nzchar(arm_var))
+  )
 
   # Validate selected viz IDs (static vizs only; findings group IDs
 
@@ -90,11 +100,16 @@ new_patient_profile_block <- function(selected = NULL,
           # Currently picked USUBJID: character(0) when no patient chosen.
           r_subject <- shiny::reactiveVal(subject)
 
+          # Study-declared arm column. Set once at study setup, no UI; held
+          # as a reactiveVal so it round-trips through the block state like
+          # every other constructor argument.
+          r_arm_var <- shiny::reactiveVal(arm_var)
+
           # The incoming cohort. This is the universe the picker selects
           # within: an upstream drill-down narrows it, the picker never
           # widens it, so the two can never conflict.
           r_cohort <- shiny::reactive({
-            pp_subject_choices(data())
+            pp_subject_choices(data(), r_arm_var())
           })
 
           # Stale-selection guard. When the upstream cohort changes and the
@@ -771,6 +786,9 @@ new_patient_profile_block <- function(selected = NULL,
                     !is.null(sev_colors)) {
                 viz_settings$sev_colors <- sev_colors
               }
+              if (identical(viz_id, "patient_overview")) {
+                viz_settings$arm_var <- r_arm_var()
+              }
 
               # Resolve declared `requires` / `optional` column dependencies.
               # If a required column (or any alias) is missing, render a
@@ -833,7 +851,8 @@ new_patient_profile_block <- function(selected = NULL,
               selected = r_selected,
               viz_settings = r_viz_settings,
               timeline_mode = r_timeline_mode,
-              subject = r_subject
+              subject = r_subject,
+              arm_var = r_arm_var
             )
           )
         }
