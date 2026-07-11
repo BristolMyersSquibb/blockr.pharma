@@ -773,17 +773,24 @@
   height: 42px;
 }
 
+/* Fills the toolbar, up to the gear. Prod arm names run far longer than the
+   public CDISC ones ("GROUPEP1B BMS-986507 ..."), so a fixed width truncated
+   them; the row is dead space otherwise. Filling also keeps the steppers put
+   as you page through the cohort — the picker's width no longer depends on
+   the label — which is what the old fixed width was for. */
 .pp-subject-picker {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-/* Fixed width, sized so the longest real label ("01-701-1028 · Xanomeline
-   High Dose · 71M", 39 chars) fits without truncating. Fixed rather than
-   content-sized so the steppers never shift as you page through the cohort. */
+/* min-width: 0 so a long label ellipsizes inside the control rather than
+   forcing the flex item wider than its share and shunting the gear off. */
 .pp-subject-select {
-  width: 360px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .pp-subject-picker.is-locked .pp-subject-select,
