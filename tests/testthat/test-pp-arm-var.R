@@ -26,7 +26,7 @@ test_that("the picker labels subjects with the declared arm column", {
   adsl <- data.frame(
     USUBJID = c("a", "b"),
     TRT = c("Drug X", "Drug Y"),
-    ARM = c("GROUPAB BMS-986507", "GROUPBP1 BMS-986507"),
+    ARM = c("GROUPAB COMPOUND-A", "GROUPBP1 COMPOUND-A"),
     AGE = c(63L, 71L), SEX = c("F", "M"),
     stringsAsFactors = FALSE
   )
@@ -38,7 +38,7 @@ test_that("the picker labels subjects with the declared arm column", {
   # unset, the ADaM chain still picks ARM, preserving today's behaviour
   undeclared <- pp_subject_choices(dm_obj)
   expect_identical(undeclared$meta,
-                   c("GROUPAB BMS-986507 · 63F", "GROUPBP1 BMS-986507 · 71M"))
+                   c("GROUPAB COMPOUND-A · 63F", "GROUPBP1 COMPOUND-A · 71M"))
 })
 
 test_that("the overview lane honors the declared arm column", {
@@ -46,7 +46,7 @@ test_that("the overview lane honors the declared arm column", {
     adsl = data.frame(
       USUBJID = "a",
       TRTSDT = as.Date("2020-01-01"), TRTEDT = as.Date("2020-06-01"),
-      TRT = "Drug X", ARM = "GROUPAB BMS-986507",
+      TRT = "Drug X", ARM = "GROUPAB COMPOUND-A",
       stringsAsFactors = FALSE
     )
   )
@@ -58,7 +58,7 @@ test_that("the overview lane honors the declared arm column", {
     paste(as.character(unlist(trt)), collapse = " ")
   }
   expect_match(lane_label(list(arm_var = "TRT")), "Drug X")
-  expect_match(lane_label(list()), "GROUPAB BMS-986507")
+  expect_match(lane_label(list()), "GROUPAB COMPOUND-A")
 })
 
 test_that("picker and overview agree on the column once arm_var is declared", {
