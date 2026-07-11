@@ -774,7 +774,7 @@
 }
 
 /* Fills the toolbar, up to the gear. Prod arm names run far longer than the
-   public CDISC ones ("GROUPEP1B BMS-986507 ..."), so a fixed width truncated
+   public CDISC ones ("GROUPEP1B COMPOUND-A ..."), so a fixed width truncated
    them; the row is dead space otherwise. Filling also keeps the steppers put
    as you page through the cohort — the picker's width no longer depends on
    the label — which is what the old fixed width was for. */
