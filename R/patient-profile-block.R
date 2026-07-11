@@ -161,14 +161,15 @@ new_patient_profile_block <- function(selected = NULL,
             shiny::req("adsl" %in% names(tbls))
             ids <- pp_subject_ids(dm_obj)
             picked <- pp_resolve_subject(ids, r_subject())
-            # Normalize short prod table names (ae, lb, vs, ...) to their
-            # ADaM canonical names (adae, adlb, advs, ...) so the vizs —
-            # which declare requirements against ADaM names — find their
-            # tables. Done AFTER dm_filter so the FK cascade (which keys
-            # off the original names) still subject-filters child tables.
+            # Reconcile the study's names with the ones the vizs declare
+            # against: short prod table names (ae, lb, vs, ...) become ADaM
+            # canonical ones, and a SDTM-shaped adsl gains the treatment
+            # dates it does not ship. Done AFTER dm_filter so the FK cascade
+            # (which keys off the original names) still subject-filters child
+            # tables.
             if (!is.na(picked)) {
               list(
-                dm     = pp_normalize_table_aliases(
+                dm     = pp_normalize_dm(
                   dm::dm_filter(dm_obj, adsl = USUBJID == picked)
                 ),
                 picked = picked,
@@ -179,7 +180,7 @@ new_patient_profile_block <- function(selected = NULL,
               # Keep the dm unfiltered so the viz sidebar still
               # populates; the chart area shows the placeholder.
               list(
-                dm     = pp_normalize_table_aliases(dm_obj),
+                dm     = pp_normalize_dm(dm_obj),
                 picked = NA_character_,
                 total  = length(ids),
                 single = FALSE
@@ -195,7 +196,7 @@ new_patient_profile_block <- function(selected = NULL,
           r_norm_dm <- shiny::reactive({
             dm_obj <- data()
             shiny::req(inherits(dm_obj, "dm"))
-            pp_normalize_table_aliases(dm_obj)
+            pp_normalize_dm(dm_obj)
           })
 
           r_cohort_vizs <- shiny::reactive({

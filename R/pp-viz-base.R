@@ -124,6 +124,78 @@ pp_normalize_table_aliases <- function(dm_obj, aliases = pp_table_aliases()) {
   do.call(dm::dm, lapply(tbls, as.data.frame))
 }
 
+#' Coerce an ISO 8601 value to a Date
+#'
+#' SDTM `*DTC` variables are character by definition and may carry a time part
+#' (`2013-02-15T10:30`). Tolerates that, the empty string, and values that are
+#' already `Date`/`POSIXt`.
+#'
+#' @param x Character, Date or POSIXt vector.
+#' @return A `Date` vector, `NA` where `x` is missing or unparseable.
+#' @noRd
+pp_as_date <- function(x) {
+  if (inherits(x, "Date")) return(x)
+  if (inherits(x, "POSIXt")) return(as.Date(x))
+  suppressWarnings(as.Date(as.character(x)))
+}
+
+#' ADSL treatment dates the profile needs, derived when the study ships SDTM
+#'
+#' The treatment lane and the relative-day reference are declared against ADaM's
+#' `TRTSDT` / `TRTEDT`. A study shaped from SDTM carries the same facts under
+#' the reference-exposure timestamps instead: `RFXSTDTC` is the date of first
+#' study treatment, which is what `TRTSDT` means, and `RFSTDTC` is the weaker
+#' subject-reference start to fall back on.
+#'
+#' A rename alone cannot do this, for two reasons. `*DTC` is character, so the
+#' value needs coercing, not just relabelling. And [pp_compute_ref_ms()] and
+#' [pp_compute_time_range()] read these columns off the raw dm, so a per-viz
+#' alias in [pp_resolve_requires()] would resolve too late for them — hence a
+#' dm-wide normalization, alongside [pp_normalize_table_aliases()].
+#'
+#' An existing canonical column always wins; nothing is overwritten.
+#'
+#' @param dm_obj A `dm` object.
+#' @return A `dm`. Unchanged (same object) when nothing was derived.
+#' @noRd
+pp_derive_adsl_dates <- function(dm_obj) {
+  tbls <- dm::dm_get_tables(dm_obj)
+  if (!"adsl" %in% names(tbls)) return(dm_obj)
+
+  adsl <- as.data.frame(tbls[["adsl"]])
+  sources <- list(
+    TRTSDT = c("RFXSTDTC", "RFSTDTC"),
+    TRTEDT = c("RFXENDTC", "RFENDTC")
+  )
+
+  derived <- FALSE
+  for (canonical in names(sources)) {
+    if (canonical %in% colnames(adsl)) next
+    hit <- sources[[canonical]][sources[[canonical]] %in% colnames(adsl)]
+    if (!length(hit)) next
+    adsl[[canonical]] <- pp_as_date(adsl[[hit[[1L]]]])
+    derived <- TRUE
+  }
+  if (!derived) return(dm_obj)
+
+  tbls[["adsl"]] <- adsl
+  do.call(dm::dm, lapply(tbls, as.data.frame))
+}
+
+#' Reconcile a study's dm with the names the vizs declare against
+#'
+#' One seam for both normalizations: short prod table names to ADaM canonical
+#' ones, then the ADSL treatment dates a SDTM-shaped study does not ship. Run
+#' this once, before anything reads the dm — the vizs, the subject picker,
+#' `pp_compute_ref_ms()` and `pp_compute_time_range()` all assume it has.
+#'
+#' @param dm_obj A `dm` object.
+#' @return A `dm`.
+#' @noRd
+pp_normalize_dm <- function(dm_obj) {
+  pp_derive_adsl_dates(pp_normalize_table_aliases(dm_obj))
+}
+
 #' Compute a data-coverage report for a set of vizs against a dm
 #'
 #' For each viz, determine whether it can render against `dm_obj` and, if
