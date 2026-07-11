@@ -36,6 +36,8 @@ patient_overview_viz <- new_pp_viz(
     adae = list(
       ASTDT   = "ASTDTC",
       AENDT   = "AENDTC",
+      ASTDY   = "AESTDY",
+      AENDY   = "AEENDY",
       AEDECOD = NULL,
       AESEV   = NULL,
       AESER   = NULL
@@ -62,12 +64,18 @@ patient_overview_viz <- new_pp_viz(
         "Treatment"
       }
 
-      # Determine lanes — omit AE lane when adae missing (or has no records)
+      # Determine lanes — omit AE lane when adae missing (or has no records).
+      # The onset may arrive as a study day, a date, or both; relative-day mode
+      # prefers the day, for the reasons in pp_xval_pref_day().
       has_adae <- "adae" %in% names(tbls)
+      ae_use_day <- FALSE
       if (has_adae) {
         adae_raw <- as.data.frame(tbls[["adae"]])
-        has_adae <- "ASTDT" %in% colnames(adae_raw) &&
-          nrow(adae_raw[!is.na(adae_raw$ASTDT), , drop = FALSE]) > 0
+        ae_use_day <- identical(mode, "rday") &&
+          "ASTDY" %in% colnames(adae_raw)
+        ae_src <- if (ae_use_day) "ASTDY" else "ASTDT"
+        has_adae <- ae_src %in% colnames(adae_raw) &&
+          nrow(adae_raw[!is.na(adae_raw[[ae_src]]), , drop = FALSE]) > 0
       }
 
       # Short lane labels keep grid.left at 60 (aligned with the other
@@ -149,9 +157,13 @@ patient_overview_viz <- new_pp_viz(
       # Adverse Events lane (omitted when adae missing)
       # ---------------------------------------------------------------
       if (has_adae) {
-        adae <- adae_raw[!is.na(adae_raw$ASTDT), , drop = FALSE]
+        adae <- adae_raw[!is.na(adae_raw[[ae_src]]), , drop = FALSE]
         ae_lane <- lane_idx[["AE"]]
-        has_end <- "AENDT" %in% colnames(adae)
+        has_end <- if (ae_use_day) {
+          "AENDY" %in% colnames(adae)
+        } else {
+          "AENDT" %in% colnames(adae)
+        }
         has_sev <- "AESEV" %in% colnames(adae)
         has_ser <- "AESER" %in% colnames(adae)
         has_term <- "AEDECOD" %in% colnames(adae)
@@ -183,19 +195,31 @@ patient_overview_viz <- new_pp_viz(
         sev_stroke_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.9"))
         sev_hex_js <- js_color_map(sev_hex)
 
+        ae_end <- function(i) if (ae_use_day) adae$AENDY[i] else adae$AENDT[i]
+        ae_x <- function(v) {
+          pp_xval_pref_day(
+            if (ae_use_day) NULL else v,
+            if (ae_use_day) v else NULL,
+            ref_ms, mode
+          )
+        }
+        ae_lab <- function(v) {
+          if (ae_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
+        }
+
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
-          s <- pp_xval(adae$ASTDT[i], ref_ms, mode)
-          e <- if (has_end && !is.na(adae$AENDT[i])) {
-            pp_xval(adae$AENDT[i], ref_ms, mode)
+          s <- ae_x(adae[[ae_src]][i])
+          e <- if (has_end && !is.na(ae_end(i))) {
+            ae_x(ae_end(i))
           } else {
             s + day_unit
           }
           sev <- if (has_sev) toupper(as.character(adae$AESEV[i])) else ""
           ser <- if (has_ser) as.character(adae$AESER[i]) else ""
           term <- if (has_term) as.character(adae$AEDECOD[i]) else "AE"
-          s_lab <- pp_xlabel(adae$ASTDT[i], ref_ms, mode)
-          e_lab <- if (has_end && !is.na(adae$AENDT[i])) {
-            pp_xlabel(adae$AENDT[i], ref_ms, mode)
+          s_lab <- ae_lab(adae[[ae_src]][i])
+          e_lab <- if (has_end && !is.na(ae_end(i))) {
+            ae_lab(ae_end(i))
           } else {
             s_lab
           }

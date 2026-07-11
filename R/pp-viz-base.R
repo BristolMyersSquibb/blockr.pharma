@@ -29,6 +29,13 @@
 #' @param optional Same shape as `requires`. Missing optional columns do not
 #'   block render; present aliases are renamed to canonical names so render
 #'   code can do `"FOO" %in% colnames(tbl)` instead of checking every alias.
+#' @param requires_any Named list keyed by table, each value a list of
+#'   character vectors. Each vector is a set of interchangeable columns, of
+#'   which at least one must be present. Use it where `requires` cannot help
+#'   because the alternatives are not aliases of one another: a study may ship
+#'   an analysis date (`ASTDT`) or a study day (`ASTDY`), and renaming one to
+#'   the other would put integers in a date slot. Declare the alternatives here
+#'   and let the render function branch on which arrived.
 #' @param controls Optional named list of per-viz UI controls (passed through
 #'   unchanged to the existing controls toolbar).
 #' @param render Function `function(dm_obj, time_range, settings, ref_ms, mode)`
@@ -40,6 +47,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
                        tables,
                        requires = list(),
                        optional = list(),
+                       requires_any = list(),
                        controls = NULL,
                        render) {
   stopifnot(
@@ -47,14 +55,14 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     is.character(label), length(label) == 1L,
     is.character(domain), length(domain) == 1L,
     is.character(tables), length(tables) >= 1L,
-    is.list(requires), is.list(optional),
+    is.list(requires), is.list(optional), is.list(requires_any),
     is.function(render)
   )
   structure(
     list(
       id = id, label = label, domain = domain, icon = icon, color = color,
       description = description, tables = tables,
-      requires = requires, optional = optional,
+      requires = requires, optional = optional, requires_any = requires_any,
       controls = controls, render = render
     ),
     class = c("pp_viz", "list")
@@ -227,6 +235,20 @@ pp_resolve_requires <- function(dm_obj, viz) {
 
   resolve_block(viz$requires, required = TRUE)
   resolve_block(viz$optional, required = FALSE)
+
+  # Interchangeable-column sets. Checked after the rename passes so an alias
+  # that resolved to its canonical name counts as present.
+  for (tbl_name in names(viz$requires_any %||% list())) {
+    if (!tbl_name %in% names(renamed_tbls)) next
+    cols <- colnames(as.data.frame(renamed_tbls[[tbl_name]]))
+    for (alts in viz$requires_any[[tbl_name]]) {
+      if (any(alts %in% cols)) next
+      missing_msgs <- c(
+        missing_msgs,
+        paste0("one of ", paste(alts, collapse = ", "), " in ", tbl_name)
+      )
+    }
+  }
 
   if (length(missing_msgs)) {
     return(list(

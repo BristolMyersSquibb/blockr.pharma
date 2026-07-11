@@ -7,8 +7,14 @@
 #
 # Data requirements (declared via new_pp_viz()):
 #   adae:
-#     required — AEDECOD, ASTDT (or ASTDTC alias)
-#     optional — AENDT (or AENDTC), AESEV, AEBODSYS (or AESOC), AESER, AEOUT
+#     required — AEDECOD, and a time source: ASTDT (or ASTDTC) or ASTDY
+#     optional — AENDT (or AENDTC), AENDY, AESEV, AEBODSYS (or AESOC),
+#                AESER, AEOUT
+#
+# A study may ship the AE onset as an analysis date, a study day, or both.
+# Relative-day mode plots days, so a native ASTDY is used as-is rather than
+# reconstructed from a date; date mode needs ASTDT and reports the panel
+# unavailable without it. See pp_xval_pref_day().
 #
 # The dispatcher in patient-profile-block.R resolves these via
 # pp_resolve_requires(): aliases are renamed to canonical names before this
@@ -25,11 +31,14 @@ ae_gantt_viz <- new_pp_viz(
   description = "Gantt bars showing AE duration by preferred term",
   tables = "adae",
   requires = list(adae = list(
-    AEDECOD = NULL,
-    ASTDT   = "ASTDTC"
+    AEDECOD = NULL
   )),
+  requires_any = list(adae = list(c("ASTDT", "ASTDY"))),
   optional = list(adae = list(
+    ASTDT    = "ASTDTC",
     AENDT    = "AENDTC",
+    ASTDY    = "AESTDY",
+    AENDY    = "AEENDY",
     AESEV    = NULL,
     AEBODSYS = "AESOC",
     AESER    = NULL,
@@ -40,7 +49,17 @@ ae_gantt_viz <- new_pp_viz(
     tbls <- dm::dm_get_tables(dm_obj)
     tbl <- as.data.frame(tbls[["adae"]])
 
-    tbl <- tbl[!is.na(tbl$ASTDT), , drop = FALSE]
+    # Prefer the study day the data already carries; fall back to the date.
+    # Date mode has no day-based fallback, so it needs ASTDT outright.
+    has_day <- "ASTDY" %in% colnames(tbl)
+    use_day <- identical(mode, "rday") && has_day
+    if (!use_day && !"ASTDT" %in% colnames(tbl)) {
+      return(pp_empty_chart(
+        "Calendar dates unavailable for adverse events; switch the timeline to relative day"
+      ))
+    }
+
+    tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No AE records"))
 
       # Severity colors: the board scale map (injected as
@@ -70,11 +89,30 @@ ae_gantt_viz <- new_pp_viz(
       has_serious <- "AESER" %in% colnames(tbl)
       has_outcome <- "AEOUT" %in% colnames(tbl)
 
+      # In relative-day mode a native study day is plotted as-is; the end lane
+      # only counts as present when it carries whichever source we are using.
+      end_day <- use_day && "AENDY" %in% colnames(tbl)
+      has_end <- if (use_day) end_day else has_end
+
       day_unit <- if (identical(mode, "rday")) 1 else 86400000
+      start_at <- function(i) {
+        if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i]
+      }
+      end_at <- function(i) {
+        if (use_day) tbl$AENDY[i] else tbl$AENDT[i]
+      }
       bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
-        s <- pp_xval(tbl$ASTDT[i], ref_ms, mode)
-        e <- if (has_end && !is.na(tbl$AENDT[i])) {
-          pp_xval(tbl$AENDT[i], ref_ms, mode)
+        s <- pp_xval_pref_day(
+          if (use_day) NULL else tbl$ASTDT[i],
+          if (use_day) tbl$ASTDY[i] else NULL,
+          ref_ms, mode
+        )
+        e <- if (has_end && !is.na(end_at(i))) {
+          pp_xval_pref_day(
+            if (use_day) NULL else tbl$AENDT[i],
+            if (use_day) tbl$AENDY[i] else NULL,
+            ref_ms, mode
+          )
         } else {
           s + day_unit
         }
@@ -84,9 +122,13 @@ ae_gantt_viz <- new_pp_viz(
         bodsys <- if (has_bodsys) as.character(tbl$AEBODSYS[i]) else ""
         serious <- if (has_serious) as.character(tbl$AESER[i]) else ""
         outcome <- if (has_outcome) as.character(tbl$AEOUT[i]) else ""
-        s_lab <- pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
-        e_lab <- if (has_end && !is.na(tbl$AENDT[i])) {
-          pp_xlabel(tbl$AENDT[i], ref_ms, mode)
+        s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i]) else {
+          pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
+        }
+        e_lab <- if (has_end && !is.na(end_at(i))) {
+          if (use_day) pp_day_label(tbl$AENDY[i]) else {
+            pp_xlabel(tbl$AENDT[i], ref_ms, mode)
+          }
         } else {
           s_lab
         }

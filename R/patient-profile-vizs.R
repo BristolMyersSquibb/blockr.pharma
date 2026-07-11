@@ -32,6 +32,59 @@ pp_xval <- function(d, ref_ms = NA_real_, mode = "date") {
   }
 }
 
+#' Convert an ADaM study day to the continuous relative-day axis
+#'
+#' `pp_xval()`'s relative-day output is a CONTINUOUS scale with no gap at zero:
+#' treatment start is 1, the day before it is 0. An ADaM \*DY column skips zero
+#' instead, so the day before treatment start is -1. The two therefore differ
+#' by one across the whole pre-treatment region, and a native \*DY plotted raw
+#' would sit a day left of everything derived from a date on the same shared
+#' axis. Map it onto the continuous scale before plotting; [pp_day_label()]
+#' reports the untouched \*DY value.
+#'
+#' @param dy ADaM study day (scalar or vector).
+#' @return Numeric position on the relative-day axis.
+#' @noRd
+pp_day_to_x <- function(dy) {
+  dy <- as.numeric(dy)
+  ifelse(!is.na(dy) & dy > 0, dy, dy + 1)
+}
+
+#' Format an ADaM study day for tooltip display
+#'
+#' The value is already a \*DY, so it needs no remapping — unlike
+#' [pp_xlabel()], which has to undo the continuous scale first.
+#'
+#' @noRd
+pp_day_label <- function(dy) {
+  if (is.na(dy)) return("")
+  paste0("D", dy)
+}
+
+#' x-axis value, preferring a study day the data already carries
+#'
+#' Relative-day mode plots study days, and many studies ship them outright
+#' (`ASTDY`, `ADY`) while shipping no analysis date at all. Reconstructing a
+#' date from such a day only to subtract it back into a day is a lossy round
+#' trip: it has to assume an anchor and a day-zero convention, and getting
+#' either wrong shifts every point by a day without looking wrong. So when a
+#' native day is present and we are in relative-day mode, use it directly.
+#'
+#' Date mode still needs real dates; a study with no dates cannot render it,
+#' which is why `day` is the preferred source rather than the only one.
+#'
+#' @param d Date / POSIXct (scalar or vector), or `NULL` when the study ships
+#'   no analysis date.
+#' @param day ADaM study day (scalar or vector), or `NULL` when the study ships
+#'   none.
+#' @param ref_ms Reference timestamp in ms (treatment start). May be NA.
+#' @param mode "date" or "rday"
+#' @noRd
+pp_xval_pref_day <- function(d, day, ref_ms = NA_real_, mode = "date") {
+  if (identical(mode, "rday") && !is.null(day)) return(pp_day_to_x(day))
+  pp_xval(d, ref_ms, mode)
+}
+
 #' Format a value for tooltip display, respecting the timeline mode
 #'
 #' Returns the calendar date (`YYYY-MM-DD`) in date mode, or `D<n>` in
@@ -281,6 +334,17 @@ pp_compute_time_range <- function(dm_obj) {
     adsl = c("TRTSDT", "TRTEDT")
   )
 
+  # Study-day columns, for studies that ship a day but no analysis date. The
+  # axis would otherwise never see those events and would clip them. Bounds
+  # only: converting a day back to a date is the lossy round trip that
+  # pp_xval_pref_day() exists to avoid, but an axis end landing a day wide is
+  # invisible, where an event landing a day off is not.
+  day_col_map <- list(
+    adae = c("ASTDY", "AENDY"),
+    adlbc = "ADY", adlbh = "ADY", adlb = "ADY", advs = "ADY",
+    adqsadas = "ADY", adqsnpix = "ADY"
+  )
+
   all_dates <- do.call(c, lapply(names(date_col_map), function(tbl_name) {
     if (!tbl_name %in% names(tbls)) return(as.Date(character()))
     tbl <- as.data.frame(tbls[[tbl_name]])
@@ -289,6 +353,25 @@ pp_compute_time_range <- function(dm_obj) {
     }))
     dates[!is.na(dates)]
   }))
+
+  ref_ms <- pp_compute_ref_ms(dm_obj)
+  if (!is.na(ref_ms)) {
+    anchor <- as.Date(as.POSIXct(ref_ms / 1000, origin = "1970-01-01",
+                                 tz = "UTC"))
+    from_days <- do.call(c, lapply(names(day_col_map), function(tbl_name) {
+      if (!tbl_name %in% names(tbls)) return(as.Date(character()))
+      tbl <- as.data.frame(tbls[[tbl_name]])
+      ds <- do.call(c, lapply(day_col_map[[tbl_name]], function(col) {
+        if (!col %in% colnames(tbl)) return(as.Date(character()))
+        dy <- suppressWarnings(as.numeric(tbl[[col]]))
+        dy <- dy[!is.na(dy)]
+        if (!length(dy)) return(as.Date(character()))
+        anchor + pp_day_to_x(dy) - 1
+      }))
+      ds[!is.na(ds)]
+    }))
+    all_dates <- c(all_dates, from_days)
+  }
 
   if (length(all_dates) == 0) return(NULL)
   as.Date(c(min(all_dates), max(all_dates)), origin = "1970-01-01")
