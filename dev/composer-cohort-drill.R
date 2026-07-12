@@ -147,8 +147,12 @@ serve(
       # sibling sender's cohort or a restored board is never clobbered.
       send = new_function_block(
         fn = "function(data, table = 'adsl') {
-  none <- data.frame(condition = '(click a level row in the summary)',
-                     values = '')
+  # Output is a RECEIPT of what this block pushed (blockr.extra::ctrl_receipt),
+  # built from `cols` alone -- the sender never reads the filter back.
+  none <- blockr.extra::ctrl_receipt(
+    list(), 'Cohort',
+    hint = 'Click a level row in the summary to filter the cohort.'
+  )
   clear <- function() {
     blockr.extra::ctrl_clear('cohort_filter',
                              state = list(columns = list()))
@@ -192,10 +196,9 @@ serve(
   if (!length(cols)) return(clear())
 
   blockr.extra::ctrl_send('cohort_filter', state = list(columns = cols))
-  data.frame(
-    condition = vapply(cols, function(x) x$name, character(1L)),
-    values = vapply(cols, function(x) paste(x$values, collapse = ', '),
-                    character(1L))
+  blockr.extra::ctrl_receipt(
+    cols, 'Cohort',
+    hint = 'Re-click the row in the summary to clear.'
   )
 }",
         block_name = "Send cohort to filter"

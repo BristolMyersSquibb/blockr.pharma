@@ -115,8 +115,16 @@ demog_fn <- function(title, vars) {
 # that is what the control channel scopes authorship by (the module namespace
 # the fn is evaluated in). See ctrl_send()'s "Clearing" section.
 send_fn <- "function(data, table = 'adsl') {
-  none <- data.frame(condition = '(click a level row in the summary)',
-                     values = '')
+  # The output is a RECEIPT: what this block last pushed, past tense. It is
+  # built from `cols` alone -- the sender never reads the filter back (see
+  # ?blockr.extra::ctrl_receipt). So after step 2 above, sender A's receipt
+  # still reads SEX = F even though the cohort is AGEGR1 = >80. That is not
+  # staleness to fix: A did send that, and what the cohort currently HOLDS is
+  # the filter block's own business to display.
+  none <- blockr.extra::ctrl_receipt(
+    list(), 'Cohort',
+    hint = 'Click a level row in the summary to filter the cohort.'
+  )
   clear <- function() {
     blockr.extra::ctrl_clear('cohort_filter',
                              state = list(columns = list()))
@@ -157,10 +165,9 @@ send_fn <- "function(data, table = 'adsl') {
   if (!length(cols)) return(clear())
 
   blockr.extra::ctrl_send('cohort_filter', state = list(columns = cols))
-  data.frame(
-    condition = vapply(cols, function(x) x$name, character(1L)),
-    values = vapply(cols, function(x) paste(x$values, collapse = ', '),
-                    character(1L))
+  blockr.extra::ctrl_receipt(
+    cols, 'Cohort',
+    hint = 'Re-click the row in the summary to clear.'
   )
 }"
 
