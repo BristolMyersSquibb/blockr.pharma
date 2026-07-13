@@ -1,10 +1,11 @@
 # TWO senders, ONE filter. Variant of composer-cohort-drill.R that puts a
-# second drillable summary (and its own sender function block) on the board,
-# both pushing into the SAME value filter over the control channel:
+# second drillable summary on the board, both pushing into the SAME value
+# filter over the control channel -- via the TABLE BLOCKS' OWN send
+# (ctrl_target, the gear's "Send to filter" option), no sender blocks:
 #
-#   adsl -> demog_a (Sex, Race)      -> tbl_a -> send_a --.
-#     |                                                    >-- cohort_filter -> profile
-#     `-> demog_b (Age group, Ethn.) -> tbl_b -> send_b --'
+#   adsl -> demog_a (Sex, Race)      -> tbl_a --.
+#     |                                          >-- cohort_filter -> profile
+#     `-> demog_b (Age group, Ethn.) -> tbl_b --'
 #
 # What to watch (the whole point of this demo):
 #
@@ -15,9 +16,10 @@
 #      compose with it. Two disjoint drills read like "narrow, then narrow
 #      again" but the second one overwrites. This is the behaviour to decide
 #      on (replace vs merge), not a bug to fix in this script.
-#   3. Sender A's own output is now STALE: it says SEX = F while the cohort is
-#      AGEGR1 = >80. A has no data link to the filter, so nothing re-evaluates
-#      it when B sends. The control channel has no back-edge, by design.
+#   3. Table A's status footer is now STALE: it says Filtered: SEX = F while
+#      the cohort is AGEGR1 = >80. A has no data link to the filter, so
+#      nothing re-evaluates it when B sends. The control channel has no
+#      back-edge, by design.
 #   4. Un-drill A (re-click `F`). A re-evaluates, calls ctrl_clear(), finds it
 #      no longer owns the target (B does) -> no-op. B's cohort SURVIVES. This
 #      is the ownership rule doing its job: an un-drill never clobbers a
@@ -62,11 +64,11 @@ options(
 message("two-sender cohort drill demo on http://127.0.0.1:", port, "/")
 
 # The board update channel is exposed to block code by the packaged bridge
-# extension, blockr.extra::new_ctrl_bridge_extension() (this script used to
+# extension, blockr.viz::new_ctrl_bridge_extension() (this script used to
 # hand-roll it). It is one extension for the whole board on purpose: the
 # last-author registry lives inside install_ctrl_send(), so BOTH senders here
 # share one registry -- that is what makes step 4 above work. It also hands the
-# board to the channel, which is what lets each sender's gear offer a picker of
+# board to the channel, which is what lets each table's gear offer a picker of
 # the board's value filter blocks.
 
 # One composer summary per pair of variables. `vars` is a list of
@@ -102,22 +104,19 @@ demog_fn <- function(title, vars) {
 }", title, blocks)
 }
 
-# The senders are blockr.extra::new_ctrl_filter_block() -- the packaged form of
-# the sender that composer-cohort-drill.R still prototypes as a function block.
-# The claim logic (blockr.extra::drill_claim_columns()) now lives in the
-# package: one tested implementation instead of a 40-line deparsed string
-# copied once per sender, real block arguments instead of a code editor, and no
-# CodeMirror mounted per sender. That is what makes ten of them viable.
+# The senders are the TABLE BLOCKS THEMSELVES: `ctrl_target` names the value
+# filter to drive and `ctrl_table` the dm table the conditions apply to (the
+# gear's "Send to filter (beta)" option). The send rides on the drill's own
+# clicks, so it keeps working when the table is parked on an off-screen view
+# under lazy eval -- the failure mode that killed the standalone sender block
+# this demo used to wire per table.
 #
 # Both send to the SAME target. Authorship is scoped by the module namespace a
 # claim was sent from, so each sender owns its own claim and an un-drill from
-# one never clears the other's (see ctrl_send()'s "Clearing" section).
-#
-# `columns` is left unset: the upstream is a TABLE, whose drilled output carries
-# the ARD identity (.variable / .group<k>) the claim is read off. Upstream of a
-# CHART or tile you must set it (e.g. columns = "SEX") -- a chart coerces its
-# input with as_plain_df(), which drops those columns, so its drilled output is
-# a plain row subset with nothing in it naming the drilled column.
+# one never clears the other's (see ctrl_send()'s "Clearing" section). The
+# claim is read off the block's own drill state -- a structured table drills
+# on its ARD identity (.variable / .group<k>), a chart or tile on its real
+# drill column, and the block knows which, so nothing is configured.
 
 
 serve(
@@ -136,10 +135,9 @@ serve(
         ),
         block_name = "Demographics A (composer)"
       ),
-      tbl_a = new_table_block(drill = "auto", block_name = "Sex / Race"),
-      send_a = new_ctrl_filter_block(
-        target = "cohort_filter", table = "adsl", label = "Cohort",
-        block_name = "Sender A"
+      tbl_a = new_table_block(
+        drill = "auto", ctrl_target = "cohort_filter", ctrl_table = "adsl",
+        block_name = "Sex / Race"
       ),
 
       # Sender B: Age group / Ethnicity -- deliberately DISJOINT dimensions
@@ -152,10 +150,9 @@ serve(
         ),
         block_name = "Demographics B (composer)"
       ),
-      tbl_b = new_table_block(drill = "auto", block_name = "Age group / Ethnicity"),
-      send_b = new_ctrl_filter_block(
-        target = "cohort_filter", table = "adsl", label = "Cohort",
-        block_name = "Sender B"
+      tbl_b = new_table_block(
+        drill = "auto", ctrl_target = "cohort_filter", ctrl_table = "adsl",
+        block_name = "Age group / Ethnicity"
       ),
 
       # The single cohort authority both senders write to.
@@ -171,21 +168,19 @@ serve(
       list(from = "cdisc", to = "adsl", input = "data"),
       list(from = "adsl", to = "demog_a", input = "data"),
       list(from = "demog_a", to = "tbl_a", input = "data"),
-      list(from = "tbl_a", to = "send_a", input = "data"),
       list(from = "adsl", to = "demog_b", input = "data"),
       list(from = "demog_b", to = "tbl_b", input = "data"),
-      list(from = "tbl_b", to = "send_b", input = "data"),
       list(from = "cdisc", to = "cohort_filter", input = "data"),
       list(from = "cohort_filter", to = "profile", input = "data")
     ),
     extensions = list(
       dag_extension = new_dag_extension(),
-      ctrl_bridge = new_ctrl_bridge_extension()
+      ctrl_bridge = blockr.viz::new_ctrl_bridge_extension()
     ),
     grids = list(
       Cohort = dock_grid(
-        list("tbl_a", "send_a"),
-        list("tbl_b", "send_b"),
+        "tbl_a",
+        "tbl_b",
         list("cohort_filter", "profile"),
         sizes = c(1, 1, 1)
       ),
