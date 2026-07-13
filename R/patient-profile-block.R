@@ -25,11 +25,15 @@
 #'   always renders its one subject. Ignored (and cleared) when the value is
 #'   absent from the incoming cohort. Defaults to `NULL`, i.e. no patient
 #'   chosen.
-#' @param arm_var ADSL column holding the treatment / arm label, as a length-1
-#'   character. Studies that do not ship the ADaM arm variables can name their
-#'   own column here (e.g. `"TRT"`); it is used by both the subject picker and
-#'   the treatment lane, so the two cannot disagree. Defaults to `NULL`, which
-#'   falls back to the first of `ARM`, `ACTARM`, `TRT01P`, `TRT01A` present.
+#' @details
+#' The ADSL column holding the treatment / arm label is study-level
+#' configuration, not block state: set it once per app via
+#' `options(blockr.pharma_arm_var = "TRT")` (or the `BLOCKR_PHARMA_ARM_VAR`
+#' environment variable). It is used by both the subject picker and the
+#' treatment lane, so the two cannot disagree. When the option is unset, the
+#' first of `ARM`, `ACTARM`, `TRT01P`, `TRT01A` present is used. A legacy
+#' `arm_var` constructor argument (from boards saved before this change) is
+#' ignored with a warning.
 #' @param ... Forwarded to [blockr.core::new_transform_block()]
 #'
 #' @return A transform block of class `patient_profile_block`
@@ -71,14 +75,25 @@ new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
                                               timeline_mode = "rday",
                                               subject = NULL,
-                                              arm_var = NULL,
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
-  stopifnot(
-    is.null(arm_var) ||
-      (is.character(arm_var) && length(arm_var) == 1L && nzchar(arm_var))
-  )
+
+  # `arm_var` is study-level configuration, not block state: it is read from
+  # the app-level option at server start (see below), never persisted, and
+  # deliberately NOT a constructor formal -- core requires every formal to
+  # round-trip through `state`, which would make it saved-board state and put
+  # it one step from user control. Boards saved before this change carry
+  # arm_var in their serialized state; on restore it lands in `...` and
+  # new_block() stores it as an inert attribute, so old boards still load --
+  # warn so the silently-dropped setting is at least visible.
+  if ("arm_var" %in% names(list(...))) {
+    warning(
+      "new_patient_profile_block(arm_var=) is ignored: set ",
+      "options(blockr.pharma_arm_var=) for the app instead.",
+      call. = FALSE
+    )
+  }
 
   # Validate selected viz IDs (static vizs only; findings group IDs
 
@@ -115,16 +130,24 @@ new_patient_profile_block <- function(selected = NULL,
           # Currently picked USUBJID: character(0) when no patient chosen.
           r_subject <- shiny::reactiveVal(subject)
 
-          # Study-declared arm column. Set once at study setup, no UI; held
-          # as a reactiveVal so it round-trips through the block state like
-          # every other constructor argument.
-          r_arm_var <- shiny::reactiveVal(arm_var)
+          # Study-declared arm column. Study-level configuration, not user
+          # input: read once from the app-level option
+          # (options(blockr.pharma_arm_var=) / BLOCKR_PHARMA_ARM_VAR), kept
+          # OUT of the block state -- neither persisted nor exposed to
+          # external control / the AI assistant. NULL = auto-detect the
+          # standard ADaM arm columns.
+          arm_var <- blockr.core::blockr_option("pharma_arm_var", NULL)
+          stopifnot(
+            is.null(arm_var) ||
+              (is.character(arm_var) && length(arm_var) == 1L &&
+                 nzchar(arm_var))
+          )
 
           # The incoming cohort. This is the universe the picker selects
           # within: an upstream drill-down narrows it, the picker never
           # widens it, so the two can never conflict.
           r_cohort <- shiny::reactive({
-            pp_subject_choices(r_data(), r_arm_var())
+            pp_subject_choices(r_data(), arm_var)
           })
 
           # Stale-selection guard. When the upstream cohort changes and the
@@ -840,7 +863,7 @@ new_patient_profile_block <- function(selected = NULL,
               viz_settings$sev_colors <- sev_colors
             }
             if (identical(viz_id, "patient_overview")) {
-              viz_settings$arm_var <- r_arm_var()
+              viz_settings$arm_var <- arm_var
             }
 
             # Resolve declared `requires` / `optional` column dependencies.
@@ -916,8 +939,7 @@ new_patient_profile_block <- function(selected = NULL,
               selected = r_selected,
               viz_settings = r_viz_settings,
               timeline_mode = r_timeline_mode,
-              subject = r_subject,
-              arm_var = r_arm_var
+              subject = r_subject
             )
           )
         }
@@ -1450,7 +1472,11 @@ new_patient_profile_block <- function(selected = NULL,
     # patient yet) — the UI shows a grey placeholder, not an error. Same for
     # `subject`: the stale-selection guard clears it whenever the picked
     # patient leaves the cohort, and clearing a field that is not listed
-    # here wedges the block.
+    # here wedges the block. EVERY state field that can legitimately be
+    # empty MUST be listed: an empty field missing here makes core's
+    # state_ready() FALSE forever, which req()-blocks dat_eval — the block's
+    # RESULT stays NULL (invisible while the block is terminal) and the AI
+    # ctrl chat can never read the input data.
     allow_empty_state = c("selected", "viz_settings", "subject"),
     external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject"),
     class = c("patient_profile_block", "dm_block"),

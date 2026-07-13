@@ -69,11 +69,18 @@ test_that("picker and overview agree on the column once arm_var is declared", {
   expect_identical(pp_arm_column(cols, "TRT"), "TRT")
 })
 
-test_that("arm_var is validated at construction", {
-  expect_error(new_patient_profile_block(arm_var = c("a", "b")))
-  expect_error(new_patient_profile_block(arm_var = ""))
-  expect_error(new_patient_profile_block(arm_var = 1))
-  expect_s3_class(new_patient_profile_block(arm_var = "TRT"),
-                  "patient_profile_block")
+test_that("arm_var is app-level config, not a constructor argument", {
+  # The arm column comes from options(blockr.pharma_arm_var=). A legacy
+  # arm_var= argument (boards saved before the change) must not break
+  # construction -- it is ignored with a warning.
+  expect_warning(
+    blk <- new_patient_profile_block(arm_var = "TRT"),
+    "blockr.pharma_arm_var"
+  )
+  expect_s3_class(blk, "patient_profile_block")
   expect_s3_class(new_patient_profile_block(), "patient_profile_block")
+  # ... and it is not block state (not persisted, not externally controllable)
+  st <- attr(new_patient_profile_block(), "allow_empty_state")
+  expect_false("arm_var" %in% st)
+  expect_false("arm_var" %in% attr(new_patient_profile_block(), "external_ctrl"))
 })
