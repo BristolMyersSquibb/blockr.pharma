@@ -231,6 +231,31 @@ pp_coverage_report <- function(dm_obj, vizs) {
   out
 }
 
+#' Does the current patient lack rows in all of a viz's tables?
+#'
+#' Viz availability is cohort-based, so a viz can be listed while the
+#' patient on screen has no data for it at all. Returns TRUE when every one
+#' of the viz's declared tables is empty in the (subject-scoped) dm — the
+#' chart slot then shows a "No data for this patient" message instead of
+#' calling the renderer. A viz with at least one non-empty table (e.g. one
+#' that reads adsl alongside a findings table) renders normally and handles
+#' its own partial emptiness, as before.
+#'
+#' @param dm_obj A subject-scoped `dm` object.
+#' @param tables Character vector of the viz's declared tables.
+#' @return TRUE when all declared tables present in the dm have zero rows.
+#' @noRd
+pp_no_patient_rows <- function(dm_obj, tables) {
+  tbls <- dm::dm_get_tables(dm_obj)
+  tables <- intersect(tables, names(tbls))
+  if (length(tables) == 0L) return(FALSE)
+  all(vapply(
+    tables,
+    function(tbl_name) nrow(as.data.frame(tbls[[tbl_name]])) == 0L,
+    logical(1L)
+  ))
+}
+
 #' Resolve required / optional column declarations against a dm
 #'
 #' Walks `viz$requires` and `viz$optional`. For each declared canonical
