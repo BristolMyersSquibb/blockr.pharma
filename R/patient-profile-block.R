@@ -97,6 +97,21 @@ new_patient_profile_block <- function(selected = NULL,
       shiny::moduleServer(
         id,
         function(input, output, session) {
+          # De-duplicated input dm. The board re-emits the SAME dm two or three
+          # times on a cold start: the block re-evaluates as the dock's
+          # visibility handshake settles (pending -> required -> rendered) and
+          # blockr.core does not compare a block's data by value, so each
+          # re-evaluation looks like a change. Everything here derives from
+          # `data()`, so the whole chart area was rebuilt -- every echarts
+          # container destroyed and recreated -- three times on startup, for a
+          # dm that is `identical()` each time.
+          #
+          # reactiveVal skips invalidation when the new value is identical to
+          # the current one, so funnelling the input through it makes a
+          # re-emitted dm cost nothing. Read `r_data()`, never `data()`.
+          r_data <- shiny::reactiveVal(NULL)
+          shiny::observe(r_data(data()))
+
           # Currently picked USUBJID: character(0) when no patient chosen.
           r_subject <- shiny::reactiveVal(subject)
 
@@ -109,7 +124,7 @@ new_patient_profile_block <- function(selected = NULL,
           # within: an upstream drill-down narrows it, the picker never
           # widens it, so the two can never conflict.
           r_cohort <- shiny::reactive({
-            pp_subject_choices(data(), r_arm_var())
+            pp_subject_choices(r_data(), r_arm_var())
           })
 
           # Stale-selection guard. When the upstream cohort changes and the
@@ -155,7 +170,7 @@ new_patient_profile_block <- function(selected = NULL,
           # chart area shows a placeholder. dm_filter cascades via FKs, so
           # every downstream read of a scoped dm sees the single-patient dm.
           r_scoped_dm <- shiny::reactive({
-            dm_obj <- data()
+            dm_obj <- r_data()
             shiny::req(inherits(dm_obj, "dm"))
             tbls <- dm::dm_get_tables(dm_obj)
             shiny::req("adsl" %in% names(tbls))
@@ -194,7 +209,7 @@ new_patient_profile_block <- function(selected = NULL,
           # screen, so they read from here and the header bar stays
           # independent of `r_subject`.
           r_norm_dm <- shiny::reactive({
-            dm_obj <- data()
+            dm_obj <- r_data()
             shiny::req(inherits(dm_obj, "dm"))
             pp_normalize_dm(dm_obj)
           })
