@@ -813,6 +813,31 @@
   display: inline-flex;
 }
 
+/* Cohort-size tag: same two-tone recipe as the dock's Package badge
+   (blockr-dock.css .badge-two-tone), with concrete fallbacks so it also
+   renders outside the dock. */
+.pp-cohort-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 4px;
+  background-color: var(--blockr-grey-100, #f3f4f6);
+  color: var(--blockr-color-text-muted, #6b7280);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  white-space: nowrap;
+}
+
+.pp-cohort-count.is-hidden {
+  display: none;
+}
+
+.pp-cohort-count svg {
+  flex-shrink: 0;
+}
+
 .pp-subject-step {
   display: inline-flex;
   align-items: center;

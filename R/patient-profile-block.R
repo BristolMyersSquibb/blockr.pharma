@@ -97,6 +97,21 @@ new_patient_profile_block <- function(selected = NULL,
       shiny::moduleServer(
         id,
         function(input, output, session) {
+          # De-duplicated input dm. The board re-emits the SAME dm two or three
+          # times on a cold start: the block re-evaluates as the dock's
+          # visibility handshake settles (pending -> required -> rendered) and
+          # blockr.core does not compare a block's data by value, so each
+          # re-evaluation looks like a change. Everything here derives from
+          # `data()`, so the whole chart area was rebuilt -- every echarts
+          # container destroyed and recreated -- three times on startup, for a
+          # dm that is `identical()` each time.
+          #
+          # reactiveVal skips invalidation when the new value is identical to
+          # the current one, so funnelling the input through it makes a
+          # re-emitted dm cost nothing. Read `r_data()`, never `data()`.
+          r_data <- shiny::reactiveVal(NULL)
+          shiny::observe(r_data(data()))
+
           # Currently picked USUBJID: character(0) when no patient chosen.
           r_subject <- shiny::reactiveVal(subject)
 
@@ -109,7 +124,7 @@ new_patient_profile_block <- function(selected = NULL,
           # within: an upstream drill-down narrows it, the picker never
           # widens it, so the two can never conflict.
           r_cohort <- shiny::reactive({
-            pp_subject_choices(data(), r_arm_var())
+            pp_subject_choices(r_data(), r_arm_var())
           })
 
           # Stale-selection guard. When the upstream cohort changes and the
@@ -155,7 +170,7 @@ new_patient_profile_block <- function(selected = NULL,
           # chart area shows a placeholder. dm_filter cascades via FKs, so
           # every downstream read of a scoped dm sees the single-patient dm.
           r_scoped_dm <- shiny::reactive({
-            dm_obj <- data()
+            dm_obj <- r_data()
             shiny::req(inherits(dm_obj, "dm"))
             tbls <- dm::dm_get_tables(dm_obj)
             shiny::req("adsl" %in% names(tbls))
@@ -194,7 +209,7 @@ new_patient_profile_block <- function(selected = NULL,
           # screen, so they read from here and the header bar stays
           # independent of `r_subject`.
           r_norm_dm <- shiny::reactive({
-            dm_obj <- data()
+            dm_obj <- r_data()
             shiny::req(inherits(dm_obj, "dm"))
             pp_normalize_dm(dm_obj)
           })
@@ -204,20 +219,16 @@ new_patient_profile_block <- function(selected = NULL,
             c(patient_profile_static_vizs(), pp_findings_vizs(dm_obj))
           })
 
-          # All vizs: static + dynamic findings groups from dm data
-          r_all_vizs <- shiny::reactive({
-            dm_obj <- r_scoped_dm()$dm
-            shiny::req(inherits(dm_obj, "dm"))
-            c(patient_profile_static_vizs(), pp_findings_vizs(dm_obj))
-          })
-
-          # Available vizs (those whose tables exist in the dm)
+          # Available vizs (those whose tables exist in the dm). Derived
+          # from the UNSCOPED dm: which vizs the study's data supports is a
+          # property of the cohort, not of the patient on screen, so the
+          # sidebar and the panel skeleton stay put when the patient
+          # changes. A patient with no rows for a viz gets a "no data"
+          # message in its chart slot instead of the card vanishing. Same
+          # source as the gear's Data coverage report, so the two agree.
           r_available <- shiny::reactive({
-            dm_obj <- r_scoped_dm()$dm
-            shiny::req(inherits(dm_obj, "dm"))
-            tbl_names <- names(dm::dm_get_tables(dm_obj))
-            all_vizs <- r_all_vizs()
-            Filter(function(v) all(v$tables %in% tbl_names), all_vizs)
+            tbl_names <- names(dm::dm_get_tables(r_norm_dm()))
+            Filter(function(v) all(v$tables %in% tbl_names), r_cohort_vizs())
           })
 
           # Selected viz IDs
@@ -326,6 +337,7 @@ new_patient_profile_block <- function(selected = NULL,
                 options = opts,
                 selected = if (is.na(picked)) "" else picked,
                 locked  = length(co$ids) <= 1L,
+                count   = length(co$ids),
                 static  = if (length(co$ids) == 1L) {
                   co$labels[[1L]]
                 } else {
@@ -365,6 +377,19 @@ new_patient_profile_block <- function(selected = NULL,
             r_viz_settings(settings)
           })
 
+          # Whether a single patient is on screen, plus the cohort size for
+          # the placeholder text. A reactiveVal fed by an observer, not a
+          # reactive: switching from patient A to patient B re-executes
+          # r_scoped_dm but leaves this pair unchanged, and reactiveVal
+          # skips invalidation on identical values. That is what keeps the
+          # panel skeleton (and with it every chart container) out of the
+          # patient-switch redraw path.
+          r_pick_state <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            scoped <- r_scoped_dm()
+            r_pick_state(list(single = scoped$single, total = scoped$total))
+          })
+
           # Shared time range
           r_time_range <- shiny::reactive({
             dm_obj <- r_scoped_dm()$dm
@@ -379,7 +404,9 @@ new_patient_profile_block <- function(selected = NULL,
             pp_compute_ref_ms(dm_obj)
           })
 
-          # Render sidebar cards (re-renders when dm changes)
+          # Render sidebar cards (re-renders when the cohort's data
+          # changes; availability is cohort-based, so patient switches
+          # leave the sidebar untouched)
           output$sidebar_cards <- shiny::renderUI({
             avail <- r_available()
             sel <- shiny::isolate(r_selected())
@@ -698,17 +725,19 @@ new_patient_profile_block <- function(selected = NULL,
             )
           })
 
-          # Render chart list (depends on selected, settings, time range,
-          # and timeline mode; rebuilds on every change — but the header
-          # bar above is independent so the popover stays open).
+          # Chart-area skeleton: one stable panel shell per selected viz,
+          # each holding its own uiOutput slot (filled by render_viz_slot
+          # below). Depends on the selection, the cohort's available vizs
+          # and the picked / not-picked state — NOT on which patient is
+          # picked, so a patient switch re-renders only the slot contents;
+          # the panels, the sidebar and the scroll position stay put.
           output$chart_area <- shiny::renderUI({
-            scoped <- r_scoped_dm()
-            dm_obj <- scoped$dm
-            shiny::req(inherits(dm_obj, "dm"))
+            st <- r_pick_state()
+            shiny::req(!is.null(st))
             # The profile needs exactly one patient. Until the header picker
             # or an upstream drill-down commits to one, show an info
             # placeholder rather than auto-picking the first subject.
-            if (!isTRUE(scoped$single)) {
+            if (!isTRUE(st$single)) {
               return(shiny::div(class = "pp-empty-state",
                 shiny::div(class = "pp-empty-state-icon",
                   shiny::HTML(paste0(
@@ -725,27 +754,16 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::p(class = "pp-empty-state-text",
                   "No patient selected"),
                 shiny::p(class = "pp-empty-state-hint",
-                  if (isTRUE(scoped$total > 1L)) {
-                    paste0("Pick one of ", scoped$total,
+                  if (isTRUE(st$total > 1L)) {
+                    paste0("Pick one of ", st$total,
                            " patients above, or drill down on a chart")
                   } else {
                     "No patient data in the incoming tables"
                   })
               ))
             }
-            time_range <- r_time_range()
-            shiny::req(time_range)
             sel <- r_selected()
             avail <- r_available()
-            all_settings <- r_viz_settings()
-            ref_ms <- r_ref_ms()
-            tl_mode <- r_timeline_mode()
-            # Relative-day mode requires a reference timestamp; if TRTSDT
-            # isn't available, silently fall back to date mode rather than
-            # rendering an empty/value axis.
-            if (identical(tl_mode, "rday") && is.na(ref_ms)) {
-              tl_mode <- "date"
-            }
 
             # Keep only selected vizs that are available
             active_ids <- intersect(sel, names(avail))
@@ -774,60 +792,106 @@ new_patient_profile_block <- function(selected = NULL,
               ))
             }
 
-            # Board scale map: resolve AE severity colors once and inject
-            # them as a render-time setting for the severity-colored vizs
-            # (not persisted -- r_viz_settings is untouched). Falls back to
-            # each viz's own constants when no map / no binding is present.
+            # Panel shells only: the uiOutput itself is the .pp-chart-panel
+            # div, so the DOM shape (panel > header + body) is unchanged
+            # once the slot renders into it.
+            ns <- session$ns
+            shiny::tagList(lapply(active_ids, function(viz_id) {
+              shiny::uiOutput(
+                ns(paste0("viz_slot_", viz_id)),
+                class = if (identical(viz_id, "patient_overview")) {
+                  "pp-chart-panel pp-treatment-strip"
+                } else {
+                  "pp-chart-panel"
+                }
+              )
+            }))
+          })
+
+          # Render one viz's panel content (header + controls + chart).
+          # Everything patient-dependent lives here, so a patient switch
+          # re-renders each slot in place and nothing around it.
+          render_viz_slot <- function(viz_id) {
+            scoped <- r_scoped_dm()
+            dm_obj <- scoped$dm
+            shiny::req(inherits(dm_obj, "dm"), isTRUE(scoped$single))
+            viz <- r_available()[[viz_id]]
+            shiny::req(!is.null(viz))
+            time_range <- r_time_range()
+            shiny::req(time_range)
+            ref_ms <- r_ref_ms()
+            tl_mode <- r_timeline_mode()
+            # Relative-day mode requires a reference timestamp; if TRTSDT
+            # isn't available, silently fall back to date mode rather than
+            # rendering an empty/value axis.
+            if (identical(tl_mode, "rday") && is.na(ref_ms)) {
+              tl_mode <- "date"
+            }
+
+            # Board scale map: resolve AE severity colors and inject them as
+            # a render-time setting for the severity-colored vizs (not
+            # persisted -- r_viz_settings is untouched). Falls back to each
+            # viz's own constants when no map / no binding is present.
             sev_colors <- pp_sev_scale_colors(r_scale_map(), dm_obj)
 
-            chart_tags <- lapply(active_ids, function(viz_id) {
-              viz <- avail[[viz_id]]
-              viz_settings <- all_settings[[viz_id]] %||% list()
-              if (viz_id %in% c("ae_gantt", "patient_overview") &&
-                    !is.null(sev_colors)) {
-                viz_settings$sev_colors <- sev_colors
-              }
-              if (identical(viz_id, "patient_overview")) {
-                viz_settings$arm_var <- r_arm_var()
-              }
+            viz_settings <- r_viz_settings()[[viz_id]] %||% list()
+            if (viz_id %in% c("ae_gantt", "patient_overview") &&
+                  !is.null(sev_colors)) {
+              viz_settings$sev_colors <- sev_colors
+            }
+            if (identical(viz_id, "patient_overview")) {
+              viz_settings$arm_var <- r_arm_var()
+            }
 
-              # Resolve declared `requires` / `optional` column dependencies.
-              # If a required column (or any alias) is missing, render a
-              # pp_empty_chart message instead of calling the viz renderer.
-              resolved <- pp_resolve_requires(dm_obj, viz)
-              chart <- if (!isTRUE(resolved$ok)) {
-                pp_empty_chart(resolved$msg)
-              } else {
-                tryCatch(
-                  viz$render(resolved$dm, time_range, viz_settings,
-                             ref_ms, tl_mode),
-                  error = function(e) pp_empty_chart(
-                    paste("Error:", conditionMessage(e))
-                  )
+            # Resolve declared `requires` / `optional` column dependencies.
+            # If a required column (or any alias) is missing, render a
+            # pp_empty_chart message instead of calling the viz renderer.
+            resolved <- pp_resolve_requires(dm_obj, viz)
+            chart <- if (!isTRUE(resolved$ok)) {
+              pp_empty_chart(resolved$msg)
+            } else if (pp_no_patient_rows(resolved$dm, viz$tables)) {
+              # Availability is cohort-based, so the viz can exist while
+              # this particular patient has no rows in any of its tables;
+              # say so instead of drawing an empty axis.
+              pp_empty_chart("No data for this patient")
+            } else {
+              tryCatch(
+                viz$render(resolved$dm, time_range, viz_settings,
+                           ref_ms, tl_mode),
+                error = function(e) pp_empty_chart(
+                  paste("Error:", conditionMessage(e))
                 )
-              }
-
-              # Build controls toolbar
-              controls_ui <- pp_controls_ui(viz, viz_id, dm_obj, viz_settings)
-
-              is_treatment <- viz_id == "patient_overview"
-              panel_class <- if (is_treatment) {
-                "pp-chart-panel pp-treatment-strip"
-              } else {
-                "pp-chart-panel"
-              }
-
-              shiny::div(class = panel_class,
-                shiny::div(class = "pp-chart-header",
-                  shiny::div(class = "pp-chart-title", viz$label),
-                  controls_ui,
-                  shiny::div(class = "pp-chart-domain", viz$domain)
-                ),
-                shiny::div(class = "pp-chart-body", chart)
               )
-            })
+            }
 
-            shiny::tagList(chart_tags)
+            controls_ui <- pp_controls_ui(viz, viz_id, dm_obj, viz_settings)
+
+            shiny::tagList(
+              shiny::div(class = "pp-chart-header",
+                shiny::div(class = "pp-chart-title", viz$label),
+                controls_ui,
+                shiny::div(class = "pp-chart-domain", viz$domain)
+              ),
+              shiny::div(class = "pp-chart-body", chart)
+            )
+          }
+
+          # Register one output per available viz, once. The id set is
+          # cohort-derived and stable across patient switches; a slot whose
+          # viz is not currently selected has no container in the DOM and
+          # Shiny keeps it suspended.
+          slot_registered <- new.env(parent = emptyenv())
+          shiny::observeEvent(r_available(), {
+            for (viz_id in names(r_available())) {
+              if (isTRUE(slot_registered[[viz_id]])) next
+              slot_registered[[viz_id]] <- TRUE
+              local({
+                vid <- viz_id
+                output[[paste0("viz_slot_", vid)]] <- shiny::renderUI(
+                  render_viz_slot(vid)
+                )
+              })
+            }
           })
 
           list(
@@ -978,6 +1042,27 @@ new_patient_profile_block <- function(selected = NULL,
                   `data-dir` = "1",
                   title = "Next patient",
                   shiny::HTML("&rsaquo;")
+                ),
+                # Cohort-size tag, two-tone like the dock's Package badge.
+                # Filled by the subject_picker message (cohort-scoped), so
+                # it updates when a drill narrows the cohort but never
+                # redraws on a patient switch. Hidden until the first
+                # cohort arrives.
+                shiny::span(
+                  class = "pp-cohort-count is-hidden",
+                  id = ns("pp_cohort_count"),
+                  title = "Patients in cohort",
+                  shiny::HTML(paste0(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="11" ',
+                    'height="11" fill="currentColor" viewBox="0 0 16 16">',
+                    '<path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 ',
+                    '1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 ',
+                    '1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832',
+                    '-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516 ',
+                    '.68-4.168 1.332-.678.678-.83 1.418-.832 ',
+                    '1.664z"/></svg>'
+                  )),
+                  shiny::span(class = "pp-cohort-count-n")
                 )
               ),
               shiny::uiOutput(ns("header_bar"))
@@ -1008,6 +1093,7 @@ new_patient_profile_block <- function(selected = NULL,
             var pickerId = '", ns("pp_picker"), "';
             var subjectContainerId = '", ns("pp_subject"), "';
             var subjectStaticId = '", ns("pp_subject_static"), "';
+            var cohortCountId = '", ns("pp_cohort_count"), "';
             var stepSubjectInputId = '", ns("step_subject"), "';
             var subjectPickerMsgId = '", ns("subject_picker"), "';
             var subjectValueMsgId = '", ns("subject_value"), "';
@@ -1065,6 +1151,15 @@ new_patient_profile_block <- function(selected = NULL,
               $picker.toggleClass('is-locked', !!msg.locked);
               $('#' + subjectStaticId).text(msg.locked ? (msg.static || '') : '');
               syncRequiredEmpty(!!msg.locked);
+
+              // Cohort-size tag. Cohort-scoped by construction: this
+              // handler only runs when the cohort itself changes.
+              var n = msg.count || 0;
+              var $count = $('#' + cohortCountId);
+              $count.find('.pp-cohort-count-n').text(n.toLocaleString());
+              $count.attr('title',
+                n === 1 ? '1 patient in cohort' : n + ' patients in cohort');
+              $count.toggleClass('is-hidden', !n);
             });
 
             // A selection the server made (steppers, or a cleared stale pick).
