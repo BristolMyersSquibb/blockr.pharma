@@ -111,65 +111,23 @@ demog_fn <- function(title, vars) {
 }", title, blocks)
 }
 
-# The sender. Identical code in both blocks -- only the block id differs, and
-# that is what the control channel scopes authorship by (the module namespace
-# the fn is evaluated in). See ctrl_send()'s "Clearing" section.
-send_fn <- "function(data, table = 'adsl') {
-  # The output is a RECEIPT: what this block last pushed, past tense. It is
-  # built from `cols` alone -- the sender never reads the filter back (see
-  # ?blockr.extra::ctrl_receipt). So after step 2 above, sender A's receipt
-  # still reads SEX = F even though the cohort is AGEGR1 = >80. That is not
-  # staleness to fix: A did send that, and what the cohort currently HOLDS is
-  # the filter block's own business to display.
-  none <- blockr.extra::ctrl_receipt(
-    list(), 'Cohort',
-    hint = 'Click a level row in the summary to filter the cohort.'
-  )
-  clear <- function() {
-    blockr.extra::ctrl_clear('cohort_filter',
-                             state = list(columns = list()))
-    none
-  }
-  if (!is.data.frame(data)) return(clear())
-  nms <- names(data)
-  if (!all(c('.variable', '.variable_level') %in% nms)) return(clear())
+# The senders are blockr.extra::new_ctrl_filter_block() -- the packaged form of
+# the sender that composer-cohort-drill.R still prototypes as a function block.
+# The claim logic (blockr.extra::drill_claim_columns()) now lives in the
+# package: one tested implementation instead of a 40-line deparsed string
+# copied once per sender, real block arguments instead of a code editor, and no
+# CodeMirror mounted per sender. That is what makes ten of them viable.
+#
+# Both send to the SAME target. Authorship is scoped by the module namespace a
+# claim was sent from, so each sender owns its own claim and an un-drill from
+# one never clears the other's (see ctrl_send()'s "Clearing" section).
+#
+# `columns` is left unset: the upstream is a TABLE, whose drilled output carries
+# the ARD identity (.variable / .group<k>) the claim is read off. Upstream of a
+# CHART or tile you must set it (e.g. columns = "SEX") -- a chart coerces its
+# input with as_plain_df(), which drops those columns, so its drilled output is
+# a plain row subset with nothing in it naming the drilled column.
 
-  var <- as.character(data$.variable)
-  lvl <- as.character(data$.variable_level)
-  keep <- !is.na(var) & !is.na(lvl) & nzchar(lvl)
-  if (!any(keep)) return(clear())
-
-  single <- function(x) {
-    u <- unique(x[!is.na(x) & nzchar(x)])
-    if (length(u) == 1L) u else NULL
-  }
-
-  cols <- list()
-  gl <- nms[startsWith(nms, '.group') & endsWith(nms, '_level')]
-  gl <- gl[order(as.integer(substr(gl, 7L, nchar(gl) - 6L)))]
-  for (g in gl) {
-    gname <- substr(g, 1L, nchar(g) - 6L)
-    if (!gname %in% nms) next
-    gn <- single(as.character(data[[gname]])[keep])
-    gv <- single(as.character(data[[g]])[keep])
-    if (is.null(gn) || is.null(gv)) next
-    cols[[length(cols) + 1L]] <- list(name = gn, table = table,
-                                      mode = 'multi', values = gv)
-  }
-  cond <- single(var[keep])
-  val  <- single(lvl[keep])
-  if (!is.null(cond) && !is.null(val)) {
-    cols[[length(cols) + 1L]] <- list(name = cond, table = table,
-                                      mode = 'multi', values = val)
-  }
-  if (!length(cols)) return(clear())
-
-  blockr.extra::ctrl_send('cohort_filter', state = list(columns = cols))
-  blockr.extra::ctrl_receipt(
-    cols, 'Cohort',
-    hint = 'Re-click the row in the summary to clear.'
-  )
-}"
 
 serve(
   new_dock_board(
@@ -188,7 +146,10 @@ serve(
         block_name = "Demographics A (composer)"
       ),
       tbl_a = new_table_block(drill = "auto", block_name = "Sex / Race"),
-      send_a = new_function_block(fn = send_fn, block_name = "Sender A"),
+      send_a = new_ctrl_filter_block(
+        target = "cohort_filter", table = "adsl", label = "Cohort",
+        block_name = "Sender A"
+      ),
 
       # Sender B: Age group / Ethnicity -- deliberately DISJOINT dimensions
       # from A, so a merge would be meaningful and a replace is visible.
@@ -201,7 +162,10 @@ serve(
         block_name = "Demographics B (composer)"
       ),
       tbl_b = new_table_block(drill = "auto", block_name = "Age group / Ethnicity"),
-      send_b = new_function_block(fn = send_fn, block_name = "Sender B"),
+      send_b = new_ctrl_filter_block(
+        target = "cohort_filter", table = "adsl", label = "Cohort",
+        block_name = "Sender B"
+      ),
 
       # The single cohort authority both senders write to.
       cohort_filter = new_value_filter_block(block_name = "Cohort"),
