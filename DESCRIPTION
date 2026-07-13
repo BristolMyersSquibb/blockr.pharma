@@ -20,17 +20,17 @@ Imports:
     blockr.dplyr,
     blockr.theme,
     dm,
-    dplyr,
     echarts4r,
     htmltools,
     htmlwidgets,
-    rlang,
     shiny
 Suggests:
+    blockr.ai,
     pharmaverseadam,
     safetyData,
     testthat (>= 3.0.0)
 Remotes:
+    BristolMyersSquibb/blockr.ai,
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dplyr,
     BristolMyersSquibb/blockr.theme

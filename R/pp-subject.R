@@ -90,10 +90,10 @@ pp_subject_choices <- function(dm_obj, arm_var = NULL) {
 
   meta <- vapply(seq_along(ids), function(i) {
     bits <- c(arm[[i]], demo[[i]])
-    paste(bits[nzchar(bits)], collapse = " · ")
+    paste(bits[nzchar(bits)], collapse = " \u00b7 ")
   }, character(1L))
 
-  labels <- ifelse(nzchar(meta), paste0(ids, " · ", meta), ids)
+  labels <- ifelse(nzchar(meta), paste0(ids, " \u00b7 ", meta), ids)
 
   list(ids = ids, labels = labels, meta = meta)
 }

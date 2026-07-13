@@ -240,7 +240,7 @@ ae_gantt_viz <- new_pp_viz(
               margin = 4,
               formatter = htmlwidgets::JS("
                 function(v) {
-                  return v.length > 9 ? v.slice(0, 8) + '…' : v;
+                  return v.length > 9 ? v.slice(0, 8) + '\u2026' : v;
                 }
               ")
             ),

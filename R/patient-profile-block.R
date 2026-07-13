@@ -253,9 +253,9 @@ new_patient_profile_block <- function(selected = NULL,
                 if ("patient_overview" %in% default_ids) {
                   others <- setdiff(default_ids, c("patient_overview",
                                                     "ae_gantt"))
-                  r_selected(c("patient_overview", head(others, 2L)))
+                  r_selected(c("patient_overview", utils::head(others, 2L)))
                 } else {
-                  r_selected(head(default_ids, 2L))
+                  r_selected(utils::head(default_ids, 2L))
                 }
               }
               # Initialize default settings for all vizs
@@ -649,7 +649,7 @@ new_patient_profile_block <- function(selected = NULL,
                     `data-disabled` = if (gear_disabled) "1" else NULL,
                     type = "button",
                     title = if (gear_disabled) {
-                      "TRTSDT not available — relative day disabled"
+                      "TRTSDT not available \u2014 relative day disabled"
                     } else {
                       "Click to switch"
                     },
@@ -1024,7 +1024,7 @@ new_patient_profile_block <- function(selected = NULL,
                 .toggleClass('blockr-field--required-empty', empty);
             }
 
-            // Mount Blockr.Select once, then setOptions() on later messages —
+            // Mount Blockr.Select once, then setOptions() on later messages ", "\u2014", "
             // the same lifecycle blockr.dm's table picker uses. `allowEmpty`
             // is what keeps '' alive across setOptions(): without it the
             // component slides the selection onto the first patient whenever
@@ -1108,7 +1108,7 @@ new_patient_profile_block <- function(selected = NULL,
             });
 
             // Timeline mode click-through: flip current value on click.
-            // Read/write via attr(), not data() — jQuery's .data() caches
+            // Read/write via attr(), not data() ", "\u2014", " jQuery's .data() caches
             // the initial attribute value and ignores later attr() writes,
             // so subsequent clicks would always read the original mode.
             $(document).on('click', '#' + layoutId + ' .pp-popover-toggle', function(e) {
