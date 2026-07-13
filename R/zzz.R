@@ -1,3 +1,7 @@
+# `USUBJID`: a dm::dm_filter() NSE column reference (adsl$USUBJID), not a
+# real global -- R CMD check can't see through the quasiquotation.
+utils::globalVariables("USUBJID")
+
 .onLoad <- function(libname, pkgname) {
   shiny::addResourcePath(
     "blockr-pharma",
@@ -70,7 +74,7 @@ pp_block_arguments <- function() {
         "\"anthropometrics\" (HEIGHT, WEIGHT from advs). ",
         "PARAMCDs not in a pre-defined group get auto-generated IDs like ",
         "\"adlb_paramcd\" (e.g. \"adlb_trig\"). ",
-        "Only use IDs from this list — do NOT put raw table names (adcm, ",
+        "Only use IDs from this list \u2014 do NOT put raw table names (adcm, ",
         "adae, adlb) or PARAMCDs in `selected`. ",
         "Set to the IDs the user wants to see. patient_overview is ",
         "usually kept as the first element."
@@ -129,7 +133,7 @@ pp_block_guidance <- function() {
       "This block displays stacked clinical visualizations for a single",
       "patient. The user controls WHICH patient via `subject`, WHICH vizs",
       "are shown via `selected`, and HOW they look via `viz_settings`.",
-      "\n\n**CRITICAL — check how many patients the input dm holds before",
+      "\n\n**CRITICAL \u2014 check how many patients the input dm holds before",
       "you query it.** Start with `unique(adsl$USUBJID)`.",
       "\n\n- **Exactly one USUBJID.** An upstream block already filtered to",
       "one patient. Every table (adsl, adae, advs, adlbc, ...) contains",
@@ -140,7 +144,7 @@ pp_block_guidance <- function() {
       "type. Just query the table directly, and leave `subject` unset.",
       "\n- **Many USUBJIDs.** The input is a cohort and the block renders",
       "nothing until a patient is chosen. Set `subject` to the USUBJID the",
-      "user means, copied verbatim from `unique(adsl$USUBJID)` — never",
+      "user means, copied verbatim from `unique(adsl$USUBJID)` \u2014 never",
       "invented, never guessed when the user did not name one. If the user",
       "asks a clinical question about \"the patient\" without naming one",
       "and none is currently selected, ask which patient rather than",
@@ -193,7 +197,7 @@ pp_block_guidance <- function() {
       "sodium?', 'any liver issues?', 'what's the kidney function",
       "like?'), use the data exploration capability to look at the",
       "actual patient values BEFORE answering. IMPORTANT: query",
-      "whichever lab table is actually in the dm — it may be split",
+      "whichever lab table is actually in the dm \u2014 it may be split",
       "(adlbc/adlbh) or combined (adlb). Look at the Input Data table",
       "list above and use that exact name. PARAMCDs also vary: ALP may",
       "be coded ALKPH, K may be POTAS, CHOL may be CHOLES, LYM may be",
@@ -220,6 +224,6 @@ pp_block_guidance <- function() {
       "summarize the AEs you see in the data (terms, severity, timing)",
       "and then say you're showing the AE Gantt chart. If they ask",
       "about labs, comment on notable values or trends. The user sees",
-      "your explanation as a chat message — make it clinically useful."
+      "your explanation as a chat message \u2014 make it clinically useful."
     )
 }
