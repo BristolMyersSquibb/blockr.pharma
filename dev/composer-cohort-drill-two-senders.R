@@ -61,22 +61,13 @@ options(
 )
 message("two-sender cohort drill demo on http://127.0.0.1:", port, "/")
 
-# No-UI extension exposing the board update channel to block code. The
-# last-author registry lives inside install_ctrl_send(), so BOTH senders on
-# this board share one registry -- that is what makes step 4 above work.
-new_ctrl_bridge_extension <- function() {
-  new_dock_extension(
-    server = function(id, board, update, ...) {
-      shiny::moduleServer(id, function(input, output, session) {
-        blockr.extra::install_ctrl_send(update)
-        list(state = list())
-      })
-    },
-    ui = function(ns, ...) htmltools::div(),
-    name = "Control bridge",
-    class = "ctrl_bridge_extension"
-  )
-}
+# The board update channel is exposed to block code by the packaged bridge
+# extension, blockr.extra::new_ctrl_bridge_extension() (this script used to
+# hand-roll it). It is one extension for the whole board on purpose: the
+# last-author registry lives inside install_ctrl_send(), so BOTH senders here
+# share one registry -- that is what makes step 4 above work. It also hands the
+# board to the channel, which is what lets each sender's gear offer a picker of
+# the board's value filter blocks.
 
 # One composer summary per pair of variables. `vars` is a list of
 # label/variable pairs, spliced into block_categorical() calls.
