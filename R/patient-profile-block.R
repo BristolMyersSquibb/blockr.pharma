@@ -889,10 +889,17 @@ new_patient_profile_block <- function(selected = NULL,
 
             controls_ui <- pp_controls_ui(viz, viz_id, dm_obj, viz_settings)
 
+            # The AE bars are colored by severity and outlined when serious;
+            # say so in the header, from the same colors the bars use.
+            legend_ui <- if (identical(viz_id, "ae_gantt")) {
+              pp_sev_legend_ui(dm_obj, sev_colors)
+            }
+
             shiny::tagList(
               shiny::div(class = "pp-chart-header",
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
+                legend_ui,
                 shiny::div(class = "pp-chart-domain", viz$domain)
               ),
               shiny::div(class = "pp-chart-body", chart)

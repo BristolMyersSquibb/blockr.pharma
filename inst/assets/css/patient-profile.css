@@ -375,6 +375,35 @@
   margin-left: auto;
 }
 
+/* Severity legend (AE panel): decodes the bar colors. */
+.pp-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pp-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.pp-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #9ca3af;
+}
+
+.pp-legend-swatch.is-serious {
+  background: transparent;
+  border: 1.5px solid #111827;
+}
+
 .pp-chart-body {
   padding: 0;
 }

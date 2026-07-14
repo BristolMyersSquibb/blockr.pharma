@@ -1,9 +1,16 @@
 # Patient Profile Viz: Adverse Events Gantt
 #
 # Gantt bars showing AE duration by preferred term, colored by severity.
-# Lanes are labelled on the y axis with small ellipsized term names that
-# fit the shared 60px left margin (the x axis must stay aligned with the
-# other patient-profile panels); the bar tooltip shows the full term.
+#
+# Each lane is labelled in the plot area, on the row just above its own bars.
+# The y axis carries no text: the shared 60px left margin (which keeps the x
+# axis aligned with the other patient-profile panels) only fits ~8 characters,
+# and preferred terms collide well before that ("APPLICATION SITE ERYTHEMA"
+# and "...PRURITUS" both truncate to "APPLICAT..."). Labelling above the bar
+# instead of beside it costs no horizontal room, so single-day events -- the
+# common case -- are labelled as legibly as month-long ones. The label is
+# truncated at the right edge of the grid; the tooltip always has the full
+# term.
 #
 # Data requirements (declared via new_pp_viz()):
 #   adae:
@@ -101,6 +108,16 @@ ae_gantt_viz <- new_pp_viz(
       end_at <- function(i) {
         if (use_day) tbl$AENDY[i] else tbl$AENDT[i]
       }
+      # One label per lane, drawn on the lane's earliest bar: the lane *is*
+      # the term, so repeating it on every bar of the lane is noise.
+      lane_first <- vapply(terms, function(term) {
+        rows <- which(as.character(tbl$AEDECOD) == term)
+        starts <- vapply(rows, function(i) {
+          as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
+        }, numeric(1L))
+        rows[order(starts)][1L]
+      }, integer(1L))
+
       bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
         s <- pp_xval_pref_day(
           if (use_day) NULL else tbl$ASTDT[i],
@@ -134,14 +151,23 @@ ae_gantt_viz <- new_pp_viz(
         }
 
         col <- sev_color(sev)
+        is_ser <- identical(toupper(serious), "Y")
+        lab <- if (i %in% lane_first) pp_term_label(term) else ""
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
-                       s_lab, e_lab, col),
-          itemStyle = list(color = col)
+                       s_lab, e_lab, col, lab),
+          # Serious is a regulatory axis of its own, independent of severity:
+          # it gets the outline, severity keeps the fill.
+          itemStyle = list(
+            color = col,
+            borderColor = if (is_ser) "#111827" else "transparent",
+            borderWidth = if (is_ser) 1.5 else 0
+          )
         )
       })
 
-      # AE bars with inside labels
+      # AE bars, each lane labelled on the row above its bars (value 11 is
+      # empty for every bar but the lane's first, so the term is written once).
       series_list <- list(list(
         type = "custom",
         name = "Adverse Events",
@@ -149,20 +175,43 @@ ae_gantt_viz <- new_pp_viz(
           function(params, api) {
             var start = api.coord([api.value(0), api.value(2)]);
             var end   = api.coord([api.value(1), api.value(2)]);
-            var h     = api.size([0, 1])[1] * 0.6;
+            var laneH = api.size([0, 1])[1];
+            var h     = Math.min(14, laneH * 0.36);
             var barW  = Math.max(end[0] - start[0], 4);
+            // The bar sits below the lane centre so the label has the top of
+            // the lane to itself.
+            var barY  = start[1] + laneH * 0.18 - h / 2;
+            var cs    = params.coordSys;
             var rect  = echarts.graphic.clipRectByRect(
-              { x: start[0], y: start[1] - h/2,
-                width: barW, height: h },
-              { x: params.coordSys.x, y: params.coordSys.y,
-                width: params.coordSys.width, height: params.coordSys.height }
+              { x: start[0], y: barY, width: barW, height: h },
+              { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
             );
             if (!rect) return;
-            return {
+
+            var children = [{
               type: 'rect',
               shape: Object.assign({}, rect, { r: 3 }),
               style: api.style()
-            };
+            }];
+
+            var label = api.value(11);
+            if (label) {
+              var tx = Math.max(start[0], cs.x + 2);
+              children.push({
+                type: 'text',
+                style: {
+                  text: label,
+                  x: tx,
+                  y: start[1] - laneH * 0.26,
+                  fill: '#4b5563',
+                  fontSize: 10,
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  textVerticalAlign: 'middle',
+                  truncate: { outerWidth: cs.x + cs.width - tx }
+                }
+              });
+            }
+            return { type: 'group', children: children };
           }
         "),
         encode = list(x = list(0, 1), y = 2),
@@ -211,7 +260,9 @@ ae_gantt_viz <- new_pp_viz(
         )
       ))
 
-      chart_height <- max(250, length(terms) * 32 + 80)
+      # A little taller per lane than a bare bar row: the lane now carries
+      # its label above the bar.
+      chart_height <- max(250, length(terms) * 38 + 80)
 
       echarts4r::e_charts(height = chart_height) |>
         echarts4r::e_list(list(
@@ -229,21 +280,10 @@ ae_gantt_viz <- new_pp_viz(
             inverse = TRUE,
             axisLine = list(show = FALSE),
             axisTick = list(show = FALSE),
-            # Ellipsized lane labels in the shared 60px left margin (the
-            # grid must stay aligned with the other patient-profile
-            # panels). They only hint at the term; the bar tooltip shows
-            # it in full on hover.
-            axisLabel = list(
-              show = TRUE,
-              fontSize = 9,
-              color = "#6b7280",
-              margin = 4,
-              formatter = htmlwidgets::JS("
-                function(v) {
-                  return v.length > 9 ? v.slice(0, 8) + '\u2026' : v;
-                }
-              ")
-            ),
+            # No text in the gutter: the term is written above the bar
+            # instead. The 60px margin itself stays (the grid must keep
+            # aligning with the other patient-profile panels).
+            axisLabel = list(show = FALSE),
             splitLine = list(show = FALSE)
           ),
           series = series_list
@@ -251,6 +291,95 @@ ae_gantt_viz <- new_pp_viz(
         echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
     }
 )
+
+#' Severity legend for the AE panel header
+#'
+#' The bars have been severity-colored all along, but nothing said so. This
+#' renders one swatch per severity level *actually present for this patient*,
+#' from the same colors the bars use (`sev_colors` when the board scale map
+#' resolves AESEV, the built-in constants otherwise), so the legend and the
+#' bars cannot drift apart. Serious AEs (AESER) get the outlined swatch that
+#' marks them in the plot.
+#'
+#' @param dm_obj Subject-scoped dm.
+#' @param sev_colors Resolved level -> color vector, or NULL.
+#' @return A `shiny::div`, or NULL when the study carries no severity.
+#' @noRd
+pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL) {
+  adae <- tryCatch(
+    as.data.frame(dm::dm_get_tables(dm_obj)[["adae"]]),
+    error = function(e) NULL
+  )
+  if (is.null(adae) || !nrow(adae)) {
+    return(NULL)
+  }
+
+  sev <- if ("AESEV" %in% colnames(adae)) {
+    as.character(adae$AESEV)
+  } else {
+    character()
+  }
+  sev <- unique(sev[!is.na(sev) & nzchar(sev)])
+
+  # Canonical order first, then anything else the study happens to use.
+  known <- c("MILD", "MODERATE", "SEVERE")
+  sev <- c(
+    known[known %in% toupper(sev)],
+    sort(sev[!toupper(sev) %in% known])
+  )
+
+  swatch <- function(color, label, outline = FALSE) {
+    shiny::span(
+      class = "pp-legend-item",
+      shiny::span(
+        class = if (outline) "pp-legend-swatch is-serious" else
+          "pp-legend-swatch",
+        style = if (outline) NULL else paste0("background:", color, ";")
+      ),
+      label
+    )
+  }
+
+  items <- lapply(sev, function(s) {
+    color <- if (!is.null(sev_colors)) {
+      sev_colors[[s]] %||% sev_colors[[toupper(s)]] %||% NULL
+    }
+    if (is.null(color)) {
+      color <- switch(toupper(s),
+        SEVERE   = "#DC2626",
+        MODERATE = "#D97706",
+        MILD     = "#CA8A04",
+        "#9ca3af"
+      )
+    }
+    swatch(unname(color), pp_term_label(s))
+  })
+
+  has_serious <- "AESER" %in% colnames(adae) &&
+    any(toupper(as.character(adae$AESER)) %in% "Y", na.rm = TRUE)
+  if (has_serious) {
+    items <- c(items, list(swatch(NULL, "Serious", outline = TRUE)))
+  }
+
+  if (!length(items)) {
+    return(NULL)
+  }
+  shiny::div(class = "pp-chart-legend", items)
+}
+
+#' Display form of a preferred term
+#'
+#' AEDECOD ships upper case ("APPLICATION SITE ERYTHEMA"), which is shouting
+#' once it sits in the plot area next to sentence-case panel text.
+#' @noRd
+pp_term_label <- function(term) {
+  term <- as.character(term)
+  ifelse(
+    is.na(term) | !nzchar(term),
+    "",
+    paste0(substr(term, 1L, 1L), tolower(substring(term, 2L)))
+  )
+}
 
 #' Minimal empty chart placeholder
 #' @param msg Message to display
