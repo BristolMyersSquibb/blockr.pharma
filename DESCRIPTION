@@ -23,6 +23,7 @@ Imports:
     echarts4r,
     htmltools,
     htmlwidgets,
+    jsonlite,
     shiny
 Suggests:
     blockr.ai,

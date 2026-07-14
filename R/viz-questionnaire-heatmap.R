@@ -128,12 +128,12 @@ questionnaire_heatmap_viz <- new_pp_viz(
         )
       }
 
-      # Tooltip needs access to axis data
-      # Embed visit and param labels as JS arrays
-      visits_js <- paste0("['", paste(visits, collapse = "','"), "']")
-      params_js <- paste0(
-        "['", paste(gsub("'", "\\\\'", param_labels), collapse = "','"), "']"
-      )
+      # Tooltip needs access to axis data: embed visit and param labels as JS
+      # arrays. Both are study data (visit names, questionnaire item labels),
+      # so they are encoded, not pasted -- a quote or a line break in either
+      # would break the literal and take the whole widget down with it.
+      visits_js <- pp_js_arr(visits)
+      params_js <- pp_js_arr(param_labels)
 
       chart_height <- max(300, length(params) * 28 + 80)
 

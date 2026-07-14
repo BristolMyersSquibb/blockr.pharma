@@ -59,7 +59,11 @@ patient_overview_viz <- new_pp_viz(
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
       arm_col <- pp_arm_column(colnames(sl), settings$arm_var)
       arm_label <- if (!is.null(arm_col)) {
-        as.character(sl[[arm_col]][1])
+        # The lane draws one line of text inside the treatment bar, so fold any
+        # embedded whitespace (a study's own arm column may carry line breaks
+        # the ADaM variables never do) rather than drawing lines on top of each
+        # other.
+        trimws(gsub("[[:space:]]+", " ", as.character(sl[[arm_col]][1])))
       } else {
         "Treatment"
       }
@@ -88,7 +92,8 @@ patient_overview_viz <- new_pp_viz(
       n_lanes <- length(lanes)
       chart_height <- 60 + n_lanes * 40
 
-      arm_js <- gsub("'", "\\\\'", arm_label)
+      # A study's arm label is data, not a literal: encode it, never paste it.
+      arm_js <- pp_js_str(arm_label)
       start_str <- pp_xlabel(sl$TRTSDT[1], ref_ms, mode)
       end_str <- pp_xlabel(sl$TRTEDT[1], ref_ms, mode)
 
@@ -120,7 +125,7 @@ patient_overview_viz <- new_pp_viz(
               }, {
                 type: 'text',
                 style: {
-                  text: '%s',
+                  text: %s,
                   x: start[0] + 8,
                   y: start[1],
                   fill: '#059669',
@@ -143,11 +148,11 @@ patient_overview_viz <- new_pp_viz(
             function(params) {
               return '<div style=\"min-width:160px\">' +
                 '<div style=\"font-size:13px;font-weight:600;margin-bottom:4px\">' +
-                '%s</div>' +
+                %s + '</div>' +
                 '<div style=\"font-size:12px;color:#6b7280\">' +
-                '%s \\u2192 %s</div></div>';
+                %s + ' \\u2192 ' + %s + '</div></div>';
             }
-          ", arm_js, start_str, end_str))
+          ", arm_js, pp_js_str(start_str), pp_js_str(end_str)))
         )
       )
 

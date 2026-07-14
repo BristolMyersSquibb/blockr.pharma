@@ -177,6 +177,43 @@ PP_AXIS_LABEL_COLOR <- "#666"
 PP_AXIS_LINE_COLOR <- "#ccc"
 PP_SPLIT_LINE_COLOR <- "#f3f4f6"
 
+#' Encode a string as a JavaScript string literal
+#'
+#' Study data reaches the charts as text pasted into hand-written JS
+#' (`renderItem`, tooltip formatters). Hand-escaping the quote is not enough:
+#' a newline, a backslash or a control character in an arm label or a
+#' parameter name breaks the literal, and a JS syntax error kills the whole
+#' widget -- the panel renders its header and an empty body, with nothing in
+#' the R log to explain it. Let the JSON encoder do it: it escapes every
+#' character JS cares about and returns the surrounding quotes, so callers
+#' interpolate the result WITHOUT wrapping it in quotes of their own.
+#'
+#' `pp_js_str()` always yields a single string literal, `pp_js_arr()` always an
+#' array literal -- the shape must not depend on the length of the data, or a
+#' one-item questionnaire would emit a bare string where the JS indexes an
+#' array.
+#'
+#' @param x Character vector (or anything coercible). `NA` becomes `""`.
+#' @return A length-1 string holding a JS literal, quotes included.
+#' @noRd
+pp_js_str <- function(x) {
+  stopifnot(length(x) == 1L)
+  as.character(jsonlite::toJSON(pp_js_chr(x), auto_unbox = TRUE))
+}
+
+#' @rdname pp_js_str
+#' @noRd
+pp_js_arr <- function(x) {
+  as.character(jsonlite::toJSON(pp_js_chr(x), auto_unbox = FALSE))
+}
+
+#' @noRd
+pp_js_chr <- function(x) {
+  x <- as.character(x)
+  x[is.na(x)] <- ""
+  x
+}
+
 #' Build shared echarts tooltip config
 #' @noRd
 pp_tooltip <- function() {
