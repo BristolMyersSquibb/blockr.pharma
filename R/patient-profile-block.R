@@ -520,13 +520,15 @@ new_patient_profile_block <- function(selected = NULL,
                   )
                 )
               ),
-              # Available (unselected) section
+              # Available (unselected) section. The groups live in their own
+              # scroll box so the sidebar's height is driven by the SELECTED
+              # list, not by however many vizs the cohort happens to offer.
               shiny::div(class = "pp-available-section",
                 shiny::div(
                   class = "pp-section-header pp-section-header-available",
                   "AVAILABLE"
                 ),
-                domain_groups
+                shiny::div(class = "pp-available-list", domain_groups)
               )
             )
           })
@@ -900,7 +902,23 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
                 legend_ui,
-                shiny::div(class = "pp-chart-domain", viz$domain)
+                shiny::div(class = "pp-chart-domain", viz$domain),
+                # Same toggle the sidebar card fires: removing a viz here
+                # deselects it, so the sidebar card slides back to AVAILABLE.
+                shiny::tags$button(
+                  class = "pp-chart-remove",
+                  type = "button",
+                  `data-viz-id` = viz_id,
+                  title = paste0("Remove ", viz$label),
+                  shiny::HTML(paste0(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="12" ',
+                    'height="12" fill="currentColor" viewBox="0 0 16 16">',
+                    '<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646',
+                    '-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 ',
+                    '0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708',
+                    'L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>'
+                  ))
+                )
               ),
               shiny::div(class = "pp-chart-body", chart)
             )
@@ -1013,13 +1031,29 @@ new_patient_profile_block <- function(selected = NULL,
                   class = "pp-sidebar-search-input",
                   id = ns("search"),
                   placeholder = "Search visualizations..."
+                ),
+                # Clear: appears only while the box has text. Restores the
+                # full list, SELECTED section included.
+                shiny::tags$button(
+                  class = "pp-sidebar-search-clear is-hidden",
+                  id = ns("search_clear"),
+                  type = "button",
+                  title = "Clear search",
+                  shiny::HTML(paste0(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" ',
+                    'height="14" fill="currentColor" viewBox="0 0 16 16">',
+                    '<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646',
+                    '-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 ',
+                    '0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708',
+                    'L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>'
+                  ))
                 )
               )
             ),
 
             # Card list
             shiny::div(class = "pp-sidebar-content",
-              shiny::uiOutput(ns("sidebar_cards"))
+              shiny::uiOutput(ns("sidebar_cards"), class = "pp-sidebar-cards")
             )
           ),
 
@@ -1110,6 +1144,7 @@ new_patient_profile_block <- function(selected = NULL,
             var pinBtnId = '", ns("pin_btn"), "';
             var expandBtnId = '", ns("expand_btn"), "';
             var toggleInputId = '", ns("toggle_viz"), "';
+            var clearBtnId = '", ns("search_clear"), "';
             var ctrlInputId = '", ns("viz_ctrl"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var reorderInputId = '", ns("reorder_viz"), "';
@@ -1254,26 +1289,78 @@ new_patient_profile_block <- function(selected = NULL,
               Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
             });
 
-            // Search: client-side filtering across both sections
-            $(document).on('input', '#' + searchId, function() {
-              var query = $(this).val().toLowerCase();
-              var sidebar = $(this).closest('.pp-sidebar');
-              sidebar.find('.pp-card').each(function() {
-                var text = ($(this).data('search-text') || '').toLowerCase();
-                $(this).toggle(!query || text.indexOf(query) >= 0);
+            // Panel x: remove the viz. Same input as the card, so the server
+            // deselects it and the sidebar card slides back to AVAILABLE.
+            $(document).on('click', '#' + layoutId + ' .pp-chart-remove',
+              function(e) {
+                e.stopPropagation();
+                var vizId = $(this).attr('data-viz-id');
+                if (!vizId) return;
+                Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
               });
-              sidebar.find('.pp-category-group').each(function() {
-                var hasVisible = $(this).find('.pp-card:visible').length > 0;
-                $(this).toggle(hasVisible);
+
+            // Search: client-side filtering across both sections.
+            //
+            // Match on the card's own data-search-text and mark it with a
+            // class -- never on `:visible`. `:visible` is false for every
+            // card inside an already-hidden section, so a section hidden by
+            // one keystroke could never come back on the next: the SELECTED
+            // section stayed collapsed after the query was cleared.
+            //
+            // The empty-selection hints hide while a query is live: they
+            // speak about the full list, not about the matches.
+            function applyFilter() {
+              var $sidebar = $('#' + sidebarId);
+              var query = ($('#' + searchId).val() || '').toLowerCase().trim();
+
+              $('#' + clearBtnId).toggleClass('is-hidden', !query);
+              $sidebar.toggleClass('is-searching', !!query);
+
+              $sidebar.find('.pp-card').each(function() {
+                var text = ($(this).attr('data-search-text') || '').toLowerCase();
+                var hit = !query || text.indexOf(query) >= 0;
+                $(this).toggleClass('is-filtered-out', !hit);
               });
-              sidebar.find('.pp-active-section').each(function() {
-                var hasVisible = $(this).find('.pp-card:visible').length > 0;
-                $(this).toggle(hasVisible);
+
+              // A section/group is shown when it still holds a matching card.
+              // Empty domain groups stay hidden either way (the sync handler
+              // leaves emptied groups in the DOM).
+              $sidebar.find('.pp-category-group').each(function() {
+                var hits = $(this).find('.pp-card').not('.is-filtered-out').length;
+                $(this).toggleClass('is-hidden', hits === 0);
               });
-              sidebar.find('.pp-available-section').each(function() {
-                var hasVisible = $(this).find('.pp-card:visible').length > 0;
-                $(this).toggle(hasVisible);
-              });
+              $sidebar.find('.pp-active-section, .pp-available-section')
+                .each(function() {
+                  var hits = $(this).find('.pp-card').not('.is-filtered-out').length;
+                  // With no query, keep the SELECTED section up even when it
+                  // holds no card: its empty hint is the invitation to add one.
+                  $(this).toggleClass('is-hidden', !!query && hits === 0);
+                });
+            }
+
+            $(document).on('input', '#' + searchId, applyFilter);
+
+            // Clear (x): reset the query and hand back the full list
+            $(document).on('click', '#' + clearBtnId, function(e) {
+              e.stopPropagation();
+              $('#' + searchId).val('').focus();
+              applyFilter();
+            });
+
+            // Escape clears too, while the box has focus
+            $(document).on('keydown', '#' + searchId, function(e) {
+              if (e.key !== 'Escape' && e.keyCode !== 27) return;
+              if (!$(this).val()) return;
+              e.stopPropagation();
+              $(this).val('');
+              applyFilter();
+            });
+
+            // A live query must survive a sidebar re-render (cohort change)
+            $(document).on('shiny:value', function(e) {
+              if (e.name && e.name.indexOf('sidebar_cards') >= 0) {
+                setTimeout(applyFilter, 0);
+              }
             });
 
             // Pin/unpin sidebar
@@ -1341,7 +1428,7 @@ new_patient_profile_block <- function(selected = NULL,
 
               var $layout = $('#' + layoutId);
               var $activeList = $layout.find('.pp-active-list');
-              var $availSection = $layout.find('.pp-available-section');
+              var $availList = $layout.find('.pp-available-list');
 
               // Build index of all cards
               var cardMap = {};
@@ -1366,14 +1453,14 @@ new_patient_profile_block <- function(selected = NULL,
                 var $card = cardMap[vid];
                 $card.removeClass('is-selected').removeAttr('draggable');
                 var domain = $card.data('domain');
-                var $group = $availSection
+                var $group = $availList
                   .find('.pp-category-group[data-domain=' + JSON.stringify(domain) + ']');
                 if (!$group.length) {
                   $group = $('<div class=pp-category-group data-domain=' +
                     JSON.stringify(domain) + '>' +
                     '<div class=pp-category-header><span>' +
                     domain.toUpperCase() + '</span></div></div>');
-                  $availSection.append($group);
+                  $availList.append($group);
                 }
                 $group.append($card);
               });
@@ -1391,11 +1478,15 @@ new_patient_profile_block <- function(selected = NULL,
                 $dragHint.addClass('is-hidden');
               }
 
-              // Hide empty domain groups, show non-empty ones
-              $availSection.find('.pp-category-group').each(function() {
+              // Hide empty domain groups, show non-empty ones. Class, not
+              // .toggle(): an inline display would outrank the search filter.
+              $availList.find('.pp-category-group').each(function() {
                 var hasCards = $(this).find('.pp-card').length > 0;
-                $(this).toggle(hasCards);
+                $(this).toggleClass('is-empty', !hasCards);
               });
+
+              // Cards moved between the sections keep the live query honest
+              applyFilter();
             });
 
             // --- HTML5 Drag and Drop on active list ---

@@ -34,10 +34,9 @@
 # Works from the workspace root or from the package dir.
 root <- if (file.exists("blockr.pharma/DESCRIPTION")) "." else ".."
 for (p in c("blockr.core", "blockr.theme", "blockr.dplyr", "blockr.dm",
-            "blockr.pharma", "blockr.dock")) {
+            "blockr.pharma", "blockr.dag", "blockr.dock")) {
   pkgload::load_all(file.path(root, p), quiet = TRUE)
 }
-library(blockr.dag)
 
 # Supplies the ADaM example tables (adsl/adae/adlbc/advs) behind the
 # "safetydata_adam" choice of the dm example block.
@@ -73,7 +72,7 @@ serve(
       list(from = "data", to = "cdisc", input = "data"),
       list(from = "cdisc", to = "profile", input = "data")
     ),
-    extensions = new_dag_extension(),
+    extensions = blockr.dag::new_dag_extension(),
     # Current dock API: named PLAIN list of `grids =` (the old `layouts =` is
     # swallowed by ... and silently ignored). Views are derived from the grids.
     # A grid leaf is a bare panel id, or panels(...) for a tabbed group;

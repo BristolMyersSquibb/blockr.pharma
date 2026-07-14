@@ -109,7 +109,7 @@
 
 .pp-sidebar-search-input {
   width: 100%;
-  padding: 9px 12px 9px 38px;
+  padding: 9px 32px 9px 38px;
   font-size: 13px;
   font-family: inherit;
   background: #f9fafb;
@@ -130,11 +130,69 @@
   color: #9ca3af;
 }
 
+/* Clear (x): muted until hovered, gone when the box is empty */
+.pp-sidebar-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.pp-sidebar-search-clear:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.pp-sidebar-search-clear.is-hidden {
+  display: none;
+}
+
 /* --- Sidebar Content ----------------------- */
+/* Column, not a single scroll box: SELECTED keeps its natural height at the
+   top and AVAILABLE takes what is left and scrolls inside it. That is what
+   keeps the sidebar's height tied to the vizs in use rather than to however
+   many the cohort offers. */
 .pp-sidebar-content {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 8px 12px 12px;
+}
+
+.pp-sidebar-cards {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Search filter states ------------------ */
+.pp-card.is-filtered-out,
+.pp-category-group.is-hidden,
+.pp-category-group.is-empty,
+.pp-active-section.is-hidden,
+.pp-available-section.is-hidden {
+  display: none;
+}
+
+/* The hints describe the full list, so they step aside during a search */
+.pp-sidebar.is-searching .pp-active-hint,
+.pp-sidebar.is-searching .pp-active-empty {
+  display: none;
 }
 
 /* --- Section Headers (SELECTED / AVAILABLE) -- */
@@ -151,6 +209,36 @@
   border-top: 1px solid #e5e7eb;
   margin-top: 8px;
   padding-top: 12px;
+}
+
+/* --- Sections ------------------------------ */
+/* SELECTED: natural height, pinned at the top, never scrolls away */
+.pp-active-section {
+  flex: 0 0 auto;
+}
+
+/* AVAILABLE: soaks up the rest and scrolls inside itself */
+.pp-available-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-available-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  /* The cap is what keeps the sidebar from being the thing that stretches the
+     block: without it, a cohort offering twenty vizs makes the whole layout as
+     tall as the card list. Below the cap the list grows to fill whatever the
+     chart column gives it; above it, it scrolls. */
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.pp-available-list::-webkit-scrollbar {
+  width: 6px;
 }
 
 /* --- Active List (drop target) ------------- */
@@ -373,6 +461,37 @@
   font-size: 11px;
   color: #9ca3af;
   margin-left: auto;
+}
+
+/* Remove (x): muted, and only fully legible once the panel is hovered --
+   it is a destructive-ish action sitting next to the chart, not a call to
+   action. Always focusable, so keyboard users are not locked out. */
+.pp-chart-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 2px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #d1d5db;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.pp-chart-panel:hover .pp-chart-remove,
+.pp-chart-remove:focus-visible {
+  opacity: 1;
+}
+
+.pp-chart-remove:hover {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 /* Severity legend (AE panel): decodes the bar colors. */
