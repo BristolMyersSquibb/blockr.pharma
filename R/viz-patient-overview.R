@@ -13,7 +13,8 @@
 #   adsl: required TRTSDT, TRTEDT; optional TRT01P, RFENDT (alias EOSDT),
 #         DTHDT (alias DTHDTC), DTHFL
 #   adae (optional table): ASTDT (alias ASTDTC), AENDT (alias AENDTC),
-#         AEDECOD, AESEV, AESER
+#         AEDECOD, a severity column (AETOXGR or AESEV, see
+#         pp_sev_column()), AESER
 
 #' Patient Overview visualization definition
 #' @noRd
@@ -39,6 +40,7 @@ patient_overview_viz <- new_pp_viz(
       ASTDY   = "AESTDY",
       AENDY   = "AEENDY",
       AEDECOD = NULL,
+      AETOXGR = NULL,
       AESEV   = NULL,
       AESER   = NULL
     )
@@ -169,17 +171,17 @@ patient_overview_viz <- new_pp_viz(
         } else {
           "AENDT" %in% colnames(adae)
         }
-        has_sev <- "AESEV" %in% colnames(adae)
+        sev_col <- pp_sev_column(colnames(adae))
+        has_sev <- !is.null(sev_col)
         has_ser <- "AESER" %in% colnames(adae)
         has_term <- "AEDECOD" %in% colnames(adae)
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
         # Severity colors: the board scale map (injected as
-        # settings$sev_colors by the block server when an AESEV binding
+        # settings$sev_colors by the block server when a severity binding
         # resolves) beats the built-in constants — same precedence as the
         # AE gantt, so both vizs always agree.
-        sev_hex <- c(SEVERE = "#DC2626", MODERATE = "#D97706",
-                     MILD = "#CA8A04")
+        sev_hex <- pp_sev_colors
         fixed <- settings$sev_colors
         if (!is.null(fixed)) {
           vals <- unname(unlist(fixed))
@@ -219,7 +221,11 @@ patient_overview_viz <- new_pp_viz(
           } else {
             s + day_unit
           }
-          sev <- if (has_sev) toupper(as.character(adae$AESEV[i])) else ""
+          sev <- if (has_sev) {
+            toupper(as.character(adae[[sev_col]][i]))
+          } else {
+            ""
+          }
           ser <- if (has_ser) as.character(adae$AESER[i]) else ""
           term <- if (has_term) as.character(adae$AEDECOD[i]) else "AE"
           s_lab <- ae_lab(adae[[ae_src]][i])
@@ -240,7 +246,9 @@ patient_overview_viz <- new_pp_viz(
               var end   = api.coord([api.value(1), api.value(2)]);
               var h     = api.size([0, 1])[1] * 0.45;
               var barW  = Math.max(end[0] - start[0], 4);
-              var sev   = (api.value(4) || '').toUpperCase();
+              // echarts coerces numeric-looking dims, so a CTCAE grade
+              // arrives as a number here: stringify before any string op.
+              var sev   = ('' + (api.value(4) || '')).toUpperCase();
               var ser   = api.value(5) || '';
               var sevFill = %s;
               var sevStroke = %s;
@@ -276,7 +284,9 @@ patient_overview_viz <- new_pp_viz(
                 var s = v[6] || '';
                 var e = v[7] || '';
                 var term = v[3] || '';
-                var sev  = v[4] || '';
+                var sev  = '' + (v[4] == null ? '' : v[4]);
+                // A bare CTCAE grade reads as noise in the badge.
+                var sevDisp = /^[0-9]+$/.test(sev) ? 'Grade ' + sev : sev;
                 var ser  = v[5] || '';
                 var sevColors = %s;
                 var col = sevColors[sev] || '#9ca3af';
@@ -287,7 +297,7 @@ patient_overview_viz <- new_pp_viz(
                   html += '<span style=\"display:inline-block;background:' +
                     col + ';color:#fff;padding:1px 6px;border-radius:3px;' +
                     'font-size:10px;font-weight:600;margin-bottom:3px\">' +
-                    sev + '</span>';
+                    sevDisp + '</span>';
                   if (ser === 'Y') {
                     html += ' <span style=\"color:#DC2626;font-size:10px;' +
                       'font-weight:600\">SERIOUS</span>';

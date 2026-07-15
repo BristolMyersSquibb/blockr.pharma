@@ -15,7 +15,8 @@
 # Data requirements (declared via new_pp_viz()):
 #   adae:
 #     required — AEDECOD, and a time source: ASTDT (or ASTDTC) or ASTDY
-#     optional — AENDT (or AENDTC), AENDY, AESEV, AEBODSYS (or AESOC),
+#     optional — AENDT (or AENDTC), AENDY, a severity column (AETOXGR or
+#                AESEV, see pp_sev_column()), AEBODSYS (or AESOC),
 #                AESER, AEOUT
 #
 # A study may ship the AE onset as an analysis date, a study day, or both.
@@ -46,6 +47,7 @@ ae_gantt_viz <- new_pp_viz(
     AENDT    = "AENDTC",
     ASTDY    = "AESTDY",
     AENDY    = "AEENDY",
+    AETOXGR  = NULL,
     AESEV    = NULL,
     AEBODSYS = "AESOC",
     AESER    = NULL,
@@ -70,7 +72,7 @@ ae_gantt_viz <- new_pp_viz(
     if (nrow(tbl) == 0) return(pp_empty_chart("No AE records"))
 
       # Severity colors: the board scale map (injected as
-      # settings$sev_colors by the block server when an AESEV binding
+      # settings$sev_colors by the block server when a severity binding
       # resolves) beats the built-in constants; absent either way -> grey.
       sev_color <- function(sev) {
         s <- as.character(sev)
@@ -81,16 +83,12 @@ ae_gantt_viz <- new_pp_viz(
             return(unname(fixed[[toupper(s)]]))
           }
         }
-        switch(toupper(s),
-          SEVERE   = "#DC2626",
-          MODERATE = "#D97706",
-          MILD     = "#CA8A04",
-          "#9ca3af"
-        )
+        pp_sev_fallback_color(s)
       }
 
       terms <- sort(unique(as.character(tbl$AEDECOD)))
-      has_sev <- "AESEV" %in% colnames(tbl)
+      sev_col <- pp_sev_column(colnames(tbl))
+      has_sev <- !is.null(sev_col)
       has_end <- "AENDT" %in% colnames(tbl)
       has_bodsys <- "AEBODSYS" %in% colnames(tbl)
       has_serious <- "AESER" %in% colnames(tbl)
@@ -135,7 +133,7 @@ ae_gantt_viz <- new_pp_viz(
         }
         term <- as.character(tbl$AEDECOD[i])
         lane <- match(term, terms) - 1L
-        sev <- if (has_sev) as.character(tbl$AESEV[i]) else "UNKNOWN"
+        sev <- if (has_sev) as.character(tbl[[sev_col]][i]) else "UNKNOWN"
         bodsys <- if (has_bodsys) as.character(tbl$AEBODSYS[i]) else ""
         serious <- if (has_serious) as.character(tbl$AESER[i]) else ""
         outcome <- if (has_outcome) as.character(tbl$AEOUT[i]) else ""
@@ -223,7 +221,9 @@ ae_gantt_viz <- new_pp_viz(
               var s = v[8] || '';
               var e = v[9] || '';
               var term = v[3] || '';
-              var sev = v[4] || '';
+              var sev = '' + (v[4] == null ? '' : v[4]);
+              // A bare CTCAE grade reads as noise in the badge.
+              var sevDisp = /^[0-9]+$/.test(sev) ? 'Grade ' + sev : sev;
               var bodsys = v[5] || '';
               var serious = v[6] || '';
               var outcome = v[7] || '';
@@ -237,7 +237,7 @@ ae_gantt_viz <- new_pp_viz(
               if (sev) {
                 html += '<span style=\"display:inline-block;background:' + col +
                   ';color:#fff;padding:1px 8px;border-radius:3px;font-size:11px;' +
-                  'font-weight:600;margin-bottom:4px\">' + sev + '</span><br/>';
+                  'font-weight:600;margin-bottom:4px\">' + sevDisp + '</span><br/>';
               }
               if (bodsys) {
                 html += '<span style=\"color:#888;font-size:11px\">' +
@@ -297,8 +297,10 @@ ae_gantt_viz <- new_pp_viz(
 #' The bars have been severity-colored all along, but nothing said so. This
 #' renders one swatch per severity level *actually present for this patient*,
 #' from the same colors the bars use (`sev_colors` when the board scale map
-#' resolves AESEV, the built-in constants otherwise), so the legend and the
-#' bars cannot drift apart. Serious AEs (AESER) get the outlined swatch that
+#' resolves the severity binding, the built-in constants otherwise), so the
+#' legend and the bars cannot drift apart. Grade-coded levels (AETOXGR) are
+#' listed in numeric order and labelled "Grade N". Serious AEs (AESER) get
+#' the outlined swatch that
 #' marks them in the plot.
 #'
 #' @param dm_obj Subject-scoped dm.
@@ -314,18 +316,22 @@ pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL) {
     return(NULL)
   }
 
-  sev <- if ("AESEV" %in% colnames(adae)) {
-    as.character(adae$AESEV)
+  sev_col <- pp_sev_column(colnames(adae))
+  sev <- if (!is.null(sev_col)) {
+    as.character(adae[[sev_col]])
   } else {
     character()
   }
   sev <- unique(sev[!is.na(sev) & nzchar(sev)])
 
-  # Canonical order first, then anything else the study happens to use.
+  # Grades in numeric order, then the canonical words, then anything else
+  # the study happens to use.
+  is_grade <- grepl("^[0-9]+$", sev)
   known <- c("MILD", "MODERATE", "SEVERE")
   sev <- c(
+    sev[is_grade][order(as.integer(sev[is_grade]))],
     known[known %in% toupper(sev)],
-    sort(sev[!toupper(sev) %in% known])
+    sort(sev[!is_grade & !toupper(sev) %in% known])
   )
 
   swatch <- function(color, label, outline = FALSE) {
@@ -345,14 +351,9 @@ pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL) {
       sev_colors[[s]] %||% sev_colors[[toupper(s)]] %||% NULL
     }
     if (is.null(color)) {
-      color <- switch(toupper(s),
-        SEVERE   = "#DC2626",
-        MODERATE = "#D97706",
-        MILD     = "#CA8A04",
-        "#9ca3af"
-      )
+      color <- pp_sev_fallback_color(s)
     }
-    swatch(unname(color), pp_term_label(s))
+    swatch(unname(color), pp_sev_label(s))
   })
 
   has_serious <- "AESER" %in% colnames(adae) &&
@@ -397,32 +398,3 @@ pp_empty_chart <- function(msg) {
     ))
 }
 
-#' Resolve AE severity colors from the board scale map
-#'
-#' Returns the resolved color vector for the severity levels present in the
-#' patient's adae (binding "AESEV"), or NULL when there is no map, no
-#' binding, or no severity data — the gantt then uses its built-in constants.
-#' @noRd
-pp_sev_scale_colors <- function(map, dm_obj) {
-  if (is.null(map)) {
-    return(NULL)
-  }
-
-  adae <- tryCatch(
-    dm::dm_get_tables(dm_obj)[["adae"]],
-    error = function(e) NULL
-  )
-
-  if (is.null(adae) || !"AESEV" %in% colnames(adae)) {
-    return(NULL)
-  }
-
-  sev <- unique(as.character(adae$AESEV))
-  sev <- sev[!is.na(sev) & nzchar(sev)]
-
-  if (!length(sev)) {
-    return(NULL)
-  }
-
-  blockr.theme::resolve_scales(map, "AESEV", levels = sev)$color
-}
