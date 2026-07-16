@@ -280,7 +280,13 @@ new_patient_profile_block <- function(selected = NULL,
           r_cohort_vizs <- shiny::reactive({
             dm_obj <- r_norm_dm()
             shiny::req(inherits(dm_obj, "dm"))
-            c(patient_profile_static_vizs(), pp_findings_vizs(dm_obj))
+            # Static vizs are decidable from the schema, so they are always
+            # listed and pp_coverage_report() explains any that cannot render.
+            # The generated ones answer a question the schema cannot: findings
+            # exist per discovered PARAMCD, the cycle lane only where the study
+            # is dosed in cycles. Absent means absent -- no card, no gap report.
+            c(patient_profile_static_vizs(), pp_cycle_vizs(dm_obj),
+              pp_findings_vizs(dm_obj))
           })
 
           # Available vizs (those whose tables exist in the dm). Derived
@@ -522,6 +528,19 @@ new_patient_profile_block <- function(selected = NULL,
             shiny::req(inherits(scoped$dm, "dm"))
             if (!isTRUE(scoped$single)) return(NA_real_)
             pp_compute_ref_ms(scoped$dm, ref_col = r_roles()$timeline)
+          })
+
+          # Treatment cycle anchors (see pp-cycle.R). Per-PATIENT, like
+          # r_ref_ms and for the same reason: the cycle calendar is this
+          # subject's, delays included. Computed once here rather than per
+          # viz -- the cycle lane and every cycle-labelled tooltip read the
+          # same frame, so they cannot disagree. NULL for a study without the
+          # cycle vocabulary, which is the common case and not an error.
+          r_cycle_anchors <- shiny::reactive({
+            scoped <- r_scoped_dm()
+            shiny::req(inherits(scoped$dm, "dm"))
+            if (!isTRUE(scoped$single)) return(NULL)
+            pp_cycle_anchor_days(pp_cycle_anchors(scoped$dm), r_ref_ms())
           })
 
           # Render sidebar cards (re-renders when the cohort's data
@@ -1018,6 +1037,9 @@ new_patient_profile_block <- function(selected = NULL,
               if (!is.null(sev_colors)) {
                 viz_settings$sev_colors <- sev_colors
               }
+            }
+            if ("cycle" %in% uses) {
+              viz_settings$cycle_anchors <- r_cycle_anchors()
             }
 
             # Check the declared `requires` / `requires_any` columns (a pure

@@ -32,7 +32,7 @@ patient_overview_viz <- new_pp_viz(
   description = "Treatment, exposure, adverse events, visits & milestones",
   tables = "adsl",
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
-  uses = c("arm", "severity"),
+  uses = c("arm", "severity", "cycle"),
   optional = list(
     adsl = c("RFENDT", "DTHDT", "DTHFL"),
     adae = c(
@@ -56,6 +56,12 @@ patient_overview_viz <- new_pp_viz(
 
       trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
+      # Cycle anchors, injected by the block (uses = "cycle"). Deliberately
+      # NOT applied to the treatment start/end or the milestone labels below:
+      # TRTSDT *is* C1 D1 by definition, so labelling it says nothing, and
+      # "EOS (C12 D3)" is noise. It rides on the events whose position within
+      # a cycle is the actual question -- doses, AEs, visits.
+      cyc <- settings$cycle_anchors
       # The arm column is a role, resolved once by the block (board option
       # or ACTARM) and injected -- the render never picks its own, so the
       # lane and the subject picker cannot disagree. An unresolved arm has
@@ -243,7 +249,7 @@ patient_overview_viz <- new_pp_viz(
           )
         }
         ae_lab <- function(v) {
-          if (ae_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
+          if (ae_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
         }
 
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
@@ -494,7 +500,7 @@ patient_overview_viz <- new_pp_viz(
           )
         }
         ex_lab <- function(v) {
-          if (ex_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
+          if (ex_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
         }
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
@@ -612,9 +618,9 @@ patient_overview_viz <- new_pp_viz(
             ref_ms, mode
           )
           x_lab <- if (identical(mode, "rday") && !is.na(visits$day[i])) {
-            pp_day_label(visits$day[i])
+            pp_day_label(visits$day[i], cyc)
           } else {
-            pp_xlabel(visits$date[i], ref_ms, mode)
+            pp_xlabel(visits$date[i], ref_ms, mode, cyc)
           }
           list(value = list(x, vis_lane, visits$visit[i], x_lab))
         })

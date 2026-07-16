@@ -34,6 +34,7 @@ cm_gantt_viz <- new_pp_viz(
     "CMDECOD", "AENDT", "AENDY", "CMDOSE", "CMDOSU", "CMDOSFRQ",
     "CMROUTE", "CMCLAS", "CMINDC"
   )),
+  uses = "cycle",
   render = function(dm_obj, time_range, settings = list(),
                     ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
@@ -82,6 +83,9 @@ cm_gantt_viz <- new_pp_viz(
 
     day_unit <- if (identical(mode, "rday")) 1 else 86400000
     end_at <- function(i) if (use_day) tbl$AENDY[i] else tbl$AENDT[i]
+    # Cycle anchors, injected by the block (uses = "cycle"); NULL makes the
+    # label helpers below no-ops.
+    cyc <- settings$cycle_anchors
 
     # One label per lane, drawn on the lane's earliest bar (see ae_gantt).
     lane_first <- vapply(meds, function(med) {
@@ -116,12 +120,12 @@ cm_gantt_viz <- new_pp_viz(
         opt_chr(tbl, "CMDOSE", i), opt_chr(tbl, "CMDOSU", i),
         opt_chr(tbl, "CMDOSFRQ", i)
       ))
-      s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i]) else {
-        pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
+      s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i], cyc) else {
+        pp_xlabel(tbl$ASTDT[i], ref_ms, mode, cyc)
       }
       e_lab <- if (has_end && !is.na(end_at(i))) {
-        if (use_day) pp_day_label(tbl$AENDY[i]) else {
-          pp_xlabel(tbl$AENDT[i], ref_ms, mode)
+        if (use_day) pp_day_label(tbl$AENDY[i], cyc) else {
+          pp_xlabel(tbl$AENDT[i], ref_ms, mode, cyc)
         }
       } else {
         s_lab

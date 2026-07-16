@@ -63,7 +63,12 @@ config_effect.patient_profile_block <- function(block, args, data = NULL, ...) {
     vapply(pp_findings_groups(), `[[`, character(1L), "id"),
     error = function(e) character()
   )
-  bad <- setdiff(sel, c(static_ids, known_groups))
+  # The cycle lane is generated too (only where the study is dosed in cycles),
+  # so it is absent from the static ids while still being a real, documented
+  # id. Read from the definition rather than spelled again here -- the literal
+  # list this replaced is exactly what drifted last time.
+  cycle_id <- tryCatch(cycle_viz$id, error = function(e) character())
+  bad <- setdiff(sel, c(static_ids, cycle_id, known_groups))
   # Auto-generated per-PARAMCD ids ("adlb_trig", "adlbc_alt", "advs_resp")
   # are valid at runtime.
   bad <- bad[!grepl("^(adlb[ch]?|advs)_", bad)]

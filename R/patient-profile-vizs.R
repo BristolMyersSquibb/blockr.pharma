@@ -55,10 +55,13 @@ pp_day_to_x <- function(dy) {
 #' The value is already a \*DY, so it needs no remapping — unlike
 #' [pp_xlabel()], which has to undo the continuous scale first.
 #'
+#' @param dy ADaM study day.
+#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
+#'   cycle/day rides behind the study day as `D22 (C2 D1)`.
 #' @noRd
-pp_day_label <- function(dy) {
+pp_day_label <- function(dy, cycle = NULL) {
   if (is.na(dy)) return("")
-  paste0("D", dy)
+  pp_with_cycle(paste0("D", dy), pp_day_to_x(dy), cycle)
 }
 
 #' x-axis value, preferring a study day the data already carries
@@ -90,9 +93,12 @@ pp_xval_pref_day <- function(d, day, ref_ms = NA_real_, mode = "date") {
 #' Returns the calendar date (`YYYY-MM-DD`) in date mode, or `D<n>` in
 #' relative-day mode (skipping day 0, matching ADaM's \*DY convention).
 #'
+#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
+#'   cycle/day is appended in BOTH modes — the clinician's ask was to see the
+#'   cycle day *in addition to* what is already there, not instead of it.
 #' @noRd
-pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date") {
-  if (identical(mode, "rday") && !is.na(ref_ms)) {
+pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", cycle = NULL) {
+  base <- if (identical(mode, "rday") && !is.na(ref_ms)) {
     day <- pp_xval(d, ref_ms, "rday")
     if (is.na(day)) return("")
     if (day > 0) paste0("D", day) else paste0("D", day - 1)
@@ -100,6 +106,11 @@ pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date") {
     if (is.na(d)) return("")
     format(as.Date(d))
   }
+  # NA ref_ms leaves pp_xval() returning a millisecond timestamp, which would
+  # be nonsense to look up against day-space anchors; there is no cycle to
+  # report without a treatment start anyway.
+  x_day <- if (is.na(ref_ms)) NA_real_ else pp_xval(d, ref_ms, "rday")
+  pp_with_cycle(base, x_day, cycle)
 }
 
 #' Build shared echarts x-axis config for date OR relative-day mode
