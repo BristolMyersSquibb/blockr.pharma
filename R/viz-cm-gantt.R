@@ -15,8 +15,8 @@
 #                CMDOSE, CMDOSU, CMDOSFRQ, CMROUTE, CMCLAS, CMINDC
 #
 # Lanes are labelled above their bars, exactly like the AE gantt, and for
-# the same reason: the shared 60px left margin fits ~8 characters and
-# medication names collide well before that.
+# the same reason: the shared left margin (PP_GRID_LEFT) fits only a few
+# characters and medication names collide well before that.
 
 #' Concomitant medications visualization definition
 #' @noRd
@@ -65,7 +65,6 @@ cm_gantt_viz <- new_pp_viz(
       med
     }
     tbl$..med <- med_of(tbl)
-    meds <- sort(unique(tbl$..med))
 
     has_end <- if (use_day) {
       "AENDY" %in% colnames(tbl)
@@ -87,18 +86,7 @@ cm_gantt_viz <- new_pp_viz(
     # label helpers below no-ops.
     cyc <- settings$cycle_anchors
 
-    # One label per lane, drawn on the lane's earliest bar (see ae_gantt).
-    lane_first <- vapply(meds, function(med) {
-      rows <- which(tbl$..med == med)
-      starts <- vapply(rows, function(i) {
-        as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
-      }, numeric(1L))
-      rows[order(starts)][1L]
-    }, integer(1L))
-
-    bar_color <- "#0891B2"
-
-    bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
+    bar_span <- function(i) {
       s <- pp_xval_pref_day(
         if (use_day) NULL else tbl$ASTDT[i],
         if (use_day) tbl$ASTDY[i] else NULL,
@@ -113,6 +101,37 @@ cm_gantt_viz <- new_pp_viz(
       } else {
         s + day_unit
       }
+      c(s, e)
+    }
+
+    # Lanes come from what the window draws, not from the table: a med whose
+    # every bar is off-axis (chronic meds started years pre-study are the
+    # common case) otherwise reserved an empty lane. See pp_gantt_in_window().
+    spans <- vapply(seq_len(nrow(tbl)), bar_span, numeric(2L))
+    tbl <- tbl[
+      pp_gantt_in_window(spans[1L, ], spans[2L, ], time_range, ref_ms, mode), ,
+      drop = FALSE
+    ]
+    if (nrow(tbl) == 0) {
+      return(pp_empty_chart("No medication records in this time range"))
+    }
+    meds <- sort(unique(tbl$..med))
+
+    # One label per lane, drawn on the lane's earliest bar (see ae_gantt).
+    lane_first <- vapply(meds, function(med) {
+      rows <- which(tbl$..med == med)
+      starts <- vapply(rows, function(i) {
+        as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
+      }, numeric(1L))
+      rows[order(starts)][1L]
+    }, integer(1L))
+
+    bar_color <- "#0891B2"
+
+    bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
+      span <- bar_span(i)
+      s <- span[1L]
+      e <- span[2L]
       med <- tbl$..med[i]
       lane <- match(med, meds) - 1L
 
@@ -142,47 +161,7 @@ cm_gantt_viz <- new_pp_viz(
     series_list <- list(list(
       type = "custom",
       name = "Concomitant Medications",
-      renderItem = htmlwidgets::JS("
-        function(params, api) {
-          var start = api.coord([api.value(0), api.value(2)]);
-          var end   = api.coord([api.value(1), api.value(2)]);
-          var laneH = api.size([0, 1])[1];
-          var h     = Math.min(14, laneH * 0.36);
-          var barW  = Math.max(end[0] - start[0], 4);
-          var barY  = start[1] + laneH * 0.18 - h / 2;
-          var cs    = params.coordSys;
-          var rect  = echarts.graphic.clipRectByRect(
-            { x: start[0], y: barY, width: barW, height: h },
-            { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
-          );
-          if (!rect) return;
-
-          var children = [{
-            type: 'rect',
-            shape: Object.assign({}, rect, { r: 3 }),
-            style: api.style()
-          }];
-
-          var label = api.value(10);
-          if (label) {
-            var tx = Math.max(start[0], cs.x + 2);
-            children.push({
-              type: 'text',
-              style: {
-                text: label,
-                x: tx,
-                y: start[1] - laneH * 0.26,
-                fill: '#4b5563',
-                fontSize: 10,
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                textVerticalAlign: 'middle',
-                truncate: { outerWidth: cs.x + cs.width - tx }
-              }
-            });
-          }
-          return { type: 'group', children: children };
-        }
-      "),
+      renderItem = pp_gantt_render_item(10),
       encode = list(x = list(0, 1), y = 2),
       data = bar_data,
       tooltip = list(
@@ -224,7 +203,7 @@ cm_gantt_viz <- new_pp_viz(
       )
     ))
 
-    chart_height <- max(250, length(meds) * 38 + 80)
+    chart_height <- pp_gantt_height(length(meds))
 
     echarts4r::e_charts(height = chart_height) |>
       echarts4r::e_list(list(
@@ -232,7 +211,8 @@ cm_gantt_viz <- new_pp_viz(
         tooltip = pp_tooltip(),
         toolbox = pp_toolbox(),
         grid = list(
-          left = 60, right = 20, top = 10, bottom = 30,
+          left = PP_GRID_LEFT, right = 20,
+          top = PP_GANTT_TOP, bottom = PP_GANTT_BOTTOM,
           borderColor = "transparent"
         ),
         xAxis = pp_time_axis(time_range, ref_ms, mode),

@@ -113,6 +113,42 @@ pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", cycle = NULL) {
   pp_with_cycle(base, x_day, cycle)
 }
 
+#' The axis end points, in the axis's own units -- the same two expressions
+#' [pp_time_axis()] uses for `min`/`max`, for callers that need to compare a
+#' value against the visible window.
+#'
+#' Returns `c(NA, NA)` when there is no window to speak of (a render with no
+#' `time_range` leaves the axis unbounded), which callers must read as "clips
+#' nothing" rather than "clips everything".
+#' @noRd
+pp_x_bounds <- function(time_range, ref_ms = NA_real_, mode = "date") {
+  if (length(time_range) < 2L) return(c(NA_real_, NA_real_))
+  if (identical(mode, "rday") && !is.na(ref_ms)) {
+    c(pp_xval(time_range[1], ref_ms, "rday"),
+      pp_xval(time_range[2], ref_ms, "rday"))
+  } else {
+    c(pp_ms_ts(time_range[1]), pp_ms_ts(time_range[2]))
+  }
+}
+
+#' Which bars intersect the visible window, given start/end in axis units.
+#'
+#' The gantts allocate one lane per term, so a bar drawn entirely outside the
+#' axis costs a blank lane -- and if it is its lane's earliest bar, it takes
+#' the lane's only label with it, since `renderItem` draws the label on that
+#' bar and the clip drops the whole group. Long-standing conmeds make this
+#' routine: an ongoing drug started D-4019 has no AENDY, renders as a one-day
+#' bar four thousand days off-axis, and reserves a lane forever.
+#' @noRd
+pp_gantt_in_window <- function(s, e, time_range, ref_ms = NA_real_,
+                               mode = "date") {
+  drawable <- !is.na(s) & !is.na(e)
+  b <- pp_x_bounds(time_range, ref_ms, mode)
+  # An unbounded axis clips nothing, so every drawable bar keeps its lane.
+  if (anyNA(b)) return(drawable)
+  drawable & e >= b[1] & s <= b[2]
+}
+
 #' Build shared echarts x-axis config for date OR relative-day mode
 #'
 #' @param time_range Length-2 Date vector (min, max)
@@ -127,10 +163,8 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       type = "value",
       min = pp_xval(time_range[1], ref_ms, "rday"),
       max = pp_xval(time_range[2], ref_ms, "rday"),
-      name = if (show_labels) "Day" else NULL,
-      nameLocation = "end",
-      nameGap = 8,
-      nameTextStyle = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11),
+      # No axis name: every tick already reads "D50", and an "Day" pinned to
+      # the axis end only crowded the last tick.
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
       axisLabel = list(
@@ -164,6 +198,12 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
   }
 }
 
+#' Where the toolbox sits, and how big its icons are. Read by PP_PLOT_TOP,
+#' which reserves the band they occupy.
+#' @noRd
+PP_TOOLBOX_TOP <- 4
+PP_TOOLBOX_SIZE <- 11
+
 #' Shared echarts toolbox: small, muted icons matching the canonical
 #' drill-down chart styling (blockr.viz/inst/js/drilldown-chart.js).
 #'
@@ -172,13 +212,54 @@ pp_toolbox <- function() {
   list(
     show = TRUE,
     right = 8,
-    top = 4,
-    itemSize = 11,
+    top = PP_TOOLBOX_TOP,
+    itemSize = PP_TOOLBOX_SIZE,
     feature = list(
       saveAsImage = list(title = "Save", pixelRatio = 2)
     ),
     iconStyle = list(borderColor = "#bbb")
   )
+}
+
+#' Smallest grid `top` that clears the toolbox band. The toolbox floats over
+#' the canvas rather than reserving space, so a grid starting above this drew
+#' the save icon on top of the first lane's bars.
+#' @noRd
+PP_PLOT_TOP <- PP_TOOLBOX_TOP + PP_TOOLBOX_SIZE + 5
+
+#' The y-axis gutter, shared by every panel.
+#'
+#' One value for all panels is load-bearing: the panels stack vertically and
+#' their x axes only read as one timeline if every grid starts at the same
+#' left. Change it here or not at all.
+#'
+#' Sized for the widest thing drawn in it. That is a numeric tick on a
+#' findings chart -- measured across all 62 PARAMCDs in the ADaM data, the
+#' widest is 4 characters ("1000"; 40 of 62 need only 3) -- or a 3-character
+#' overview lane name ("TRT", "VIS"). 4 characters at 11px is ~26px, plus
+#' echarts' 8px label margin. [pp_compact_num_js()] bounds the tick width for
+#' studies whose labs run larger than this dataset's. The gantt lanes draw
+#' their labels in the plot area and need none of it, but they keep it to hold
+#' the alignment.
+#' @noRd
+PP_GRID_LEFT <- 44
+
+#' Axis-tick formatter that keeps a number inside ~4 characters.
+#'
+#' The gutter is sized for 4 characters, and an auto-scaled axis takes its
+#' ticks from the data: a study shipping a lab in raw units (platelets in
+#' /uL, say) would otherwise print "500000" into a 44px gutter and collide
+#' with the plot.
+#' @noRd
+pp_compact_num_js <- function() {
+  htmlwidgets::JS("
+    function(v) {
+      var a = Math.abs(v);
+      if (a >= 1e6) return (v / 1e6) + 'M';
+      if (a >= 1e4) return (v / 1e3) + 'k';
+      return v;
+    }
+  ")
 }
 
 #' Canonical axis colors used by the drill-down chart family. Kept
@@ -187,6 +268,74 @@ pp_toolbox <- function() {
 PP_AXIS_LABEL_COLOR <- "#666"
 PP_AXIS_LINE_COLOR <- "#ccc"
 PP_SPLIT_LINE_COLOR <- "#f3f4f6"
+
+#' Lane geometry for the patient-profile gantt charts (AE, CM).
+#'
+#' A lane is one term: a label row sitting above its bar. Every value here is
+#' an absolute pixel offset and the lane height never varies with the number
+#' of lanes, so the label-to-bar gap is identical on a two-term chart and a
+#' fifty-term one. Deriving the offsets from the rendered lane height instead
+#' (`api.size()`) coupled them to the panel height, and a minimum panel height
+#' then stretched short charts apart.
+#' @noRd
+PP_GANTT_LANE_H <- 38
+PP_GANTT_BAR_H <- 14
+PP_GANTT_BAR_DY <- 7
+PP_GANTT_LABEL_DY <- -10
+PP_GANTT_TOP <- PP_PLOT_TOP
+PP_GANTT_BOTTOM <- 30
+
+#' Panel height for a gantt chart with `n_lanes` lanes.
+#' @noRd
+pp_gantt_height <- function(n_lanes) {
+  PP_GANTT_TOP + PP_GANTT_BOTTOM + max(n_lanes, 1L) * PP_GANTT_LANE_H
+}
+
+#' `renderItem` for the gantt charts. `label_idx` is the index in the encoded
+#' value vector carrying the lane term (written once, on the lane's first bar).
+#' @noRd
+pp_gantt_render_item <- function(label_idx) {
+  htmlwidgets::JS(sprintf("
+    function(params, api) {
+      var start = api.coord([api.value(0), api.value(2)]);
+      var end   = api.coord([api.value(1), api.value(2)]);
+      var h     = %d;
+      var barW  = Math.max(end[0] - start[0], 4);
+      var barY  = start[1] + %d - h / 2;
+      var cs    = params.coordSys;
+      var rect  = echarts.graphic.clipRectByRect(
+        { x: start[0], y: barY, width: barW, height: h },
+        { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
+      );
+      if (!rect) return;
+
+      var children = [{
+        type: 'rect',
+        shape: Object.assign({}, rect, { r: 3 }),
+        style: api.style()
+      }];
+
+      var label = api.value(%d);
+      if (label) {
+        var tx = Math.max(start[0], cs.x + 2);
+        children.push({
+          type: 'text',
+          style: {
+            text: label,
+            x: tx,
+            y: start[1] + (%d),
+            fill: '#4b5563',
+            fontSize: 10,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            textVerticalAlign: 'middle',
+            truncate: { outerWidth: cs.x + cs.width - tx }
+          }
+        });
+      }
+      return { type: 'group', children: children };
+    }
+  ", PP_GANTT_BAR_H, PP_GANTT_BAR_DY, label_idx, PP_GANTT_LABEL_DY))
+}
 
 #' Encode a string as a JavaScript string literal
 #'
@@ -600,7 +749,11 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   has_param <- "PARAM" %in% colnames(tbl)
 
   n_params <- length(params)
-  grid_height <- max(120, floor(400 / max(n_params, 1)))
+  # Fixed per-chart height. Splitting a total budget across the selected
+  # params instead made one chart inherit the whole budget and tower over a
+  # two-chart panel -- backwards, since a lone series needs no more room to
+  # be read than it does stacked with others.
+  grid_height <- 140
   grid_gap <- 50
   top_pad <- 10
   bot_pad <- 30
@@ -631,13 +784,13 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     }
     titles[[p_idx]] <- list(
       text = param_label,
-      left = 60,
+      left = PP_GRID_LEFT,
       top = grid_top - 18,
       textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
     )
 
     grids[[p_idx]] <- list(
-      left = 60, right = 20,
+      left = PP_GRID_LEFT, right = 20,
       top = grid_top, height = grid_height,
       borderColor = "transparent"
     )
@@ -652,7 +805,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       gridIndex = grid_idx,
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
-      axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11),
+      axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11,
+                       formatter = pp_compact_num_js()),
       splitLine = list(
         show = TRUE,
         lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed",

@@ -135,7 +135,10 @@ questionnaire_heatmap_viz <- new_pp_viz(
       visits_js <- pp_js_arr(visits)
       params_js <- pp_js_arr(param_labels)
 
-      chart_height <- max(300, length(params) * 28 + 80)
+      # Chrome plus a fixed 28px row, same rule as the gantt lanes: a minimum
+      # height would stretch a short questionnaire's rows apart instead of
+      # just drawing a short chart.
+      chart_height <- PP_PLOT_TOP + 50 + max(length(params), 1L) * 28
 
       echarts4r::e_charts(height = chart_height) |>
         echarts4r::e_list(list(
@@ -168,7 +171,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
             ", visits_js, params_js))
           ),
           grid = list(
-            left = 140, right = 20, top = 10, bottom = 50,
+            left = 140, right = 20, top = PP_PLOT_TOP, bottom = 50,
             borderColor = "transparent"
           ),
           xAxis = list(

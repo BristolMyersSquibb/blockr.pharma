@@ -144,7 +144,7 @@ adas_trajectory_viz <- new_pp_viz(
             itemWidth = 14, itemHeight = 10
           ),
           grid = list(
-            left = 60, right = 20, top = 20,
+            left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP,
             bottom = if (length(params) > 1) 40 else 30,
             borderColor = "transparent"
           ),

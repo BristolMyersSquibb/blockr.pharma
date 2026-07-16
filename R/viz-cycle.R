@@ -179,7 +179,7 @@ cycle_viz <- new_pp_viz(
         tooltip = pp_tooltip(),
         toolbox = pp_toolbox(),
         grid = list(
-          left = 60, right = 20, top = 10, bottom = 30,
+          left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP, bottom = 30,
           borderColor = "transparent"
         ),
         xAxis = pp_time_axis(time_range, ref_ms, mode),

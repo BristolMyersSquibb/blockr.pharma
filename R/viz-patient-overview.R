@@ -132,14 +132,16 @@ patient_overview_viz <- new_pp_viz(
       # the same two dates a third time. What is left (end of study, death)
       # are POINTS, and a point does not need a category of its own.
       #
-      # Short lane labels keep grid.left at 60 (aligned with the other
-      # timeline charts). Tooltips on each item still carry the full context.
+      # Short lane labels are what let the shared gutter (PP_GRID_LEFT) stay
+      # narrow. Tooltips on each item still carry the full context.
       lanes <- c("TRT", if (has_adae) "AE", if (has_vis) "VIS")
       lane_full <- c(TRT = "Treatment", AE = "Adverse Events",
                      VIS = "Visits")
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
-      chart_height <- 60 + n_lanes * 40
+      # Chrome plus an exact 40px per lane, so lane geometry does not shift
+      # with the number of lanes a subject happens to have.
+      chart_height <- PP_PLOT_TOP + 30 + n_lanes * 40
 
       # A study's arm label is data, not a literal: encode it, never paste it.
       arm_js <- pp_js_str(arm_label)
@@ -671,7 +673,7 @@ patient_overview_viz <- new_pp_viz(
           tooltip = pp_tooltip(),
           toolbox = pp_toolbox(),
           grid = list(
-            left = 60, right = 20, top = 10, bottom = 30,
+            left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP, bottom = 30,
             borderColor = "transparent"
           ),
           xAxis = pp_time_axis(time_range, ref_ms, mode),

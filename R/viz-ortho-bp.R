@@ -169,7 +169,7 @@ ortho_bp_viz <- new_pp_viz(
             itemWidth = 14, itemHeight = 10
           ),
           grid = list(
-            left = 60, right = 20, top = 20, bottom = 40,
+            left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP, bottom = 40,
             borderColor = "transparent"
           ),
           xAxis = list(

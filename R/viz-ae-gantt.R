@@ -3,10 +3,11 @@
 # Gantt bars showing AE duration by preferred term, colored by severity.
 #
 # Each lane is labelled in the plot area, on the row just above its own bars.
-# The y axis carries no text: the shared 60px left margin (which keeps the x
-# axis aligned with the other patient-profile panels) only fits ~8 characters,
-# and preferred terms collide well before that ("APPLICATION SITE ERYTHEMA"
-# and "...PRURITUS" both truncate to "APPLICAT..."). Labelling above the bar
+# The y axis carries no text: the shared left margin (PP_GRID_LEFT, which
+# keeps the x axis aligned with the other patient-profile panels) fits only a
+# few characters, and preferred terms collide well before that ("APPLICATION
+# SITE ERYTHEMA" and "...PRURITUS" both truncate to "APPLIC..."). Labelling
+# above the bar
 # instead of beside it costs no horizontal room, so single-day events -- the
 # common case -- are labelled as legibly as month-long ones. The label is
 # truncated at the right edge of the grid; the tooltip always has the full
@@ -79,7 +80,6 @@ ae_gantt_viz <- new_pp_viz(
         pp_sev_fallback_color(s)
       }
 
-      terms <- sort(unique(as.character(tbl$AEDECOD)))
       # The severity column is a role, resolved once by the block and
       # injected -- never re-detected here, or bars and legend could drift.
       sev_col <- settings$roles$severity
@@ -99,23 +99,11 @@ ae_gantt_viz <- new_pp_viz(
       has_end <- if (use_day) end_day else has_end
 
       day_unit <- if (identical(mode, "rday")) 1 else 86400000
-      start_at <- function(i) {
-        if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i]
-      }
       end_at <- function(i) {
         if (use_day) tbl$AENDY[i] else tbl$AENDT[i]
       }
-      # One label per lane, drawn on the lane's earliest bar: the lane *is*
-      # the term, so repeating it on every bar of the lane is noise.
-      lane_first <- vapply(terms, function(term) {
-        rows <- which(as.character(tbl$AEDECOD) == term)
-        starts <- vapply(rows, function(i) {
-          as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
-        }, numeric(1L))
-        rows[order(starts)][1L]
-      }, integer(1L))
 
-      bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
+      bar_span <- function(i) {
         s <- pp_xval_pref_day(
           if (use_day) NULL else tbl$ASTDT[i],
           if (use_day) tbl$ASTDY[i] else NULL,
@@ -130,6 +118,37 @@ ae_gantt_viz <- new_pp_viz(
         } else {
           s + day_unit
         }
+        c(s, e)
+      }
+
+      # Lanes come from what the window draws, not from the table: a term
+      # whose every bar is off-axis otherwise reserved an empty lane, and a
+      # clipped earliest bar took its lane's only label with it. See
+      # pp_gantt_in_window().
+      spans <- vapply(seq_len(nrow(tbl)), bar_span, numeric(2L))
+      tbl <- tbl[
+        pp_gantt_in_window(spans[1L, ], spans[2L, ], time_range, ref_ms, mode),
+        , drop = FALSE
+      ]
+      if (nrow(tbl) == 0) {
+        return(pp_empty_chart("No adverse events in this time range"))
+      }
+      terms <- sort(unique(as.character(tbl$AEDECOD)))
+
+      # One label per lane, drawn on the lane's earliest bar: the lane *is*
+      # the term, so repeating it on every bar of the lane is noise.
+      lane_first <- vapply(terms, function(term) {
+        rows <- which(as.character(tbl$AEDECOD) == term)
+        starts <- vapply(rows, function(i) {
+          as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
+        }, numeric(1L))
+        rows[order(starts)][1L]
+      }, integer(1L))
+
+      bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
+        span <- bar_span(i)
+        s <- span[1L]
+        e <- span[2L]
         term <- as.character(tbl$AEDECOD[i])
         lane <- match(term, terms) - 1L
         sev <- if (has_sev) as.character(tbl[[sev_col]][i]) else "UNKNOWN"
@@ -168,49 +187,7 @@ ae_gantt_viz <- new_pp_viz(
       series_list <- list(list(
         type = "custom",
         name = "Adverse Events",
-        renderItem = htmlwidgets::JS("
-          function(params, api) {
-            var start = api.coord([api.value(0), api.value(2)]);
-            var end   = api.coord([api.value(1), api.value(2)]);
-            var laneH = api.size([0, 1])[1];
-            var h     = Math.min(14, laneH * 0.36);
-            var barW  = Math.max(end[0] - start[0], 4);
-            // The bar sits below the lane centre so the label has the top of
-            // the lane to itself.
-            var barY  = start[1] + laneH * 0.18 - h / 2;
-            var cs    = params.coordSys;
-            var rect  = echarts.graphic.clipRectByRect(
-              { x: start[0], y: barY, width: barW, height: h },
-              { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
-            );
-            if (!rect) return;
-
-            var children = [{
-              type: 'rect',
-              shape: Object.assign({}, rect, { r: 3 }),
-              style: api.style()
-            }];
-
-            var label = api.value(11);
-            if (label) {
-              var tx = Math.max(start[0], cs.x + 2);
-              children.push({
-                type: 'text',
-                style: {
-                  text: label,
-                  x: tx,
-                  y: start[1] - laneH * 0.26,
-                  fill: '#4b5563',
-                  fontSize: 10,
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  textVerticalAlign: 'middle',
-                  truncate: { outerWidth: cs.x + cs.width - tx }
-                }
-              });
-            }
-            return { type: 'group', children: children };
-          }
-        "),
+        renderItem = pp_gantt_render_item(11),
         encode = list(x = list(0, 1), y = 2),
         data = bar_data,
         tooltip = list(
@@ -260,9 +237,7 @@ ae_gantt_viz <- new_pp_viz(
         )
       ))
 
-      # A little taller per lane than a bare bar row: the lane now carries
-      # its label above the bar.
-      chart_height <- max(250, length(terms) * 38 + 80)
+      chart_height <- pp_gantt_height(length(terms))
 
       echarts4r::e_charts(height = chart_height) |>
         echarts4r::e_list(list(
@@ -270,7 +245,8 @@ ae_gantt_viz <- new_pp_viz(
           tooltip = pp_tooltip(),
           toolbox = pp_toolbox(),
           grid = list(
-            left = 60, right = 20, top = 10, bottom = 30,
+            left = PP_GRID_LEFT, right = 20,
+            top = PP_GANTT_TOP, bottom = PP_GANTT_BOTTOM,
             borderColor = "transparent"
           ),
           xAxis = pp_time_axis(time_range, ref_ms, mode),
@@ -281,8 +257,8 @@ ae_gantt_viz <- new_pp_viz(
             axisLine = list(show = FALSE),
             axisTick = list(show = FALSE),
             # No text in the gutter: the term is written above the bar
-            # instead. The 60px margin itself stays (the grid must keep
-            # aligning with the other patient-profile panels).
+            # instead. The margin itself stays (the grid must keep aligning
+            # with the other patient-profile panels).
             axisLabel = list(show = FALSE),
             splitLine = list(show = FALSE)
           ),
@@ -400,4 +376,3 @@ pp_empty_chart <- function(msg) {
       yAxis = list(show = FALSE)
     ))
 }
-

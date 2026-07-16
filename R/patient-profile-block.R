@@ -1117,7 +1117,6 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
                 legend_ui,
-                shiny::div(class = "pp-chart-domain", viz$domain),
                 # Same toggle the sidebar card fires: removing a viz here
                 # deselects it, so the sidebar card slides back to AVAILABLE.
                 shiny::tags$button(
