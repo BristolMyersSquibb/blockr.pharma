@@ -50,6 +50,37 @@ test_that("equal data yields an identical catalog signature", {
   expect_false(identical(pp_vizs_signature(cat1), pp_vizs_signature(cat3)))
 })
 
+test_that("group definitions are patient-independent", {
+  # The drill architecture feeds the profile ONE patient per upstream
+  # update. Two patients sharing the same groups must yield identical
+  # catalog signatures, or the sidebar re-renders on every drill -- so a
+  # group's chip choices resolve at dispatch, never baked per patient.
+  mk <- function(pcs) {
+    dm::dm(
+      adsl = data.frame(USUBJID = "x", ACTARM = "Placebo",
+                        stringsAsFactors = FALSE),
+      adlbc = data.frame(USUBJID = "x", PARAMCD = pcs,
+                         AVAL = seq_along(pcs), ADT = as.Date("2020-01-01"),
+                         stringsAsFactors = FALSE)
+    )
+  }
+  pat_a <- pp_findings_vizs(mk(c("ALT", "AST", "BILI")))
+  pat_b <- pp_findings_vizs(mk(c("ALT", "GGT")))  # same group, other params
+
+  expect_true("liver_panel" %in% names(pat_a))
+  expect_true("liver_panel" %in% names(pat_b))
+  expect_identical(
+    pp_vizs_signature(pat_a["liver_panel"]),
+    pp_vizs_signature(pat_b["liver_panel"])
+  )
+
+  # the chips subset by the group's clinical list, resolved from the data
+  ctrl <- pat_a$liver_panel$controls$items
+  expect_null(ctrl$choices)
+  expect_identical(ctrl$choices_from, "PARAMCD")
+  expect_true(all(c("ALT", "AST", "GGT") %in% ctrl$choices_subset))
+})
+
 test_that("visit levels order by AVISITN, not lexically", {
   tbl <- data.frame(
     AVISIT = c("Week 10", "Week 2", "Baseline", "Week 10"),

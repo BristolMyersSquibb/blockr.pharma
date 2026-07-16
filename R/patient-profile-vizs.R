@@ -1055,19 +1055,27 @@ pp_findings_vizs <- function(dm_obj) {
           list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
+        # Choices resolve at DISPATCH (choices_from + choices_subset), never
+        # baked into the definition: a baked `present` made every definition
+        # patient-specific, so a drilled-in upstream (single-patient input)
+        # changed the catalog signature on every patient and the whole
+        # sidebar re-rendered per drill. With data-independent definitions,
+        # two patients sharing the same groups compare identical and the
+        # sidebar stays put.
         controls = list(
           items = list(
             type = "checkbox",
             label = "Items",
-            choices = present,
-            default = present
+            choices_from = "PARAMCD",
+            choices_subset = g$paramcds,
+            default = NULL
           )
         ),
         render = local({
           .tbl_name <- tbl_name
           .label <- g$label
           .color <- g$color
-          .default_paramcds <- present
+          .default_paramcds <- g$paramcds
           function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
             paramcds <- settings$items %||% .default_paramcds

@@ -659,6 +659,11 @@ new_patient_profile_block <- function(selected = NULL,
                         } else {
                           sort(unique(as.character(tbl[[col]])))
                         }
+                        # Restrict to the viz's declared subset (a findings
+                        # group's PARAMCDs), in the subset's clinical order.
+                        if (!is.null(ctrl$choices_subset)) {
+                          choices <- intersect(ctrl$choices_subset, choices)
+                        }
                         break
                       }
                     }
