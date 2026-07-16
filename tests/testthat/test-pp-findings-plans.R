@@ -21,6 +21,22 @@ test_that("params living only in adlb get cards even when both splits exist", {
   expect_false("adlb_alt" %in% names(vizs))
 })
 
+test_that("the catalog signature ignores card ORDER", {
+  # pp_findings_vizs() emits per-param cards in the patient's PARAMCD
+  # order, so the same cards arrive in different sequences across drills.
+  # An order-sensitive compare read that as a change and re-rendered the
+  # sidebar (prod: "CHANGED (32 vizs; + -)" -- set diff empty both ways).
+  vizs <- patient_profile_static_vizs()
+  expect_identical(
+    pp_vizs_signature(vizs),
+    pp_vizs_signature(rev(vizs))
+  )
+  # ...but a card whose CONTENT differs is still a change
+  other <- vizs
+  other[[1L]]$label <- "Renamed"
+  expect_false(identical(pp_vizs_signature(vizs), pp_vizs_signature(other)))
+})
+
 test_that("equal data yields an identical catalog signature", {
   mk <- function() {
     dm::dm(

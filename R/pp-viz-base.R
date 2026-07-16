@@ -96,6 +96,15 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
 #' @return A list safe to compare with `identical()`.
 #' @noRd
 pp_vizs_signature <- function(vizs) {
+  # ORDER-INDEPENDENT: sort by id first. pp_findings_vizs() emits the
+  # per-param cards in the order the patient's PARAMCDs come out, so two
+  # patients carrying the SAME cards can hand them over in a different
+  # sequence -- an order-only difference that an order-sensitive compare
+  # reads as a change, and the sidebar re-rendered on drills that changed
+  # nothing (prod log: "CHANGED (32 vizs; + -)", the set diff empty both
+  # ways). The catalog's own order is left alone: what the sidebar draws
+  # is whichever object the block kept, so the DOM order stays put too.
+  vizs <- vizs[order(names(vizs))]
   lapply(vizs, function(v) {
     v <- unclass(v)
     v[!vapply(v, is.function, logical(1L))]
