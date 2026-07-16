@@ -180,6 +180,17 @@
   flex-direction: column;
 }
 
+/* No busy fade on the card list. Shiny drops a recomputing output to 30%
+   opacity, which on the white sidebar reads as a white flash whenever the
+   card catalog genuinely re-renders (a drilled patient with different
+   ungrouped parameters). The swap itself is atomic; the fade is the only
+   visible part, so suppress it here — the charts keep theirs, where
+   "recomputing" is real information. */
+.pp-sidebar-cards.recalculating,
+.pp-sidebar-cards .recalculating {
+  opacity: 1 !important;
+}
+
 /* --- Search filter states ------------------ */
 .pp-card.is-filtered-out,
 .pp-category-group.is-hidden,
