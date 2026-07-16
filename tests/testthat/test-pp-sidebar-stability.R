@@ -45,6 +45,21 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     expect_identical(cat_a, r_available_val())
 
+    # a drill's transient "no selection" emission (an EMPTY dm) must not
+    # erase the catalog -- this was the sidebar flash on chart drills
+    empty <- pp_one_patient("Z")
+    tbls0 <- lapply(dm::dm_get_tables(empty), function(t) {
+      as.data.frame(t)[0, , drop = FALSE]
+    })
+    r_in(do.call(dm::dm, tbls0))
+    session$flushReact()
+    expect_identical(cat_a, r_available_val())
+
+    # and the next patient lands on the SAME catalog object again
+    r_in(pp_one_patient("D", c("AST", "GGT")))
+    session$flushReact()
+    expect_identical(cat_a, r_available_val())
+
     # and a genuine catalog change (a new table) still gets through
     with_vs <- pp_one_patient("C")
     tbls <- dm::dm_get_tables(with_vs)
