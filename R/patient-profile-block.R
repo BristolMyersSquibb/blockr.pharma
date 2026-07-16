@@ -125,12 +125,6 @@ new_patient_profile_block <- function(selected = NULL,
       shiny::moduleServer(
         id,
         function(input, output, session) {
-          # Build banner: proves WHICH blockr.pharma a running app actually
-          # loaded (bind-mounted trees + several R libraries make "am I on
-          # the right version?" a real question). One line per session.
-          cat("[patient-profile] blockr.pharma ",
-              as.character(utils::packageVersion("blockr.pharma")),
-              "\n", sep = "", file = stderr())
           # De-duplicated input dm. The board re-emits the SAME dm two or three
           # times on a cold start: the block re-evaluates as the dock's
           # visibility handshake settles (pending -> required -> rendered) and
@@ -337,8 +331,6 @@ new_patient_profile_block <- function(selected = NULL,
             # emits one atomic update and never showed it.)
             if (!is.null(cur) &&
                   length(pp_subject_ids(shiny::isolate(r_norm_dm()))) == 0L) {
-              cat("[patient-profile] empty-selection emission -- catalog",
-                  "held\n", file = stderr())
               return()
             }
 
@@ -370,13 +362,6 @@ new_patient_profile_block <- function(selected = NULL,
 
             sig <- pp_vizs_signature(avail)
             if (!identical(sig, attr(cur, "pp_sig", exact = TRUE))) {
-              cat("[patient-profile] sidebar catalog ",
-                  if (is.null(cur)) "initial (" else "CHANGED (",
-                  length(avail), " vizs; +",
-                  paste(setdiff(names(avail), names(cur)), collapse = ","),
-                  " -",
-                  paste(setdiff(names(cur), names(avail)), collapse = ","),
-                  ")\n", sep = "", file = stderr())
               attr(avail, "pp_sig") <- sig
               r_available_val(avail)
             }
