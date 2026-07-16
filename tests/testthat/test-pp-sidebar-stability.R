@@ -45,6 +45,20 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     expect_identical(cat_a, r_available_val())
 
+    # per-param cards REMEMBER: a patient revealing an ungrouped param adds
+    # its card once; the next patient without it must NOT drop it again --
+    # this per-drill add/remove churn was the sidebar flash on prod
+    r_in(pp_one_patient("E", c("ALT", "TSH")))   # TSH: ungrouped -> new card
+    session$flushReact()
+    cat_e <- r_available_val()
+    expect_false(identical(cat_a, cat_e))
+    expect_true("adlbc_tsh" %in% names(cat_e))
+
+    r_in(pp_one_patient("F", c("ALT", "AST")))   # F has no TSH
+    session$flushReact()
+    expect_identical(cat_e, r_available_val())   # card stays, no re-render
+    cat_a <- cat_e
+
     # a drill's transient "no selection" emission (an EMPTY dm) must not
     # erase the catalog -- this was the sidebar flash on chart drills
     empty <- pp_one_patient("Z")

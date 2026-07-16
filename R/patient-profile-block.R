@@ -342,6 +342,32 @@ new_patient_profile_block <- function(selected = NULL,
               return()
             }
 
+            # The catalog REMEMBERS. A drilled single-patient input only
+            # reveals the params THAT patient carries, but the cards describe
+            # the study: the data-generated per-param cards (adlb_*) differed
+            # per patient, so every swim-lane drill re-rendered the sidebar
+            # (patients without basole/eosle/... dropped those cards, the
+            # next one brought them back). A previously seen card therefore
+            # stays as long as its table stays; a patient without the param
+            # gets the "No records" message in its slot -- which is this
+            # block's stated philosophy for patient-level emptiness anyway.
+            # Remembered extras append sorted, so the merged order is a pure
+            # function of the union and the signature converges after the
+            # first few drills.
+            if (!is.null(cur)) {
+              tbl_names <- names(dm::dm_get_tables(
+                shiny::isolate(r_norm_dm())
+              ))
+              seen <- Filter(
+                function(v) all(v$tables %in% tbl_names),
+                cur
+              )
+              extra <- setdiff(names(seen), names(avail))
+              if (length(extra)) {
+                avail <- c(avail, seen[sort(extra)])
+              }
+            }
+
             sig <- pp_vizs_signature(avail)
             if (!identical(sig, attr(cur, "pp_sig", exact = TRUE))) {
               cat("[patient-profile] sidebar catalog ",
