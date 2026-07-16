@@ -170,10 +170,14 @@ test_that("the profile's vizs are available and render on SDTM data", {
     expect_null(chart$x$opts$title$text, info = id)
   }
 
-  # the overview carries the exposure lane (raw SDTM ex) and the visit
-  # ruler (VISIT -> AVISIT via the catalog, dated from VSDTC/LBDTC)
+  # the overview draws exposure (raw SDTM ex) and the visit ruler (VISIT ->
+  # AVISIT via the catalog, dated from VSDTC/LBDTC). Exposure IS the treatment
+  # lane rather than a lane of its own, so assert the series, not a "EX" row.
   ov <- avail[["patient_overview"]]$render(one, tr, settings, ref, "date")
-  expect_true(all(c("EX", "VIS") %in% unlist(ov$x$opts$yAxis$data)))
+  ov_series <- vapply(ov$x$opts$series, `[[`, character(1L), "name")
+  expect_true("Exposure" %in% ov_series)
+  expect_true("VIS" %in% unlist(ov$x$opts$yAxis$data))
+  expect_false("EX" %in% unlist(ov$x$opts$yAxis$data))
 
   # one findings viz (labs come from the combined adlb on SDTM)
   lab_ids <- grep("^adlb_", names(avail), value = TRUE)

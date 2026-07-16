@@ -118,13 +118,24 @@ patient_overview_viz <- new_pp_viz(
       }
       has_vis <- nrow(visits) > 0
 
+      # ONE treatment lane, not three. ADSL's TRTSDT/TRTEDT are the min/max
+      # of the exposure records -- on pharmaverseadam, TRTSDT equals the first
+      # dose date for 100% of subjects and TRTEDT the last for 98.4% (the six
+      # exceptions off by a day). So a Treatment bar beside an Exposure lane
+      # draws the same fact twice, and draws it worse: an envelope from first
+      # to last dose asserts continuous treatment, where the exposure records
+      # show the holds. Exposure fills the lane where it exists; the envelope
+      # is the fallback for a study shipping no adex.
+      #
+      # Milestones fold in for the same reason. They were a lane whose first
+      # two items were the treatment bar's own endpoints redrawn as circles --
+      # the same two dates a third time. What is left (end of study, death)
+      # are POINTS, and a point does not need a category of its own.
+      #
       # Short lane labels keep grid.left at 60 (aligned with the other
-      # timeline charts). Tooltips on each item still carry the full
-      # category context (Treatment / Exposure / AE term / milestone kind).
-      lanes <- c("TRT", if (has_adex) "EX", if (has_adae) "AE", "MS",
-                 if (has_vis) "VIS")
-      lane_full <- c(TRT = "Treatment", EX = "Exposure",
-                     AE = "Adverse Events", MS = "Milestones",
+      # timeline charts). Tooltips on each item still carry the full context.
+      lanes <- c("TRT", if (has_adae) "AE", if (has_vis) "VIS")
+      lane_full <- c(TRT = "Treatment", AE = "Adverse Events",
                      VIS = "Visits")
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
@@ -136,8 +147,12 @@ patient_overview_viz <- new_pp_viz(
       end_str <- pp_xlabel(sl$TRTEDT[1], ref_ms, mode)
 
       # ---------------------------------------------------------------
-      # Treatment lane
+      # Treatment envelope — FALLBACK ONLY (no adex). Carries the arm label,
+      # which is why it is worth drawing at all when it is all we have; with
+      # exposure present the arm is a click away in the subject picker header
+      # and the dose bars have their own text to show.
       # ---------------------------------------------------------------
+      trt_lane <- lane_idx[["TRT"]]
       trt_series <- list(
         type = "custom",
         name = "Treatment",
@@ -178,7 +193,7 @@ patient_overview_viz <- new_pp_viz(
           }
         ", arm_js)),
         data = list(list(
-          value = list(trt_start, trt_end, lane_idx[["TRT"]])
+          value = list(trt_start, trt_end, trt_lane)
         )),
         encode = list(x = list(0, 1), y = 2),
         tooltip = list(
@@ -194,7 +209,7 @@ patient_overview_viz <- new_pp_viz(
         )
       )
 
-      all_series <- list(trt_series)
+      all_series <- if (has_adex) list() else list(trt_series)
 
       # ---------------------------------------------------------------
       # Adverse Events lane (omitted when adae missing)
@@ -354,20 +369,13 @@ patient_overview_viz <- new_pp_viz(
       }
 
       # ---------------------------------------------------------------
-      # Milestones lane
+      # Milestones — markers ON the treatment lane. Treatment start/end are
+      # deliberately NOT among them any more: they were circles sitting under
+      # the very bar whose ends they marked. What remains genuinely happens
+      # elsewhere in time, usually after treatment stops.
       # ---------------------------------------------------------------
-      ms_lane <- lane_idx[["MS"]]
+      ms_lane <- trt_lane
       milestone_data <- list()
-
-      # Treatment start (green filled circle)
-      milestone_data <- c(milestone_data, list(list(
-        value = list(trt_start, ms_lane, "trt_start", start_str)
-      )))
-
-      # Treatment end (green hollow circle)
-      milestone_data <- c(milestone_data, list(list(
-        value = list(trt_end, ms_lane, "trt_end", end_str)
-      )))
 
       # End of study (blue diamond) — RFENDT is canonical, EOSDT aliased
       if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
@@ -399,19 +407,7 @@ patient_overview_viz <- new_pp_viz(
             var y = api.coord([api.value(0), api.value(1)])[1];
             var kind = api.value(2);
             var sz = 6;
-            if (kind === 'trt_start') {
-              return {
-                type: 'circle',
-                shape: { cx: x, cy: y, r: sz },
-                style: { fill: '#059669', stroke: '#fff', lineWidth: 1.5 }
-              };
-            } else if (kind === 'trt_end') {
-              return {
-                type: 'circle',
-                shape: { cx: x, cy: y, r: sz },
-                style: { fill: '#fff', stroke: '#059669', lineWidth: 2 }
-              };
-            } else if (kind === 'eos') {
+            if (kind === 'eos') {
               return {
                 type: 'polygon',
                 shape: {
@@ -447,16 +443,12 @@ patient_overview_viz <- new_pp_viz(
               var kind = v[2];
               var date = v[3] || '';
               var labels = {
-                'trt_start': 'Treatment Start',
-                'trt_end':   'Treatment End',
-                'eos':       'End of Study',
-                'death':     'Death'
+                'eos':   'End of Study',
+                'death': 'Death'
               };
               var colors = {
-                'trt_start': '#059669',
-                'trt_end':   '#059669',
-                'eos':       '#2563EB',
-                'death':     '#DC2626'
+                'eos':   '#2563EB',
+                'death': '#DC2626'
               };
               var label = labels[kind] || kind;
               var col = colors[kind] || '#6b7280';
@@ -470,14 +462,18 @@ patient_overview_viz <- new_pp_viz(
         )
       )
 
-      all_series <- c(all_series, list(ms_series))
+      # Appended AFTER exposure, below -- the milestones now share a lane with
+      # the dose bars, and echarts paints in series order, so adding them here
+      # would hide a death marker under the bar it lands on (the DTHFL branch
+      # above puts one exactly there).
 
       # ---------------------------------------------------------------
-      # Exposure lane (omitted when adex missing)
+      # Exposure — the treatment lane's real content when adex exists. Dose
+      # bars say everything the envelope did and the holds besides.
       # ---------------------------------------------------------------
       if (has_adex) {
         adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
-        ex_lane <- lane_idx[["EX"]]
+        ex_lane <- trt_lane
         ex_has_end <- if (ex_use_day) {
           "AENDY" %in% colnames(adex)
         } else {
@@ -604,6 +600,14 @@ patient_overview_viz <- new_pp_viz(
         )
 
         all_series <- c(all_series, list(ex_series))
+      }
+
+      # Milestones last: they share the treatment lane with the dose bars now,
+      # and echarts paints in series order. Most patients reach neither, so
+      # the series is legitimately empty -- it never was while it carried the
+      # treatment endpoints.
+      if (length(milestone_data)) {
+        all_series <- c(all_series, list(ms_series))
       }
 
       # ---------------------------------------------------------------
