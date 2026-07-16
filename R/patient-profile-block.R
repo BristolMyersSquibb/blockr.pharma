@@ -20,6 +20,11 @@
 #'   from treatment start, ADaM \*DY convention; the default) or `"date"`
 #'   (calendar dates). Changeable at runtime via the gear popover in the
 #'   chart area header.
+#' @param show_prestudy Show the full pre-treatment history? By default the
+#'   timeline starts 30 days before treatment start (the screening window,
+#'   so baselines stay visible) -- one medication started years earlier must
+#'   not stretch every axis to it. `TRUE` restores the full range; also a
+#'   toggle in the gear popover.
 #' @param subject USUBJID to display, as a length-1 character. Only meaningful
 #'   when the incoming dm carries more than one subject; a single-subject dm
 #'   always renders its one subject. Ignored (and cleared) when the value is
@@ -80,9 +85,11 @@ new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
                                               timeline_mode = "rday",
                                               subject = NULL,
+                                              show_prestudy = FALSE,
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
+  stopifnot(isTRUE(show_prestudy) || isFALSE(show_prestudy))
 
   # `arm_var` is study-level configuration, not block state: it is the
   # "arm_var" BOARD option (read reactively in the server below), never
@@ -311,6 +318,13 @@ new_patient_profile_block <- function(selected = NULL,
             }
           })
 
+          # Show the full pre-treatment history (default: clip to a 30-day
+          # screening window before treatment start; see pp_clip_prestudy)
+          r_show_prestudy <- shiny::reactiveVal(isTRUE(show_prestudy))
+          shiny::observeEvent(input$show_prestudy, {
+            r_show_prestudy(isTRUE(input$show_prestudy))
+          })
+
           # Initialize selection to patient_overview + first available
           init_done <- shiny::reactiveVal(FALSE)
           shiny::observeEvent(r_available(), {
@@ -449,11 +463,22 @@ new_patient_profile_block <- function(selected = NULL,
             r_pick_state(list(single = scoped$single, total = scoped$total))
           })
 
-          # Shared time range
+          # Shared time range. Unless the user opts into the full
+          # pre-treatment history, the range floor is a 30-day screening
+          # window before treatment start: one medication started years ago
+          # must not stretch every axis to it, while baselines (screening
+          # labs and vitals) stay on screen. Ongoing bars still enter from
+          # the left edge; only events entirely before the floor drop out.
           r_time_range <- shiny::reactive({
             dm_obj <- r_scoped_dm()$dm
             shiny::req(inherits(dm_obj, "dm"))
-            pp_compute_time_range(dm_obj, ref_col = r_roles()$timeline)
+            tr <- pp_compute_time_range(dm_obj, ref_col = r_roles()$timeline)
+            if (!r_show_prestudy()) {
+              tr <- pp_clip_prestudy(
+                tr, pp_compute_ref_ms(dm_obj, r_roles()$timeline)
+              )
+            }
+            tr
           })
 
           # Reference timestamp (TRTSDT) used for relative-day mode. The
@@ -688,6 +713,7 @@ new_patient_profile_block <- function(selected = NULL,
             co <- r_cohort()
             ns <- session$ns
             init_mode <- shiny::isolate(r_timeline_mode())
+            init_prestudy <- shiny::isolate(r_show_prestudy())
             # Whether relative-day mode is possible at all is a property of
             # the study (does ADSL carry a usable TRTSDT), not of the patient
             # on screen. Read it from the unscoped dm: routing through
@@ -762,6 +788,20 @@ new_patient_profile_block <- function(selected = NULL,
                     } else {
                       "Date"
                     }
+                  )
+                ),
+                shiny::div(class = "pp-popover-row",
+                  shiny::span(class = "pp-popover-label", "Pre-treatment"),
+                  shiny::tags$button(
+                    class = "pp-popover-toggle",
+                    id = ns("pp_prestudy_toggle"),
+                    `data-prestudy` = if (init_prestudy) "1" else "0",
+                    type = "button",
+                    title = paste0(
+                      "Show the full pre-treatment history, or only the ",
+                      "30-day screening window before treatment start"
+                    ),
+                    if (init_prestudy) "Full history" else "Screening only"
                   )
                 ),
                 # Data coverage: visuals that can't render for this data,
@@ -1054,7 +1094,8 @@ new_patient_profile_block <- function(selected = NULL,
               selected = r_selected,
               viz_settings = r_viz_settings,
               timeline_mode = r_timeline_mode,
-              subject = r_subject
+              subject = r_subject,
+              show_prestudy = r_show_prestudy
             )
           )
         }
@@ -1241,6 +1282,7 @@ new_patient_profile_block <- function(selected = NULL,
 
             var dragActive = false;
             var tlModeInputId = '", ns("timeline_mode"), "';
+            var prestudyInputId = '", ns("show_prestudy"), "';
             var gearBtnId = '", ns("pp_gear_btn"), "';
             var gearPopoverId = '", ns("pp_gear_popover"), "';
 
@@ -1360,16 +1402,31 @@ new_patient_profile_block <- function(selected = NULL,
             // Read/write via attr(), not data() ", "\u2014", " jQuery's .data() caches
             // the initial attribute value and ignores later attr() writes,
             // so subsequent clicks would always read the original mode.
-            $(document).on('click', '#' + layoutId + ' .pp-popover-toggle', function(e) {
-              e.stopPropagation();
-              if ($(this).attr('data-disabled') === '1') return;
-              var cur = $(this).attr('data-tl-mode');
-              var next = (cur === 'rday') ? 'date' : 'rday';
-              // Optimistic UI update; server re-render will confirm.
-              $(this).text(next === 'rday' ? 'Relative day' : 'Date');
-              $(this).attr('data-tl-mode', next);
-              Shiny.setInputValue(tlModeInputId, next, {priority: 'event'});
-            });
+            $(document).on('click',
+              '#' + layoutId + ' .pp-popover-toggle[data-tl-mode]',
+              function(e) {
+                e.stopPropagation();
+                if ($(this).attr('data-disabled') === '1') return;
+                var cur = $(this).attr('data-tl-mode');
+                var next = (cur === 'rday') ? 'date' : 'rday';
+                // Optimistic UI update; server re-render will confirm.
+                $(this).text(next === 'rday' ? 'Relative day' : 'Date');
+                $(this).attr('data-tl-mode', next);
+                Shiny.setInputValue(tlModeInputId, next, {priority: 'event'});
+              });
+
+            // Pre-treatment history toggle, same flip-on-click pattern.
+            $(document).on('click',
+              '#' + layoutId + ' .pp-popover-toggle[data-prestudy]',
+              function(e) {
+                e.stopPropagation();
+                var on = $(this).attr('data-prestudy') === '1';
+                var next = !on;
+                $(this).text(next ? 'Full history' : 'Screening only');
+                $(this).attr('data-prestudy', next ? '1' : '0');
+                Shiny.setInputValue(prestudyInputId, next,
+                                    {priority: 'event'});
+              });
 
             // Card click: toggle selection (server-driven, no optimistic toggle)
             $(document).on('click', '#' + layoutId + ' .pp-card', function(e) {
@@ -1666,7 +1723,8 @@ new_patient_profile_block <- function(selected = NULL,
     # RESULT stays NULL (invisible while the block is terminal) and the AI
     # ctrl chat can never read the input data.
     allow_empty_state = c("selected", "viz_settings", "subject"),
-    external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject"),
+    external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject",
+                      "show_prestudy"),
     class = c("patient_profile_block", "dm_block"),
     ...
   )

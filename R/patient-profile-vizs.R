@@ -382,6 +382,36 @@ pp_compute_ref_ms <- function(dm_obj, ref_col = NULL) {
   pp_ms_ts(v)
 }
 
+#' Clip the timeline's lower bound to the screening window
+#'
+#' One concomitant medication started years before the study must not
+#' stretch every panel's axis to it. Unless the user opts into the full
+#' pre-treatment history (the gear's "Pre-treatment" toggle), the shared
+#' time range starts no earlier than `margin_days` before the reference
+#' (treatment start) -- wide enough for the screening window, so baseline
+#' labs and vitals stay on screen. Bars that started earlier but are still
+#' running enter from the left axis edge; only events entirely before the
+#' floor drop out.
+#'
+#' Total: without a reference (no treatment dates, or no patient on screen)
+#' there is nothing to anchor the floor to, and the range passes through.
+#'
+#' @param time_range Length-2 Date vector, or `NULL`.
+#' @param ref_ms Reference timestamp in ms (see [pp_compute_ref_ms()]).
+#' @param margin_days Screening margin before the reference.
+#' @return The (possibly clipped) time range.
+#' @noRd
+pp_clip_prestudy <- function(time_range, ref_ms, margin_days = 30L) {
+  if (is.null(time_range) || is.na(ref_ms)) return(time_range)
+  floor_date <- as.Date(as.POSIXct(ref_ms / 1000, origin = "1970-01-01",
+                                   tz = "UTC")) - margin_days
+  if (time_range[1] < floor_date) {
+    # never invert the range (a study entirely pre-reference keeps its end)
+    time_range[1] <- min(floor_date, time_range[2])
+  }
+  time_range
+}
+
 #' Can this study express relative-day mode at all?
 #'
 #' A study-level question (does ADSL carry a usable TRTSDT), asked by the

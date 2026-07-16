@@ -11,6 +11,7 @@ new_patient_profile_block(
   viz_settings = list(),
   timeline_mode = "rday",
   subject = NULL,
+  show_prestudy = FALSE,
   ...
 )
 
@@ -35,6 +36,12 @@ when the incoming dm carries more than one subject; a single-subject dm
 always renders its one subject. Ignored (and cleared) when the value is
 absent from the incoming cohort. Defaults to \code{NULL}, i.e. no patient
 chosen.}
+
+\item{show_prestudy}{Show the full pre-treatment history? By default the
+timeline starts 30 days before treatment start (the screening window,
+so baselines stay visible) -- one medication started years earlier must
+not stretch every axis to it. \code{TRUE} restores the full range; also a
+toggle in the gear popover.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 
