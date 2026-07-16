@@ -97,6 +97,13 @@ serve(
       list(from = "cdisc", to = "profile", input = "data")
     ),
     extensions = blockr.dag::new_dag_extension(),
+    # safetyData ships no ACTARM, so the arm column must be declared or the
+    # profile stops with the undeclared error (see
+    # patient-profile-arm-option.R for that flow). TRT01A is the actual arm.
+    options = c(
+      dock_board_options(),
+      new_board_options(new_study_roles_option(arm = "TRT01A"))
+    ),
     grids = list(
       Profile = dock_grid("profile"),
       Pipeline = dock_grid("dag_extension"),

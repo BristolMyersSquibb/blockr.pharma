@@ -32,7 +32,7 @@ overview_arm_js <- function(arm) {
   chart <- patient_overview_viz$render(
     dm_obj,
     time_range = c(-10, 200),
-    settings = list(arm_var = "TRT"),
+    settings = list(roles = list(arm = "TRT")),
     ref_ms = NA_real_,
     mode = "rday"
   )

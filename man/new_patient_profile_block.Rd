@@ -11,7 +11,6 @@ new_patient_profile_block(
   viz_settings = list(),
   timeline_mode = "rday",
   subject = NULL,
-  arm_var = NULL,
   ...
 )
 
@@ -36,12 +35,6 @@ when the incoming dm carries more than one subject; a single-subject dm
 always renders its one subject. Ignored (and cleared) when the value is
 absent from the incoming cohort. Defaults to \code{NULL}, i.e. no patient
 chosen.}
-
-\item{arm_var}{ADSL column holding the treatment / arm label, as a length-1
-character. Studies that do not ship the ADaM arm variables can name their
-own column here (e.g. \code{"TRT"}); it is used by both the subject picker and
-the treatment lane, so the two cannot disagree. Defaults to \code{NULL}, which
-falls back to the first of \code{ARM}, \code{ACTARM}, \code{TRT01P}, \code{TRT01A} present.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 
@@ -69,6 +62,20 @@ subject within it and the block filters the dm down to that patient, so
 the charts and the block's own output never disagree. Until a patient is
 picked the block is a pass-through and the chart area shows a placeholder:
 whose data this is is never guessed.
+
+The ADSL column holding the treatment / arm label is study-level
+configuration, not block state: it is the arm field of the
+\code{"study_roles"} \emph{board option} (see \code{\link[=new_study_roles_option]{new_study_roles_option()}}, which
+also declares the severity column, the timeline reference and table
+aliases), declared once per study in the board's settings sidebar and
+serialized with the board. It is used by both the subject picker and the
+treatment lane, so the two cannot disagree. Undeclared, the column is
+\code{ACTARM}; a declared column that the data does not carry is a named
+error, never a fallback. The legacy app-level option
+\code{options(blockr.pharma_arm_var =)} (or \code{BLOCKR_PHARMA_ARM_VAR}) is still
+honored on boards that have not declared an arm, for the migration only.
+A legacy \code{arm_var} constructor argument (from boards saved before the
+option existed) is ignored with a warning.
 }
 \examples{
 # Construct the block

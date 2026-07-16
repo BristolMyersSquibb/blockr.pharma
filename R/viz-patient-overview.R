@@ -10,11 +10,13 @@
 #   3. Milestones — point markers: treatment start/end, end of study, death
 #
 # Data requirements (declared via new_pp_viz()):
-#   adsl: required TRTSDT, TRTEDT; optional TRT01P, RFENDT (alias EOSDT),
-#         DTHDT (alias DTHDTC), DTHFL
-#   adae (optional table): ASTDT (alias ASTDTC), AENDT (alias AENDTC),
-#         AEDECOD, a severity column (AETOXGR or AESEV, see
-#         pp_sev_column()), AESER
+#   adsl: required TRTSDT, TRTEDT; optional RFENDT, DTHDT, DTHFL
+#   adae (optional table): ASTDT, AENDT, ASTDY, AENDY, AEDECOD, AESER
+#   roles: arm (the ADSL arm column, settings$roles$arm) and severity
+#          (the ADAE severity column, settings$roles$severity)
+#
+# All names are canonical: pp_normalize_dm() reconciles a study's spellings
+# (EOSDT, DTHDTC, ASTDTC, ...) dm-wide before anything renders.
 
 #' Patient Overview visualization definition
 #' @noRd
@@ -27,22 +29,11 @@ patient_overview_viz <- new_pp_viz(
   description = "Treatment period, adverse events & milestones",
   tables = "adsl",
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
+  uses = c("arm", "severity"),
   optional = list(
-    adsl = list(
-      TRT01P = NULL,
-      RFENDT = "EOSDT",
-      DTHDT  = "DTHDTC",
-      DTHFL  = NULL
-    ),
-    adae = list(
-      ASTDT   = "ASTDTC",
-      AENDT   = "AENDTC",
-      ASTDY   = "AESTDY",
-      AENDY   = "AEENDY",
-      AEDECOD = NULL,
-      AETOXGR = NULL,
-      AESEV   = NULL,
-      AESER   = NULL
+    adsl = c("RFENDT", "DTHDT", "DTHFL"),
+    adae = c(
+      "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER"
     )
   ),
   render = function(dm_obj, time_range, settings = list(),
@@ -59,8 +50,12 @@ patient_overview_viz <- new_pp_viz(
 
       trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
-      arm_col <- pp_arm_column(colnames(sl), settings$arm_var)
-      arm_label <- if (!is.null(arm_col)) {
+      # The arm column is a role, resolved once by the block (board option
+      # or ACTARM) and injected -- the render never picks its own, so the
+      # lane and the subject picker cannot disagree. An unresolved arm has
+      # already raised the named block error; the lane stays generic.
+      arm_col <- settings$roles$arm
+      arm_label <- if (!is.null(arm_col) && arm_col %in% colnames(sl)) {
         # The lane draws one line of text inside the treatment bar, so fold any
         # embedded whitespace (a study's own arm column may carry line breaks
         # the ADaM variables never do) rather than drawing lines on top of each
@@ -171,8 +166,10 @@ patient_overview_viz <- new_pp_viz(
         } else {
           "AENDT" %in% colnames(adae)
         }
-        sev_col <- pp_sev_column(colnames(adae))
-        has_sev <- !is.null(sev_col)
+        # Severity is a role, injected by the block -- same source as the AE
+        # gantt, so the two vizs always agree.
+        sev_col <- settings$roles$severity
+        has_sev <- !is.null(sev_col) && sev_col %in% colnames(adae)
         has_ser <- "AESER" %in% colnames(adae)
         has_term <- "AEDECOD" %in% colnames(adae)
         day_unit <- if (identical(mode, "rday")) 1 else 86400000

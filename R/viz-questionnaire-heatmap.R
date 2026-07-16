@@ -22,8 +22,8 @@ questionnaire_heatmap_viz <- new_pp_viz(
     adqsnpix = c("PARAMCD", "AVISIT", "AVAL")
   ),
   optional = list(
-    adqsadas = list(CHG = NULL, PARAM = NULL, AVISITN = NULL),
-    adqsnpix = list(CHG = NULL, PARAM = NULL, AVISITN = NULL)
+    adqsadas = c("CHG", "PARAM", "AVISITN"),
+    adqsnpix = c("CHG", "PARAM", "AVISITN")
   ),
   controls = list(
     domain = list(

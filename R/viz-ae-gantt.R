@@ -14,19 +14,18 @@
 #
 # Data requirements (declared via new_pp_viz()):
 #   adae:
-#     required — AEDECOD, and a time source: ASTDT (or ASTDTC) or ASTDY
-#     optional — AENDT (or AENDTC), AENDY, a severity column (AETOXGR or
-#                AESEV, see pp_sev_column()), AEBODSYS (or AESOC),
-#                AESER, AEOUT
+#     required — AEDECOD, and a time source: ASTDT or ASTDY
+#     optional — AENDT, AENDY, AEBODSYS, AESER, AEOUT
+#     roles    — severity (the resolved column arrives as
+#                settings$roles$severity)
+#
+# All names are canonical: pp_normalize_dm() has reconciled the study's
+# spellings (ASTDTC, AESTDTC, AESOC, ...) dm-wide before anything renders.
 #
 # A study may ship the AE onset as an analysis date, a study day, or both.
 # Relative-day mode plots days, so a native ASTDY is used as-is rather than
 # reconstructed from a date; date mode needs ASTDT and reports the panel
 # unavailable without it. See pp_xval_pref_day().
-#
-# The dispatcher in patient-profile-block.R resolves these via
-# pp_resolve_requires(): aliases are renamed to canonical names before this
-# render runs, so the body can assume canonical column names exist.
 
 #' AE Gantt visualization definition
 #' @noRd
@@ -38,21 +37,15 @@ ae_gantt_viz <- new_pp_viz(
   color = "#7C3AED",
   description = "Gantt bars showing AE duration by preferred term",
   tables = "adae",
-  requires = list(adae = list(
-    AEDECOD = NULL
-  )),
+  requires = list(adae = "AEDECOD"),
   requires_any = list(adae = list(c("ASTDT", "ASTDY"))),
-  optional = list(adae = list(
-    ASTDT    = "ASTDTC",
-    AENDT    = "AENDTC",
-    ASTDY    = "AESTDY",
-    AENDY    = "AEENDY",
-    AETOXGR  = NULL,
-    AESEV    = NULL,
-    AEBODSYS = "AESOC",
-    AESER    = NULL,
-    AEOUT    = NULL
+  optional = list(adae = c(
+    "ASTDT", "AENDT", "ASTDY", "AENDY", "AEBODSYS", "AESER", "AEOUT"
   )),
+  uses = "severity",
+  legend_ui = function(dm_obj, settings) {
+    pp_sev_legend_ui(dm_obj, settings$sev_colors, settings$roles$severity)
+  },
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
@@ -87,8 +80,10 @@ ae_gantt_viz <- new_pp_viz(
       }
 
       terms <- sort(unique(as.character(tbl$AEDECOD)))
-      sev_col <- pp_sev_column(colnames(tbl))
-      has_sev <- !is.null(sev_col)
+      # The severity column is a role, resolved once by the block and
+      # injected -- never re-detected here, or bars and legend could drift.
+      sev_col <- settings$roles$severity
+      has_sev <- !is.null(sev_col) && sev_col %in% colnames(tbl)
       has_end <- "AENDT" %in% colnames(tbl)
       has_bodsys <- "AEBODSYS" %in% colnames(tbl)
       has_serious <- "AESER" %in% colnames(tbl)
@@ -227,10 +222,11 @@ ae_gantt_viz <- new_pp_viz(
               var bodsys = v[5] || '';
               var serious = v[6] || '';
               var outcome = v[7] || '';
-              var sevColors = {
-                'SEVERE': '#DC2626', 'MODERATE': '#D97706', 'MILD': '#CA8A04'
-              };
-              var col = v[10] || sevColors[sev] || '#90a4ae';
+              // v[10] always carries the color resolved in R (scale map,
+              // then built-in constants, then grey) -- the single source.
+              // A JS word-scale map here once made grade-coded studies fall
+              // through to a grey matching neither palette.
+              var col = v[10] || '#9ca3af';
               var html = '<div style=\"min-width:180px\">';
               html += '<div style=\"font-size:14px;font-weight:700;margin-bottom:4px\">' +
                 term + '</div>';
@@ -305,9 +301,10 @@ ae_gantt_viz <- new_pp_viz(
 #'
 #' @param dm_obj Subject-scoped dm.
 #' @param sev_colors Resolved level -> color vector, or NULL.
+#' @param sev_col The severity role's resolved column, or NULL.
 #' @return A `shiny::div`, or NULL when the study carries no severity.
 #' @noRd
-pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL) {
+pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL, sev_col = NULL) {
   adae <- tryCatch(
     as.data.frame(dm::dm_get_tables(dm_obj)[["adae"]]),
     error = function(e) NULL
@@ -316,7 +313,9 @@ pp_sev_legend_ui <- function(dm_obj, sev_colors = NULL) {
     return(NULL)
   }
 
-  sev_col <- pp_sev_column(colnames(adae))
+  if (!is.null(sev_col) && !sev_col %in% colnames(adae)) {
+    sev_col <- NULL
+  }
   sev <- if (!is.null(sev_col)) {
     as.character(adae[[sev_col]])
   } else {

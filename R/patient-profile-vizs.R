@@ -214,6 +214,29 @@ pp_js_chr <- function(x) {
   x
 }
 
+#' Visit levels in visit order
+#'
+#' `AVISIT` values ordered by their numeric companion `AVISITN` when the
+#' table carries one, lexically otherwise. Lexical order puts "Week 10"
+#' before "Week 2", so any default of the form "the last two visits" picks
+#' the wrong two without this -- with no cue that it did.
+#'
+#' @param tbl A findings data.frame.
+#' @return Character vector of visit labels, in visit order.
+#' @noRd
+pp_visit_levels <- function(tbl) {
+  if (!"AVISIT" %in% colnames(tbl)) return(character())
+  v <- trimws(as.character(tbl$AVISIT))
+  if ("AVISITN" %in% colnames(tbl)) {
+    n <- suppressWarnings(as.numeric(tbl$AVISITN))
+    pairs <- unique(data.frame(v = v, n = n, stringsAsFactors = FALSE))
+    out <- unique(pairs[order(pairs$n, pairs$v), , drop = FALSE]$v)
+  } else {
+    out <- sort(unique(v))
+  }
+  out[!is.na(out) & nzchar(out)]
+}
+
 #' Build shared echarts tooltip config
 #' @noRd
 pp_tooltip <- function() {
@@ -347,64 +370,81 @@ pp_icon_html <- function(icon_name, color) {
 #' @param dm_obj A dm object
 #' @return Length-2 Date vector or NULL if no dates found
 #' @noRd
-pp_compute_ref_ms <- function(dm_obj) {
+pp_compute_ref_ms <- function(dm_obj, ref_col = NULL) {
+  if (!inherits(dm_obj, "dm")) return(NA_real_)
   tbls <- dm::dm_get_tables(dm_obj)
   if (!"adsl" %in% names(tbls)) return(NA_real_)
   adsl <- as.data.frame(tbls[["adsl"]])
-  if (!"TRTSDT" %in% colnames(adsl) || nrow(adsl) == 0) return(NA_real_)
-  v <- adsl$TRTSDT[1]
+  ref_col <- ref_col %||% "TRTSDT"
+  if (!ref_col %in% colnames(adsl) || nrow(adsl) == 0) return(NA_real_)
+  v <- pp_as_date(adsl[[ref_col]][1])
   if (is.na(v)) return(NA_real_)
   pp_ms_ts(v)
 }
 
-pp_compute_time_range <- function(dm_obj) {
+#' Can this study express relative-day mode at all?
+#'
+#' A study-level question (does ADSL carry a usable TRTSDT), asked by the
+#' header gear on the UNSCOPED dm. Distinct from [pp_compute_ref_ms()],
+#' which is per-patient (row 1 of a subject-scoped ADSL): asking the
+#' per-patient function a study-level question let one arbitrary cohort
+#' member with a missing treatment start disable relative-day mode for the
+#' whole study.
+#'
+#' @param dm_obj A normalized `dm` (or anything; total).
+#' @param ref_col The timeline role's resolved column (default `TRTSDT`).
+#' @return TRUE when any ADSL row carries a non-missing reference.
+#' @noRd
+pp_has_ref <- function(dm_obj, ref_col = NULL) {
+  if (!inherits(dm_obj, "dm")) return(FALSE)
+  tbls <- dm::dm_get_tables(dm_obj)
+  if (!"adsl" %in% names(tbls)) return(FALSE)
+  adsl <- as.data.frame(tbls[["adsl"]])
+  ref_col <- ref_col %||% "TRTSDT"
+  ref_col %in% colnames(adsl) && any(!is.na(pp_as_date(adsl[[ref_col]])))
+}
+
+pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
   tbls <- dm::dm_get_tables(dm_obj)
 
-  date_col_map <- list(
-    adae = c("ASTDT", "AENDT"),
-    adlbc = "ADT",
-    adlbh = "ADT",
-    adlb = "ADT",
-    advs = "ADT",
-    adqsadas = "ADT",
-    adqsnpix = "ADT",
-    adsl = c("TRTSDT", "TRTEDT")
-  )
+  # Canonical timeline columns, scanned across EVERY table. The dm has been
+  # normalized (pp_normalize_dm()) before this runs, so the canonical names
+  # are the only spellings left to find. The per-table map this replaces is
+  # what silently clipped the axis for aliased studies: it scanned raw names
+  # off a dm whose column aliases resolved later, per viz, so every event
+  # outside the ADSL treatment window fell off the axis with no cue.
+  date_cols <- c("ASTDT", "AENDT", "ADT", "TRTSDT", "TRTEDT")
+  day_cols <- c("ASTDY", "AENDY", "ADY")
+
+  all_dates <- do.call(c, lapply(names(tbls), function(tbl_name) {
+    tbl <- as.data.frame(tbls[[tbl_name]])
+    dates <- do.call(c, lapply(intersect(date_cols, colnames(tbl)),
+      function(col) pp_as_date(tbl[[col]])
+    ))
+    if (is.null(dates)) return(as.Date(character()))
+    dates[!is.na(dates)]
+  }))
 
   # Study-day columns, for studies that ship a day but no analysis date. The
   # axis would otherwise never see those events and would clip them. Bounds
   # only: converting a day back to a date is the lossy round trip that
   # pp_xval_pref_day() exists to avoid, but an axis end landing a day wide is
   # invisible, where an event landing a day off is not.
-  day_col_map <- list(
-    adae = c("ASTDY", "AENDY"),
-    adlbc = "ADY", adlbh = "ADY", adlb = "ADY", advs = "ADY",
-    adqsadas = "ADY", adqsnpix = "ADY"
-  )
-
-  all_dates <- do.call(c, lapply(names(date_col_map), function(tbl_name) {
-    if (!tbl_name %in% names(tbls)) return(as.Date(character()))
-    tbl <- as.data.frame(tbls[[tbl_name]])
-    dates <- do.call(c, lapply(date_col_map[[tbl_name]], function(col) {
-      if (col %in% colnames(tbl)) as.Date(tbl[[col]]) else as.Date(character())
-    }))
-    dates[!is.na(dates)]
-  }))
-
-  ref_ms <- pp_compute_ref_ms(dm_obj)
+  ref_ms <- pp_compute_ref_ms(dm_obj, ref_col)
   if (!is.na(ref_ms)) {
     anchor <- as.Date(as.POSIXct(ref_ms / 1000, origin = "1970-01-01",
                                  tz = "UTC"))
-    from_days <- do.call(c, lapply(names(day_col_map), function(tbl_name) {
-      if (!tbl_name %in% names(tbls)) return(as.Date(character()))
+    from_days <- do.call(c, lapply(names(tbls), function(tbl_name) {
       tbl <- as.data.frame(tbls[[tbl_name]])
-      ds <- do.call(c, lapply(day_col_map[[tbl_name]], function(col) {
-        if (!col %in% colnames(tbl)) return(as.Date(character()))
-        dy <- suppressWarnings(as.numeric(tbl[[col]]))
-        dy <- dy[!is.na(dy)]
-        if (!length(dy)) return(as.Date(character()))
-        anchor + pp_day_to_x(dy) - 1
-      }))
+      ds <- do.call(c, lapply(intersect(day_cols, colnames(tbl)),
+        function(col) {
+          dy <- suppressWarnings(as.numeric(tbl[[col]]))
+          dy <- dy[!is.na(dy)]
+          if (!length(dy)) return(as.Date(character()))
+          anchor + pp_day_to_x(dy) - 1
+        }
+      ))
+      if (is.null(ds)) return(as.Date(character()))
       ds[!is.na(ds)]
     }))
     all_dates <- c(all_dates, from_days)
@@ -705,6 +745,7 @@ patient_profile_static_vizs <- function() {
   vizs <- list(
     patient_overview_viz,
     ae_gantt_viz,
+    cm_gantt_viz,
     adas_trajectory_viz,
     npix_radar_viz,
     ortho_bp_viz,
@@ -853,7 +894,10 @@ pp_findings_vizs <- function(dm_obj) {
 
   # Decide which real table sources which group set. Sponsors ship labs
   # either split (adlbc + adlbh) or combined (adlb) — support both. When
-  # adlb is present, it fills in for whichever split tables are missing.
+  # adlb is present, it fills in for whichever split tables are missing;
+  # when BOTH splits are present, adlb still gets a plan of its own (with no
+  # groups), so a PARAMCD living only in adlb yields an individual card
+  # instead of silently getting no viz and no coverage entry.
   source_plans <- list()
   add_plan <- function(table, group_tables, meta) {
     source_plans[[length(source_plans) + 1L]] <<- list(
@@ -874,11 +918,14 @@ pp_findings_vizs <- function(dm_obj) {
   } else if ("adlb" %in% names(tbls)) {
     adlb_fills <- c(adlb_fills, "adlbh")
   }
-  if (length(adlb_fills) > 0L) {
+  if ("adlb" %in% names(tbls)) {
     add_plan("adlb", adlb_fills, table_meta$adlb)
   }
 
   vizs <- list()
+  # Params already covered by an earlier plan: an adlb param that also
+  # lives in a split table must not get a duplicate card.
+  covered_paramcds <- character(0)
 
   for (plan in source_plans) {
     tbl_name <- plan$table
@@ -911,14 +958,11 @@ pp_findings_vizs <- function(dm_obj) {
         description = g$description,
         tables = tbl_name,
         requires = stats::setNames(
-          list(list(PARAMCD = NULL, AVAL = NULL, ADT = "ADTM")),
+          list(c("PARAMCD", "AVAL", "ADT")),
           tbl_name
         ),
         optional = stats::setNames(
-          list(list(
-            PARAM = NULL, ANRIND = NULL,
-            A1LO = NULL, A1HI = NULL, AVISITN = NULL
-          )),
+          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
         controls = list(
@@ -950,8 +994,10 @@ pp_findings_vizs <- function(dm_obj) {
       )
     }
 
-    # Create individual viz cards for ungrouped PARAMCDs
-    ungrouped <- setdiff(all_paramcds, grouped_paramcds)
+    # Create individual viz cards for ungrouped PARAMCDs (skipping params an
+    # earlier plan already covers, e.g. an adlb param that also lives in a
+    # split table)
+    ungrouped <- setdiff(all_paramcds, c(grouped_paramcds, covered_paramcds))
     for (pc in ungrouped) {
       viz_id <- paste0(tbl_name, "_", tolower(pc))
       vizs[[viz_id]] <- new_pp_viz(
@@ -963,14 +1009,11 @@ pp_findings_vizs <- function(dm_obj) {
         description = pc,
         tables = tbl_name,
         requires = stats::setNames(
-          list(list(PARAMCD = NULL, AVAL = NULL, ADT = "ADTM")),
+          list(c("PARAMCD", "AVAL", "ADT")),
           tbl_name
         ),
         optional = stats::setNames(
-          list(list(
-            PARAM = NULL, ANRIND = NULL,
-            A1LO = NULL, A1HI = NULL, AVISITN = NULL
-          )),
+          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
         render = local({
@@ -991,6 +1034,8 @@ pp_findings_vizs <- function(dm_obj) {
         })
       )
     }
+
+    covered_paramcds <- c(covered_paramcds, grouped_paramcds, ungrouped)
   }
 
   vizs

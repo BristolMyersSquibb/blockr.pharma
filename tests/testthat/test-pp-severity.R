@@ -44,7 +44,11 @@ test_that("pp_sev_label spells out grades", {
   expect_identical(blockr.pharma:::pp_sev_label("SEVERE"), "Severe")
 })
 
-test_that("pp_sev_scale_colors resolves the detected column's binding", {
+pp_sev_col_of <- function(dm_obj) {
+  blockr.pharma:::pp_resolve_roles(dm_obj)$severity
+}
+
+test_that("pp_sev_scale_colors resolves the severity role's binding", {
   skip_if_not_installed("blockr.theme")
   map <- blockr.theme::new_scale_map(
     blockr.theme::scale_binding(
@@ -55,7 +59,7 @@ test_that("pp_sev_scale_colors resolves the detected column's binding", {
   )
 
   dm_obj <- pp_sev_dm(data.frame(AETOXGR = c(1, 3)))
-  cols <- blockr.pharma:::pp_sev_scale_colors(map, dm_obj)
+  cols <- blockr.pharma:::pp_sev_scale_colors(map, dm_obj, pp_sev_col_of(dm_obj))
   expect_identical(cols[["1"]], "#111111")
   expect_identical(cols[["3"]], "#333333")
 
@@ -64,14 +68,17 @@ test_that("pp_sev_scale_colors resolves the detected column's binding", {
   word_map <- blockr.theme::new_scale_map(
     blockr.theme::scale_binding("AESEV", color = c(MILD = "#aaaaaa"))
   )
-  expect_null(blockr.pharma:::pp_sev_scale_colors(word_map, dm_obj))
+  expect_null(
+    blockr.pharma:::pp_sev_scale_colors(word_map, dm_obj, pp_sev_col_of(dm_obj))
+  )
 })
 
 test_that("AE gantt colors grade-coded severity without a map", {
   dm_obj <- pp_sev_dm(data.frame(AETOXGR = c(3, 5)))
   chart <- blockr.pharma:::ae_gantt_viz$render(
     dm_obj,
-    time_range = blockr.pharma:::pp_compute_time_range(dm_obj)
+    time_range = blockr.pharma:::pp_compute_time_range(dm_obj),
+    settings = list(roles = list(severity = "AETOXGR"))
   )
   bars <- chart$x$opts$series[[1]]$data
   cols <- vapply(bars, function(b) b$itemStyle$color, "")
@@ -80,7 +87,9 @@ test_that("AE gantt colors grade-coded severity without a map", {
 
 test_that("severity legend lists grades in order with Grade labels", {
   dm_obj <- pp_sev_dm(data.frame(AETOXGR = c(3, 1)))
-  html <- as.character(blockr.pharma:::pp_sev_legend_ui(dm_obj))
+  html <- as.character(
+    blockr.pharma:::pp_sev_legend_ui(dm_obj, sev_col = "AETOXGR")
+  )
   expect_match(html, "Grade 1")
   expect_match(html, "Grade 3")
   expect_lt(regexpr("Grade 1", html), regexpr("Grade 3", html))

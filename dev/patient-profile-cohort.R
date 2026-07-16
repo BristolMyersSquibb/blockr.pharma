@@ -73,6 +73,13 @@ serve(
       list(from = "cdisc", to = "profile", input = "data")
     ),
     extensions = blockr.dag::new_dag_extension(),
+    # safetyData ships no ACTARM, so the arm column must be declared or the
+    # profile stops with the undeclared error (see
+    # patient-profile-arm-option.R for that flow). TRT01A is the actual arm.
+    options = c(
+      dock_board_options(),
+      new_board_options(new_study_roles_option(arm = "TRT01A"))
+    ),
     # Current dock API: named PLAIN list of `grids =` (the old `layouts =` is
     # swallowed by ... and silently ignored). Views are derived from the grids.
     # A grid leaf is a bare panel id, or panels(...) for a tabbed group;

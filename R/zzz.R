@@ -46,6 +46,15 @@ register_pharma_blocks <- function() {
 #' Build arguments metadata for the patient profile block
 #' @noRd
 pp_block_arguments <- function() {
+  # Findings group ids and their PARAMCDs, straight from the group templates
+  # (the single copy; a hand-written list here once drifted from them).
+  group_desc <- paste(
+    vapply(pp_findings_groups(), function(g) {
+      sprintf("\"%s\" (%s)", g$id, paste(g$paramcds, collapse = ", "))
+    }, character(1L)),
+    collapse = ", "
+  )
+
   new_block_args(
     selected = new_block_arg(
       paste0(
@@ -53,25 +62,15 @@ pp_block_arguments <- function() {
         "Static IDs: ",
         "\"patient_overview\" (treatment period + AE bars + milestones from ADSL/adae), ",
         "\"ae_gantt\" (adverse events Gantt chart from adae), ",
+        "\"cm_gantt\" (concomitant medications Gantt chart from adcm), ",
         "\"adas_trajectory\" (ADAS-Cog score trajectory from adqsadas), ",
         "\"npix_radar\" (NPI-X radar chart from adqsnpix), ",
         "\"ortho_bp\" (orthostatic blood pressure from advs), ",
         "\"questionnaire_heatmap\" (heatmap of questionnaire scores). ",
         "Findings group IDs (generated from data; lab groups source from ",
-        "adlbc/adlbh when those tables exist, or the combined adlb otherwise): ",
-        "\"liver_panel\" (ALT, AST, BILI, GGT, ALP/ALKPH), ",
-        "\"renal_panel\" (BUN, CREAT, URATE), ",
-        "\"electrolytes\" (SODIUM, K/POTAS, CL, CA, PHOS), ",
-        "\"metabolic\" (GLUC, CHOL/CHOLES, PROT, ALB), ",
-        "\"muscle_enzymes\" (CK), ",
-        "\"cbc\" (WBC, RBC, HGB, HCT, PLAT), ",
-        "\"rbc_indices\" (MCV, MCH, MCHC), ",
-        "\"wbc_differential\" (LYM/LYMPH, MONO, EOS, BASO), ",
-        "\"rbc_morphology\" (ANISO, MACROCY, MICROCY, POIKILO, POLYCHR), ",
-        "\"blood_pressure\" (SYSBP, DIABP from advs), ",
-        "\"pulse\" (PULSE from advs), ",
-        "\"temperature\" (TEMP from advs), ",
-        "\"anthropometrics\" (HEIGHT, WEIGHT from advs). ",
+        "adlbc/adlbh when those tables exist, or the combined adlb ",
+        "otherwise; the PARAMCD lists include sponsor synonyms): ",
+        group_desc, ". ",
         "PARAMCDs not in a pre-defined group get auto-generated IDs like ",
         "\"adlb_paramcd\" (e.g. \"adlb_trig\"). ",
         "Only use IDs from this list \u2014 do NOT put raw table names (adcm, ",
@@ -160,6 +159,7 @@ pp_block_guidance <- function() {
       "\n\nWhen the user asks about a clinical domain, select the",
       "relevant visualization(s):",
       "- Adverse events/AEs/safety -> ae_gantt",
+      "- Medications/conmeds/concomitant meds -> cm_gantt",
       "- Liver function/hepatic/ALT/AST -> liver_panel",
       "- Renal function/kidney/creatinine -> renal_panel",
       "- Electrolytes/sodium/potassium -> electrolytes",

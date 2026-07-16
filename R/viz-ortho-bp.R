@@ -6,7 +6,8 @@
 # Controls: visits (checkbox of available visits).
 #
 # Data requirements (declared via new_pp_viz()):
-#   advs: required PARAMCD, AVAL, ATPT (or VSPOS); optional AVISIT
+#   advs: required PARAMCD, AVAL, ATPT; optional AVISIT, AVISITN
+# (canonical names; pp_normalize_dm() maps VSPOS -> ATPT etc. dm-wide)
 
 #' Orthostatic BP visualization definition
 #' @noRd
@@ -18,12 +19,8 @@ ortho_bp_viz <- new_pp_viz(
   color = "#0891B2",
   description = "Blood pressure by position (lying, standing 1min, 3min)",
   tables = "advs",
-  requires = list(advs = list(
-    PARAMCD = NULL,
-    AVAL    = NULL,
-    ATPT    = "VSPOS"
-  )),
-  optional = list(advs = list(AVISIT = NULL)),
+  requires = list(advs = c("PARAMCD", "AVAL", "ATPT")),
+  optional = list(advs = c("AVISIT", "AVISITN")),
   controls = list(
     visits = list(
       type = "checkbox",
@@ -46,7 +43,7 @@ ortho_bp_viz <- new_pp_viz(
 
       # Position categories. ADaM studies spell the position out as an ATPT
       # timepoint phrase; SDTM studies use the VSPOS controlled terms, which
-      # pp_resolve_requires() has already renamed to ATPT by this point.
+      # pp_normalize_dm() has already mapped to ATPT dm-wide.
       pos_map <- c(
         "AFTER LYING DOWN FOR 5 MINUTES" = "Lying",
         "AFTER STANDING FOR 1 MINUTE" = "Standing 1m",
@@ -68,13 +65,10 @@ ortho_bp_viz <- new_pp_viz(
         unique(bp$position)
       )
 
-      # Available visits
-      if (has_avisit) {
-        all_visits <- sort(unique(trimws(bp$AVISIT)))
-        all_visits <- all_visits[nzchar(all_visits)]
-      } else {
-        all_visits <- character(0)
-      }
+      # Available visits, in visit order (AVISITN when present): the
+      # "last two" default below must not pick "Week 2" over "Week 10"
+      # because of a lexical sort.
+      all_visits <- if (has_avisit) pp_visit_levels(bp) else character(0)
 
       sel_visits <- settings$visits
       if (is.null(sel_visits) || length(sel_visits) == 0) {

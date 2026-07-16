@@ -17,6 +17,7 @@ npix_radar_viz <- new_pp_viz(
   description = "Radar chart of NPI-X domain scores by visit",
   tables = "adqsnpix",
   requires = list(adqsnpix = c("PARAMCD", "AVAL", "AVISIT")),
+  optional = list(adqsnpix = "AVISITN"),
   controls = list(
     visits = list(
       type = "checkbox",
@@ -47,8 +48,7 @@ npix_radar_viz <- new_pp_viz(
         NPITM11S = "Sleep", NPITM12S = "Appetite"
       )
 
-      all_visits <- sort(unique(trimws(tbl$AVISIT)))
-      all_visits <- all_visits[nzchar(all_visits)]
+      all_visits <- pp_visit_levels(tbl)
 
       sel_visits <- settings$visits
       if (is.null(sel_visits) || length(sel_visits) == 0) {
