@@ -119,6 +119,12 @@ pp_column_catalog <- function() {
       AENDT = d("AENDTC", "CMENDTC"),
       ASTDY = i("CMSTDY"),
       AENDY = i("CMENDY")
+    ),
+    adex = list(
+      ASTDT = d("ASTDTC", "EXSTDTC"),
+      AENDT = d("AENDTC", "EXENDTC"),
+      ASTDY = i("EXSTDY"),
+      AENDY = i("EXENDY")
     )
   )
 }

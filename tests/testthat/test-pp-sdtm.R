@@ -13,26 +13,31 @@ sdtm_fixture <- function(n_subjects = 3L) {
   vs <- as.data.frame(pharmaversesdtm::vs)
   lb <- as.data.frame(pharmaversesdtm::lb)
   cm <- as.data.frame(pharmaversesdtm::cm)
+  ex <- as.data.frame(pharmaversesdtm::ex)
 
-  # Subjects that actually have AE, VS, LB and CM rows, so the renders have
-  # something to draw.
+  # Subjects that actually have AE, VS, LB, CM and EX rows, so the renders
+  # have something to draw.
   ids <- Reduce(intersect, list(
     unique(dm$USUBJID), unique(ae$USUBJID), unique(vs$USUBJID),
-    unique(lb$USUBJID), unique(cm$USUBJID)
+    unique(lb$USUBJID), unique(cm$USUBJID), unique(ex$USUBJID)
   ))
   ids <- utils::head(ids, n_subjects)
   stopifnot(length(ids) >= 1L)
 
   keep <- function(df) df[df$USUBJID %in% ids, , drop = FALSE]
   dm::dm(dm = keep(dm), ae = keep(ae), vs = keep(vs),
-         lb = keep(lb), cm = keep(cm))
+         lb = keep(lb), cm = keep(cm), ex = keep(ex))
 }
 
 test_that("SDTM domains normalize to canonical tables and columns", {
   norm <- pp_normalize_dm(sdtm_fixture())
   tbls <- dm::dm_get_tables(norm)
 
-  expect_setequal(names(tbls), c("adsl", "adae", "advs", "adlb", "adcm"))
+  expect_setequal(names(tbls),
+                  c("adsl", "adae", "advs", "adlb", "adcm", "adex"))
+
+  adex <- as.data.frame(tbls$adex)
+  expect_s3_class(adex$ASTDT, "Date")    # from EXSTDTC
 
   adsl <- as.data.frame(tbls$adsl)
   expect_s3_class(adsl$TRTSDT, "Date")   # from RFXSTDTC, coerced
@@ -164,6 +169,11 @@ test_that("the profile's vizs are available and render on SDTM data", {
     # a real chart, not the pp_empty_chart placeholder
     expect_null(chart$x$opts$title$text, info = id)
   }
+
+  # the overview carries the exposure lane (raw SDTM ex) and the visit
+  # ruler (VISIT -> AVISIT via the catalog, dated from VSDTC/LBDTC)
+  ov <- avail[["patient_overview"]]$render(one, tr, settings, ref, "date")
+  expect_true(all(c("EX", "VIS") %in% unlist(ov$x$opts$yAxis$data)))
 
   # one findings viz (labs come from the combined adlb on SDTM)
   lab_ids <- grep("^adlb_", names(avail), value = TRUE)

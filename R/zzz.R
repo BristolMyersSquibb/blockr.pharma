@@ -60,7 +60,8 @@ pp_block_arguments <- function() {
       paste0(
         "Array of visualization IDs to display. ",
         "Static IDs: ",
-        "\"patient_overview\" (treatment period + AE bars + milestones from ADSL/adae), ",
+        "\"patient_overview\" (treatment period, exposure/dosing bars, AE bars, ",
+        "visit ticks + milestones from ADSL/adae/adex), ",
         "\"ae_gantt\" (adverse events Gantt chart from adae), ",
         "\"cm_gantt\" (concomitant medications Gantt chart from adcm), ",
         "\"adas_trajectory\" (ADAS-Cog score trajectory from adqsadas), ",

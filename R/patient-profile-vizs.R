@@ -382,6 +382,66 @@ pp_compute_ref_ms <- function(dm_obj, ref_col = NULL) {
   pp_ms_ts(v)
 }
 
+#' The subject's visit schedule, from whatever findings tables carry it
+#'
+#' There is no subject-visit table in the profile's inputs (SDTM's SV is not
+#' loaded), but every findings table records which visit each measurement
+#' belongs to. Collecting the earliest measurement date (and study day) per
+#' visit label across all of them reconstructs the schedule well enough for
+#' a ruler: one tick per visit the subject actually attended.
+#'
+#' @param tbls Named list of tables (from `dm::dm_get_tables()`), subject-
+#'   scoped.
+#' @return A data.frame with `visit`, `date` (Date, may be NA) and `day`
+#'   (numeric, may be NA), ordered by time; zero rows when nothing carries
+#'   visits.
+#' @noRd
+pp_visit_schedule <- function(tbls) {
+  empty <- data.frame(visit = character(), date = as.Date(character()),
+                      day = numeric(), stringsAsFactors = FALSE)
+  rows <- list()
+  for (tbl_name in names(tbls)) {
+    df <- as.data.frame(tbls[[tbl_name]])
+    if (!"AVISIT" %in% colnames(df)) next
+    visit <- trimws(as.character(df$AVISIT))
+    keep <- !is.na(visit) & nzchar(visit)
+    if (!any(keep)) next
+    df <- df[keep, , drop = FALSE]
+    visit <- visit[keep]
+    date <- if ("ADT" %in% colnames(df)) pp_as_date(df$ADT) else
+      as.Date(rep(NA, nrow(df)))
+    day <- if ("ADY" %in% colnames(df)) {
+      suppressWarnings(as.numeric(df$ADY))
+    } else {
+      rep(NA_real_, nrow(df))
+    }
+    rows[[length(rows) + 1L]] <- data.frame(
+      visit = visit, date = date, day = day, stringsAsFactors = FALSE
+    )
+  }
+  if (!length(rows)) return(empty)
+
+  all <- do.call(rbind, rows)
+  all <- all[!is.na(all$date) | !is.na(all$day), , drop = FALSE]
+  if (!nrow(all)) return(empty)
+
+  min_or_na <- function(x) if (all(is.na(x))) x[1] else min(x, na.rm = TRUE)
+  out <- do.call(rbind, lapply(split(all, all$visit), function(g) {
+    data.frame(visit = g$visit[1], date = min_or_na(g$date),
+               day = min_or_na(g$day), stringsAsFactors = FALSE)
+  }))
+  # A study is dated or day-only consistently; never mix the two scales in
+  # one sort key (a Date's numeric is days since 1970, a *DY is ~tens).
+  ord <- if (any(!is.na(out$date))) {
+    order(out$date, out$day, na.last = TRUE)
+  } else {
+    order(out$day, na.last = TRUE)
+  }
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
 #' Clip the timeline's lower bound to the screening window
 #'
 #' One concomitant medication started years before the study must not
