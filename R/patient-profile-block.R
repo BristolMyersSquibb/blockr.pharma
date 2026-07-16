@@ -1160,9 +1160,16 @@ new_patient_profile_block <- function(selected = NULL,
     ui = function(id) {
       ns <- shiny::NS(id)
       shiny::tagList(
-        shiny::tags$link(
-          rel = "stylesheet",
-          href = "blockr-pharma/css/patient-profile.css"
+        # As an htmlDependency, NOT a raw tags$link to the resource path: the
+        # dependency's served URL embeds the package version, so a Version
+        # bump busts browser caches. A bare link URL never changes, and the
+        # browser happily keeps a stale stylesheet across reloads (and
+        # load_all()s) -- the inst/js convention, applied to CSS.
+        htmltools::htmlDependency(
+          "blockr-pharma-pp",
+          as.character(utils::packageVersion("blockr.pharma")),
+          src = system.file("assets", package = "blockr.pharma"),
+          stylesheet = "css/patient-profile.css"
         ),
         # Blockr.Select: the shared single-select primitive. Its dropdown is
         # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
