@@ -82,6 +82,26 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
   )
 }
 
+#' The value identity of a viz catalog
+#'
+#' Everything a sidebar card or the render dispatch reads off a `pp_viz`
+#' definition -- id, labels, tables, declarations, controls -- with the
+#' function fields (render, legend_ui) stripped. Two catalogs built from
+#' equal data compare `identical()` on this signature even though their
+#' closures never do (pp_findings_vizs() builds fresh environments per
+#' call), which is what lets the block skip sidebar re-renders on upstream
+#' dm updates that change nothing card-visible.
+#'
+#' @param vizs Named list of `pp_viz` definitions.
+#' @return A list safe to compare with `identical()`.
+#' @noRd
+pp_vizs_signature <- function(vizs) {
+  lapply(vizs, function(v) {
+    v <- unclass(v)
+    v[!vapply(v, is.function, logical(1L))]
+  })
+}
+
 #' Compute a data-coverage report for a set of vizs against a dm
 #'
 #' For each viz, determine whether it can render against `dm_obj` and, if

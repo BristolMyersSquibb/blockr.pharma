@@ -290,11 +290,40 @@ new_patient_profile_block <- function(selected = NULL,
           # changes. A patient with no rows for a viz gets a "no data"
           # message in its chart slot instead of the card vanishing. Same
           # source as the gear's Data coverage report, so the two agree.
-          r_available <- shiny::reactive({
+          r_available_src <- shiny::reactive({
             dm_obj <- r_norm_dm()
             shiny::req(inherits(dm_obj, "dm"))
             tbl_names <- names(dm::dm_get_tables(dm_obj))
             Filter(function(v) all(v$tables %in% tbl_names), r_cohort_vizs())
+          })
+
+          # De-duplicated viz catalog. An upstream dm update (a refreshed
+          # read, a re-filtered cohort) almost always yields the SAME set of
+          # cards, but pp_findings_vizs() builds fresh render closures every
+          # time, so no downstream identical() could ever skip -- the whole
+          # sidebar (SELECTED and AVAILABLE cards alike) re-rendered on
+          # every upstream emission. Compare catalogs by their non-function
+          # fields instead (everything a card or the dispatch reads off a
+          # definition -- renders take the dm as an argument, so keeping the
+          # previous closures is equivalent when those fields match) and
+          # only then let the new object through. The sidebar renderUI and
+          # the slot observers below simply do not invalidate on a
+          # same-catalog update. Same trick as r_data's identical-skip
+          # above, one level up.
+          r_available_val <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            avail <- r_available_src()
+            sig <- pp_vizs_signature(avail)
+            cur <- shiny::isolate(r_available_val())
+            if (!identical(sig, attr(cur, "pp_sig", exact = TRUE))) {
+              attr(avail, "pp_sig") <- sig
+              r_available_val(avail)
+            }
+          })
+          r_available <- shiny::reactive({
+            avail <- r_available_val()
+            shiny::req(!is.null(avail))
+            avail
           })
 
           # Selected viz IDs

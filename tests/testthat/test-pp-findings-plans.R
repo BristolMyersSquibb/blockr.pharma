@@ -21,6 +21,35 @@ test_that("params living only in adlb get cards even when both splits exist", {
   expect_false("adlb_alt" %in% names(vizs))
 })
 
+test_that("equal data yields an identical catalog signature", {
+  mk <- function() {
+    dm::dm(
+      adsl = data.frame(USUBJID = "x", ACTARM = "Placebo",
+                        stringsAsFactors = FALSE),
+      advs = data.frame(USUBJID = "x", PARAMCD = c("SYSBP", "PULSE"),
+                        AVAL = c(120, 60), ADT = as.Date("2020-01-01"),
+                        stringsAsFactors = FALSE)
+    )
+  }
+  cat1 <- c(patient_profile_static_vizs(), pp_findings_vizs(mk()))
+  cat2 <- c(patient_profile_static_vizs(), pp_findings_vizs(mk()))
+
+  # fresh closures never compare identical -- the signature must
+  expect_false(identical(cat1, cat2))
+  expect_identical(pp_vizs_signature(cat1), pp_vizs_signature(cat2))
+
+  # ...and a new PARAMCD is a real catalog change
+  dm3 <- dm::dm(
+    adsl = data.frame(USUBJID = "x", ACTARM = "Placebo",
+                      stringsAsFactors = FALSE),
+    advs = data.frame(USUBJID = "x", PARAMCD = c("SYSBP", "PULSE", "RESP"),
+                      AVAL = c(120, 60, 16), ADT = as.Date("2020-01-01"),
+                      stringsAsFactors = FALSE)
+  )
+  cat3 <- c(patient_profile_static_vizs(), pp_findings_vizs(dm3))
+  expect_false(identical(pp_vizs_signature(cat1), pp_vizs_signature(cat3)))
+})
+
 test_that("visit levels order by AVISITN, not lexically", {
   tbl <- data.frame(
     AVISIT = c("Week 10", "Week 2", "Baseline", "Week 10"),
