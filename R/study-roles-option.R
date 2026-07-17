@@ -9,7 +9,9 @@
 # declared-but-missing = a named error, never a fallback):
 #
 #   arm       -- ADSL treatment/arm label column. Default ACTARM.
-#   severity  -- ADAE severity column. Default: detect AETOXGR over AESEV.
+#   severity  -- ADAE severity column. Default: detect the word scale before
+#                the grade, ADaM before SDTM (ASEV, AESEV, ATOXGR, AETOXGR);
+#                a grade-coded study declares its column here.
 #   timeline  -- ADSL column anchoring relative-day mode. Default TRTSDT
 #                (which pp_normalize_dm() derives from RFXSTDTC/RFSTDTC for
 #                SDTM-shaped studies).
@@ -45,7 +47,8 @@
 #'
 #' @param arm ADSL arm column; `""` = undeclared (convention: `ACTARM`).
 #' @param severity ADAE severity column; `""` = undeclared (convention:
-#'   detect `AETOXGR`, then `AESEV`).
+#'   detect `ASEV`, `AESEV`, `ATOXGR`, then `AETOXGR` -- the word scale
+#'   before the grade, ADaM before SDTM).
 #' @param timeline ADSL column anchoring relative-day mode; `""` =
 #'   undeclared (convention: `TRTSDT`).
 #' @param category Settings sidebar category
@@ -78,7 +81,7 @@ new_study_roles_option <- function(arm = "", severity = "", timeline = "",
       htmltools::tagList(
         field(id, "study_arm", "Arm column", "ACTARM (default)"),
         field(id, "study_severity", "Severity column",
-              "AETOXGR / AESEV (detected)"),
+              "AESEV / AETOXGR (detected)"),
         field(id, "study_timeline", "Timeline reference",
               "TRTSDT (default)")
       )

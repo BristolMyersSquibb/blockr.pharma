@@ -47,8 +47,11 @@ test_that("the option normalizes, serializes and restores", {
 test_that("a declared severity column wins, and errors when absent", {
   cols <- c("USUBJID", "AETOXGR", "AESEV", "SEVX")
   expect_identical(pp_sev_column(cols, "SEVX"), "SEVX")
-  # undeclared: detection prefers the grade, as before
-  expect_identical(pp_sev_column(cols, NULL), "AETOXGR")
+  # A grade-coded study declares, and the declaration outranks the word
+  # scale detection would otherwise pick.
+  expect_identical(pp_sev_column(cols, "AETOXGR"), "AETOXGR")
+  # undeclared: detection takes the word scale, the general default
+  expect_identical(pp_sev_column(cols, NULL), "AESEV")
   # neither column, undeclared: legitimately no severity
   expect_null(pp_sev_column(c("USUBJID", "AEDECOD")))
 

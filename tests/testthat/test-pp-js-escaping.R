@@ -44,7 +44,7 @@ test_that("the treatment lane folds a multi-line arm label to one line", {
 
   # A study's own arm column may carry line breaks the ADaM arm variables
   # never do. The lane draws one line of text inside the bar.
-  js <- overview_arm_js("BMS-986507 2.5mg+\nOxaliplatin")
+  js <- overview_arm_js("XYZ-000000 2.5mg+\nOxaliplatin")
 
   expect_false(grepl("2.5mg+\nOxaliplatin", js, fixed = TRUE))
   expect_true(grepl("2.5mg+ Oxaliplatin", js, fixed = TRUE))
@@ -55,7 +55,7 @@ test_that("a hostile arm label is encoded, not pasted, into the lane's JS", {
 
   # Characters the whitespace fold does not touch, and which a hand-rolled
   # quote escape gets wrong. A syntax error here blanks the whole panel.
-  js <- overview_arm_js("BMS \\ 'high' \"dose\"")
+  js <- overview_arm_js("XYZ \\ 'high' \"dose\"")
 
-  expect_true(grepl('BMS \\\\ \'high\' \\"dose\\"', js, fixed = TRUE))
+  expect_true(grepl('XYZ \\\\ \'high\' \\"dose\\"', js, fixed = TRUE))
 })

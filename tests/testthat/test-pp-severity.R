@@ -20,16 +20,36 @@ pp_sev_dm <- function(adae_extra) {
   dm::dm(adsl = adsl, adae = adae)
 }
 
-test_that("pp_sev_column prefers the grade column", {
+test_that("pp_sev_column takes the word scale before the grade", {
+  # The general default: SDTM's ae carries the word scale by definition, a
+  # toxicity grade is a therapeutic-area convention. A grade study declares.
   expect_identical(
     blockr.pharma:::pp_sev_column(c("AESEV", "AETOXGR")),
-    "AETOXGR"
+    "AESEV"
   )
+  # One vocabulary present: no choice to make, either way.
   expect_identical(
     blockr.pharma:::pp_sev_column(c("AEDECOD", "AESEV")),
     "AESEV"
   )
+  expect_identical(
+    blockr.pharma:::pp_sev_column(c("AEDECOD", "AETOXGR")),
+    "AETOXGR"
+  )
   expect_null(blockr.pharma:::pp_sev_column("AEDECOD"))
+})
+
+test_that("pp_sev_column takes the ADaM spelling before the SDTM one", {
+  expect_identical(blockr.pharma:::pp_sev_column(c("AESEV", "ASEV")), "ASEV")
+  expect_identical(
+    blockr.pharma:::pp_sev_column(c("AETOXGR", "ATOXGR")),
+    "ATOXGR"
+  )
+  # Vocabulary outranks spelling: the ADaM word scale beats the ADaM grade.
+  expect_identical(
+    blockr.pharma:::pp_sev_column(c("ASEV", "AESEV", "ATOXGR", "AETOXGR")),
+    "ASEV"
+  )
 })
 
 test_that("built-in constants cover grades and words", {

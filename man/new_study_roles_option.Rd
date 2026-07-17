@@ -16,7 +16,8 @@ new_study_roles_option(
 \item{arm}{ADSL arm column; \code{""} = undeclared (convention: \code{ACTARM}).}
 
 \item{severity}{ADAE severity column; \code{""} = undeclared (convention:
-detect \code{AETOXGR}, then \code{AESEV}).}
+detect \code{ASEV}, \code{AESEV}, \code{ATOXGR}, then \code{AETOXGR} -- the word scale
+before the grade, ADaM before SDTM).}
 
 \item{timeline}{ADSL column anchoring relative-day mode; \code{""} =
 undeclared (convention: \code{TRTSDT}).}
