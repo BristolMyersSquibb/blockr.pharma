@@ -525,17 +525,30 @@ new_patient_profile_block <- function(selected = NULL,
             r_viz_settings(settings)
           })
 
-          # Whether a single patient is on screen, plus the cohort size for
-          # the placeholder text. A reactiveVal fed by an observer, not a
-          # reactive: switching from patient A to patient B re-executes
-          # r_scoped_dm but leaves this pair unchanged, and reactiveVal
-          # skips invalidation on identical values. That is what keeps the
-          # panel skeleton (and with it every chart container) out of the
-          # patient-switch redraw path.
+          # Whether a single patient is on screen. A reactiveVal fed by an
+          # observer, not a reactive: switching from patient A to patient B
+          # re-executes r_scoped_dm but leaves this flag unchanged, and
+          # reactiveVal skips invalidation on identical values. That is what
+          # keeps the panel skeleton (and with it every chart container) out
+          # of the redraw path.
+          #
+          # The cohort SIZE is deliberately not in here. It used to be, for
+          # the placeholder's "Pick one of N patients" line, which meant every
+          # upstream filter changed the pair and rebuilt the whole chart area
+          # -- the placeholder flashing, and, with a patient picked, every
+          # chart container torn down and remade. The size reaches that one
+          # sentence through r_cohort_total below instead.
           r_pick_state <- shiny::reactiveVal(NULL)
           shiny::observe({
-            scoped <- r_scoped_dm()
-            r_pick_state(list(single = scoped$single, total = scoped$total))
+            r_pick_state(list(single = r_scoped_dm()$single))
+          })
+
+          # Cohort size, for the placeholder sentence only. Same identical-
+          # skip, so an upstream emission that leaves the count alone does not
+          # redraw the sentence either.
+          r_cohort_total <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            r_cohort_total(r_scoped_dm()$total)
           })
 
           # Shared time range. Unless the user opts into the full
@@ -802,21 +815,31 @@ new_patient_profile_block <- function(selected = NULL,
           # popover from being rebuilt (and closing) when the user flips the
           # timeline toggle or picks a patient. Both button labels are kept
           # in sync by optimistic JS plus a confirming custom message.
+          # Whether relative-day mode is possible at all is a property of the
+          # study (does ADSL carry a usable TRTSDT), not of the patient on
+          # screen. Read from the unscoped dm: routing through `r_ref_ms()`
+          # would make the header depend on `r_subject`, and every pick would
+          # rebuild the header and slam both popovers shut. pp_has_ref() asks
+          # study-wide -- the per-patient pp_compute_ref_ms() would let one
+          # arbitrary cohort member with a missing treatment start disable the
+          # mode for everyone.
+          #
+          # A reactiveVal, not a read inside the header: `r_norm_dm()` is a
+          # plain reactive and so invalidates on EVERY upstream emission, even
+          # one that leaves this flag alone. The header must only rebuild when
+          # the flag actually flips, or an upstream filter rebuilds the gear
+          # (and shuts an open popover) on every keystroke.
+          r_gear_disabled <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            r_gear_disabled(!pp_has_ref(r_norm_dm(), r_roles()$timeline))
+          })
+
           output$header_bar <- shiny::renderUI({
-            co <- r_cohort()
+            gear_disabled <- r_gear_disabled()
+            shiny::req(!is.null(gear_disabled))
             ns <- session$ns
             init_mode <- shiny::isolate(r_timeline_mode())
             init_prestudy <- shiny::isolate(r_show_prestudy())
-            # Whether relative-day mode is possible at all is a property of
-            # the study (does ADSL carry a usable TRTSDT), not of the patient
-            # on screen. Read it from the unscoped dm: routing through
-            # `r_ref_ms()` would make the header depend on `r_subject`, and
-            # every pick would rebuild the header and slam both popovers
-            # shut. pp_has_ref() asks study-wide -- the per-patient
-            # pp_compute_ref_ms() here would let one arbitrary cohort member
-            # with a missing treatment start disable the mode for everyone.
-            gear_disabled <- !pp_has_ref(r_norm_dm(), r_roles()$timeline)
-
 
             gear_tag <- shiny::div(
               class = "pp-gear-wrap",
@@ -901,45 +924,14 @@ new_patient_profile_block <- function(selected = NULL,
                 # with the reason (missing table or required column). Lets
                 # users see what's collected without each one having to be
                 # selected first. Hidden behind the gear, not permanent.
-                {
-                  vizs <- r_cohort_vizs()  # req()s until a dm has arrived
-                  cov <- pp_coverage_report(r_norm_dm(), vizs)
-                  roles <- r_roles()
-                  shiny::tagList(
-                    shiny::div(class = "pp-popover-divider"),
-                    shiny::div(class = "pp-popover-section-label",
-                      "Study variables"),
-                    shiny::div(class = "pp-coverage-item",
-                      shiny::span(class = "pp-coverage-label", "Arm"),
-                      shiny::span(class = "pp-coverage-reason",
-                        roles$arm %||% "unresolved — see block error")
-                    ),
-                    shiny::div(class = "pp-coverage-item",
-                      shiny::span(class = "pp-coverage-label", "Severity"),
-                      shiny::span(class = "pp-coverage-reason",
-                        roles$severity %||% "none in adae (bars uncolored)")
-                    ),
-                    shiny::div(class = "pp-coverage-item",
-                      shiny::span(class = "pp-coverage-label", "Timeline"),
-                      shiny::span(class = "pp-coverage-reason",
-                        roles$timeline %||% "none (relative day off)")
-                    ),
-                    shiny::div(class = "pp-popover-divider"),
-                    shiny::div(class = "pp-popover-section-label",
-                      "Data coverage"),
-                    if (length(cov) == 0L) {
-                      shiny::div(class = "pp-coverage-ok",
-                        "All visuals available")
-                    } else {
-                      lapply(cov, function(c) {
-                        shiny::div(class = "pp-coverage-item",
-                          shiny::span(class = "pp-coverage-label", c$label),
-                          shiny::span(class = "pp-coverage-reason", c$reason)
-                        )
-                      })
-                    }
-                  )
-                }
+                #
+                # Its own output, because it is the one part of the header
+                # that reads the data. Inlined here, every upstream emission
+                # rebuilt the whole header -- including the gear button, which
+                # made the gear flash and shut an open popover. Nested, the
+                # button and the popover shell stay mounted and only the
+                # coverage list re-renders.
+                shiny::uiOutput(ns("gear_coverage"))
               )
             )
 
@@ -953,6 +945,68 @@ new_patient_profile_block <- function(selected = NULL,
               ),
               gear_tag
             )
+          })
+
+          # The data-derived half of the gear popover (see the uiOutput
+          # above). This one SHOULD track the data -- what a study collects is
+          # exactly what it reports -- it just must not drag the gear button
+          # with it.
+          output$gear_coverage <- shiny::renderUI({
+            vizs <- r_cohort_vizs()  # req()s until a dm has arrived
+            cov <- pp_coverage_report(r_norm_dm(), vizs)
+            roles <- r_roles()
+            shiny::tagList(
+              shiny::div(class = "pp-popover-divider"),
+              shiny::div(class = "pp-popover-section-label",
+                "Study variables"),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Arm"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$arm %||% "unresolved — see block error")
+              ),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Severity"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$severity %||% "none in adae (bars uncolored)")
+              ),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Timeline"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$timeline %||% "none (relative day off)")
+              ),
+              shiny::div(class = "pp-popover-divider"),
+              shiny::div(class = "pp-popover-section-label",
+                "Data coverage"),
+              if (length(cov) == 0L) {
+                shiny::div(class = "pp-coverage-ok", "All visuals available")
+              } else {
+                lapply(cov, function(c) {
+                  shiny::div(class = "pp-coverage-item",
+                    shiny::span(class = "pp-coverage-label", c$label),
+                    shiny::span(class = "pp-coverage-reason", c$reason)
+                  )
+                })
+              }
+            )
+          })
+          # The popover is display:none until the gear is clicked, so Shiny
+          # would suspend this output and leave the coverage list blank on the
+          # first open. It is a handful of divs; render it with the header.
+          shiny::outputOptions(output, "gear_coverage",
+                               suspendWhenHidden = FALSE)
+
+          # The placeholder's one live sentence (see pp_empty_hint above).
+          # Only mounted while the placeholder is, so it needs no suspend
+          # override: when it is hidden there is nothing to say.
+          output$pp_empty_hint <- shiny::renderUI({
+            total <- r_cohort_total()
+            shiny::req(!is.null(total))
+            if (isTRUE(total > 1L)) {
+              paste0("Pick one of ", total,
+                     " patients above, or drill down on a chart")
+            } else {
+              "No patient data in the incoming tables"
+            }
           })
 
           # Chart-area skeleton: one stable panel shell per selected viz,
@@ -983,13 +1037,11 @@ new_patient_profile_block <- function(selected = NULL,
                 ),
                 shiny::p(class = "pp-empty-state-text",
                   "No patient selected"),
+                # The count lives in its own output: reading it here would
+                # put the cohort size back into this output's dependencies
+                # and flash the whole placeholder on every upstream filter.
                 shiny::p(class = "pp-empty-state-hint",
-                  if (isTRUE(st$total > 1L)) {
-                    paste0("Pick one of ", st$total,
-                           " patients above, or drill down on a chart")
-                  } else {
-                    "No patient data in the incoming tables"
-                  })
+                  shiny::uiOutput(session$ns("pp_empty_hint"), inline = TRUE))
               ))
             }
             sel <- r_selected()
