@@ -5,8 +5,7 @@
 # removed or renamed (the blockr.sandbox drilldown/heatmap/patient-profile
 # blocks, the pre-graduation blockr.viz `bi_filter`, and the old
 # blockr.dm `dm_semi_filter`). This script rebuilds the SAME board topology
-# with the current, maintained blocks -- mirroring the working blockr.cdex
-# board (blockr.cdex/R/cedx_board.R) -- and writes a fresh, self-contained
+# with the current, maintained blocks and writes a fresh, self-contained
 # JSON.
 #
 # Block migration (old -> new):
@@ -15,7 +14,7 @@
 #       metric->value, agg_fn->func, x_col->x, y_col->y, x_end_col->xend,
 #       series_by->series; drilldown is now the explicit `drill=` arg.
 #   new_ae_heatmap_block (blockr.sandbox) -> new_function_block (subject x PT
-#       max-grade matrix) + new_table_block(sequential shading), the cedx
+#       max-grade matrix) + new_table_block(sequential shading), the usual
 #       AE-heatmap pattern (there is no `heatmap` chart type).
 #   new_bi_filter_block (blockr.viz) -> new_value_filter_block (blockr.dm)
 #   new_dm_semi_filter_block (blockr.dm) -> new_dm_filter_by_data_block
@@ -101,7 +100,7 @@ wayward_cardinal <- blockr.dm::new_value_filter_block(
 
 # AE heatmap: subject x top-N-term matrix coloured by max toxicity grade
 # (falls back to event count when no grade column). Rendered by a downstream
-# table block with sequential shading -- the cedx AE-heatmap pattern.
+# table block with sequential shading -- the usual AE-heatmap pattern.
 public_pike <- blockr.extra::new_function_block(
   fn = function(data) {
     top_n <- 30L

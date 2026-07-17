@@ -22,15 +22,19 @@ register_pharma_blocks <- function() {
   register_blocks(
     "new_patient_profile_block",
     name = "Patient Profile",
+    # One line. `description` is the SHORT summary by contract (see
+    # ?register_block: `details` is "the longer human-facing description ...
+    # complementing the short `description`"), and it is rendered straight
+    # into human surfaces -- the block header popover, and bare `title=`
+    # tooltips on the header subtitle and the sidebar card. It used to carry
+    # 540 characters of model-facing guidance, against a 72-character median
+    # across the 49 registered blocks; every one of those sentences now lives
+    # in pp_block_guidance() below, which lands in the SAME model prompt
+    # (blockr.ai pastes description, then guidance, two lines apart), so the
+    # model lost nothing.
     description = paste0(
-      "SINGLE-patient clinical profile (stacked per-patient charts: ADAS ",
-      "trajectory, AE gantt, lab/vital panels) from a dm. Accepts either a ",
-      "dm already filtered to one subject (e.g. from a drilldown chart into ",
-      "dm_filter_by_data(table=\"adsl\", key_col=\"USUBJID\")) or a full ",
-      "cohort dm, in which case set `subject` to the USUBJID to display and ",
-      "the block filters the dm down to that patient. NOT a cohort view: for ",
-      "group/treatment-arm trends (e.g. mean ADAS-Cog change from baseline ",
-      "by arm) use a chart block on a pulled table instead, not this block."
+      "Stacked per-patient clinical charts (AE Gantt, labs, vitals) from a ",
+      "CDISC dm."
     ),
     category = "plot",
     icon = "person-badge",
@@ -46,32 +50,32 @@ register_pharma_blocks <- function() {
 #' Build arguments metadata for the patient profile block
 #' @noRd
 pp_block_arguments <- function() {
+  # Findings group ids and their PARAMCDs, straight from the group templates
+  # (the single copy; a hand-written list here once drifted from them).
+  group_desc <- paste(
+    vapply(pp_findings_groups(), function(g) {
+      sprintf("\"%s\" (%s)", g$id, paste(g$paramcds, collapse = ", "))
+    }, character(1L)),
+    collapse = ", "
+  )
+
   new_block_args(
     selected = new_block_arg(
       paste0(
         "Array of visualization IDs to display. ",
         "Static IDs: ",
-        "\"patient_overview\" (treatment period + AE bars + milestones from ADSL/adae), ",
+        "\"patient_overview\" (treatment period, exposure/dosing bars, AE bars, ",
+        "visit ticks + milestones from ADSL/adae/adex), ",
         "\"ae_gantt\" (adverse events Gantt chart from adae), ",
+        "\"cm_gantt\" (concomitant medications Gantt chart from adcm), ",
         "\"adas_trajectory\" (ADAS-Cog score trajectory from adqsadas), ",
         "\"npix_radar\" (NPI-X radar chart from adqsnpix), ",
         "\"ortho_bp\" (orthostatic blood pressure from advs), ",
         "\"questionnaire_heatmap\" (heatmap of questionnaire scores). ",
         "Findings group IDs (generated from data; lab groups source from ",
-        "adlbc/adlbh when those tables exist, or the combined adlb otherwise): ",
-        "\"liver_panel\" (ALT, AST, BILI, GGT, ALP/ALKPH), ",
-        "\"renal_panel\" (BUN, CREAT, URATE), ",
-        "\"electrolytes\" (SODIUM, K/POTAS, CL, CA, PHOS), ",
-        "\"metabolic\" (GLUC, CHOL/CHOLES, PROT, ALB), ",
-        "\"muscle_enzymes\" (CK), ",
-        "\"cbc\" (WBC, RBC, HGB, HCT, PLAT), ",
-        "\"rbc_indices\" (MCV, MCH, MCHC), ",
-        "\"wbc_differential\" (LYM/LYMPH, MONO, EOS, BASO), ",
-        "\"rbc_morphology\" (ANISO, MACROCY, MICROCY, POIKILO, POLYCHR), ",
-        "\"blood_pressure\" (SYSBP, DIABP from advs), ",
-        "\"pulse\" (PULSE from advs), ",
-        "\"temperature\" (TEMP from advs), ",
-        "\"anthropometrics\" (HEIGHT, WEIGHT from advs). ",
+        "adlbc/adlbh when those tables exist, or the combined adlb ",
+        "otherwise; the PARAMCD lists include sponsor synonyms): ",
+        group_desc, ". ",
         "PARAMCDs not in a pre-defined group get auto-generated IDs like ",
         "\"adlb_paramcd\" (e.g. \"adlb_trig\"). ",
         "Only use IDs from this list \u2014 do NOT put raw table names (adcm, ",
@@ -131,8 +135,34 @@ pp_block_arguments <- function() {
 pp_block_guidance <- function() {
   paste(
       "This block displays stacked clinical visualizations for a single",
-      "patient. The user controls WHICH patient via `subject`, WHICH vizs",
-      "are shown via `selected`, and HOW they look via `viz_settings`.",
+      "patient (ADAS trajectory, AE gantt, lab / vital panels). The user",
+      "controls WHICH patient via `subject`, WHICH vizs are shown via",
+      "`selected`, and HOW they look via `viz_settings`.",
+      # Moved here from the registry `description`, which is a human-facing
+      # one-liner and was the ONLY place these two steers existed. Both reach
+      # the model in the same system prompt either way.
+      #
+      # OUT OF SCOPE is the phrase the harness's HOW TO WORK section looks
+      # for: it is what licenses replying without configuring. Saying "use a
+      # chart block instead" on its own does not work -- the model reads it,
+      # then configures the nearest single-patient approximation anyway,
+      # because the generic "configuring is an ACTION, do not answer in plain
+      # language and stop" rule sits later in the prompt and wins.
+      "\n\n**Cohort questions are OUT OF SCOPE for this block.** It shows one",
+      "patient at a time; a group-level or treatment-arm request (e.g. \"mean",
+      "ADAS-Cog change from baseline by arm\", \"compare the arms\", \"which",
+      "patients have the most AEs\") is one this block CANNOT answer, however",
+      "the input dm is shaped -- a cohort dm coming in does not make it a",
+      "cohort view. Do NOT configure the closest single-patient",
+      "approximation and caveat it: that silently answers a different",
+      "question than the one asked, and the chart on screen looks like a",
+      "reply. Instead leave the config alone and say that this block shows a",
+      "single patient and that a chart block on a pulled table is the right",
+      "tool for arm-level trends.",
+      "\n\nIt takes either a dm already filtered to one subject (e.g. from a",
+      "drilldown chart into `dm_filter_by_data(table = \"adsl\", key_col =",
+      "\"USUBJID\")`) or a full cohort dm, in which case `subject` names the",
+      "USUBJID to display and the block filters the dm down to that patient.",
       "\n\n**CRITICAL \u2014 check how many patients the input dm holds before",
       "you query it.** Start with `unique(adsl$USUBJID)`.",
       "\n\n- **Exactly one USUBJID.** An upstream block already filtered to",
@@ -160,6 +190,7 @@ pp_block_guidance <- function() {
       "\n\nWhen the user asks about a clinical domain, select the",
       "relevant visualization(s):",
       "- Adverse events/AEs/safety -> ae_gantt",
+      "- Medications/conmeds/concomitant meds -> cm_gantt",
       "- Liver function/hepatic/ALT/AST -> liver_panel",
       "- Renal function/kidney/creatinine -> renal_panel",
       "- Electrolytes/sodium/potassium -> electrolytes",

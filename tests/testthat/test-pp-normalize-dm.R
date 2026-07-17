@@ -16,7 +16,7 @@ sdtm_adsl <- function(...) {
 }
 
 test_that("TRTSDT/TRTEDT are derived from the exposure timestamps", {
-  out <- pp_derive_adsl_dates(dm::dm(adsl = sdtm_adsl()))
+  out <- pp_normalize_dm(dm::dm(adsl = sdtm_adsl()))
   adsl <- as.data.frame(dm::dm_get_tables(out)$adsl)
   expect_identical(adsl$TRTSDT, as.Date("2020-01-01"))
   expect_identical(adsl$TRTEDT, as.Date("2020-06-01"))
@@ -28,7 +28,7 @@ test_that("RFSTDTC/RFENDTC are the fallback when the exposure dates are absent",
   adsl <- data.frame(USUBJID = "x", RFSTDTC = "2020-02-02",
                      RFENDTC = "2020-07-07", stringsAsFactors = FALSE)
   out <- as.data.frame(
-    dm::dm_get_tables(pp_derive_adsl_dates(dm::dm(adsl = adsl)))$adsl
+    dm::dm_get_tables(pp_normalize_dm(dm::dm(adsl = adsl)))$adsl
   )
   expect_identical(out$TRTSDT, as.Date("2020-02-02"))
   expect_identical(out$TRTEDT, as.Date("2020-07-07"))
@@ -37,7 +37,7 @@ test_that("RFSTDTC/RFENDTC are the fallback when the exposure dates are absent",
 test_that("the exposure dates win over the weaker reference dates", {
   adsl <- sdtm_adsl(RFSTDTC = "1999-01-01", RFENDTC = "1999-12-31")
   out <- as.data.frame(
-    dm::dm_get_tables(pp_derive_adsl_dates(dm::dm(adsl = adsl)))$adsl
+    dm::dm_get_tables(pp_normalize_dm(dm::dm(adsl = adsl)))$adsl
   )
   expect_identical(out$TRTSDT, as.Date("2020-01-01"))
 })
@@ -45,16 +45,23 @@ test_that("the exposure dates win over the weaker reference dates", {
 test_that("an existing TRTSDT is never overwritten", {
   adsl <- sdtm_adsl(TRTSDT = as.Date("2011-11-11"))
   out <- as.data.frame(
-    dm::dm_get_tables(pp_derive_adsl_dates(dm::dm(adsl = adsl)))$adsl
+    dm::dm_get_tables(pp_normalize_dm(dm::dm(adsl = adsl)))$adsl
   )
   expect_identical(out$TRTSDT, as.Date("2011-11-11"))
   expect_identical(out$TRTEDT, as.Date("2020-06-01"))  # still derived
 })
 
-test_that("a conformant ADaM dm passes through untouched", {
-  skip_if_not_installed("pharmaverseadam")
-  dm_obj <- dm::dm(adsl = as.data.frame(pharmaverseadam::adsl))
-  expect_identical(pp_derive_adsl_dates(dm_obj), dm_obj)
+test_that("a fully canonical dm passes through untouched", {
+  # Same OBJECT, not a rebuilt equal one: the block's reactives compare by
+  # identity, so an unchanged dm must cost nothing downstream.
+  adsl <- data.frame(
+    USUBJID = "x",
+    TRTSDT = as.Date("2020-01-01"), TRTEDT = as.Date("2020-06-01"),
+    RFENDT = as.Date("2020-07-01"), DTHDT = as.Date(NA),
+    stringsAsFactors = FALSE
+  )
+  dm_obj <- dm::dm(adsl = adsl)
+  expect_identical(pp_normalize_dm(dm_obj), dm_obj)
 })
 
 test_that("the derived dates reach ref_ms and the time range", {

@@ -1,6 +1,6 @@
 # Orthostatic BP sources body position from ATPT (ADaM timepoint phrase) or
-# VSPOS (SDTM position term), and places every reading on the category it was
-# actually measured at.
+# VSPOS (SDTM position term; mapped to ATPT dm-wide by pp_normalize_dm()),
+# and places every reading on the category it was actually measured at.
 
 ortho_dm <- function(pos_col, rows) {
   df <- do.call(rbind, lapply(names(rows), function(pc) {
@@ -14,12 +14,13 @@ ortho_dm <- function(pos_col, rows) {
 }
 
 ortho_opts <- function(dm_obj) {
+  dm_obj <- blockr.pharma:::pp_normalize_dm(dm_obj)
   res <- blockr.pharma:::pp_resolve_requires(
     dm_obj, blockr.pharma:::ortho_bp_viz
   )
   testthat::expect_true(isTRUE(res$ok))
   blockr.pharma:::ortho_bp_viz$render(
-    res$dm, time_range = NULL, settings = list()
+    dm_obj, time_range = NULL, settings = list()
   )$x$opts
 }
 
@@ -83,14 +84,11 @@ test_that("a series missing a position leaves a gap instead of shifting left", {
 })
 
 test_that("unrecognized position terms fail loudly rather than plotting", {
-  dm_obj <- ortho_dm("VSPOS", list(
+  dm_obj <- blockr.pharma:::pp_normalize_dm(ortho_dm("VSPOS", list(
     SYSBP = list(pos = c("PRE-DOSE", "POST-DOSE"), val = c(120, 130))
-  ))
-  res <- blockr.pharma:::pp_resolve_requires(
-    dm_obj, blockr.pharma:::ortho_bp_viz
-  )
+  )))
   chart <- blockr.pharma:::ortho_bp_viz$render(
-    res$dm, time_range = NULL, settings = list()
+    dm_obj, time_range = NULL, settings = list()
   )
   expect_match(
     paste(unlist(chart$x$opts$title), collapse = " "),
@@ -102,8 +100,9 @@ test_that("neither ATPT nor VSPOS present is reported as a missing column", {
   df <- data.frame(USUBJID = "x", PARAMCD = "SYSBP", AVAL = 120,
                    VSTPT = "PRE-DOSE")
   res <- blockr.pharma:::pp_resolve_requires(
-    dm::dm(advs = df), blockr.pharma:::ortho_bp_viz
+    blockr.pharma:::pp_normalize_dm(dm::dm(advs = df)),
+    blockr.pharma:::ortho_bp_viz
   )
   expect_false(res$ok)
-  expect_match(res$msg, "missing ATPT \\(or VSPOS\\) in advs")
+  expect_match(res$msg, "missing ATPT in advs")
 })

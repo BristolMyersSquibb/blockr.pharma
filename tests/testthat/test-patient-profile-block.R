@@ -65,11 +65,11 @@ test_that("pp_subject_choices labels with whatever demography exists", {
 
   full <- dm::dm(adsl = data.frame(
     USUBJID = c("a", "b"),
-    ARM = c("Placebo", "Xanomeline"),
+    ACTARM = c("Placebo", "Xanomeline"),
     AGE = c(63L, 71L),
     SEX = c("F", "M")
   ))
-  got <- pp_subject_choices(full)
+  got <- pp_subject_choices(full, "ACTARM")
   expect_identical(got$ids, c("a", "b"))
   expect_identical(got$labels, c("a · Placebo · 63F", "b · Xanomeline · 71M"))
 
@@ -82,11 +82,11 @@ test_that("pp_subject_choices splits the muted secondary label off the id", {
   skip_if_not_installed("dm")
   full <- dm::dm(adsl = data.frame(
     USUBJID = c("a", "b"),
-    ARM = c("Placebo", "Xanomeline"),
+    ACTARM = c("Placebo", "Xanomeline"),
     AGE = c(63L, 71L),
     SEX = c("F", "M")
   ))
-  got <- pp_subject_choices(full)
+  got <- pp_subject_choices(full, "ACTARM")
   expect_identical(got$meta, c("Placebo · 63F", "Xanomeline · 71M"))
   # label is the flat form: the search haystack and the button text
   expect_identical(got$labels, c("a · Placebo · 63F", "b · Xanomeline · 71M"))
@@ -99,8 +99,8 @@ test_that("pp_subject_choices splits the muted secondary label off the id", {
 
   # an NA arm blanks rather than printing "NA"
   na_arm <- pp_subject_choices(dm::dm(adsl = data.frame(
-    USUBJID = c("a", "b"), ARM = c(NA, "Placebo")
-  )))
+    USUBJID = c("a", "b"), ACTARM = c(NA, "Placebo")
+  )), "ACTARM")
   expect_identical(na_arm$meta, c("", "Placebo"))
   expect_identical(na_arm$labels, c("a", "b · Placebo"))
 })
@@ -109,9 +109,9 @@ test_that("pp_subject_choices does not misalign labels on a duplicated adsl", {
   skip_if_not_installed("dm")
   dup <- dm::dm(adsl = data.frame(
     USUBJID = c("a", "a", "b"),
-    ARM = c("Placebo", "Placebo", "Xanomeline")
+    ACTARM = c("Placebo", "Placebo", "Xanomeline")
   ))
-  got <- pp_subject_choices(dup)
+  got <- pp_subject_choices(dup, "ACTARM")
   expect_identical(got$ids, c("a", "b"))
   expect_identical(got$labels, c("a · Placebo", "b · Xanomeline"))
 })

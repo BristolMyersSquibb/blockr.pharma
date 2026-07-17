@@ -38,7 +38,7 @@ test_that("the day-native axis agrees with the date-derived one", {
 day_only_dm <- function() {
   dm::dm(
     adsl = data.frame(
-      USUBJID = "x",
+      USUBJID = "x", ACTARM = "Placebo",
       TRTSDT = as.Date("2020-01-01"), TRTEDT = as.Date("2020-06-01"),
       stringsAsFactors = FALSE
     ),
@@ -53,10 +53,11 @@ day_only_dm <- function() {
 }
 
 test_that("the AE gantt renders from study days with no dates present", {
-  res <- pp_resolve_requires(day_only_dm(), ae_gantt_viz)
+  dm_obj <- day_only_dm()
+  res <- pp_resolve_requires(dm_obj, ae_gantt_viz)
   expect_true(isTRUE(res$ok))
 
-  chart <- ae_gantt_viz$render(res$dm, time_range = NULL, settings = list(),
+  chart <- ae_gantt_viz$render(dm_obj, time_range = NULL, settings = list(),
                                ref_ms = NA_real_, mode = "rday")
   expect_s3_class(chart, "htmlwidget")
 
@@ -71,18 +72,21 @@ test_that("AESTDY/AEENDY are accepted as the SDTM spelling", {
   ae <- as.data.frame(dm::dm_get_tables(dm_obj)$adae)
   names(ae)[names(ae) == "ASTDY"] <- "AESTDY"
   names(ae)[names(ae) == "AENDY"] <- "AEENDY"
-  dm2 <- dm::dm(adsl = as.data.frame(dm::dm_get_tables(dm_obj)$adsl), adae = ae)
+  dm2 <- pp_normalize_dm(
+    dm::dm(adsl = as.data.frame(dm::dm_get_tables(dm_obj)$adsl), adae = ae)
+  )
 
   res <- pp_resolve_requires(dm2, ae_gantt_viz)
   expect_true(isTRUE(res$ok))
-  expect_true("ASTDY" %in% colnames(dm::dm_get_tables(res$dm)$adae))
+  expect_true("ASTDY" %in% colnames(dm::dm_get_tables(dm2)$adae))
 })
 
 test_that("the overview AE lane also plots study days", {
-  res <- pp_resolve_requires(day_only_dm(), patient_overview_viz)
+  dm_obj <- day_only_dm()
+  res <- pp_resolve_requires(dm_obj, patient_overview_viz)
   expect_true(isTRUE(res$ok))
   chart <- patient_overview_viz$render(
-    res$dm, time_range = NULL, settings = list(),
+    dm_obj, time_range = NULL, settings = list(),
     ref_ms = pp_ms_ts(as.Date("2020-01-01")), mode = "rday"
   )
   ae <- Filter(function(s) identical(s$name, "Adverse Events"),
@@ -93,8 +97,8 @@ test_that("the overview AE lane also plots study days", {
 })
 
 test_that("date mode says so rather than plotting a study-day-only AE table", {
-  res <- pp_resolve_requires(day_only_dm(), ae_gantt_viz)
-  chart <- ae_gantt_viz$render(res$dm, time_range = NULL, settings = list(),
+  chart <- ae_gantt_viz$render(day_only_dm(), time_range = NULL,
+                               settings = list(),
                                ref_ms = NA_real_, mode = "date")
   expect_match(paste(unlist(chart$x$opts$title), collapse = " "),
                "relative day")

@@ -20,6 +20,11 @@
 #'   from treatment start, ADaM \*DY convention; the default) or `"date"`
 #'   (calendar dates). Changeable at runtime via the gear popover in the
 #'   chart area header.
+#' @param show_prestudy Show the full pre-treatment history? By default the
+#'   timeline starts 30 days before treatment start (the screening window,
+#'   so baselines stay visible) -- one medication started years earlier must
+#'   not stretch every axis to it. `TRUE` restores the full range; also a
+#'   toggle in the gear popover.
 #' @param subject USUBJID to display, as a length-1 character. Only meaningful
 #'   when the incoming dm carries more than one subject; a single-subject dm
 #'   always renders its one subject. Ignored (and cleared) when the value is
@@ -27,13 +32,18 @@
 #'   chosen.
 #' @details
 #' The ADSL column holding the treatment / arm label is study-level
-#' configuration, not block state: set it once per app via
-#' `options(blockr.pharma_arm_var = "TRT")` (or the `BLOCKR_PHARMA_ARM_VAR`
-#' environment variable). It is used by both the subject picker and the
-#' treatment lane, so the two cannot disagree. When the option is unset, the
-#' first of `ARM`, `ACTARM`, `TRT01P`, `TRT01A` present is used. A legacy
-#' `arm_var` constructor argument (from boards saved before this change) is
-#' ignored with a warning.
+#' configuration, not block state: it is the arm field of the
+#' `"study_roles"` *board option* (see [new_study_roles_option()], which
+#' also declares the severity column, the timeline reference and table
+#' aliases), declared once per study in the board's settings sidebar and
+#' serialized with the board. It is used by both the subject picker and the
+#' treatment lane, so the two cannot disagree. Undeclared, the column is
+#' `ACTARM`; a declared column that the data does not carry is a named
+#' error, never a fallback. The legacy app-level option
+#' `options(blockr.pharma_arm_var =)` (or `BLOCKR_PHARMA_ARM_VAR`) is still
+#' honored on boards that have not declared an arm, for the migration only.
+#' A legacy `arm_var` constructor argument (from boards saved before the
+#' option existed) is ignored with a warning.
 #' @param ... Forwarded to [blockr.core::new_transform_block()]
 #'
 #' @return A transform block of class `patient_profile_block`
@@ -75,22 +85,25 @@ new_patient_profile_block <- function(selected = NULL,
                                               viz_settings = list(),
                                               timeline_mode = "rday",
                                               subject = NULL,
+                                              show_prestudy = FALSE,
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
+  stopifnot(isTRUE(show_prestudy) || isFALSE(show_prestudy))
 
-  # `arm_var` is study-level configuration, not block state: it is read from
-  # the app-level option at server start (see below), never persisted, and
-  # deliberately NOT a constructor formal -- core requires every formal to
-  # round-trip through `state`, which would make it saved-board state and put
-  # it one step from user control. Boards saved before this change carry
+  # `arm_var` is study-level configuration, not block state: it is the
+  # "arm_var" BOARD option (read reactively in the server below), never
+  # persisted with the block, and deliberately NOT a constructor formal --
+  # core requires every formal to round-trip through `state`, which would
+  # make it saved-board state and put it one step from user control (the AI
+  # surface is every non-dots formal). Boards saved before this change carry
   # arm_var in their serialized state; on restore it lands in `...` and
   # new_block() stores it as an inert attribute, so old boards still load --
   # warn so the silently-dropped setting is at least visible.
   if ("arm_var" %in% names(list(...))) {
     warning(
-      "new_patient_profile_block(arm_var=) is ignored: set ",
-      "options(blockr.pharma_arm_var=) for the app instead.",
+      "new_patient_profile_block(arm_var=) is ignored: declare the study's ",
+      "arm column in the board sidebar (Study > Arm column) instead.",
       call. = FALSE
     )
   }
@@ -130,24 +143,63 @@ new_patient_profile_block <- function(selected = NULL,
           # Currently picked USUBJID: character(0) when no patient chosen.
           r_subject <- shiny::reactiveVal(subject)
 
-          # Study-declared arm column. Study-level configuration, not user
-          # input: read once from the app-level option
-          # (options(blockr.pharma_arm_var=) / BLOCKR_PHARMA_ARM_VAR), kept
-          # OUT of the block state -- neither persisted nor exposed to
-          # external control / the AI assistant. NULL = auto-detect the
-          # standard ADaM arm columns.
-          arm_var <- blockr.core::blockr_option("pharma_arm_var", NULL)
+          # Study-declared roles. Study-level configuration, not user input:
+          # kept OUT of the block state -- neither persisted with the block
+          # nor exposed to external control / the AI assistant. It is the
+          # "study_roles" BOARD option (sidebar-editable, serialized with
+          # the board), read reactively so a sidebar edit re-resolves every
+          # consumer. The legacy app-level option
+          # (options(blockr.pharma_arm_var=) / BLOCKR_PHARMA_ARM_VAR) is
+          # transitional: it still covers the ARM on boards that have not
+          # declared, and goes away -- here and in the deployment's app.R --
+          # once every deployed study has declared in its sidebar (see the
+          # study-metadata design spec's sequencing).
+          r_option_roles <- board_study_roles()
+          legacy_arm_var <- blockr.core::blockr_option("pharma_arm_var", NULL)
           stopifnot(
-            is.null(arm_var) ||
-              (is.character(arm_var) && length(arm_var) == 1L &&
-                 nzchar(arm_var))
+            is.null(legacy_arm_var) ||
+              (is.character(legacy_arm_var) && length(legacy_arm_var) == 1L &&
+                 nzchar(legacy_arm_var))
           )
+          r_declared <- shiny::reactive({
+            d <- r_option_roles() %||% list()
+            d$arm <- d$arm %||% legacy_arm_var
+            d
+          })
+
+          # The incoming dm, reconciled ONCE with the names the vizs declare
+          # against (pp_normalize_dm(): SDTM-style table names, SDTM/vendor
+          # column spellings, typed date derivations).
+          # Everything below reads from here -- the picker, roles,
+          # availability, coverage, the time range and the renders -- so
+          # nothing can see a pre-normalization name again (the class of bug
+          # where the time axis was computed from raw names and silently
+          # clipped aliased studies). Total (NULL until a dm arrives):
+          # observers consume its dependents.
+          r_norm_dm <- shiny::reactive({
+            dm_obj <- r_data()
+            if (!inherits(dm_obj, "dm")) return(NULL)
+            pp_normalize_dm(dm_obj)
+          })
+
+          # Role resolution, once per (dm, declaration): which column is the
+          # arm, which codes severity, which anchors the timeline. Total --
+          # an unresolved role lands in $errors and is raised loudly via
+          # pp_roles_blocker() on the eval path, never from here.
+          r_roles <- shiny::reactive({
+            pp_resolve_roles(r_norm_dm(), r_declared())
+          })
 
           # The incoming cohort. This is the universe the picker selects
           # within: an upstream drill-down narrows it, the picker never
           # widens it, so the two can never conflict.
           r_cohort <- shiny::reactive({
-            pp_subject_choices(r_data(), arm_var)
+            nd <- r_norm_dm()
+            if (is.null(nd)) {
+              return(list(ids = character(), labels = character(),
+                          meta = character()))
+            }
+            pp_subject_choices(nd, r_roles()$arm)
           })
 
           # Stale-selection guard. When the upstream cohort changes and the
@@ -190,26 +242,25 @@ new_patient_profile_block <- function(selected = NULL,
           # The profile is by definition a per-patient view. It renders when
           # the incoming dm carries exactly one subject, or when the picker
           # has committed to one of many. Otherwise `single` is FALSE and the
-          # chart area shows a placeholder. dm_filter cascades via FKs, so
-          # every downstream read of a scoped dm sees the single-patient dm.
+          # chart area shows a placeholder. Scoping is a plain per-table
+          # USUBJID filter on the already-normalized dm (pp_scope_subject():
+          # every CDISC table carries USUBJID, so no FK cascade is needed),
+          # which means a patient switch costs a filter, not a second
+          # normalization pass, and there is no ordering constraint between
+          # scoping and normalization left to get wrong.
           r_scoped_dm <- shiny::reactive({
-            dm_obj <- r_data()
+            dm_obj <- r_norm_dm()
             shiny::req(inherits(dm_obj, "dm"))
-            tbls <- dm::dm_get_tables(dm_obj)
-            shiny::req("adsl" %in% names(tbls))
+            # Post-normalization this is the canonical name even for a study
+            # that shipped the SDTM `dm` domain -- checking the RAW dm here
+            # is what used to kill SDTM studies before the alias machinery
+            # ever ran.
+            shiny::req("adsl" %in% names(dm::dm_get_tables(dm_obj)))
             ids <- pp_subject_ids(dm_obj)
             picked <- pp_resolve_subject(ids, r_subject())
-            # Reconcile the study's names with the ones the vizs declare
-            # against: short prod table names (ae, lb, vs, ...) become ADaM
-            # canonical ones, and a SDTM-shaped adsl gains the treatment
-            # dates it does not ship. Done AFTER dm_filter so the FK cascade
-            # (which keys off the original names) still subject-filters child
-            # tables.
             if (!is.na(picked)) {
               list(
-                dm     = pp_normalize_dm(
-                  dm::dm_filter(dm_obj, adsl = USUBJID == picked)
-                ),
+                dm     = pp_scope_subject(dm_obj, picked),
                 picked = picked,
                 total  = length(ids),
                 single = TRUE
@@ -218,7 +269,7 @@ new_patient_profile_block <- function(selected = NULL,
               # Keep the dm unfiltered so the viz sidebar still
               # populates; the chart area shows the placeholder.
               list(
-                dm     = pp_normalize_dm(dm_obj),
+                dm     = dm_obj,
                 picked = NA_character_,
                 total  = length(ids),
                 single = FALSE
@@ -226,20 +277,16 @@ new_patient_profile_block <- function(selected = NULL,
             }
           })
 
-          # The incoming dm with table aliases normalized, unscoped by
-          # subject. Data-coverage diagnostics are a property of the tables
-          # and columns the study collected, not of which patient is on
-          # screen, so they read from here and the header bar stays
-          # independent of `r_subject`.
-          r_norm_dm <- shiny::reactive({
-            dm_obj <- r_data()
-            shiny::req(inherits(dm_obj, "dm"))
-            pp_normalize_dm(dm_obj)
-          })
-
           r_cohort_vizs <- shiny::reactive({
             dm_obj <- r_norm_dm()
-            c(patient_profile_static_vizs(), pp_findings_vizs(dm_obj))
+            shiny::req(inherits(dm_obj, "dm"))
+            # Static vizs are decidable from the schema, so they are always
+            # listed and pp_coverage_report() explains any that cannot render.
+            # The generated ones answer a question the schema cannot: findings
+            # exist per discovered PARAMCD, the cycle lane only where the study
+            # is dosed in cycles. Absent means absent -- no card, no gap report.
+            c(patient_profile_static_vizs(), pp_cycle_vizs(dm_obj),
+              pp_findings_vizs(dm_obj))
           })
 
           # Available vizs (those whose tables exist in the dm). Derived
@@ -249,9 +296,80 @@ new_patient_profile_block <- function(selected = NULL,
           # changes. A patient with no rows for a viz gets a "no data"
           # message in its chart slot instead of the card vanishing. Same
           # source as the gear's Data coverage report, so the two agree.
-          r_available <- shiny::reactive({
-            tbl_names <- names(dm::dm_get_tables(r_norm_dm()))
+          r_available_src <- shiny::reactive({
+            dm_obj <- r_norm_dm()
+            shiny::req(inherits(dm_obj, "dm"))
+            tbl_names <- names(dm::dm_get_tables(dm_obj))
             Filter(function(v) all(v$tables %in% tbl_names), r_cohort_vizs())
+          })
+
+          # De-duplicated viz catalog. An upstream dm update (a refreshed
+          # read, a re-filtered cohort) almost always yields the SAME set of
+          # cards, but pp_findings_vizs() builds fresh render closures every
+          # time, so no downstream identical() could ever skip -- the whole
+          # sidebar (SELECTED and AVAILABLE cards alike) re-rendered on
+          # every upstream emission. Compare catalogs by their non-function
+          # fields instead (everything a card or the dispatch reads off a
+          # definition -- renders take the dm as an argument, so keeping the
+          # previous closures is equivalent when those fields match) and
+          # only then let the new object through. The sidebar renderUI and
+          # the slot observers below simply do not invalidate on a
+          # same-catalog update. Same trick as r_data's identical-skip
+          # above, one level up.
+          r_available_val <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            avail <- r_available_src()
+            cur <- shiny::isolate(r_available_val())
+
+            # A chart drill passes through "no selection" between clicks,
+            # and the upstream filter then emits an EMPTY dm before the new
+            # patient lands. An empty selection says nothing about what the
+            # study collected, so it must not erase the catalog: without
+            # this hold, the findings cards vanished for the fraction of a
+            # second between the empty emission and the patient arriving --
+            # the sidebar "flash" on every swim-lane drill. (A table drill
+            # emits one atomic update and never showed it.)
+            if (!is.null(cur) &&
+                  length(pp_subject_ids(shiny::isolate(r_norm_dm()))) == 0L) {
+              return()
+            }
+
+            # The catalog REMEMBERS. A drilled single-patient input only
+            # reveals the params THAT patient carries, but the cards describe
+            # the study: the data-generated per-param cards (adlb_*) differed
+            # per patient, so every swim-lane drill re-rendered the sidebar
+            # (patients without basole/eosle/... dropped those cards, the
+            # next one brought them back). A previously seen card therefore
+            # stays as long as its table stays; a patient without the param
+            # gets the "No records" message in its slot -- which is this
+            # block's stated philosophy for patient-level emptiness anyway.
+            # Remembered extras append sorted, so the merged order is a pure
+            # function of the union and the signature converges after the
+            # first few drills.
+            if (!is.null(cur)) {
+              tbl_names <- names(dm::dm_get_tables(
+                shiny::isolate(r_norm_dm())
+              ))
+              seen <- Filter(
+                function(v) all(v$tables %in% tbl_names),
+                cur
+              )
+              extra <- setdiff(names(seen), names(avail))
+              if (length(extra)) {
+                avail <- c(avail, seen[sort(extra)])
+              }
+            }
+
+            sig <- pp_vizs_signature(avail)
+            if (!identical(sig, attr(cur, "pp_sig", exact = TRUE))) {
+              attr(avail, "pp_sig") <- sig
+              r_available_val(avail)
+            }
+          })
+          r_available <- shiny::reactive({
+            avail <- r_available_val()
+            shiny::req(!is.null(avail))
+            avail
           })
 
           # Selected viz IDs
@@ -273,6 +391,13 @@ new_patient_profile_block <- function(selected = NULL,
             if (isTRUE(new_mode %in% c("date", "rday"))) {
               r_timeline_mode(new_mode)
             }
+          })
+
+          # Show the full pre-treatment history (default: clip to a 30-day
+          # screening window before treatment start; see pp_clip_prestudy)
+          r_show_prestudy <- shiny::reactiveVal(isTRUE(show_prestudy))
+          shiny::observeEvent(input$show_prestudy, {
+            r_show_prestudy(isTRUE(input$show_prestudy))
           })
 
           # Initialize selection to patient_overview + first available
@@ -400,31 +525,75 @@ new_patient_profile_block <- function(selected = NULL,
             r_viz_settings(settings)
           })
 
-          # Whether a single patient is on screen, plus the cohort size for
-          # the placeholder text. A reactiveVal fed by an observer, not a
-          # reactive: switching from patient A to patient B re-executes
-          # r_scoped_dm but leaves this pair unchanged, and reactiveVal
-          # skips invalidation on identical values. That is what keeps the
-          # panel skeleton (and with it every chart container) out of the
-          # patient-switch redraw path.
+          # Whether a single patient is on screen. A reactiveVal fed by an
+          # observer, not a reactive: switching from patient A to patient B
+          # re-executes r_scoped_dm but leaves this flag unchanged, and
+          # reactiveVal skips invalidation on identical values. That is what
+          # keeps the panel skeleton (and with it every chart container) out
+          # of the redraw path.
+          #
+          # The cohort SIZE is deliberately not in here. It used to be, for
+          # the placeholder's "Pick one of N patients" line, which meant every
+          # upstream filter changed the pair and rebuilt the whole chart area
+          # -- the placeholder flashing, and, with a patient picked, every
+          # chart container torn down and remade. The size reaches that one
+          # sentence through r_cohort_total below instead.
           r_pick_state <- shiny::reactiveVal(NULL)
           shiny::observe({
-            scoped <- r_scoped_dm()
-            r_pick_state(list(single = scoped$single, total = scoped$total))
+            r_pick_state(list(single = r_scoped_dm()$single))
           })
 
-          # Shared time range
+          # Cohort size, for the placeholder sentence only. Same identical-
+          # skip, so an upstream emission that leaves the count alone does not
+          # redraw the sentence either.
+          r_cohort_total <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            r_cohort_total(r_scoped_dm()$total)
+          })
+
+          # Shared time range. Unless the user opts into the full
+          # pre-treatment history, the range floor is a 30-day screening
+          # window before treatment start: one medication started years ago
+          # must not stretch every axis to it, while baselines (screening
+          # labs and vitals) stay on screen. Ongoing bars still enter from
+          # the left edge; only events entirely before the floor drop out.
           r_time_range <- shiny::reactive({
             dm_obj <- r_scoped_dm()$dm
             shiny::req(inherits(dm_obj, "dm"))
-            pp_compute_time_range(dm_obj)
+            tr <- pp_compute_time_range(dm_obj, ref_col = r_roles()$timeline)
+            if (!r_show_prestudy()) {
+              tr <- pp_clip_prestudy(
+                tr, pp_compute_ref_ms(dm_obj, r_roles()$timeline)
+              )
+            }
+            tr
           })
 
-          # Reference timestamp (TRTSDT) used for relative-day mode
+          # Reference timestamp (TRTSDT) used for relative-day mode. The
+          # reference is a per-PATIENT value (this subject's treatment
+          # start), so it exists only once a single patient is on screen --
+          # computing it from an unscoped cohort takes whichever subject
+          # happens to sit in ADSL row 1, and one arbitrary patient with a
+          # missing treatment start would disable relative-day mode for the
+          # whole study.
           r_ref_ms <- shiny::reactive({
-            dm_obj <- r_scoped_dm()$dm
-            shiny::req(inherits(dm_obj, "dm"))
-            pp_compute_ref_ms(dm_obj)
+            scoped <- r_scoped_dm()
+            shiny::req(inherits(scoped$dm, "dm"))
+            if (!isTRUE(scoped$single)) return(NA_real_)
+            pp_compute_ref_ms(scoped$dm, ref_col = r_roles()$timeline)
+          })
+
+          # Treatment cycle anchors (see pp-cycle.R). Per-PATIENT, like
+          # r_ref_ms and for the same reason: the cycle calendar is this
+          # subject's, delays included. Computed once here rather than per
+          # viz -- the cycle lane and every cycle-labelled tooltip read the
+          # same frame, so they cannot disagree. NULL for a study without the
+          # cycle vocabulary, which is the common case and not an error.
+          r_cycle_anchors <- shiny::reactive({
+            scoped <- r_scoped_dm()
+            shiny::req(inherits(scoped$dm, "dm"))
+            if (!isTRUE(scoped$single)) return(NULL)
+            pp_cycle_anchor_days(pp_cycle_anchors(scoped$dm), r_ref_ms())
           })
 
           # Render sidebar cards (re-renders when the cohort's data
@@ -555,7 +724,18 @@ new_patient_profile_block <- function(selected = NULL,
                       tbl <- as.data.frame(tbls[[tbl_name]])
                       col <- ctrl$choices_from
                       if (col %in% colnames(tbl)) {
-                        choices <- sort(unique(as.character(tbl[[col]])))
+                        # Visits come in visit order (AVISITN when present):
+                        # lexical order puts "Week 10" before "Week 2".
+                        choices <- if (identical(col, "AVISIT")) {
+                          pp_visit_levels(tbl)
+                        } else {
+                          sort(unique(as.character(tbl[[col]])))
+                        }
+                        # Restrict to the viz's declared subset (a findings
+                        # group's PARAMCDs), in the subset's clinical order.
+                        if (!is.null(ctrl$choices_subset)) {
+                          choices <- intersect(ctrl$choices_subset, choices)
+                        }
                         break
                       }
                     }
@@ -635,17 +815,31 @@ new_patient_profile_block <- function(selected = NULL,
           # popover from being rebuilt (and closing) when the user flips the
           # timeline toggle or picks a patient. Both button labels are kept
           # in sync by optimistic JS plus a confirming custom message.
+          # Whether relative-day mode is possible at all is a property of the
+          # study (does ADSL carry a usable TRTSDT), not of the patient on
+          # screen. Read from the unscoped dm: routing through `r_ref_ms()`
+          # would make the header depend on `r_subject`, and every pick would
+          # rebuild the header and slam both popovers shut. pp_has_ref() asks
+          # study-wide -- the per-patient pp_compute_ref_ms() would let one
+          # arbitrary cohort member with a missing treatment start disable the
+          # mode for everyone.
+          #
+          # A reactiveVal, not a read inside the header: `r_norm_dm()` is a
+          # plain reactive and so invalidates on EVERY upstream emission, even
+          # one that leaves this flag alone. The header must only rebuild when
+          # the flag actually flips, or an upstream filter rebuilds the gear
+          # (and shuts an open popover) on every keystroke.
+          r_gear_disabled <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            r_gear_disabled(!pp_has_ref(r_norm_dm(), r_roles()$timeline))
+          })
+
           output$header_bar <- shiny::renderUI({
-            co <- r_cohort()
+            gear_disabled <- r_gear_disabled()
+            shiny::req(!is.null(gear_disabled))
             ns <- session$ns
             init_mode <- shiny::isolate(r_timeline_mode())
-            # Whether relative-day mode is possible at all is a property of
-            # the study (does ADSL carry TRTSDT), not of the patient on
-            # screen. Read it from the unscoped dm: routing through
-            # `r_ref_ms()` would make the header depend on `r_subject`, and
-            # every pick would rebuild the header and slam both popovers shut.
-            gear_disabled <- is.na(pp_compute_ref_ms(r_norm_dm()))
-
+            init_prestudy <- shiny::isolate(r_show_prestudy())
 
             gear_tag <- shiny::div(
               class = "pp-gear-wrap",
@@ -712,29 +906,32 @@ new_patient_profile_block <- function(selected = NULL,
                     }
                   )
                 ),
+                shiny::div(class = "pp-popover-row",
+                  shiny::span(class = "pp-popover-label", "Pre-treatment"),
+                  shiny::tags$button(
+                    class = "pp-popover-toggle",
+                    id = ns("pp_prestudy_toggle"),
+                    `data-prestudy` = if (init_prestudy) "1" else "0",
+                    type = "button",
+                    title = paste0(
+                      "Show the full pre-treatment history, or only the ",
+                      "30-day screening window before treatment start"
+                    ),
+                    if (init_prestudy) "Full history" else "Screening only"
+                  )
+                ),
                 # Data coverage: visuals that can't render for this data,
                 # with the reason (missing table or required column). Lets
                 # users see what's collected without each one having to be
                 # selected first. Hidden behind the gear, not permanent.
-                {
-                  cov <- pp_coverage_report(r_norm_dm(), r_cohort_vizs())
-                  shiny::tagList(
-                    shiny::div(class = "pp-popover-divider"),
-                    shiny::div(class = "pp-popover-section-label",
-                      "Data coverage"),
-                    if (length(cov) == 0L) {
-                      shiny::div(class = "pp-coverage-ok",
-                        "All visuals available")
-                    } else {
-                      lapply(cov, function(c) {
-                        shiny::div(class = "pp-coverage-item",
-                          shiny::span(class = "pp-coverage-label", c$label),
-                          shiny::span(class = "pp-coverage-reason", c$reason)
-                        )
-                      })
-                    }
-                  )
-                }
+                #
+                # Its own output, because it is the one part of the header
+                # that reads the data. Inlined here, every upstream emission
+                # rebuilt the whole header -- including the gear button, which
+                # made the gear flash and shut an open popover. Nested, the
+                # button and the popover shell stay mounted and only the
+                # coverage list re-renders.
+                shiny::uiOutput(ns("gear_coverage"))
               )
             )
 
@@ -748,6 +945,68 @@ new_patient_profile_block <- function(selected = NULL,
               ),
               gear_tag
             )
+          })
+
+          # The data-derived half of the gear popover (see the uiOutput
+          # above). This one SHOULD track the data -- what a study collects is
+          # exactly what it reports -- it just must not drag the gear button
+          # with it.
+          output$gear_coverage <- shiny::renderUI({
+            vizs <- r_cohort_vizs()  # req()s until a dm has arrived
+            cov <- pp_coverage_report(r_norm_dm(), vizs)
+            roles <- r_roles()
+            shiny::tagList(
+              shiny::div(class = "pp-popover-divider"),
+              shiny::div(class = "pp-popover-section-label",
+                "Study variables"),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Arm"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$arm %||% "unresolved \u2014 see block error")
+              ),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Severity"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$severity %||% "none in adae (bars uncolored)")
+              ),
+              shiny::div(class = "pp-coverage-item",
+                shiny::span(class = "pp-coverage-label", "Timeline"),
+                shiny::span(class = "pp-coverage-reason",
+                  roles$timeline %||% "none (relative day off)")
+              ),
+              shiny::div(class = "pp-popover-divider"),
+              shiny::div(class = "pp-popover-section-label",
+                "Data coverage"),
+              if (length(cov) == 0L) {
+                shiny::div(class = "pp-coverage-ok", "All visuals available")
+              } else {
+                lapply(cov, function(c) {
+                  shiny::div(class = "pp-coverage-item",
+                    shiny::span(class = "pp-coverage-label", c$label),
+                    shiny::span(class = "pp-coverage-reason", c$reason)
+                  )
+                })
+              }
+            )
+          })
+          # The popover is display:none until the gear is clicked, so Shiny
+          # would suspend this output and leave the coverage list blank on the
+          # first open. It is a handful of divs; render it with the header.
+          shiny::outputOptions(output, "gear_coverage",
+                               suspendWhenHidden = FALSE)
+
+          # The placeholder's one live sentence (see pp_empty_hint above).
+          # Only mounted while the placeholder is, so it needs no suspend
+          # override: when it is hidden there is nothing to say.
+          output$pp_empty_hint <- shiny::renderUI({
+            total <- r_cohort_total()
+            shiny::req(!is.null(total))
+            if (isTRUE(total > 1L)) {
+              paste0("Pick one of ", total,
+                     " patients above, or drill down on a chart")
+            } else {
+              "No patient data in the incoming tables"
+            }
           })
 
           # Chart-area skeleton: one stable panel shell per selected viz,
@@ -778,13 +1037,11 @@ new_patient_profile_block <- function(selected = NULL,
                 ),
                 shiny::p(class = "pp-empty-state-text",
                   "No patient selected"),
+                # The count lives in its own output: reading it here would
+                # put the cohort size back into this output's dependencies
+                # and flash the whole placeholder on every upstream filter.
                 shiny::p(class = "pp-empty-state-hint",
-                  if (isTRUE(st$total > 1L)) {
-                    paste0("Pick one of ", st$total,
-                           " patients above, or drill down on a chart")
-                  } else {
-                    "No patient data in the incoming tables"
-                  })
+                  shiny::uiOutput(session$ns("pp_empty_hint"), inline = TRUE))
               ))
             }
             sel <- r_selected()
@@ -853,35 +1110,45 @@ new_patient_profile_block <- function(selected = NULL,
               tl_mode <- "date"
             }
 
-            # Board scale map: resolve AE severity colors and inject them as
-            # a render-time setting for the severity-colored vizs (not
-            # persisted -- r_viz_settings is untouched). Falls back to each
-            # viz's own constants when no map / no binding is present.
-            sev_colors <- pp_sev_scale_colors(r_scale_map(), dm_obj)
-
+            # Role injection, driven by the viz's `uses` declaration -- no
+            # viz-id matching. The resolved role columns arrive as
+            # settings$roles; for the severity role the board scale map's
+            # colors ride along as settings$sev_colors (render-time only,
+            # r_viz_settings is untouched; each viz falls back to its own
+            # constants when no map / no binding resolves).
             viz_settings <- r_viz_settings()[[viz_id]] %||% list()
-            if (viz_id %in% c("ae_gantt", "patient_overview") &&
-                  !is.null(sev_colors)) {
-              viz_settings$sev_colors <- sev_colors
+            roles <- r_roles()
+            uses <- viz$uses %||% character()
+            if (length(uses)) {
+              viz_settings$roles <- roles[intersect(uses, names(roles))]
             }
-            if (identical(viz_id, "patient_overview")) {
-              viz_settings$arm_var <- arm_var
+            if ("severity" %in% uses) {
+              sev_colors <- pp_sev_scale_colors(
+                r_scale_map(), dm_obj, sev_col = roles$severity
+              )
+              if (!is.null(sev_colors)) {
+                viz_settings$sev_colors <- sev_colors
+              }
+            }
+            if ("cycle" %in% uses) {
+              viz_settings$cycle_anchors <- r_cycle_anchors()
             }
 
-            # Resolve declared `requires` / `optional` column dependencies.
-            # If a required column (or any alias) is missing, render a
+            # Check the declared `requires` / `requires_any` columns (a pure
+            # presence check -- names were reconciled dm-wide by
+            # pp_normalize_dm()). If a required column is missing, render a
             # pp_empty_chart message instead of calling the viz renderer.
             resolved <- pp_resolve_requires(dm_obj, viz)
             chart <- if (!isTRUE(resolved$ok)) {
               pp_empty_chart(resolved$msg)
-            } else if (pp_no_patient_rows(resolved$dm, viz$tables)) {
+            } else if (pp_no_patient_rows(dm_obj, viz$tables)) {
               # Availability is cohort-based, so the viz can exist while
               # this particular patient has no rows in any of its tables;
               # say so instead of drawing an empty axis.
               pp_empty_chart("No data for this patient")
             } else {
               tryCatch(
-                viz$render(resolved$dm, time_range, viz_settings,
+                viz$render(dm_obj, time_range, viz_settings,
                            ref_ms, tl_mode),
                 error = function(e) pp_empty_chart(
                   paste("Error:", conditionMessage(e))
@@ -891,10 +1158,10 @@ new_patient_profile_block <- function(selected = NULL,
 
             controls_ui <- pp_controls_ui(viz, viz_id, dm_obj, viz_settings)
 
-            # The AE bars are colored by severity and outlined when serious;
-            # say so in the header, from the same colors the bars use.
-            legend_ui <- if (identical(viz_id, "ae_gantt")) {
-              pp_sev_legend_ui(dm_obj, sev_colors)
+            # Panel-header legend, declared by the viz itself (e.g. the AE
+            # severity swatches) -- again no viz-id matching here.
+            legend_ui <- if (is.function(viz$legend_ui)) {
+              viz$legend_ui(dm_obj, viz_settings)
             }
 
             shiny::tagList(
@@ -902,7 +1169,6 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
                 legend_ui,
-                shiny::div(class = "pp-chart-domain", viz$domain),
                 # Same toggle the sidebar card fires: removing a viz here
                 # deselects it, so the sidebar card slides back to AVAILABLE.
                 shiny::tags$button(
@@ -952,19 +1218,31 @@ new_patient_profile_block <- function(selected = NULL,
             expr = shiny::reactive({
               sel <- r_subject()
               ids <- pp_subject_ids(data())
+              # A role that does not resolve (declared but absent, or an
+              # undeclared arm with no ACTARM) must stop the block loudly,
+              # not decorate it with plausible labels. The stop() is
+              # *returned* rather than raised: blockr.core wraps the
+              # evaluation of this expression in its condition capture, so
+              # it lands as a named error on the block, next to the sidebar
+              # that fixes it.
+              blocker <- pp_roles_blocker(data(), r_declared())
+              if (!is.null(blocker)) {
+                return(blocker)
+              }
               if (length(sel) != 1L || !sel %in% ids) {
                 return(quote(identity(data)))
               }
-              bquote(
-                dm::dm_filter(data, adsl = USUBJID == .(subject)),
-                list(subject = sel)
+              pp_subject_filter_expr(
+                pp_subject_tbl_name(names(dm::dm_get_tables(data()))),
+                sel
               )
             }),
             state = list(
               selected = r_selected,
               viz_settings = r_viz_settings,
               timeline_mode = r_timeline_mode,
-              subject = r_subject
+              subject = r_subject,
+              show_prestudy = r_show_prestudy
             )
           )
         }
@@ -973,9 +1251,16 @@ new_patient_profile_block <- function(selected = NULL,
     ui = function(id) {
       ns <- shiny::NS(id)
       shiny::tagList(
-        shiny::tags$link(
-          rel = "stylesheet",
-          href = "blockr-pharma/css/patient-profile.css"
+        # As an htmlDependency, NOT a raw tags$link to the resource path: the
+        # dependency's served URL embeds the package version, so a Version
+        # bump busts browser caches. A bare link URL never changes, and the
+        # browser happily keeps a stale stylesheet across reloads (and
+        # load_all()s) -- the inst/js convention, applied to CSS.
+        htmltools::htmlDependency(
+          "blockr-pharma-pp",
+          as.character(utils::packageVersion("blockr.pharma")),
+          src = system.file("assets", package = "blockr.pharma"),
+          stylesheet = "css/patient-profile.css"
         ),
         # Blockr.Select: the shared single-select primitive. Its dropdown is
         # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
@@ -1151,6 +1436,7 @@ new_patient_profile_block <- function(selected = NULL,
 
             var dragActive = false;
             var tlModeInputId = '", ns("timeline_mode"), "';
+            var prestudyInputId = '", ns("show_prestudy"), "';
             var gearBtnId = '", ns("pp_gear_btn"), "';
             var gearPopoverId = '", ns("pp_gear_popover"), "';
 
@@ -1270,16 +1556,31 @@ new_patient_profile_block <- function(selected = NULL,
             // Read/write via attr(), not data() ", "\u2014", " jQuery's .data() caches
             // the initial attribute value and ignores later attr() writes,
             // so subsequent clicks would always read the original mode.
-            $(document).on('click', '#' + layoutId + ' .pp-popover-toggle', function(e) {
-              e.stopPropagation();
-              if ($(this).attr('data-disabled') === '1') return;
-              var cur = $(this).attr('data-tl-mode');
-              var next = (cur === 'rday') ? 'date' : 'rday';
-              // Optimistic UI update; server re-render will confirm.
-              $(this).text(next === 'rday' ? 'Relative day' : 'Date');
-              $(this).attr('data-tl-mode', next);
-              Shiny.setInputValue(tlModeInputId, next, {priority: 'event'});
-            });
+            $(document).on('click',
+              '#' + layoutId + ' .pp-popover-toggle[data-tl-mode]',
+              function(e) {
+                e.stopPropagation();
+                if ($(this).attr('data-disabled') === '1') return;
+                var cur = $(this).attr('data-tl-mode');
+                var next = (cur === 'rday') ? 'date' : 'rday';
+                // Optimistic UI update; server re-render will confirm.
+                $(this).text(next === 'rday' ? 'Relative day' : 'Date');
+                $(this).attr('data-tl-mode', next);
+                Shiny.setInputValue(tlModeInputId, next, {priority: 'event'});
+              });
+
+            // Pre-treatment history toggle, same flip-on-click pattern.
+            $(document).on('click',
+              '#' + layoutId + ' .pp-popover-toggle[data-prestudy]',
+              function(e) {
+                e.stopPropagation();
+                var on = $(this).attr('data-prestudy') === '1';
+                var next = !on;
+                $(this).text(next ? 'Full history' : 'Screening only');
+                $(this).attr('data-prestudy', next ? '1' : '0');
+                Shiny.setInputValue(prestudyInputId, next,
+                                    {priority: 'event'});
+              });
 
             // Card click: toggle selection (server-driven, no optimistic toggle)
             $(document).on('click', '#' + layoutId + ' .pp-card', function(e) {
@@ -1576,7 +1877,8 @@ new_patient_profile_block <- function(selected = NULL,
     # RESULT stays NULL (invisible while the block is terminal) and the AI
     # ctrl chat can never read the input data.
     allow_empty_state = c("selected", "viz_settings", "subject"),
-    external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject"),
+    external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject",
+                      "show_prestudy"),
     class = c("patient_profile_block", "dm_block"),
     ...
   )

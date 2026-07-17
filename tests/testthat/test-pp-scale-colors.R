@@ -15,9 +15,10 @@ test_that("pp_sev_scale_colors resolves against patient adae", {
     )
   )
 
-  cols <- blockr.pharma:::pp_sev_scale_colors(map, dm_obj)
+  cols <- blockr.pharma:::pp_sev_scale_colors(map, dm_obj, "AESEV")
   expect_identical(cols[["SEVERE"]], "#DC2626")
   expect_identical(cols[["MILD"]], "#CA8A04")
 
-  expect_null(blockr.pharma:::pp_sev_scale_colors(NULL, dm_obj))
+  expect_null(blockr.pharma:::pp_sev_scale_colors(NULL, dm_obj, "AESEV"))
+  expect_null(blockr.pharma:::pp_sev_scale_colors(map, dm_obj, NULL))
 })

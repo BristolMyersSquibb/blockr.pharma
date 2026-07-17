@@ -4,6 +4,7 @@
 pp_overview_dm <- function(sev = c(AESEV = "SEVERE")) {
   adsl <- data.frame(
     USUBJID = "x",
+    ACTARM = "Placebo",
     TRTSDT = as.Date("2020-01-01"),
     TRTEDT = as.Date("2020-06-01")
   )

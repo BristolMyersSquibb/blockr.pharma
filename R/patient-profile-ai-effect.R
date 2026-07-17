@@ -54,15 +54,24 @@ config_effect.patient_profile_block <- function(block, args, data = NULL, ...) {
   # Flag IDs that are neither a known static viz nor a known findings group.
   # Findings groups are data-derived (and auto-generated adlb_* IDs are valid at
   # runtime), so an otherwise-unknown ID is most likely a typo or a raw
-  # table/PARAMCD name the model should not have put in `selected`.
+  # table/PARAMCD name the model should not have put in `selected`. The group
+  # ids come from the group templates themselves -- a duplicated literal list
+  # here once drifted from them.
   static_ids <- tryCatch(names(patient_profile_static_vizs()),
                          error = function(e) character())
-  known_groups <- c("liver_panel", "renal_panel", "electrolytes", "metabolic",
-                    "muscle_enzymes", "cbc", "rbc_indices", "wbc_differential",
-                    "rbc_morphology", "blood_pressure", "pulse", "temperature",
-                    "anthropometrics")
-  bad <- setdiff(sel, c(static_ids, known_groups))
-  bad <- bad[!grepl("^adlb_", bad)]
+  known_groups <- tryCatch(
+    vapply(pp_findings_groups(), `[[`, character(1L), "id"),
+    error = function(e) character()
+  )
+  # The cycle lane is generated too (only where the study is dosed in cycles),
+  # so it is absent from the static ids while still being a real, documented
+  # id. Read from the definition rather than spelled again here -- the literal
+  # list this replaced is exactly what drifted last time.
+  cycle_id <- tryCatch(cycle_viz$id, error = function(e) character())
+  bad <- setdiff(sel, c(static_ids, cycle_id, known_groups))
+  # Auto-generated per-PARAMCD ids ("adlb_trig", "adlbc_alt", "advs_resp")
+  # are valid at runtime.
+  bad <- bad[!grepl("^(adlb[ch]?|advs)_", bad)]
   if (length(bad)) {
     desc <- paste0(
       desc, " -- possibly INVALID view ID(s): ", paste(bad, collapse = ", "),

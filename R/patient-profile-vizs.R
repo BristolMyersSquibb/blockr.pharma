@@ -55,10 +55,13 @@ pp_day_to_x <- function(dy) {
 #' The value is already a \*DY, so it needs no remapping — unlike
 #' [pp_xlabel()], which has to undo the continuous scale first.
 #'
+#' @param dy ADaM study day.
+#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
+#'   cycle/day rides behind the study day as `D22 (C2 D1)`.
 #' @noRd
-pp_day_label <- function(dy) {
+pp_day_label <- function(dy, cycle = NULL) {
   if (is.na(dy)) return("")
-  paste0("D", dy)
+  pp_with_cycle(paste0("D", dy), pp_day_to_x(dy), cycle)
 }
 
 #' x-axis value, preferring a study day the data already carries
@@ -90,9 +93,12 @@ pp_xval_pref_day <- function(d, day, ref_ms = NA_real_, mode = "date") {
 #' Returns the calendar date (`YYYY-MM-DD`) in date mode, or `D<n>` in
 #' relative-day mode (skipping day 0, matching ADaM's \*DY convention).
 #'
+#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
+#'   cycle/day is appended in BOTH modes — the clinician's ask was to see the
+#'   cycle day *in addition to* what is already there, not instead of it.
 #' @noRd
-pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date") {
-  if (identical(mode, "rday") && !is.na(ref_ms)) {
+pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", cycle = NULL) {
+  base <- if (identical(mode, "rday") && !is.na(ref_ms)) {
     day <- pp_xval(d, ref_ms, "rday")
     if (is.na(day)) return("")
     if (day > 0) paste0("D", day) else paste0("D", day - 1)
@@ -100,6 +106,47 @@ pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date") {
     if (is.na(d)) return("")
     format(as.Date(d))
   }
+  # NA ref_ms leaves pp_xval() returning a millisecond timestamp, which would
+  # be nonsense to look up against day-space anchors; there is no cycle to
+  # report without a treatment start anyway.
+  x_day <- if (is.na(ref_ms)) NA_real_ else pp_xval(d, ref_ms, "rday")
+  pp_with_cycle(base, x_day, cycle)
+}
+
+#' The axis end points, in the axis's own units -- the same two expressions
+#' [pp_time_axis()] uses for `min`/`max`, for callers that need to compare a
+#' value against the visible window.
+#'
+#' Returns `c(NA, NA)` when there is no window to speak of (a render with no
+#' `time_range` leaves the axis unbounded), which callers must read as "clips
+#' nothing" rather than "clips everything".
+#' @noRd
+pp_x_bounds <- function(time_range, ref_ms = NA_real_, mode = "date") {
+  if (length(time_range) < 2L) return(c(NA_real_, NA_real_))
+  if (identical(mode, "rday") && !is.na(ref_ms)) {
+    c(pp_xval(time_range[1], ref_ms, "rday"),
+      pp_xval(time_range[2], ref_ms, "rday"))
+  } else {
+    c(pp_ms_ts(time_range[1]), pp_ms_ts(time_range[2]))
+  }
+}
+
+#' Which bars intersect the visible window, given start/end in axis units.
+#'
+#' The gantts allocate one lane per term, so a bar drawn entirely outside the
+#' axis costs a blank lane -- and if it is its lane's earliest bar, it takes
+#' the lane's only label with it, since `renderItem` draws the label on that
+#' bar and the clip drops the whole group. Long-standing conmeds make this
+#' routine: an ongoing drug started D-4019 has no AENDY, renders as a one-day
+#' bar four thousand days off-axis, and reserves a lane forever.
+#' @noRd
+pp_gantt_in_window <- function(s, e, time_range, ref_ms = NA_real_,
+                               mode = "date") {
+  drawable <- !is.na(s) & !is.na(e)
+  b <- pp_x_bounds(time_range, ref_ms, mode)
+  # An unbounded axis clips nothing, so every drawable bar keeps its lane.
+  if (anyNA(b)) return(drawable)
+  drawable & e >= b[1] & s <= b[2]
 }
 
 #' Build shared echarts x-axis config for date OR relative-day mode
@@ -116,10 +163,8 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       type = "value",
       min = pp_xval(time_range[1], ref_ms, "rday"),
       max = pp_xval(time_range[2], ref_ms, "rday"),
-      name = if (show_labels) "Day" else NULL,
-      nameLocation = "end",
-      nameGap = 8,
-      nameTextStyle = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11),
+      # No axis name: every tick already reads "D50", and an "Day" pinned to
+      # the axis end only crowded the last tick.
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
       axisLabel = list(
@@ -153,6 +198,12 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
   }
 }
 
+#' Where the toolbox sits, and how big its icons are. Read by PP_PLOT_TOP,
+#' which reserves the band they occupy.
+#' @noRd
+PP_TOOLBOX_TOP <- 4
+PP_TOOLBOX_SIZE <- 11
+
 #' Shared echarts toolbox: small, muted icons matching the canonical
 #' drill-down chart styling (blockr.viz/inst/js/drilldown-chart.js).
 #'
@@ -161,13 +212,54 @@ pp_toolbox <- function() {
   list(
     show = TRUE,
     right = 8,
-    top = 4,
-    itemSize = 11,
+    top = PP_TOOLBOX_TOP,
+    itemSize = PP_TOOLBOX_SIZE,
     feature = list(
       saveAsImage = list(title = "Save", pixelRatio = 2)
     ),
     iconStyle = list(borderColor = "#bbb")
   )
+}
+
+#' Smallest grid `top` that clears the toolbox band. The toolbox floats over
+#' the canvas rather than reserving space, so a grid starting above this drew
+#' the save icon on top of the first lane's bars.
+#' @noRd
+PP_PLOT_TOP <- PP_TOOLBOX_TOP + PP_TOOLBOX_SIZE + 5
+
+#' The y-axis gutter, shared by every panel.
+#'
+#' One value for all panels is load-bearing: the panels stack vertically and
+#' their x axes only read as one timeline if every grid starts at the same
+#' left. Change it here or not at all.
+#'
+#' Sized for the widest thing drawn in it. That is a numeric tick on a
+#' findings chart -- measured across all 62 PARAMCDs in the ADaM data, the
+#' widest is 4 characters ("1000"; 40 of 62 need only 3) -- or a 3-character
+#' overview lane name ("TRT", "VIS"). 4 characters at 11px is ~26px, plus
+#' echarts' 8px label margin. [pp_compact_num_js()] bounds the tick width for
+#' studies whose labs run larger than this dataset's. The gantt lanes draw
+#' their labels in the plot area and need none of it, but they keep it to hold
+#' the alignment.
+#' @noRd
+PP_GRID_LEFT <- 44
+
+#' Axis-tick formatter that keeps a number inside ~4 characters.
+#'
+#' The gutter is sized for 4 characters, and an auto-scaled axis takes its
+#' ticks from the data: a study shipping a lab in raw units (platelets in
+#' /uL, say) would otherwise print "500000" into a 44px gutter and collide
+#' with the plot.
+#' @noRd
+pp_compact_num_js <- function() {
+  htmlwidgets::JS("
+    function(v) {
+      var a = Math.abs(v);
+      if (a >= 1e6) return (v / 1e6) + 'M';
+      if (a >= 1e4) return (v / 1e3) + 'k';
+      return v;
+    }
+  ")
 }
 
 #' Canonical axis colors used by the drill-down chart family. Kept
@@ -176,6 +268,74 @@ pp_toolbox <- function() {
 PP_AXIS_LABEL_COLOR <- "#666"
 PP_AXIS_LINE_COLOR <- "#ccc"
 PP_SPLIT_LINE_COLOR <- "#f3f4f6"
+
+#' Lane geometry for the patient-profile gantt charts (AE, CM).
+#'
+#' A lane is one term: a label row sitting above its bar. Every value here is
+#' an absolute pixel offset and the lane height never varies with the number
+#' of lanes, so the label-to-bar gap is identical on a two-term chart and a
+#' fifty-term one. Deriving the offsets from the rendered lane height instead
+#' (`api.size()`) coupled them to the panel height, and a minimum panel height
+#' then stretched short charts apart.
+#' @noRd
+PP_GANTT_LANE_H <- 38
+PP_GANTT_BAR_H <- 14
+PP_GANTT_BAR_DY <- 7
+PP_GANTT_LABEL_DY <- -10
+PP_GANTT_TOP <- PP_PLOT_TOP
+PP_GANTT_BOTTOM <- 30
+
+#' Panel height for a gantt chart with `n_lanes` lanes.
+#' @noRd
+pp_gantt_height <- function(n_lanes) {
+  PP_GANTT_TOP + PP_GANTT_BOTTOM + max(n_lanes, 1L) * PP_GANTT_LANE_H
+}
+
+#' `renderItem` for the gantt charts. `label_idx` is the index in the encoded
+#' value vector carrying the lane term (written once, on the lane's first bar).
+#' @noRd
+pp_gantt_render_item <- function(label_idx) {
+  htmlwidgets::JS(sprintf("
+    function(params, api) {
+      var start = api.coord([api.value(0), api.value(2)]);
+      var end   = api.coord([api.value(1), api.value(2)]);
+      var h     = %d;
+      var barW  = Math.max(end[0] - start[0], 4);
+      var barY  = start[1] + %d - h / 2;
+      var cs    = params.coordSys;
+      var rect  = echarts.graphic.clipRectByRect(
+        { x: start[0], y: barY, width: barW, height: h },
+        { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
+      );
+      if (!rect) return;
+
+      var children = [{
+        type: 'rect',
+        shape: Object.assign({}, rect, { r: 3 }),
+        style: api.style()
+      }];
+
+      var label = api.value(%d);
+      if (label) {
+        var tx = Math.max(start[0], cs.x + 2);
+        children.push({
+          type: 'text',
+          style: {
+            text: label,
+            x: tx,
+            y: start[1] + (%d),
+            fill: '#4b5563',
+            fontSize: 10,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            textVerticalAlign: 'middle',
+            truncate: { outerWidth: cs.x + cs.width - tx }
+          }
+        });
+      }
+      return { type: 'group', children: children };
+    }
+  ", PP_GANTT_BAR_H, PP_GANTT_BAR_DY, label_idx, PP_GANTT_LABEL_DY))
+}
 
 #' Encode a string as a JavaScript string literal
 #'
@@ -212,6 +372,29 @@ pp_js_chr <- function(x) {
   x <- as.character(x)
   x[is.na(x)] <- ""
   x
+}
+
+#' Visit levels in visit order
+#'
+#' `AVISIT` values ordered by their numeric companion `AVISITN` when the
+#' table carries one, lexically otherwise. Lexical order puts "Week 10"
+#' before "Week 2", so any default of the form "the last two visits" picks
+#' the wrong two without this -- with no cue that it did.
+#'
+#' @param tbl A findings data.frame.
+#' @return Character vector of visit labels, in visit order.
+#' @noRd
+pp_visit_levels <- function(tbl) {
+  if (!"AVISIT" %in% colnames(tbl)) return(character())
+  v <- trimws(as.character(tbl$AVISIT))
+  if ("AVISITN" %in% colnames(tbl)) {
+    n <- suppressWarnings(as.numeric(tbl$AVISITN))
+    pairs <- unique(data.frame(v = v, n = n, stringsAsFactors = FALSE))
+    out <- unique(pairs[order(pairs$n, pairs$v), , drop = FALSE]$v)
+  } else {
+    out <- sort(unique(v))
+  }
+  out[!is.na(out) & nzchar(out)]
 }
 
 #' Build shared echarts tooltip config
@@ -347,64 +530,171 @@ pp_icon_html <- function(icon_name, color) {
 #' @param dm_obj A dm object
 #' @return Length-2 Date vector or NULL if no dates found
 #' @noRd
-pp_compute_ref_ms <- function(dm_obj) {
+pp_compute_ref_ms <- function(dm_obj, ref_col = NULL) {
+  if (!inherits(dm_obj, "dm")) return(NA_real_)
   tbls <- dm::dm_get_tables(dm_obj)
   if (!"adsl" %in% names(tbls)) return(NA_real_)
   adsl <- as.data.frame(tbls[["adsl"]])
-  if (!"TRTSDT" %in% colnames(adsl) || nrow(adsl) == 0) return(NA_real_)
-  v <- adsl$TRTSDT[1]
+  ref_col <- ref_col %||% "TRTSDT"
+  if (!ref_col %in% colnames(adsl) || nrow(adsl) == 0) return(NA_real_)
+  v <- pp_as_date(adsl[[ref_col]][1])
   if (is.na(v)) return(NA_real_)
   pp_ms_ts(v)
 }
 
-pp_compute_time_range <- function(dm_obj) {
+#' The subject's visit schedule, from whatever findings tables carry it
+#'
+#' There is no subject-visit table in the profile's inputs (SDTM's SV is not
+#' loaded), but every findings table records which visit each measurement
+#' belongs to. Collecting the earliest measurement date (and study day) per
+#' visit label across all of them reconstructs the schedule well enough for
+#' a ruler: one tick per visit the subject actually attended.
+#'
+#' @param tbls Named list of tables (from `dm::dm_get_tables()`), subject-
+#'   scoped.
+#' @return A data.frame with `visit`, `date` (Date, may be NA) and `day`
+#'   (numeric, may be NA), ordered by time; zero rows when nothing carries
+#'   visits.
+#' @noRd
+pp_visit_schedule <- function(tbls) {
+  empty <- data.frame(visit = character(), date = as.Date(character()),
+                      day = numeric(), stringsAsFactors = FALSE)
+  rows <- list()
+  for (tbl_name in names(tbls)) {
+    df <- as.data.frame(tbls[[tbl_name]])
+    if (!"AVISIT" %in% colnames(df)) next
+    visit <- trimws(as.character(df$AVISIT))
+    keep <- !is.na(visit) & nzchar(visit)
+    if (!any(keep)) next
+    df <- df[keep, , drop = FALSE]
+    visit <- visit[keep]
+    date <- if ("ADT" %in% colnames(df)) pp_as_date(df$ADT) else
+      as.Date(rep(NA, nrow(df)))
+    day <- if ("ADY" %in% colnames(df)) {
+      suppressWarnings(as.numeric(df$ADY))
+    } else {
+      rep(NA_real_, nrow(df))
+    }
+    rows[[length(rows) + 1L]] <- data.frame(
+      visit = visit, date = date, day = day, stringsAsFactors = FALSE
+    )
+  }
+  if (!length(rows)) return(empty)
+
+  all <- do.call(rbind, rows)
+  all <- all[!is.na(all$date) | !is.na(all$day), , drop = FALSE]
+  if (!nrow(all)) return(empty)
+
+  min_or_na <- function(x) if (all(is.na(x))) x[1] else min(x, na.rm = TRUE)
+  out <- do.call(rbind, lapply(split(all, all$visit), function(g) {
+    data.frame(visit = g$visit[1], date = min_or_na(g$date),
+               day = min_or_na(g$day), stringsAsFactors = FALSE)
+  }))
+  # A study is dated or day-only consistently; never mix the two scales in
+  # one sort key (a Date's numeric is days since 1970, a *DY is ~tens).
+  ord <- if (any(!is.na(out$date))) {
+    order(out$date, out$day, na.last = TRUE)
+  } else {
+    order(out$day, na.last = TRUE)
+  }
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' Clip the timeline's lower bound to the screening window
+#'
+#' One concomitant medication started years before the study must not
+#' stretch every panel's axis to it. Unless the user opts into the full
+#' pre-treatment history (the gear's "Pre-treatment" toggle), the shared
+#' time range starts no earlier than `margin_days` before the reference
+#' (treatment start) -- wide enough for the screening window, so baseline
+#' labs and vitals stay on screen. Bars that started earlier but are still
+#' running enter from the left axis edge; only events entirely before the
+#' floor drop out.
+#'
+#' Total: without a reference (no treatment dates, or no patient on screen)
+#' there is nothing to anchor the floor to, and the range passes through.
+#'
+#' @param time_range Length-2 Date vector, or `NULL`.
+#' @param ref_ms Reference timestamp in ms (see [pp_compute_ref_ms()]).
+#' @param margin_days Screening margin before the reference.
+#' @return The (possibly clipped) time range.
+#' @noRd
+pp_clip_prestudy <- function(time_range, ref_ms, margin_days = 30L) {
+  if (is.null(time_range) || is.na(ref_ms)) return(time_range)
+  floor_date <- as.Date(as.POSIXct(ref_ms / 1000, origin = "1970-01-01",
+                                   tz = "UTC")) - margin_days
+  if (time_range[1] < floor_date) {
+    # never invert the range (a study entirely pre-reference keeps its end)
+    time_range[1] <- min(floor_date, time_range[2])
+  }
+  time_range
+}
+
+#' Can this study express relative-day mode at all?
+#'
+#' A study-level question (does ADSL carry a usable TRTSDT), asked by the
+#' header gear on the UNSCOPED dm. Distinct from [pp_compute_ref_ms()],
+#' which is per-patient (row 1 of a subject-scoped ADSL): asking the
+#' per-patient function a study-level question let one arbitrary cohort
+#' member with a missing treatment start disable relative-day mode for the
+#' whole study.
+#'
+#' @param dm_obj A normalized `dm` (or anything; total).
+#' @param ref_col The timeline role's resolved column (default `TRTSDT`).
+#' @return TRUE when any ADSL row carries a non-missing reference.
+#' @noRd
+pp_has_ref <- function(dm_obj, ref_col = NULL) {
+  if (!inherits(dm_obj, "dm")) return(FALSE)
+  tbls <- dm::dm_get_tables(dm_obj)
+  if (!"adsl" %in% names(tbls)) return(FALSE)
+  adsl <- as.data.frame(tbls[["adsl"]])
+  ref_col <- ref_col %||% "TRTSDT"
+  ref_col %in% colnames(adsl) && any(!is.na(pp_as_date(adsl[[ref_col]])))
+}
+
+pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
   tbls <- dm::dm_get_tables(dm_obj)
 
-  date_col_map <- list(
-    adae = c("ASTDT", "AENDT"),
-    adlbc = "ADT",
-    adlbh = "ADT",
-    adlb = "ADT",
-    advs = "ADT",
-    adqsadas = "ADT",
-    adqsnpix = "ADT",
-    adsl = c("TRTSDT", "TRTEDT")
-  )
+  # Canonical timeline columns, scanned across EVERY table. The dm has been
+  # normalized (pp_normalize_dm()) before this runs, so the canonical names
+  # are the only spellings left to find. The per-table map this replaces is
+  # what silently clipped the axis for aliased studies: it scanned raw names
+  # off a dm whose column aliases resolved later, per viz, so every event
+  # outside the ADSL treatment window fell off the axis with no cue.
+  date_cols <- c("ASTDT", "AENDT", "ADT", "TRTSDT", "TRTEDT")
+  day_cols <- c("ASTDY", "AENDY", "ADY")
+
+  all_dates <- do.call(c, lapply(names(tbls), function(tbl_name) {
+    tbl <- as.data.frame(tbls[[tbl_name]])
+    dates <- do.call(c, lapply(intersect(date_cols, colnames(tbl)),
+      function(col) pp_as_date(tbl[[col]])
+    ))
+    if (is.null(dates)) return(as.Date(character()))
+    dates[!is.na(dates)]
+  }))
 
   # Study-day columns, for studies that ship a day but no analysis date. The
   # axis would otherwise never see those events and would clip them. Bounds
   # only: converting a day back to a date is the lossy round trip that
   # pp_xval_pref_day() exists to avoid, but an axis end landing a day wide is
   # invisible, where an event landing a day off is not.
-  day_col_map <- list(
-    adae = c("ASTDY", "AENDY"),
-    adlbc = "ADY", adlbh = "ADY", adlb = "ADY", advs = "ADY",
-    adqsadas = "ADY", adqsnpix = "ADY"
-  )
-
-  all_dates <- do.call(c, lapply(names(date_col_map), function(tbl_name) {
-    if (!tbl_name %in% names(tbls)) return(as.Date(character()))
-    tbl <- as.data.frame(tbls[[tbl_name]])
-    dates <- do.call(c, lapply(date_col_map[[tbl_name]], function(col) {
-      if (col %in% colnames(tbl)) as.Date(tbl[[col]]) else as.Date(character())
-    }))
-    dates[!is.na(dates)]
-  }))
-
-  ref_ms <- pp_compute_ref_ms(dm_obj)
+  ref_ms <- pp_compute_ref_ms(dm_obj, ref_col)
   if (!is.na(ref_ms)) {
     anchor <- as.Date(as.POSIXct(ref_ms / 1000, origin = "1970-01-01",
                                  tz = "UTC"))
-    from_days <- do.call(c, lapply(names(day_col_map), function(tbl_name) {
-      if (!tbl_name %in% names(tbls)) return(as.Date(character()))
+    from_days <- do.call(c, lapply(names(tbls), function(tbl_name) {
       tbl <- as.data.frame(tbls[[tbl_name]])
-      ds <- do.call(c, lapply(day_col_map[[tbl_name]], function(col) {
-        if (!col %in% colnames(tbl)) return(as.Date(character()))
-        dy <- suppressWarnings(as.numeric(tbl[[col]]))
-        dy <- dy[!is.na(dy)]
-        if (!length(dy)) return(as.Date(character()))
-        anchor + pp_day_to_x(dy) - 1
-      }))
+      ds <- do.call(c, lapply(intersect(day_cols, colnames(tbl)),
+        function(col) {
+          dy <- suppressWarnings(as.numeric(tbl[[col]]))
+          dy <- dy[!is.na(dy)]
+          if (!length(dy)) return(as.Date(character()))
+          anchor + pp_day_to_x(dy) - 1
+        }
+      ))
+      if (is.null(ds)) return(as.Date(character()))
       ds[!is.na(ds)]
     }))
     all_dates <- c(all_dates, from_days)
@@ -459,7 +749,11 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   has_param <- "PARAM" %in% colnames(tbl)
 
   n_params <- length(params)
-  grid_height <- max(120, floor(400 / max(n_params, 1)))
+  # Fixed per-chart height. Splitting a total budget across the selected
+  # params instead made one chart inherit the whole budget and tower over a
+  # two-chart panel -- backwards, since a lone series needs no more room to
+  # be read than it does stacked with others.
+  grid_height <- 140
   grid_gap <- 50
   top_pad <- 10
   bot_pad <- 30
@@ -490,13 +784,13 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     }
     titles[[p_idx]] <- list(
       text = param_label,
-      left = 60,
+      left = PP_GRID_LEFT,
       top = grid_top - 18,
       textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
     )
 
     grids[[p_idx]] <- list(
-      left = 60, right = 20,
+      left = PP_GRID_LEFT, right = 20,
       top = grid_top, height = grid_height,
       borderColor = "transparent"
     )
@@ -511,7 +805,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       gridIndex = grid_idx,
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
-      axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11),
+      axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11,
+                       formatter = pp_compact_num_js()),
       splitLine = list(
         show = TRUE,
         lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed",
@@ -705,6 +1000,7 @@ patient_profile_static_vizs <- function() {
   vizs <- list(
     patient_overview_viz,
     ae_gantt_viz,
+    cm_gantt_viz,
     adas_trajectory_viz,
     npix_radar_viz,
     ortho_bp_viz,
@@ -853,10 +1149,14 @@ pp_findings_vizs <- function(dm_obj) {
 
   # Decide which real table sources which group set. Sponsors ship labs
   # either split (adlbc + adlbh) or combined (adlb) — support both. When
-  # adlb is present, it fills in for whichever split tables are missing.
-  source_plans <- list()
+  # adlb is present, it fills in for whichever split tables are missing;
+  # when BOTH splits are present, adlb still gets a plan of its own (with no
+  # groups), so a PARAMCD living only in adlb yields an individual card
+  # instead of silently getting no viz and no coverage entry.
+  plans_acc <- new.env(parent = emptyenv())
+  plans_acc$source_plans <- list()
   add_plan <- function(table, group_tables, meta) {
-    source_plans[[length(source_plans) + 1L]] <<- list(
+    plans_acc$source_plans[[length(plans_acc$source_plans) + 1L]] <- list(
       table = table, group_tables = group_tables, meta = meta
     )
   }
@@ -874,13 +1174,16 @@ pp_findings_vizs <- function(dm_obj) {
   } else if ("adlb" %in% names(tbls)) {
     adlb_fills <- c(adlb_fills, "adlbh")
   }
-  if (length(adlb_fills) > 0L) {
+  if ("adlb" %in% names(tbls)) {
     add_plan("adlb", adlb_fills, table_meta$adlb)
   }
 
   vizs <- list()
+  # Params already covered by an earlier plan: an adlb param that also
+  # lives in a split table must not get a duplicate card.
+  covered_paramcds <- character(0)
 
-  for (plan in source_plans) {
+  for (plan in plans_acc$source_plans) {
     tbl_name <- plan$table
     tbl <- as.data.frame(tbls[[tbl_name]])
     if (!"PARAMCD" %in% colnames(tbl)) next
@@ -911,29 +1214,34 @@ pp_findings_vizs <- function(dm_obj) {
         description = g$description,
         tables = tbl_name,
         requires = stats::setNames(
-          list(list(PARAMCD = NULL, AVAL = NULL, ADT = "ADTM")),
+          list(c("PARAMCD", "AVAL", "ADT")),
           tbl_name
         ),
         optional = stats::setNames(
-          list(list(
-            PARAM = NULL, ANRIND = NULL,
-            A1LO = NULL, A1HI = NULL, AVISITN = NULL
-          )),
+          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
+        # Choices resolve at DISPATCH (choices_from + choices_subset), never
+        # baked into the definition: a baked `present` made every definition
+        # patient-specific, so a drilled-in upstream (single-patient input)
+        # changed the catalog signature on every patient and the whole
+        # sidebar re-rendered per drill. With data-independent definitions,
+        # two patients sharing the same groups compare identical and the
+        # sidebar stays put.
         controls = list(
           items = list(
             type = "checkbox",
             label = "Items",
-            choices = present,
-            default = present
+            choices_from = "PARAMCD",
+            choices_subset = g$paramcds,
+            default = NULL
           )
         ),
         render = local({
           .tbl_name <- tbl_name
           .label <- g$label
           .color <- g$color
-          .default_paramcds <- present
+          .default_paramcds <- g$paramcds
           function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
             paramcds <- settings$items %||% .default_paramcds
@@ -950,8 +1258,10 @@ pp_findings_vizs <- function(dm_obj) {
       )
     }
 
-    # Create individual viz cards for ungrouped PARAMCDs
-    ungrouped <- setdiff(all_paramcds, grouped_paramcds)
+    # Create individual viz cards for ungrouped PARAMCDs (skipping params an
+    # earlier plan already covers, e.g. an adlb param that also lives in a
+    # split table)
+    ungrouped <- setdiff(all_paramcds, c(grouped_paramcds, covered_paramcds))
     for (pc in ungrouped) {
       viz_id <- paste0(tbl_name, "_", tolower(pc))
       vizs[[viz_id]] <- new_pp_viz(
@@ -963,14 +1273,11 @@ pp_findings_vizs <- function(dm_obj) {
         description = pc,
         tables = tbl_name,
         requires = stats::setNames(
-          list(list(PARAMCD = NULL, AVAL = NULL, ADT = "ADTM")),
+          list(c("PARAMCD", "AVAL", "ADT")),
           tbl_name
         ),
         optional = stats::setNames(
-          list(list(
-            PARAM = NULL, ANRIND = NULL,
-            A1LO = NULL, A1HI = NULL, AVISITN = NULL
-          )),
+          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
         render = local({
@@ -991,6 +1298,8 @@ pp_findings_vizs <- function(dm_obj) {
         })
       )
     }
+
+    covered_paramcds <- c(covered_paramcds, grouped_paramcds, ungrouped)
   }
 
   vizs

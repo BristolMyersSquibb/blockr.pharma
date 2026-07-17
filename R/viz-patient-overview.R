@@ -3,18 +3,23 @@
 # Multi-lane overview chart (~180px) combining treatment timeline, adverse
 # events, and key milestones in a single compact chart.
 #
-# Lanes:
+# Lanes (each data-gated; absent tables simply drop their lane):
 #   1. Treatment — green bar from TRTSDT to TRTEDT with arm label
-#   2. Adverse Events — compact overlapping bars colored by severity
-#      (omitted when adae table is missing)
-#   3. Milestones — point markers: treatment start/end, end of study, death
+#   2. Exposure — dosing-period bars from adex, labelled with the dose
+#   3. Adverse Events — compact overlapping bars colored by severity
+#   4. Milestones — point markers: treatment start/end, end of study, death
+#   5. Visits — one tick per visit the subject attended (reconstructed from
+#      the findings tables; see pp_visit_schedule())
 #
 # Data requirements (declared via new_pp_viz()):
-#   adsl: required TRTSDT, TRTEDT; optional TRT01P, RFENDT (alias EOSDT),
-#         DTHDT (alias DTHDTC), DTHFL
-#   adae (optional table): ASTDT (alias ASTDTC), AENDT (alias AENDTC),
-#         AEDECOD, a severity column (AETOXGR or AESEV, see
-#         pp_sev_column()), AESER
+#   adsl: required TRTSDT, TRTEDT; optional RFENDT, DTHDT, DTHFL
+#   adae (optional table): ASTDT, AENDT, ASTDY, AENDY, AEDECOD, AESER
+#   adex (optional table): ASTDT, AENDT, ASTDY, AENDY, EXDOSE, EXDOSU, EXTRT
+#   roles: arm (the ADSL arm column, settings$roles$arm) and severity
+#          (the ADAE severity column, settings$roles$severity)
+#
+# All names are canonical: pp_normalize_dm() reconciles a study's spellings
+# (EOSDT, DTHDTC, ASTDTC, ...) dm-wide before anything renders.
 
 #' Patient Overview visualization definition
 #' @noRd
@@ -24,25 +29,17 @@ patient_overview_viz <- new_pp_viz(
   domain = "Treatment",
   icon = "capsule",
   color = "#059669",
-  description = "Treatment period, adverse events & milestones",
+  description = "Treatment, exposure, adverse events, visits & milestones",
   tables = "adsl",
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
+  uses = c("arm", "severity", "cycle"),
   optional = list(
-    adsl = list(
-      TRT01P = NULL,
-      RFENDT = "EOSDT",
-      DTHDT  = "DTHDTC",
-      DTHFL  = NULL
+    adsl = c("RFENDT", "DTHDT", "DTHFL"),
+    adae = c(
+      "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER"
     ),
-    adae = list(
-      ASTDT   = "ASTDTC",
-      AENDT   = "AENDTC",
-      ASTDY   = "AESTDY",
-      AENDY   = "AEENDY",
-      AEDECOD = NULL,
-      AETOXGR = NULL,
-      AESEV   = NULL,
-      AESER   = NULL
+    adex = c(
+      "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT"
     )
   ),
   render = function(dm_obj, time_range, settings = list(),
@@ -59,8 +56,18 @@ patient_overview_viz <- new_pp_viz(
 
       trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
-      arm_col <- pp_arm_column(colnames(sl), settings$arm_var)
-      arm_label <- if (!is.null(arm_col)) {
+      # Cycle anchors, injected by the block (uses = "cycle"). Deliberately
+      # NOT applied to the treatment start/end or the milestone labels below:
+      # TRTSDT *is* C1 D1 by definition, so labelling it says nothing, and
+      # "EOS (C12 D3)" is noise. It rides on the events whose position within
+      # a cycle is the actual question -- doses, AEs, visits.
+      cyc <- settings$cycle_anchors
+      # The arm column is a role, resolved once by the block (board option
+      # or ACTARM) and injected -- the render never picks its own, so the
+      # lane and the subject picker cannot disagree. An unresolved arm has
+      # already raised the named block error; the lane stays generic.
+      arm_col <- settings$roles$arm
+      arm_label <- if (!is.null(arm_col) && arm_col %in% colnames(sl)) {
         # The lane draws one line of text inside the treatment bar, so fold any
         # embedded whitespace (a study's own arm column may carry line breaks
         # the ADaM variables never do) rather than drawing lines on top of each
@@ -84,15 +91,57 @@ patient_overview_viz <- new_pp_viz(
           nrow(adae_raw[!is.na(adae_raw[[ae_src]]), , drop = FALSE]) > 0
       }
 
-      # Short lane labels keep grid.left at 60 (aligned with the other
-      # timeline charts). Tooltips on each item still carry the full
-      # category context (Treatment / AE term / milestone kind).
-      lanes <- c("TRT", if (has_adae) "AE", "MS")
+      # Exposure lane, same date-or-day gating as the AE lane. adex is
+      # parameterized in ADaM (several rows per dosing period), so periods
+      # dedupe by (start, end, dose).
+      has_adex <- "adex" %in% names(tbls)
+      ex_use_day <- FALSE
+      if (has_adex) {
+        adex_raw <- as.data.frame(tbls[["adex"]])
+        ex_use_day <- identical(mode, "rday") &&
+          "ASTDY" %in% colnames(adex_raw)
+        ex_src <- if (ex_use_day) "ASTDY" else "ASTDT"
+        has_adex <- ex_src %in% colnames(adex_raw) &&
+          nrow(adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]) > 0
+      }
+
+      # Visit ruler: reconstructed from the findings tables; anchors every
+      # other lane to when the subject was actually seen.
+      visits <- pp_visit_schedule(tbls)
+      if (nrow(visits)) {
+        vis_ok <- if (identical(mode, "rday")) {
+          !is.na(visits$day) | !is.na(visits$date)
+        } else {
+          !is.na(visits$date)
+        }
+        visits <- visits[vis_ok, , drop = FALSE]
+      }
+      has_vis <- nrow(visits) > 0
+
+      # ONE treatment lane, not three. ADSL's TRTSDT/TRTEDT are the min/max
+      # of the exposure records -- on pharmaverseadam, TRTSDT equals the first
+      # dose date for 100% of subjects and TRTEDT the last for 98.4% (the six
+      # exceptions off by a day). So a Treatment bar beside an Exposure lane
+      # draws the same fact twice, and draws it worse: an envelope from first
+      # to last dose asserts continuous treatment, where the exposure records
+      # show the holds. Exposure fills the lane where it exists; the envelope
+      # is the fallback for a study shipping no adex.
+      #
+      # Milestones fold in for the same reason. They were a lane whose first
+      # two items were the treatment bar's own endpoints redrawn as circles --
+      # the same two dates a third time. What is left (end of study, death)
+      # are POINTS, and a point does not need a category of its own.
+      #
+      # Short lane labels are what let the shared gutter (PP_GRID_LEFT) stay
+      # narrow. Tooltips on each item still carry the full context.
+      lanes <- c("TRT", if (has_adae) "AE", if (has_vis) "VIS")
       lane_full <- c(TRT = "Treatment", AE = "Adverse Events",
-                     MS = "Milestones")
+                     VIS = "Visits")
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
-      chart_height <- 60 + n_lanes * 40
+      # Chrome plus an exact 40px per lane, so lane geometry does not shift
+      # with the number of lanes a subject happens to have.
+      chart_height <- PP_PLOT_TOP + 30 + n_lanes * 40
 
       # A study's arm label is data, not a literal: encode it, never paste it.
       arm_js <- pp_js_str(arm_label)
@@ -100,8 +149,12 @@ patient_overview_viz <- new_pp_viz(
       end_str <- pp_xlabel(sl$TRTEDT[1], ref_ms, mode)
 
       # ---------------------------------------------------------------
-      # Treatment lane
+      # Treatment envelope — FALLBACK ONLY (no adex). Carries the arm label,
+      # which is why it is worth drawing at all when it is all we have; with
+      # exposure present the arm is a click away in the subject picker header
+      # and the dose bars have their own text to show.
       # ---------------------------------------------------------------
+      trt_lane <- lane_idx[["TRT"]]
       trt_series <- list(
         type = "custom",
         name = "Treatment",
@@ -142,7 +195,7 @@ patient_overview_viz <- new_pp_viz(
           }
         ", arm_js)),
         data = list(list(
-          value = list(trt_start, trt_end, lane_idx[["TRT"]])
+          value = list(trt_start, trt_end, trt_lane)
         )),
         encode = list(x = list(0, 1), y = 2),
         tooltip = list(
@@ -158,7 +211,7 @@ patient_overview_viz <- new_pp_viz(
         )
       )
 
-      all_series <- list(trt_series)
+      all_series <- if (has_adex) list() else list(trt_series)
 
       # ---------------------------------------------------------------
       # Adverse Events lane (omitted when adae missing)
@@ -171,8 +224,10 @@ patient_overview_viz <- new_pp_viz(
         } else {
           "AENDT" %in% colnames(adae)
         }
-        sev_col <- pp_sev_column(colnames(adae))
-        has_sev <- !is.null(sev_col)
+        # Severity is a role, injected by the block -- same source as the AE
+        # gantt, so the two vizs always agree.
+        sev_col <- settings$roles$severity
+        has_sev <- !is.null(sev_col) && sev_col %in% colnames(adae)
         has_ser <- "AESER" %in% colnames(adae)
         has_term <- "AEDECOD" %in% colnames(adae)
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
@@ -211,7 +266,7 @@ patient_overview_viz <- new_pp_viz(
           )
         }
         ae_lab <- function(v) {
-          if (ae_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
+          if (ae_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
         }
 
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
@@ -316,20 +371,13 @@ patient_overview_viz <- new_pp_viz(
       }
 
       # ---------------------------------------------------------------
-      # Milestones lane
+      # Milestones — markers ON the treatment lane. Treatment start/end are
+      # deliberately NOT among them any more: they were circles sitting under
+      # the very bar whose ends they marked. What remains genuinely happens
+      # elsewhere in time, usually after treatment stops.
       # ---------------------------------------------------------------
-      ms_lane <- lane_idx[["MS"]]
+      ms_lane <- trt_lane
       milestone_data <- list()
-
-      # Treatment start (green filled circle)
-      milestone_data <- c(milestone_data, list(list(
-        value = list(trt_start, ms_lane, "trt_start", start_str)
-      )))
-
-      # Treatment end (green hollow circle)
-      milestone_data <- c(milestone_data, list(list(
-        value = list(trt_end, ms_lane, "trt_end", end_str)
-      )))
 
       # End of study (blue diamond) — RFENDT is canonical, EOSDT aliased
       if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
@@ -361,19 +409,7 @@ patient_overview_viz <- new_pp_viz(
             var y = api.coord([api.value(0), api.value(1)])[1];
             var kind = api.value(2);
             var sz = 6;
-            if (kind === 'trt_start') {
-              return {
-                type: 'circle',
-                shape: { cx: x, cy: y, r: sz },
-                style: { fill: '#059669', stroke: '#fff', lineWidth: 1.5 }
-              };
-            } else if (kind === 'trt_end') {
-              return {
-                type: 'circle',
-                shape: { cx: x, cy: y, r: sz },
-                style: { fill: '#fff', stroke: '#059669', lineWidth: 2 }
-              };
-            } else if (kind === 'eos') {
+            if (kind === 'eos') {
               return {
                 type: 'polygon',
                 shape: {
@@ -409,16 +445,12 @@ patient_overview_viz <- new_pp_viz(
               var kind = v[2];
               var date = v[3] || '';
               var labels = {
-                'trt_start': 'Treatment Start',
-                'trt_end':   'Treatment End',
-                'eos':       'End of Study',
-                'death':     'Death'
+                'eos':   'End of Study',
+                'death': 'Death'
               };
               var colors = {
-                'trt_start': '#059669',
-                'trt_end':   '#059669',
-                'eos':       '#2563EB',
-                'death':     '#DC2626'
+                'eos':   '#2563EB',
+                'death': '#DC2626'
               };
               var label = labels[kind] || kind;
               var col = colors[kind] || '#6b7280';
@@ -432,7 +464,205 @@ patient_overview_viz <- new_pp_viz(
         )
       )
 
-      all_series <- c(all_series, list(ms_series))
+      # Appended AFTER exposure, below -- the milestones now share a lane with
+      # the dose bars, and echarts paints in series order, so adding them here
+      # would hide a death marker under the bar it lands on (the DTHFL branch
+      # above puts one exactly there).
+
+      # ---------------------------------------------------------------
+      # Exposure — the treatment lane's real content when adex exists. Dose
+      # bars say everything the envelope did and the holds besides.
+      # ---------------------------------------------------------------
+      if (has_adex) {
+        adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
+        ex_lane <- trt_lane
+        ex_has_end <- if (ex_use_day) {
+          "AENDY" %in% colnames(adex)
+        } else {
+          "AENDT" %in% colnames(adex)
+        }
+        opt_chr <- function(df, col, i) {
+          if (col %in% colnames(df)) {
+            v <- df[[col]][i]
+            if (is.na(v)) "" else as.character(v)
+          } else {
+            ""
+          }
+        }
+        ex_end <- function(i) if (ex_use_day) adex$AENDY[i] else adex$AENDT[i]
+        ex_x <- function(v) {
+          pp_xval_pref_day(
+            if (ex_use_day) NULL else v,
+            if (ex_use_day) v else NULL,
+            ref_ms, mode
+          )
+        }
+        ex_lab <- function(v) {
+          if (ex_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
+        }
+        day_unit <- if (identical(mode, "rday")) 1 else 86400000
+
+        # ADaM adex is parameterized (one row per PARAMCD per period);
+        # the lane wants each dosing period once.
+        dose_of <- function(i) {
+          trimws(paste(opt_chr(adex, "EXDOSE", i), opt_chr(adex, "EXDOSU", i)))
+        }
+        key <- vapply(seq_len(nrow(adex)), function(i) {
+          paste(adex[[ex_src]][i], if (ex_has_end) ex_end(i) else "",
+                dose_of(i))
+        }, character(1L))
+        adex <- adex[!duplicated(key), , drop = FALSE]
+
+        ex_data <- lapply(seq_len(nrow(adex)), function(i) {
+          x0 <- ex_x(adex[[ex_src]][i])
+          x1 <- if (ex_has_end && !is.na(ex_end(i))) {
+            ex_x(ex_end(i))
+          } else {
+            x0 + day_unit
+          }
+          s_lab <- ex_lab(adex[[ex_src]][i])
+          e_lab <- if (ex_has_end && !is.na(ex_end(i))) {
+            ex_lab(ex_end(i))
+          } else {
+            s_lab
+          }
+          list(value = list(
+            x0, x1, ex_lane, dose_of(i), opt_chr(adex, "EXTRT", i),
+            s_lab, e_lab
+          ))
+        })
+
+        ex_series <- list(
+          type = "custom",
+          name = "Exposure",
+          renderItem = htmlwidgets::JS("
+            function(params, api) {
+              var start = api.coord([api.value(0), api.value(2)]);
+              var end   = api.coord([api.value(1), api.value(2)]);
+              var h     = api.size([0, 1])[1] * 0.45;
+              var barW  = Math.max(end[0] - start[0], 4);
+              var children = [{
+                type: 'rect',
+                shape: {
+                  x: start[0], y: start[1] - h/2,
+                  width: barW, height: h, r: 2
+                },
+                style: {
+                  fill: 'rgba(37,99,235,0.25)',
+                  stroke: 'rgba(37,99,235,0.55)',
+                  lineWidth: 1
+                }
+              }];
+              // Dose text when the bar has room for it. echarts coerces
+              // numeric-looking dims, so stringify before use.
+              var dose = '' + (api.value(3) == null ? '' : api.value(3));
+              if (dose && barW > 46) {
+                children.push({
+                  type: 'text',
+                  style: {
+                    text: dose,
+                    x: start[0] + barW / 2,
+                    y: start[1],
+                    fill: '#1e40af',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    textAlign: 'center',
+                    textVerticalAlign: 'middle',
+                    truncate: { outerWidth: barW - 8 }
+                  }
+                });
+              }
+              return { type: 'group', children: children };
+            }
+          "),
+          data = ex_data,
+          encode = list(x = list(0, 1), y = 2),
+          tooltip = list(
+            formatter = htmlwidgets::JS("
+              function(params) {
+                var v = params.value;
+                var dose = '' + (v[3] == null ? '' : v[3]);
+                var trt = v[4] || '';
+                var s = v[5] || '';
+                var e = v[6] || '';
+                var html = '<div style=\"min-width:160px\">';
+                html += '<div style=\"font-size:13px;font-weight:600;' +
+                  'margin-bottom:2px\">' + (trt || 'Exposure') + '</div>';
+                if (dose) {
+                  html += '<div style=\"font-size:12px\">Dose: <b>' +
+                    dose + '</b></div>';
+                }
+                html += '<div style=\"font-size:12px;color:#6b7280\">' +
+                  s + ' \u2192 ' + e + '</div></div>';
+                return html;
+              }
+            ")
+          )
+        )
+
+        all_series <- c(all_series, list(ex_series))
+      }
+
+      # Milestones last: they share the treatment lane with the dose bars now,
+      # and echarts paints in series order. Most patients reach neither, so
+      # the series is legitimately empty -- it never was while it carried the
+      # treatment endpoints.
+      if (length(milestone_data)) {
+        all_series <- c(all_series, list(ms_series))
+      }
+
+      # ---------------------------------------------------------------
+      # Visit ruler (omitted when nothing carries visits)
+      # ---------------------------------------------------------------
+      if (has_vis) {
+        vis_lane <- lane_idx[["VIS"]]
+        vis_data <- lapply(seq_len(nrow(visits)), function(i) {
+          x <- pp_xval_pref_day(
+            if (is.na(visits$date[i])) NULL else visits$date[i],
+            if (is.na(visits$day[i])) NULL else visits$day[i],
+            ref_ms, mode
+          )
+          x_lab <- if (identical(mode, "rday") && !is.na(visits$day[i])) {
+            pp_day_label(visits$day[i], cyc)
+          } else {
+            pp_xlabel(visits$date[i], ref_ms, mode, cyc)
+          }
+          list(value = list(x, vis_lane, visits$visit[i], x_lab))
+        })
+
+        vis_series <- list(
+          type = "custom",
+          name = "Visits",
+          renderItem = htmlwidgets::JS("
+            function(params, api) {
+              var p = api.coord([api.value(0), api.value(1)]);
+              var h = api.size([0, 1])[1] * 0.4;
+              return {
+                type: 'rect',
+                shape: { x: p[0] - 1, y: p[1] - h / 2, width: 2, height: h },
+                style: { fill: '#9ca3af' }
+              };
+            }
+          "),
+          data = vis_data,
+          encode = list(x = 0, y = 1),
+          tooltip = list(
+            formatter = htmlwidgets::JS("
+              function(params) {
+                var v = params.value;
+                return '<div style=\"min-width:120px\">' +
+                  '<div style=\"font-size:13px;font-weight:600\">' +
+                  (v[2] || 'Visit') + '</div>' +
+                  '<div style=\"font-size:12px;color:#6b7280\">' +
+                  (v[3] || '') + '</div></div>';
+              }
+            ")
+          )
+        )
+
+        all_series <- c(all_series, list(vis_series))
+      }
 
       # ---------------------------------------------------------------
       # Assemble chart
@@ -443,7 +673,7 @@ patient_overview_viz <- new_pp_viz(
           tooltip = pp_tooltip(),
           toolbox = pp_toolbox(),
           grid = list(
-            left = 60, right = 20, top = 10, bottom = 30,
+            left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP, bottom = 30,
             borderColor = "transparent"
           ),
           xAxis = pp_time_axis(time_range, ref_ms, mode),

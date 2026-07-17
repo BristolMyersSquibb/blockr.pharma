@@ -4,8 +4,8 @@
 # Controls: items (checkbox of PARAMCDs), chg (toggle absolute vs change).
 #
 # Data requirements (declared via new_pp_viz()):
-#   adqsadas: required PARAMCD, AVAL, ADT (alias ADTM);
-#             optional AVISIT, PARAM, CHG
+#   adqsadas: required PARAMCD, AVAL, ADT; optional AVISIT, PARAM, CHG
+# (canonical names; pp_normalize_dm() maps ADTM -> ADT dm-wide)
 
 #' ADAS-Cog Trajectory visualization definition
 #' @noRd
@@ -17,16 +17,8 @@ adas_trajectory_viz <- new_pp_viz(
   color = "#7C3AED",
   description = "ADAS-Cog scores over visits with item-level drill-down",
   tables = "adqsadas",
-  requires = list(adqsadas = list(
-    PARAMCD = NULL,
-    AVAL    = NULL,
-    ADT     = "ADTM"
-  )),
-  optional = list(adqsadas = list(
-    AVISIT = NULL,
-    PARAM  = NULL,
-    CHG    = NULL
-  )),
+  requires = list(adqsadas = c("PARAMCD", "AVAL", "ADT")),
+  optional = list(adqsadas = c("AVISIT", "PARAM", "CHG")),
   controls = list(
     items = list(
       type = "checkbox",
@@ -152,7 +144,7 @@ adas_trajectory_viz <- new_pp_viz(
             itemWidth = 14, itemHeight = 10
           ),
           grid = list(
-            left = 60, right = 20, top = 20,
+            left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP,
             bottom = if (length(params) > 1) 40 else 30,
             borderColor = "transparent"
           ),
