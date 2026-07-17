@@ -962,7 +962,7 @@ new_patient_profile_block <- function(selected = NULL,
               shiny::div(class = "pp-coverage-item",
                 shiny::span(class = "pp-coverage-label", "Arm"),
                 shiny::span(class = "pp-coverage-reason",
-                  roles$arm %||% "unresolved — see block error")
+                  roles$arm %||% "unresolved \u2014 see block error")
               ),
               shiny::div(class = "pp-coverage-item",
                 shiny::span(class = "pp-coverage-label", "Severity"),

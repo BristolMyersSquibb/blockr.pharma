@@ -126,10 +126,11 @@ pp_vizs_signature <- function(vizs) {
 #' @noRd
 pp_coverage_report <- function(dm_obj, vizs) {
   tbl_names <- names(dm::dm_get_tables(dm_obj))
-  out <- list()
+  acc <- new.env(parent = emptyenv())
+  acc$out <- list()
   add <- function(v, reason) {
-    out[[length(out) + 1L]] <<- list(id = v$id, label = v$label,
-                                     reason = reason)
+    acc$out[[length(acc$out) + 1L]] <- list(id = v$id, label = v$label,
+                                            reason = reason)
   }
   for (v in vizs) {
     missing_tbls <- setdiff(v$tables, tbl_names)
@@ -143,7 +144,7 @@ pp_coverage_report <- function(dm_obj, vizs) {
       add(v, sub("^.*unavailable: missing ", "missing ", res$msg))
     }
   }
-  out
+  acc$out
 }
 
 #' Does the current patient lack rows in all of a viz's tables?

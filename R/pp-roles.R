@@ -49,15 +49,17 @@ pp_resolve_roles <- function(dm_obj, declared = NULL) {
                 errors = list())
   if (!inherits(dm_obj, "dm")) return(roles)
 
+  acc <- new.env(parent = emptyenv())
+  acc$roles <- roles
   declared <- declared %||% list()
   tbls <- dm::dm_get_tables(dm_obj)
 
   take <- function(role, resolver) {
     res <- tryCatch(resolver(), error = function(e) e)
     if (inherits(res, "condition")) {
-      roles$errors[[role]] <<- res
+      acc$roles$errors[[role]] <- res
     } else {
-      roles[[role]] <<- res
+      acc$roles[[role]] <- res
     }
   }
 
@@ -75,7 +77,7 @@ pp_resolve_roles <- function(dm_obj, declared = NULL) {
     })
   }
 
-  roles
+  acc$roles
 }
 
 #' Resolve the ADSL column anchoring relative-day mode

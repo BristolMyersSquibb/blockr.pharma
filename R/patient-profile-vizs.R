@@ -1153,9 +1153,10 @@ pp_findings_vizs <- function(dm_obj) {
   # when BOTH splits are present, adlb still gets a plan of its own (with no
   # groups), so a PARAMCD living only in adlb yields an individual card
   # instead of silently getting no viz and no coverage entry.
-  source_plans <- list()
+  plans_acc <- new.env(parent = emptyenv())
+  plans_acc$source_plans <- list()
   add_plan <- function(table, group_tables, meta) {
-    source_plans[[length(source_plans) + 1L]] <<- list(
+    plans_acc$source_plans[[length(plans_acc$source_plans) + 1L]] <- list(
       table = table, group_tables = group_tables, meta = meta
     )
   }
@@ -1182,7 +1183,7 @@ pp_findings_vizs <- function(dm_obj) {
   # lives in a split table must not get a duplicate card.
   covered_paramcds <- character(0)
 
-  for (plan in source_plans) {
+  for (plan in plans_acc$source_plans) {
     tbl_name <- plan$table
     tbl <- as.data.frame(tbls[[tbl_name]])
     if (!"PARAMCD" %in% colnames(tbl)) next

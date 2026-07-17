@@ -86,10 +86,14 @@ pp_roles_blocker <- function(dm_obj, declared = NULL) {
     if (length(hits)) hits[[1L]] else NULL
   }
 
-  err <- NULL
+  acc <- new.env(parent = emptyenv())
+  acc$err <- NULL
   check <- function(resolver) {
-    if (!is.null(err)) return()
-    err <<- tryCatch({resolver(); NULL}, error = function(e) e)
+    if (!is.null(acc$err)) return()
+    acc$err <- tryCatch({
+      resolver()
+      NULL
+    }, error = function(e) e)
   }
 
   subj <- find_tbl("adsl")
@@ -104,12 +108,12 @@ pp_roles_blocker <- function(dm_obj, declared = NULL) {
                                    declared$severity))
   }
 
-  if (is.null(err)) return(NULL)
+  if (is.null(acc$err)) return(NULL)
 
   bquote(
     stop(base::errorCondition(
-      .(conditionMessage(err)),
-      class = .(setdiff(class(err), c("error", "condition")))
+      .(conditionMessage(acc$err)),
+      class = .(setdiff(class(acc$err), c("error", "condition")))
     ))
   )
 }
