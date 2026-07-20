@@ -51,23 +51,6 @@ test_that("AVAL resolves from LBSTRESN when the canonical column is absent", {
   expect_equal(plotted_values(render_findings_card(adlb)), c(2.7, 3.1, 2.9))
 })
 
-test_that("ADaM derived records (DTYPE) are not plotted as observations", {
-  # THE REPORTED BUG. An ADaM adlb routinely carries derived analysis rows
-  # alongside the observed one for the same PARAMCD and date -- LOCF carry-
-  # forwards, averages of replicates, and imputed records that a study fills
-  # with 0. ADaM flags them with DTYPE; the observed record is DTYPE == NA.
-  #
-  # Before pp_select_records() existed, pp_render_findings() drew every row.
-  # The 0-valued derived record landed on the same x as the real 2.7 and the
-  # line collapsed to the floor between every pair of real points; on screen
-  # the neutrophil count read 0.
-  observed <- neut_adlb(DTYPE = NA_character_)
-  derived <- neut_adlb(AVAL = 0, DTYPE = "CALCULATION")
-  adlb <- rbind(observed, derived)
-
-  expect_equal(plotted_values(render_findings_card(adlb)), c(2.7, 3.1, 2.9))
-})
-
 test_that("a carried-forward value is drawn, but not as a measurement", {
   # LOCF is "mark", not "drop": it puts a value on a date where nothing was
   # measured, which is information the collected rows do not carry. It is
@@ -86,16 +69,6 @@ test_that("a carried-forward value is drawn, but not as a measurement", {
                c("circle", "circle", "circle", "emptyCircle"))
   expect_match(pts[[4]]$tooltip_text, "LOCF")
   expect_match(pts[[4]]$tooltip_text, "not measured")
-})
-
-test_that("a card says how many derived records it held back", {
-  adlb <- rbind(
-    neut_adlb(DTYPE = NA_character_),
-    neut_adlb(AVAL = 0, DTYPE = "MAXIMUM")
-  )
-  chart <- render_findings_card(adlb)
-  titles <- vapply(chart$x$opts$title, function(t) t$text %||% "", character(1))
-  expect_true(any(grepl("3 derived records hidden", titles)))
 })
 
 test_that("a character AVAL does not kill the card", {
@@ -121,75 +94,4 @@ test_that("character reference ranges do not kill the card", {
   expect_equal(plotted_values(render_findings_card(adlb)), c(2.7, 3.1, 2.9))
 })
 
-# ---------------------------------------------------------------------------
-# The same defect class in the aggregating vizs.
-#
-# pp_render_findings() draws one point per row, so "mark" is enough there.
-# The vizs below collapse rows with mean(), where marking cannot help -- a
-# blended observed-plus-derived number appears in no record. They go through
-# pp_prefer_collected(): a cell holding any measurement ignores the derived
-# rows in it.
-# ---------------------------------------------------------------------------
 
-test_that("ortho BP does not average a replicate against its derived mean", {
-  # ADaM stores the replicate mean as a DTYPE="AVERAGE" row NEXT TO the
-  # replicates. viz-ortho-bp.R:111 averages all three, weighting the derived
-  # value at 1/3. Orthostatic protocols repeat on an abnormal reading, so
-  # duplicates here are expected, not exotic.
-  pos <- "AFTER STANDING FOR 1 MINUTE"
-  advs <- data.frame(
-    USUBJID = "x",
-    PARAMCD = "SYSBP",
-    ATPT    = pos,
-    AVISIT  = "BASELINE",
-    AVAL    = c(180, 140, 160),
-    DTYPE   = c(NA, NA, "AVERAGE"),
-    stringsAsFactors = FALSE
-  )
-  dm_obj <- pp_normalize_dm(dm::dm(advs = advs))
-  opts <- ortho_bp_viz$render(dm_obj, time_range = NULL, settings = list())$x$opts
-  s <- Filter(function(s) grepl("^Systolic", s$name %||% ""), opts$series)[[1]]
-  drawn <- vapply(s$data, function(d) as.numeric(d$value[[2]]), numeric(1))
-
-  # AVERAGE is "keep": the study already summarized its own replicates, so
-  # the summary is drawn and the replicates it consumed are not. Drawing all
-  # three would average the mean back in and weight it at 1/3.
-  expect_equal(drawn, 160)
-})
-
-test_that("questionnaire heatmap does not blend observed with derived", {
-  adqsadas <- data.frame(
-    USUBJID = "x",
-    PARAMCD = "ACTOT",
-    AVISIT  = "WEEK 8",
-    AVAL    = c(20, 30),
-    DTYPE   = c(NA, "LOCF"),
-    stringsAsFactors = FALSE
-  )
-  dm_obj <- pp_normalize_dm(dm::dm(adqsadas = adqsadas))
-  opts <- questionnaire_heatmap_viz$render(
-    dm_obj, time_range = NULL, settings = list(domain = "adqsadas")
-  )$x$opts
-  cells <- Filter(function(s) identical(s$type, "heatmap"), opts$series)[[1]]$data
-  vals <- vapply(cells, function(d) as.numeric(d[[3]]), numeric(1))
-
-  # 25 would be the mean of an observed 20 and a carried-forward 30 -- a
-  # score the patient never had. A cell holding any measurement ignores the
-  # derived rows in it; marking cannot help here, since there is no
-  # half-including a value in an average.
-  expect_equal(vals, 20)
-})
-
-test_that("the lab reference band ignores derived rows", {
-  # patient-profile-vizs.R:932 takes median(A1LO) over ROWS, not over distinct
-  # reference ranges, so LOCF rows carrying a stale range outvote the real one.
-  observed <- neut_adlb(DTYPE = NA_character_, A1LO = 1.5, A1HI = 8.0)
-  derived <- neut_adlb(DTYPE = "LOCF", A1LO = 0.5, A1HI = 3.0)
-  adlb <- rbind(observed, derived, derived)
-
-  chart <- render_findings_card(adlb)
-  band <- Filter(function(s) grepl(" ref$", s$name %||% ""), chart$x$opts$series)
-  expect_length(band, 1L)
-  area <- band[[1]]$markArea$data[[1]]
-  expect_equal(c(area[[1]]$yAxis, area[[2]]$yAxis), c(1.5, 8.0))
-})

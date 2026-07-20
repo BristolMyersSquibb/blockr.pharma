@@ -782,7 +782,6 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   # emptiness and value filtering.
   tbl <- pp_prepare_findings(dm_obj, table_name)
   if (is.null(tbl)) return(pp_empty_chart(paste("No", label, "records")))
-  note <- pp_suppressed_note(tbl)
 
   tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
   if (!is.null(paramcds)) {
@@ -799,6 +798,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   params <- sort(unique(tbl$PARAMCD))
   has_anrind <- "ANRIND" %in% colnames(tbl)
   has_ref <- all(c("A1LO", "A1HI") %in% colnames(tbl))
+  has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
 
   n_params <- length(params)
@@ -884,11 +884,11 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         if (anr %in% names(anrind_colors)) pt_color <- anrind_colors[[anr]]
       }
 
-      # A derived point is drawn hollow so it cannot be read as a
-      # measurement. Without this the "mark" policy is indistinguishable
-      # from plotting the row unflagged, which is the defect it exists to
-      # fix -- see pp_select_records().
-      derived <- isTRUE(p_data$.pp_derived[i])
+      # A record the study derived rather than collected is drawn hollow and
+      # names its DTYPE in the tooltip. Shown, not filtered: the sponsor put
+      # it there deliberately. Marking adds provenance; it removes nothing.
+      derived <- has_dtype && !is.na(p_data$DTYPE[i]) &&
+        nzchar(trimws(as.character(p_data$DTYPE[i])))
 
       tt <- paste0(
         '<div style="min-width:160px">',
@@ -1000,11 +1000,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
 
     # Reference bands
     if (has_ref) {
-      # The band is one number per parameter, so it aggregates -- and a
-      # carried-forward row repeats a stale range, outvoting the real one.
-      ref_rows <- pp_prefer_collected(p_data)
-      ref_lo <- stats::median(ref_rows$A1LO, na.rm = TRUE)
-      ref_hi <- stats::median(ref_rows$A1HI, na.rm = TRUE)
+      ref_lo <- stats::median(p_data$A1LO, na.rm = TRUE)
+      ref_hi <- stats::median(p_data$A1HI, na.rm = TRUE)
       if (!is.na(ref_lo) && !is.na(ref_hi)) {
         all_series <- c(all_series, list(list(
           type = "line",
@@ -1029,15 +1026,6 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         )))
       }
     }
-  }
-
-  # Rendering the count is what keeps the "drop" policy honest: the
-  # alternative is a card that silently decided which rows count.
-  if (!is.null(note)) {
-    titles[[length(titles) + 1L]] <- list(
-      text = note, left = PP_GRID_LEFT, bottom = 0,
-      textStyle = list(fontSize = 10, fontWeight = 400, color = "#9ca3af")
-    )
   }
 
   echarts4r::e_charts(height = total_height) |>

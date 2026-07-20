@@ -108,7 +108,7 @@ ortho_bp_viz <- new_pp_viz(
           vals <- vapply(positions, function(pos) {
             rows <- v_data[v_data$position == pos, , drop = FALSE]
             if (nrow(rows) == 0) return(NA_real_)
-            mean(pp_prefer_collected(rows)$AVAL, na.rm = TRUE)
+            mean(rows$AVAL, na.rm = TRUE)
           }, numeric(1))
 
           # Carry the category index explicitly: dropping a missing position

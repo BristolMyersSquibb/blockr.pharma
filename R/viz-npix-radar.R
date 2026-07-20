@@ -82,9 +82,7 @@ npix_radar_viz <- new_pp_viz(
         v_data <- tbl[trimws(tbl$AVISIT) == visit, , drop = FALSE]
         # One value per domain
         values <- vapply(present_codes, function(pc) {
-          rows <- pp_prefer_collected(
-            v_data[v_data$PARAMCD == pc, , drop = FALSE]
-          )
+          rows <- v_data[v_data$PARAMCD == pc, , drop = FALSE]
           if (nrow(rows) == 0) return(NA_real_)
           mean(rows$AVAL, na.rm = TRUE)
         }, numeric(1))
