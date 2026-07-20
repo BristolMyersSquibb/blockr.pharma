@@ -294,9 +294,47 @@ pp_gantt_height <- function(n_lanes) {
 #' `renderItem` for the gantt charts. `label_idx` is the index in the encoded
 #' value vector carrying the lane term (written once, on the lane's first bar).
 #' @noRd
-pp_gantt_render_item <- function(label_idx) {
+#' Where an event with no end date stops
+#'
+#' It does not stop. A missing `AENDT`/`AENDY` is the ADaM encoding for an
+#' event that was still running when the data was cut -- for an AE, the state
+#' a safety reviewer is scanning for. Drawing it as `start + one day` renders
+#' the single most important case as a resolved same-day blip, and the tooltip
+#' compounds it by falling back to the start label ("D12 -> D12").
+#'
+#' So an open event runs to the edge of the visible window and says so. The
+#' bar is clipped there by `renderItem`, which is the correct reading: the
+#' event continues past what is on screen.
+#'
+#' Falls back to a one-day stub only on an unbounded axis, where there is no
+#' edge to run to.
+#'
+#' @param s Bar start, in axis units.
+#' @param time_range,ref_ms,mode Axis definition, as passed to the viz.
+#' @param day_unit One day in axis units.
+#' @return The bar end, in axis units.
+#' @noRd
+pp_gantt_open_end <- function(s, time_range, ref_ms = NA_real_,
+                              mode = "date", day_unit = 86400000) {
+  b <- pp_x_bounds(time_range, ref_ms, mode)
+  if (anyNA(b)) return(s + day_unit)
+  pmax(b[2L], s + day_unit)
+}
+
+#' @rdname pp_gantt_open_end
+#' @noRd
+PP_ONGOING_LABEL <- "ongoing"
+
+pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
+  # An open-ended bar gets a chevron at the window edge. Without it the bar
+  # just ends where the axis ends, which reads as "resolved on the last day
+  # shown" -- the same misreading in a different place.
+  ongoing_js <- if (is.null(ongoing_idx)) "false" else {
+    sprintf("!!api.value(%d)", ongoing_idx)
+  }
   htmlwidgets::JS(sprintf("
     function(params, api) {
+      var isOngoing = %s;
       var start = api.coord([api.value(0), api.value(2)]);
       var end   = api.coord([api.value(1), api.value(2)]);
       var h     = %d;
@@ -314,6 +352,19 @@ pp_gantt_render_item <- function(label_idx) {
         shape: Object.assign({}, rect, { r: 3 }),
         style: api.style()
       }];
+
+      if (isOngoing) {
+        var ax = rect.x + rect.width;
+        var cy = rect.y + rect.height / 2;
+        var ah = rect.height * 0.9;
+        if (ax + ah <= cs.x + cs.width + ah) {
+          children.push({
+            type: 'polygon',
+            shape: { points: [[ax, cy - ah], [ax + ah, cy], [ax, cy + ah]] },
+            style: { fill: api.style().fill, opacity: 0.9 }
+          });
+        }
+      }
 
       var label = api.value(%d);
       if (label) {
@@ -334,7 +385,8 @@ pp_gantt_render_item <- function(label_idx) {
       }
       return { type: 'group', children: children };
     }
-  ", PP_GANTT_BAR_H, PP_GANTT_BAR_DY, label_idx, PP_GANTT_LABEL_DY))
+  ", ongoing_js, PP_GANTT_BAR_H, PP_GANTT_BAR_DY, label_idx,
+     PP_GANTT_LABEL_DY))
 }
 
 #' Encode a string as a JavaScript string literal
@@ -725,12 +777,13 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
 pp_render_findings <- function(dm_obj, time_range, table_name, label,
                                base_color, paramcds = NULL,
                                ref_ms = NA_real_, mode = "date") {
-  tbls <- dm::dm_get_tables(dm_obj)
-  tbl <- as.data.frame(tbls[[table_name]])
-
   # Structural columns (PARAMCD, AVAL, ADT) are validated upstream by the
   # dispatcher via pp_resolve_requires(). This function only handles row
   # emptiness and value filtering.
+  tbl <- pp_prepare_findings(dm_obj, table_name)
+  if (is.null(tbl)) return(pp_empty_chart(paste("No", label, "records")))
+  note <- pp_suppressed_note(tbl)
+
   tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
   if (!is.null(paramcds)) {
     tbl <- tbl[tbl$PARAMCD %in% paramcds, , drop = FALSE]
@@ -831,6 +884,12 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         if (anr %in% names(anrind_colors)) pt_color <- anrind_colors[[anr]]
       }
 
+      # A derived point is drawn hollow so it cannot be read as a
+      # measurement. Without this the "mark" policy is indistinguishable
+      # from plotting the row unflagged, which is the defect it exists to
+      # fix -- see pp_select_records().
+      derived <- isTRUE(p_data$.pp_derived[i])
+
       tt <- paste0(
         '<div style="min-width:160px">',
         '<div style="font-size:14px;font-weight:700;margin-bottom:2px">',
@@ -871,11 +930,23 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         tt <- paste0(tt, '<br/><span style="color:#6b7280">Ref:</span> ',
           round(p_data$A1LO[i], 1), ' \u2013 ', round(p_data$A1HI[i], 1))
       }
+      if (derived) {
+        tt <- paste0(tt,
+          '<br/><span style="color:#6b7280">Derived:</span> ',
+          as.character(p_data$DTYPE[i]),
+          ' <span style="color:#b45309">(not measured)</span>'
+        )
+      }
       tt <- paste0(tt, '</div></div>')
 
       list(
         value = list(dt, val),
-        itemStyle = list(color = pt_color),
+        symbol = if (derived) "emptyCircle" else "circle",
+        itemStyle = if (derived) {
+          list(color = "#ffffff", borderColor = pt_color, borderWidth = 2)
+        } else {
+          list(color = pt_color)
+        },
         tooltip_text = tt
       )
     })
@@ -929,8 +1000,11 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
 
     # Reference bands
     if (has_ref) {
-      ref_lo <- stats::median(p_data$A1LO, na.rm = TRUE)
-      ref_hi <- stats::median(p_data$A1HI, na.rm = TRUE)
+      # The band is one number per parameter, so it aggregates -- and a
+      # carried-forward row repeats a stale range, outvoting the real one.
+      ref_rows <- pp_prefer_collected(p_data)
+      ref_lo <- stats::median(ref_rows$A1LO, na.rm = TRUE)
+      ref_hi <- stats::median(ref_rows$A1HI, na.rm = TRUE)
       if (!is.na(ref_lo) && !is.na(ref_hi)) {
         all_series <- c(all_series, list(list(
           type = "line",
@@ -955,6 +1029,15 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         )))
       }
     }
+  }
+
+  # Rendering the count is what keeps the "drop" policy honest: the
+  # alternative is a card that silently decided which rows count.
+  if (!is.null(note)) {
+    titles[[length(titles) + 1L]] <- list(
+      text = note, left = PP_GRID_LEFT, bottom = 0,
+      textStyle = list(fontSize = 10, fontWeight = 400, color = "#9ca3af")
+    )
   }
 
   echarts4r::e_charts(height = total_height) |>

@@ -271,10 +271,13 @@ patient_overview_viz <- new_pp_viz(
 
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
           s <- ae_x(adae[[ae_src]][i])
+          # A missing AENDT means the AE was still running at data cut --
+          # the state a safety reviewer scans for. Run it to the window edge
+          # rather than drawing a resolved same-day blip.
           e <- if (has_end && !is.na(ae_end(i))) {
             ae_x(ae_end(i))
           } else {
-            s + day_unit
+            pp_gantt_open_end(s, time_range, ref_ms, mode, day_unit)
           }
           sev <- if (has_sev) {
             toupper(as.character(adae[[sev_col]][i]))
@@ -287,7 +290,7 @@ patient_overview_viz <- new_pp_viz(
           e_lab <- if (has_end && !is.na(ae_end(i))) {
             ae_lab(ae_end(i))
           } else {
-            s_lab
+            PP_ONGOING_LABEL
           }
           list(value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab))
         })
@@ -518,13 +521,13 @@ patient_overview_viz <- new_pp_viz(
           x1 <- if (ex_has_end && !is.na(ex_end(i))) {
             ex_x(ex_end(i))
           } else {
-            x0 + day_unit
+            pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
           }
           s_lab <- ex_lab(adex[[ex_src]][i])
           e_lab <- if (ex_has_end && !is.na(ex_end(i))) {
             ex_lab(ex_end(i))
           } else {
-            s_lab
+            PP_ONGOING_LABEL
           }
           list(value = list(
             x0, x1, ex_lane, dose_of(i), opt_chr(adex, "EXTRT", i),

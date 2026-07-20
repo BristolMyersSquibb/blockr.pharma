@@ -27,8 +27,8 @@ npix_radar_viz <- new_pp_viz(
     )
   ),
   render = function(dm_obj, time_range, settings = list(), ...) {
-    tbls <- dm::dm_get_tables(dm_obj)
-    tbl <- as.data.frame(tbls[["adqsnpix"]])
+    tbl <- pp_prepare_findings(dm_obj, "adqsnpix")
+    if (is.null(tbl)) return(pp_empty_chart("No NPI-X records"))
 
     tbl <- tbl[!is.na(tbl$AVAL), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No NPI-X records"))
@@ -82,16 +82,23 @@ npix_radar_viz <- new_pp_viz(
         v_data <- tbl[trimws(tbl$AVISIT) == visit, , drop = FALSE]
         # One value per domain
         values <- vapply(present_codes, function(pc) {
-          rows <- v_data[v_data$PARAMCD == pc, , drop = FALSE]
+          rows <- pp_prefer_collected(
+            v_data[v_data$PARAMCD == pc, , drop = FALSE]
+          )
           if (nrow(rows) == 0) return(NA_real_)
           mean(rows$AVAL, na.rm = TRUE)
         }, numeric(1))
-        values[is.na(values)] <- 0
+        # NOT zero-filled. NPI-X domain scores are 0-anchored ("symptom
+        # absent"), so a fabricated 0 is pixel-identical to a recorded 0 and
+        # the tooltip reads "0" either way -- there is no way to tell "not
+        # assessed" from "assessed, none". echarts leaves a null vertex open,
+        # which is the honest rendering.
+        values[is.nan(values)] <- NA_real_
 
         color <- visit_colors[((vi - 1L) %% length(visit_colors)) + 1L]
 
         list(
-          value = as.list(values),
+          value = lapply(unname(values), function(v) if (is.na(v)) NULL else v),
           name = visit,
           lineStyle = list(color = color, width = 2),
           itemStyle = list(color = color),

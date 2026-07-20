@@ -116,10 +116,11 @@ ae_gantt_viz <- new_pp_viz(
             ref_ms, mode
           )
         } else {
-          s + day_unit
+          pp_gantt_open_end(s, time_range, ref_ms, mode, day_unit)
         }
         c(s, e)
       }
+      is_ongoing <- function(i) !(has_end && !is.na(end_at(i)))
 
       # Lanes come from what the window draws, not from the table: a term
       # whose every bar is off-axis otherwise reserved an empty lane, and a
@@ -163,7 +164,7 @@ ae_gantt_viz <- new_pp_viz(
             pp_xlabel(tbl$AENDT[i], ref_ms, mode, cyc)
           }
         } else {
-          s_lab
+          PP_ONGOING_LABEL
         }
 
         col <- sev_color(sev)
@@ -171,7 +172,7 @@ ae_gantt_viz <- new_pp_viz(
         lab <- if (i %in% lane_first) pp_term_label(term) else ""
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
-                       s_lab, e_lab, col, lab),
+                       s_lab, e_lab, col, lab, is_ongoing(i)),
           # Serious is a regulatory axis of its own, independent of severity:
           # it gets the outline, severity keeps the fill.
           itemStyle = list(
@@ -187,7 +188,7 @@ ae_gantt_viz <- new_pp_viz(
       series_list <- list(list(
         type = "custom",
         name = "Adverse Events",
-        renderItem = pp_gantt_render_item(11),
+        renderItem = pp_gantt_render_item(11, ongoing_idx = 12),
         encode = list(x = list(0, 1), y = 2),
         data = bar_data,
         tooltip = list(

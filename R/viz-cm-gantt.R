@@ -99,10 +99,11 @@ cm_gantt_viz <- new_pp_viz(
           ref_ms, mode
         )
       } else {
-        s + day_unit
+        pp_gantt_open_end(s, time_range, ref_ms, mode, day_unit)
       }
       c(s, e)
     }
+    is_ongoing <- function(i) !(has_end && !is.na(end_at(i)))
 
     # Lanes come from what the window draws, not from the table: a med whose
     # every bar is off-axis (chronic meds started years pre-study are the
@@ -147,13 +148,14 @@ cm_gantt_viz <- new_pp_viz(
           pp_xlabel(tbl$AENDT[i], ref_ms, mode, cyc)
         }
       } else {
-        s_lab
+        PP_ONGOING_LABEL
       }
       lab <- if (i %in% lane_first) pp_term_label(med) else ""
       list(
         value = list(s, e, lane, med, dose,
                      opt_chr(tbl, "CMROUTE", i), opt_chr(tbl, "CMCLAS", i),
-                     opt_chr(tbl, "CMINDC", i), s_lab, e_lab, lab),
+                     opt_chr(tbl, "CMINDC", i), s_lab, e_lab, lab,
+                     is_ongoing(i)),
         itemStyle = list(color = bar_color)
       )
     })
@@ -161,7 +163,7 @@ cm_gantt_viz <- new_pp_viz(
     series_list <- list(list(
       type = "custom",
       name = "Concomitant Medications",
-      renderItem = pp_gantt_render_item(10),
+      renderItem = pp_gantt_render_item(10, ongoing_idx = 11),
       encode = list(x = list(0, 1), y = 2),
       data = bar_data,
       tooltip = list(

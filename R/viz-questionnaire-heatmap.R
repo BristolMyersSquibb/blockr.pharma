@@ -45,7 +45,8 @@ questionnaire_heatmap_viz <- new_pp_viz(
     domain <- settings$domain %||% "adqsadas"
     y_col <- settings$value %||% "AVAL"
 
-    tbl <- as.data.frame(tbls[[domain]])
+    tbl <- pp_prepare_findings(dm_obj, domain)
+    if (is.null(tbl)) return(pp_empty_chart("No records"))
     if (!(y_col %in% colnames(tbl))) {
       return(pp_empty_chart(paste("No", y_col, "values in", domain)))
     }
@@ -90,6 +91,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
         for (pi in seq_along(params)) {
           rows <- tbl[trimws(tbl$AVISIT) == visits[vi] &
             tbl$PARAMCD == params[pi], , drop = FALSE]
+          rows <- pp_prefer_collected(rows)
           val <- if (nrow(rows) > 0) mean(rows[[y_col]], na.rm = TRUE) else NA
           if (!is.na(val)) {
             heat_data <- c(heat_data, list(list(vi - 1L, pi - 1L, round(val, 2))))

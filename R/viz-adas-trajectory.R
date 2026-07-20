@@ -34,8 +34,8 @@ adas_trajectory_viz <- new_pp_viz(
   ),
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
-    tbls <- dm::dm_get_tables(dm_obj)
-    tbl <- as.data.frame(tbls[["adqsadas"]])
+    tbl <- pp_prepare_findings(dm_obj, "adqsadas")
+    if (is.null(tbl)) return(pp_empty_chart("No ADAS-Cog records"))
 
     tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No ADAS-Cog records"))
@@ -51,7 +51,10 @@ adas_trajectory_viz <- new_pp_viz(
 
       has_param <- "PARAM" %in% colnames(tbl)
       has_avisit <- "AVISIT" %in% colnames(tbl)
-      params <- sort(unique(tbl$PARAMCD))
+      # as.character() before the colors[[pc]] lookup below: [[ on a factor
+      # indexes by LEVEL CODE, so a factor PARAMCD silently mis-colors every
+      # series, or errors out past the palette length.
+      params <- sort(unique(as.character(tbl$PARAMCD)))
 
       colors <- c(
         ACTOT = "#7C3AED",

@@ -30,8 +30,8 @@ ortho_bp_viz <- new_pp_viz(
     )
   ),
   render = function(dm_obj, time_range, settings = list(), ...) {
-    tbls <- dm::dm_get_tables(dm_obj)
-    tbl <- as.data.frame(tbls[["advs"]])
+    tbl <- pp_prepare_findings(dm_obj, "advs")
+    if (is.null(tbl)) return(pp_empty_chart("No vital sign records"))
 
     # Filter to BP params with ATPT
       bp <- tbl[tbl$PARAMCD %in% c("SYSBP", "DIABP") &
@@ -108,7 +108,7 @@ ortho_bp_viz <- new_pp_viz(
           vals <- vapply(positions, function(pos) {
             rows <- v_data[v_data$position == pos, , drop = FALSE]
             if (nrow(rows) == 0) return(NA_real_)
-            mean(rows$AVAL, na.rm = TRUE)
+            mean(pp_prefer_collected(rows)$AVAL, na.rm = TRUE)
           }, numeric(1))
 
           # Carry the category index explicitly: dropping a missing position
