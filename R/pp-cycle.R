@@ -26,11 +26,12 @@
 # and a wrong one, so back-calculation is strictly a FALLBACK for a missing
 # D1, and says so via `estimated`.
 #
-# Verified on CA-244 before any of this was written (blockr.sandbox
-# R/cycle-diag.R): 99.6% of cycles carry a real D1 row, and the back-calc
-# agrees with it 43% exactly / 90% within two days -- i.e. the labels track
-# the dates, with ordinary visit slippage in the tail. The fallback is a rare
-# edge case there, not the common path.
+# Measured against real study data before any of this was written: the large
+# majority of cycles carry a real D1 row, and where both exist the back-calc
+# agrees with it closely -- i.e. the labels track the dates, with ordinary
+# visit slippage in the tail. The fallback is an edge case, not the common
+# path. Re-run the diagnostic per study rather than trusting these shapes;
+# a study with sparser D1 coverage would make the fallback load-bearing.
 
 #' The cycle/day vocabulary, as it appears in VISIT
 #'
