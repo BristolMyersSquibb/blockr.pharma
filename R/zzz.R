@@ -16,7 +16,7 @@ utils::globalVariables("USUBJID")
   invisible(NULL)
 }
 
-#' @importFrom blockr.core register_blocks new_block_args new_block_arg
+#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec
 #'   arg_array arg_string
 register_pharma_blocks <- function() {
   register_blocks(
@@ -59,8 +59,8 @@ pp_block_arguments <- function() {
     collapse = ", "
   )
 
-  new_block_args(
-    selected = new_block_arg(
+  new_arg_specs(
+    selected = new_arg_spec(
       paste0(
         "Array of visualization IDs to display. ",
         "Static IDs: ",
@@ -91,7 +91,7 @@ pp_block_arguments <- function() {
     # An arbitrary-key map (keys are viz IDs, values are setting objects of
     # varying shape). The JSON-Schema subset has no open-ended object, so
     # `type` is left unset and the consumer infers the map from the example.
-    viz_settings = new_block_arg(
+    viz_settings = new_arg_spec(
       paste0(
         "Object with per-visualization settings. Keys are viz IDs, values ",
         "are setting objects. Only set for vizs that have controls. ",
@@ -112,7 +112,7 @@ pp_block_arguments <- function() {
         questionnaire_heatmap = list(domain = "adqsadas", value = "AVAL")
       )
     ),
-    subject = new_block_arg(
+    subject = new_arg_spec(
       paste0(
         "USUBJID of the patient to display, as a single string. Only needed ",
         "when the input dm carries MORE THAN ONE subject: the block then ",
