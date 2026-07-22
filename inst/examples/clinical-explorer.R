@@ -59,6 +59,11 @@ options(
   blockr.dock_is_locked = FALSE,
   blockr.tabular_display = blockr.ui::html_table_display,
   blockr.eval_parent_env = asNamespace("stats"),
+  # Build a block only once it is required, instead of staggering every
+  # off-screen block into existence in the background. This board carries 24
+  # blocks across six views, so the default pass spends the whole startup
+  # constructing blocks nobody is looking at.
+  blockr.background_construction_delay = Inf,
   # blockr.session: build the board from the request URL (board_name / user /
   # version handle) so named projects are shareable / bookmarkable.
   blockr.session_url_params = TRUE
