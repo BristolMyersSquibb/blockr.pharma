@@ -26,6 +26,12 @@
 #
 # Run from the workspace root:
 #   Rscript blockr.pharma/dev/regenerate-clinical-explorer.R
+#
+# NB: this is the board's *reference* definition, not a byte-for-byte generator
+# of the shipped JSON -- that file has since been patched in place (a rerun
+# rewrites every constructor version, mints fresh link ids, and re-keys the DAG
+# extension from `dag_extension` to `dag`). Read it to see what the board is;
+# before overwriting the shipped JSON with its output, diff the two.
 
 setwd("/workspace")
 
@@ -228,31 +234,67 @@ links_drill <- blockr.core::links(
 links <- c(links_main, links_drill)
 
 # --- Layout (5 workflow views + a Setup/DAG view) --------------------------
-dl <- blockr.dock::dock_layout
-layouts <- list(
-  Setup = dl("data", "cdisc", "dag_extension"),
-  Population = dl("global_filter",
-                  c("pop_demog", "bony_urson", "pop_demog_tbl"),
+# Membership (which panels a view holds, plus its display name) and geometry
+# (nesting, tab groups, sizes) are two separate slots: `views` and `grids`.
+# `panels(..., active =)` picks the tab that OPENS -- the default is the first
+# one, which lands on the raw head of the chain rather than what the view is
+# about, so every tab group names its own open tab.
+dg <- blockr.dock::dock_grid
+pn <- blockr.dock::panels
+gr <- blockr.dock::group
+vw <- blockr.dock::dock_view
+
+views <- list(
+  Setup = vw(c("data", "cdisc", blockr.dock::ext("dag"))),
+  Population = vw(c("global_filter", "pop_demog", "bony_urson",
+                    "pop_demog_tbl")),
+  DataExplorer = vw(c("global_filter", "dx_pull", "dx_select", "dx_search",
+                      "dx_download"), name = "Data Explorer"),
+  AdverseEvents = vw(c("global_filter", "ae_heatmap_tbl", "loving_noddy",
+                       "gantt_chart", "pt_profile"), name = "Adverse Events"),
+  Lab = vw(c("global_filter", "radiant_gaur", "traj_chart", "pt_profile")),
+  VitalSigns = vw(c("global_filter", "wayward_cardinal", "cut_wryneck",
+                    "pt_profile"), name = "Vital Signs")
+)
+
+grids <- list(
+  Setup = dg("data", "cdisc", blockr.dock::ext("dag")),
+  # The rendered Table 1, not the summary block's raw preview.
+  Population = dg("global_filter",
+                  pn("pop_demog", "bony_urson", "pop_demog_tbl",
+                     active = "pop_demog_tbl"),
                   sizes = c(1, 4)),
-  DataExplorer = dl("global_filter",
-                    c("dx_pull", "dx_select", "dx_search", "dx_download"),
-                    sizes = c(1, 4), name = "Data Explorer"),
-  AdverseEvents = dl("global_filter",
-                     c("ae_heatmap_tbl", "loving_noddy", "gantt_chart"),
-                     "pt_profile", sizes = c(1, 2, 2),
-                     name = "Adverse Events"),
-  Lab = dl(list("global_filter", "radiant_gaur"), c("traj_chart"),
-           "pt_profile", sizes = c(1, 2, 2)),
-  VitalSigns = dl(list("global_filter", "wayward_cardinal"),
-                  c("cut_wryneck"), "pt_profile", sizes = c(1, 2, 2),
-                  name = "Vital Signs")
+  # The searchable table, not the raw pull -- and not the download button
+  # that follows it.
+  DataExplorer = dg("global_filter",
+                    pn("dx_pull", "dx_select", "dx_search", "dx_download",
+                       active = "dx_search"),
+                    sizes = c(1, 4)),
+  AdverseEvents = dg("global_filter",
+                     pn("ae_heatmap_tbl", "loving_noddy", "gantt_chart",
+                        active = "gantt_chart"),
+                     "pt_profile", sizes = c(1, 2, 2)),
+  Lab = dg(gr("global_filter", "radiant_gaur"), "traj_chart", "pt_profile",
+           sizes = c(1, 2, 2)),
+  VitalSigns = dg(gr("global_filter", "wayward_cardinal"), "cut_wryneck",
+                  "pt_profile", sizes = c(1, 2, 2))
 )
 
 board <- blockr.dock::new_dock_board(
   blocks = blocks,
   links = links,
   extensions = list(blockr.dag::new_dag_extension()),
-  layouts = layouts,
+  # safetyData's ADSL carries no ACTARM, so the profile's arm role must be
+  # declared or the block stops with a named error (that is the design --
+  # never silently fall back to ARM, the *planned* arm, in a safety view).
+  options = c(
+    blockr.dock::dock_board_options(),
+    blockr.core::new_board_options(
+      blockr.pharma::new_study_roles_option(arm = "TRT01A")
+    )
+  ),
+  views = views,
+  grids = grids,
   active = "Population"
 )
 

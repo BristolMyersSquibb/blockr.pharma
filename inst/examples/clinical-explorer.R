@@ -14,6 +14,7 @@ if (!exists("dev_local")) dev_local <- FALSE
 
 blockr_pkgs <- c(
   "blockr.core",
+  "blockr.ui",        # html_table_display, the tabular display below
   "blockr.dock",
   "blockr.dag",
   "blockr.dplyr",
