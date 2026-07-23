@@ -565,9 +565,9 @@ pp_icon_html <- function(icon_name, color) {
 
   sprintf(
     paste0(
-      '<div style="width:40px;height:40px;border-radius:7px;background:%s;',
+      '<div style="width:22px;height:22px;border-radius:5px;background:%s;',
       'display:flex;align-items:center;justify-content:center;flex-shrink:0">',
-      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" ',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" ',
       'fill="%s" viewBox="0 0 16 16">%s</svg></div>'
     ),
     bg_rgba, color, svg_path

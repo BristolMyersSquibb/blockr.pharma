@@ -23,8 +23,8 @@
 
 /* --- Sidebar ------------------------------- */
 .pp-sidebar {
-  width: 300px;
-  min-width: 300px;
+  width: 232px;
+  min-width: 232px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -47,14 +47,14 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
   background: #ffffff;
 }
 
 .pp-sidebar-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
   margin: 0;
@@ -89,7 +89,7 @@
 
 /* --- Search -------------------------------- */
 .pp-sidebar-search {
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
@@ -100,7 +100,7 @@
 
 .pp-sidebar-search-icon {
   position: absolute;
-  left: 12px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
   color: #9ca3af;
@@ -109,7 +109,7 @@
 
 .pp-sidebar-search-input {
   width: 100%;
-  padding: 9px 32px 9px 38px;
+  padding: 6px 28px 6px 32px;
   font-size: 13px;
   font-family: inherit;
   background: #f9fafb;
@@ -170,7 +170,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 8px 12px 12px;
+  padding: 6px 8px 10px;
 }
 
 .pp-sidebar-cards {
@@ -282,11 +282,11 @@
 /* Drag handle for active cards */
 .pp-active-list .pp-card-main::before {
   content: '\2261';
-  font-size: 16px;
+  font-size: 14px;
   color: #d1d5db;
   cursor: grab;
   flex-shrink: 0;
-  width: 16px;
+  width: 12px;
   text-align: center;
   line-height: 1;
   transition: color 0.15s;
@@ -334,12 +334,15 @@
 }
 
 /* --- Cards --------------------------------- */
+/* One-line rows: 22px icon chip + title, description demoted to a title
+   tooltip. Twice the vertical density of the old 40px-icon cards, which is
+   what lets the sidebar sit at 232px instead of 300. */
 .pp-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  margin-bottom: 4px;
-  border-radius: 8px;
+  margin-bottom: 2px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   transition: all 150ms ease;
@@ -360,8 +363,8 @@
 .pp-card-main {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 44px 10px 10px;
+  gap: 8px;
+  padding: 5px 26px 5px 6px;
   min-width: 0;
 }
 
@@ -370,8 +373,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
 }
 
@@ -383,31 +386,23 @@
 
 .pp-card-title {
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #111827;
   margin: 0;
   line-height: 1.4;
-}
-
-.pp-card-description {
-  font-size: 11px;
-  color: #6b7280;
-  margin: 2px 0 0 0;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- Card Check Circle --------------------- */
 .pp-card-check {
   position: absolute;
-  right: 10px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #e5e7eb;
   display: flex;
@@ -417,8 +412,8 @@
 }
 
 .pp-card-check svg {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
   color: transparent;
   transition: color 0.15s ease;
 }

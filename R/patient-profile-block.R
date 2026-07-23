@@ -611,12 +611,15 @@ new_patient_profile_block <- function(selected = NULL,
               ))
             }
 
-            # Helper to build a single card
+            # Helper to build a single card. One-line row: the description
+            # is a title tooltip, not a visible paragraph, but stays in
+            # data-search-text so searching by PARAMCD still works.
             build_card <- function(v, is_sel) {
               shiny::div(
                 class = paste("pp-card", if (is_sel) "is-selected"),
                 `data-viz-id` = v$id,
                 `data-domain` = v$domain,
+                title = v$description,
                 `data-search-text` = paste(
                   v$label, v$description, v$domain
                 ),
@@ -625,9 +628,7 @@ new_patient_profile_block <- function(selected = NULL,
                     shiny::HTML(pp_icon_html(v$icon, v$color))
                   ),
                   shiny::div(class = "pp-card-content",
-                    shiny::tags$p(class = "pp-card-title", v$label),
-                    shiny::tags$p(class = "pp-card-description",
-                      v$description)
+                    shiny::tags$p(class = "pp-card-title", v$label)
                   ),
                   shiny::div(class = "pp-card-check",
                     shiny::HTML(paste0(

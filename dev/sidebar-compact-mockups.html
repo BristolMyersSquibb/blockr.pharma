@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patient Profile — Sidebar Space Proposals</title>
+<style>
+  :root {
+    --ink: #111827;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --line: #e5e7eb;
+    --bg: #f9fafb;
+    --accent: #3b82f6;
+    --accent-soft: rgba(59,130,246,0.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .page { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .subtitle { color: var(--muted); margin: 0 0 28px; max-width: 72ch; }
+  h2 { font-size: 19px; margin: 48px 0 4px; display: flex; align-items: center; gap: 10px; }
+  h2 .tag {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .tag-save { background: #d1fae5; color: #065f46; }
+  .tag-ref  { background: #f3f4f6; color: #6b7280; }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 78ch; }
+  .lead b { color: var(--ink); font-weight: 600; }
+
+  /* ---- mock frame ---- */
+  .frame {
+    display: flex;
+    height: 380px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    position: relative;
+  }
+  .frame-note {
+    font-size: 12px; color: var(--faint); margin: 8px 2px 0;
+  }
+  .interactive-hint { color: #2563eb; }
+
+  /* ---- chart area (shared) ---- */
+  .chart-area { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+  .toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .subject-picker {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12.5px; color: var(--ink);
+  }
+  .step-btn {
+    width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 6px;
+    background: #fff; color: var(--faint); font-size: 11px; line-height: 20px; text-align: center;
+  }
+  .subject-select {
+    border: 1px solid var(--line); border-radius: 7px; padding: 4px 26px 4px 10px;
+    background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="%239ca3af"><path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>') no-repeat right 9px center;
+    font-size: 12.5px; color: var(--ink); min-width: 190px;
+  }
+  .gear-btn {
+    margin-left: auto; width: 26px; height: 26px; border: none; background: transparent;
+    color: var(--faint); display: flex; align-items: center; justify-content: center; border-radius: 6px;
+  }
+  .charts { flex: 1; overflow: hidden; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+  .chart-skel {
+    flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .chart-skel-title { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+  .chart-skel svg { flex: 1; width: 100%; min-height: 0; }
+
+  /* ---- current sidebar (faithful) ---- */
+  .sb { display: flex; flex-direction: column; background: #fff; border-right: 1px solid var(--line); flex-shrink: 0; }
+  .sb-300 { width: 300px; }
+  .sb-header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    border-bottom: 1px solid var(--line); flex-shrink: 0;
+  }
+  .sb-title { font-size: 15px; font-weight: 600; margin: 0; white-space: nowrap; }
+  .pin-btn { margin-left: auto; width: 30px; height: 30px; border: none; background: transparent; color: var(--faint); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .sb-search { padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .search-input {
+    width: 100%; padding: 8px 10px 8px 32px; font-size: 13px; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; color: var(--ink);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 16 16" fill="%239ca3af"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>');
+    background-repeat: no-repeat; background-position: 10px center;
+  }
+  .sb-content { flex: 1; overflow-y: auto; padding: 8px 12px 12px; }
+  .section-header {
+    font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 8px 4px 6px;
+  }
+  .cat-header { font-size: 10px; font-weight: 500; color: var(--faint); text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 4px 4px; }
+  .drag-hint { font-size: 10px; color: var(--faint); padding: 0 4px 4px; }
+
+  .card {
+    position: relative; display: flex; align-items: center; gap: 12px;
+    padding: 10px 40px 10px 10px; margin-bottom: 4px;
+    border-radius: 8px; border: 1px solid transparent; cursor: pointer; user-select: none;
+    transition: all .15s ease;
+  }
+  .card:hover { border-color: var(--line); background: rgba(249,250,251,.6); }
+  .card.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .card-icon { width: 40px; height: 40px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .card-body { min-width: 0; flex: 1; }
+  .card-title { font-size: 13px; font-weight: 500; margin: 0; line-height: 1.4; }
+  .card-desc { font-size: 11px; color: var(--muted); margin: 2px 0 0; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .check {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; border-radius: 50%; background: var(--line);
+    display: flex; align-items: center; justify-content: center; transition: all .15s;
+  }
+  .check svg { width: 12px; height: 12px; fill: transparent; }
+  .card.sel .check { background: var(--accent); }
+  .card.sel .check svg { fill: #fff; }
+
+  /* ---- A: dense list ---- */
+  .sb-232 { width: 232px; }
+  .row {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    padding: 5px 26px 5px 6px; margin-bottom: 2px;
+    border-radius: 6px; border: 1px solid transparent; cursor: pointer; user-select: none;
+  }
+  .row:hover { border-color: var(--line); background: rgba(249,250,251,.6); }
+  .row.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .row-icon { width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .row-title { font-size: 12.5px; font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .row .check { width: 16px; height: 16px; right: 6px; }
+  .row .check svg { width: 9px; height: 9px; }
+  .sb-232 .sb-header { padding: 10px 12px; }
+  .sb-232 .sb-search { padding: 8px 12px; }
+  .sb-232 .sb-content { padding: 6px 8px 10px; }
+
+  /* ---- B: icon rail ---- */
+  .rail {
+    width: 52px; flex-shrink: 0; border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 2px;
+    background: #fff; position: relative; z-index: 3;
+  }
+  .rail-divider { width: 28px; border-top: 1px solid var(--line); margin: 6px 0; }
+  .rail-btn {
+    position: relative; width: 38px; height: 38px; border-radius: 8px; border: none;
+    background: transparent; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .rail-btn:hover { background: var(--bg); }
+  .rail-btn.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  .rail-btn.sel::after {
+    content: ""; position: absolute; left: -7px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 18px; border-radius: 2px; background: var(--accent);
+  }
+  .rail-more { color: var(--faint); font-size: 15px; }
+  .rail-flyout {
+    position: absolute; left: 52px; top: 0; bottom: 0; width: 248px;
+    background: #fff; border-right: 1px solid var(--line); box-shadow: 6px 0 18px rgba(0,0,0,0.07);
+    z-index: 2; padding: 8px; overflow-y: auto;
+    opacity: 0; pointer-events: none; transform: translateX(-6px); transition: all .18s ease;
+  }
+  .rail-wrap:hover .rail-flyout, .rail-flyout.open { opacity: 1; pointer-events: auto; transform: none; }
+  .flyout-hint { font-size: 11px; color: var(--faint); padding: 4px 6px 8px; }
+
+  /* ---- C: chip bar ---- */
+  .chipbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 14px; border-bottom: 1px solid var(--line); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; padding: 3px 8px 3px 6px;
+    border: 1px solid var(--line); border-radius: 999px; background: #fff;
+    cursor: grab; user-select: none; white-space: nowrap;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .chip .x { color: var(--faint); font-size: 13px; line-height: 1; cursor: pointer; padding: 0 1px; border: none; background: none; }
+  .chip .x:hover { color: #dc2626; }
+  .chip-add {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500;
+    color: var(--accent); background: var(--accent-soft); border: 1px dashed rgba(59,130,246,0.45);
+    border-radius: 999px; padding: 3px 10px; cursor: pointer; user-select: none;
+  }
+  .addmenu {
+    position: absolute; top: 44px; left: 14px; width: 264px; max-height: 290px; overflow-y: auto;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12); z-index: 5; padding: 8px; display: none;
+  }
+  .addmenu.open { display: block; }
+
+  /* ---- D: popover picker ---- */
+  .viz-btn {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500;
+    border: 1px solid var(--line); border-radius: 7px; background: #fff; padding: 5px 11px;
+    cursor: pointer; user-select: none; color: var(--ink);
+  }
+  .viz-btn .count { background: var(--accent); color: #fff; border-radius: 999px; font-size: 10.5px; padding: 1px 7px; font-weight: 600; }
+  .popover {
+    position: absolute; top: 44px; left: 14px; width: 300px; max-height: 300px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 12px 34px rgba(0,0,0,0.14); z-index: 5;
+    display: none; flex-direction: column; overflow: hidden;
+  }
+  .popover.open { display: flex; }
+  .popover .sb-search { padding: 10px 12px; }
+  .popover .sb-content { padding: 6px 10px 10px; }
+
+  /* ---- E: overlay ---- */
+  .peek-strip {
+    width: 20px; flex-shrink: 0; border-right: 1px solid var(--line); background: var(--bg);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    color: var(--faint); position: relative; z-index: 3;
+  }
+  .peek-strip:hover { background: #f3f4f6; color: #374151; }
+  .overlay-sb {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 300px; z-index: 4;
+    background: #fff; border-right: 1px solid var(--line);
+    box-shadow: 10px 0 28px rgba(0,0,0,0.10);
+    transform: translateX(-100%); transition: transform .22s ease;
+    display: flex; flex-direction: column;
+  }
+  .overlay-open .overlay-sb { transform: none; }
+  .overlay-scrim { position: absolute; inset: 0; background: rgba(17,24,39,0.06); z-index: 3; display: none; }
+  .overlay-open .overlay-scrim { display: block; }
+
+  /* ---- pros/cons + table ---- */
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .pc div { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; }
+  .pc h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .pc .pros h4 { color: #065f46; } .pc .cons h4 { color: #92400e; }
+  .pc ul { margin: 0; padding-left: 18px; color: #374151; }
+  .pc li { margin: 3px 0; }
+  .impl { font-size: 13px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
+  .impl code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+  table.cmp { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 13.5px; margin-top: 12px; }
+  .cmp th, .cmp td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .cmp th { background: var(--bg); font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  .cmp tr:last-child td { border-bottom: none; }
+  .good { color: #065f46; font-weight: 600; }
+  .ok { color: #92400e; font-weight: 600; }
+  .reco { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 18px 22px; margin-top: 40px; }
+  .reco h2 { margin-top: 0; }
+  @media (max-width: 800px) { .pc { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Patient Profile — making the visualization sidebar smaller</h1>
+  <p class="subtitle">
+    The sidebar is a fixed <b>300&nbsp;px</b> and each card spends <b>~60&nbsp;px of height</b>
+    (40&nbsp;px icon + title + two-line description). On a laptop inside the dock, that is
+    roughly a quarter of the block's width spent on a picker you touch once per session.
+    Below are five alternatives, from a pure CSS diet to removing the sidebar entirely.
+    All mockups use the real viz metadata (labels, domains, icons, colors) and are lightly
+    interactive — click cards, chips and buttons.
+  </p>
+
+  <!-- ================= CURRENT ================= -->
+  <h2>Current design <span class="tag tag-ref">reference — 300 px</span></h2>
+  <p class="lead">What ships today: header + search + SELECTED / AVAILABLE card list.
+     The description line and the 40&nbsp;px icon are what make it wide <i>and</i> tall.</p>
+  <div class="frame">
+    <div class="sb sb-300">
+      <div class="sb-header"><h3 class="sb-title">Visualizations</h3><button class="pin-btn">📌</button></div>
+      <div class="sb-search"><input class="search-input" placeholder="Search visualizations..."></div>
+      <div class="sb-content" id="mock-current"></div>
+    </div>
+    <div class="chart-area">
+      <div class="toolbar">
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="charts" id="charts-current"></div>
+    </div>
+  </div>
+  <p class="frame-note">Faithful rebuild of the shipped CSS (300 px sidebar, 60 px cards).</p>
+
+  <!-- ================= A ================= -->
+  <h2>1 · Compact rows <span class="tag tag-save">300 → 232 px · rows 60 → 29 px</span></h2>
+  <p class="lead">
+    Keep the sidebar and its whole interaction model, but put it on a diet: <b>one-line rows</b>,
+    22&nbsp;px icon chips, description demoted to a native tooltip (hover a row). Search, sections,
+    domain groups and drag-reorder all survive unchanged. Twice as many vizs visible without scrolling.
+  </p>
+  <div class="frame">
+    <div class="sb sb-232">
+      <div class="sb-header"><h3 class="sb-title" style="font-size:13.5px">Visualizations</h3><button class="pin-btn">📌</button></div>
+      <div class="sb-search"><input class="search-input" style="padding-top:6px;padding-bottom:6px" placeholder="Search..."></div>
+      <div class="sb-content" id="mock-dense"></div>
+    </div>
+    <div class="chart-area">
+      <div class="toolbar">
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="charts" id="charts-dense"></div>
+    </div>
+  </div>
+  <p class="frame-note"><span class="interactive-hint">Interactive:</span> click rows to select / deselect; hover for the description tooltip.</p>
+  <div class="pc">
+    <div class="pros"><h4>Pros</h4><ul>
+      <li>Cheapest change by far — CSS + dropping one <code>&lt;p&gt;</code> from <code>build_card()</code></li>
+      <li>Nothing about search / drag / sections / sync logic changes</li>
+      <li>~2× vertical density; whole AVAILABLE list often fits without scrolling</li>
+    </ul></div>
+    <div class="cons"><h4>Cons</h4><ul>
+      <li>Still a permanent 232 px column</li>
+      <li>Descriptions only on hover (fine — they are mostly PARAMCD lists)</li>
+    </ul></div>
+  </div>
+  <div class="impl">Touchpoints: <code>patient-profile.css</code> (<code>.pp-sidebar</code> width, <code>.pp-card-*</code> sizes) and <code>build_card()</code> in <code>patient-profile-block.R</code> (move description to <code>title=</code> attribute).</div>
+
+  <!-- ================= B ================= -->
+  <h2>2 · Icon rail with hover flyout <span class="tag tag-save">300 → 52 px</span></h2>
+  <p class="lead">
+    Collapse the sidebar to a <b>52&nbsp;px rail of icon buttons</b> — selected vizs on top
+    (accent ring + left bar), a divider, then the available ones. Hovering the rail slides out
+    a flyout with the full labeled list (search included); it retracts when the pointer leaves.
+    The picker stays permanently visible and one click away, at a sixth of the width.
+  </p>
+  <div class="frame">
+    <div class="rail-wrap" style="display:flex; position:relative;">
+      <div class="rail" id="rail"></div>
+      <div class="rail-flyout">
+        <div class="flyout-hint">Pin ▸ to keep open · Esc to close</div>
+        <div class="sb-search" style="border-bottom:none;padding:0 4px 8px"><input class="search-input" style="padding-top:6px;padding-bottom:6px" placeholder="Search..."></div>
+        <div id="mock-rail-flyout"></div>
+      </div>
+    </div>
+    <div class="chart-area">
+      <div class="toolbar">
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="charts" id="charts-rail"></div>
+    </div>
+  </div>
+  <p class="frame-note"><span class="interactive-hint">Interactive:</span> hover the rail to open the flyout; click icons or rows to toggle.</p>
+  <div class="pc">
+    <div class="pros"><h4>Pros</h4><ul>
+      <li>Selection state always visible at a glance (colored icons + accent marks)</li>
+      <li>~250 px returned to charts, permanently</li>
+      <li>Familiar pattern (VS Code activity bar, dock sidebars)</li>
+    </ul></div>
+    <div class="cons"><h4>Cons</h4><ul>
+      <li>Icons alone are ambiguous — 5 lab panels share the droplet icon, so the flyout is mandatory</li>
+      <li>More JS: flyout open/close, hover intent, pinning</li>
+      <li>Drag-reorder needs to live in the flyout, not the rail</li>
+    </ul></div>
+  </div>
+  <div class="impl">The collapse/expand plumbing (<code>pp-pin-btn</code>, <code>pp-expand-btn</code>) already exists — the rail replaces the fully-collapsed state rather than adding a third mode.</div>
+
+  <!-- ================= C ================= -->
+  <h2>3 · Chip bar on top <span class="tag tag-save">sidebar gone · ~36 px of height</span></h2>
+  <p class="lead">
+    Drop the sidebar entirely. Selected vizs become <b>removable chips in a bar above the charts</b>,
+    sharing the row with an <b>+ Add</b> button that opens the searchable card list as a dropdown.
+    Chips drag to reorder; the domain color dot keeps them scannable. Horizontal cost: zero.
+  </p>
+  <div class="frame" id="frame-chip">
+    <div class="chart-area">
+      <div class="toolbar">
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="chipbar" id="chipbar"></div>
+      <div class="charts" id="charts-chip"></div>
+    </div>
+    <div class="addmenu" id="addmenu">
+      <div class="sb-search" style="border-bottom:none;padding:2px 4px 8px"><input class="search-input" style="padding-top:6px;padding-bottom:6px" placeholder="Search visualizations..."></div>
+      <div id="mock-addmenu"></div>
+    </div>
+  </div>
+  <p class="frame-note"><span class="interactive-hint">Interactive:</span> remove chips with ×, click <b>+ Add</b> to open the picker menu.</p>
+  <div class="pc">
+    <div class="pros"><h4>Pros</h4><ul>
+      <li>Zero horizontal cost — charts get the full block width</li>
+      <li>Selected set and its order are always visible (chips <i>are</i> the order)</li>
+      <li>Chips double as quick-remove; matches the existing per-panel × button</li>
+    </ul></div>
+    <div class="cons"><h4>Cons</h4><ul>
+      <li>AVAILABLE list only visible inside the dropdown — less browsable/discoverable</li>
+      <li>Many selected vizs wrap the bar to 2 rows, eating the height it saved</li>
+      <li>Bigger refactor: sidebar render, search JS and toggle sync move into a menu</li>
+    </ul></div>
+  </div>
+  <div class="impl">The dropdown should reuse <code>build_card()</code> as-is; portal it to <code>&lt;body&gt;</code> like Blockr.Select so it escapes <code>.pp-chart-area</code> overflow (same clipping trap as the gear popover).</div>
+
+  <!-- ================= D ================= -->
+  <h2>4 · Toolbar popover picker <span class="tag tag-save">sidebar gone · 0 px standing cost</span></h2>
+  <p class="lead">
+    The most radical: the whole picker lives behind <b>one toolbar button</b> next to the subject
+    picker, showing a count badge. Clicking opens the current sidebar — cards, search, SELECTED /
+    AVAILABLE — as a popover, unchanged. When closed, the profile is 100% charts.
+  </p>
+  <div class="frame" id="frame-pop">
+    <div class="chart-area">
+      <div class="toolbar">
+        <button class="viz-btn" id="vizbtn">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="#374151"><path fill-rule="evenodd" d="M0 0h1v15h15v1H0zm14.817 3.113a.5.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61 4.15-5.073a.5.5 0 0 1 .704-.07"/></svg>
+          Visualizations <span class="count" id="vizcount">3</span>
+        </button>
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="charts" id="charts-pop"></div>
+    </div>
+    <div class="popover" id="popover">
+      <div class="sb-search"><input class="search-input" style="padding-top:6px;padding-bottom:6px" placeholder="Search visualizations..."></div>
+      <div class="sb-content" id="mock-popover"></div>
+    </div>
+  </div>
+  <p class="frame-note"><span class="interactive-hint">Interactive:</span> click <b>Visualizations</b> to open/close the picker; toggle cards inside — the badge updates.</p>
+  <div class="pc">
+    <div class="pros"><h4>Pros</h4><ul>
+      <li>Absolute maximum chart space — nothing persistent at all</li>
+      <li>Card list, search and section logic reused verbatim inside the popover</li>
+      <li>Matches how the gear popover already works — consistent block chrome</li>
+    </ul></div>
+    <div class="cons"><h4>Cons</h4><ul>
+      <li>Selection state invisible while closed (only a count)</li>
+      <li>Two clicks to toggle one viz; browsing while comparing charts means reopening</li>
+      <li>First-time discoverability is the weakest of the five</li>
+    </ul></div>
+  </div>
+  <div class="impl">Essentially "move <code>pp-sidebar</code> into a portalled popover". The existing collapse state machine goes away; the popover needs the same <code>&lt;body&gt;</code> portal treatment as Blockr.Select.</div>
+
+  <!-- ================= E ================= -->
+  <h2>5 · Overlay + auto-hide <span class="tag tag-save">0 px steady-state · sidebar unchanged</span></h2>
+  <p class="lead">
+    Keep today's sidebar pixel-for-pixel, but change its <b>behavior</b>: it overlays the charts
+    instead of pushing them, opens from a slim 20&nbsp;px edge strip, and auto-hides after you
+    add or remove a viz. Steady state is all charts; the full browsable list is one hover away.
+    Pin it (📌 already exists) to get exactly today's pushed layout back.
+  </p>
+  <div class="frame" id="frame-overlay">
+    <div class="peek-strip" id="peek" title="Show visualizations">›</div>
+    <div class="overlay-scrim" id="scrim"></div>
+    <div class="overlay-sb">
+      <div class="sb-header"><h3 class="sb-title">Visualizations</h3><button class="pin-btn" title="Pin (keep open, push layout)">📌</button></div>
+      <div class="sb-search"><input class="search-input" placeholder="Search visualizations..."></div>
+      <div class="sb-content" id="mock-overlay"></div>
+    </div>
+    <div class="chart-area">
+      <div class="toolbar">
+        <div class="subject-picker"><button class="step-btn">‹</button><select class="subject-select"><option>01-701-1015 · Placebo</option></select><button class="step-btn">›</button></div>
+        <button class="gear-btn">⚙</button>
+      </div>
+      <div class="charts" id="charts-overlay"></div>
+    </div>
+  </div>
+  <p class="frame-note"><span class="interactive-hint">Interactive:</span> click the thin edge strip to slide the sidebar over the charts; selecting a card auto-hides it; click the scrim to dismiss.</p>
+  <div class="pc">
+    <div class="pros"><h4>Pros</h4><ul>
+      <li>Zero visual redesign — same cards, same search, same everything</li>
+      <li>Full-width charts by default, full browsable list on demand</li>
+      <li>Pin restores current behavior for users who prefer it (state already serialized)</li>
+    </ul></div>
+    <div class="cons"><h4>Cons</h4><ul>
+      <li>Overlay hides the leftmost chart while open — no live side-by-side while picking</li>
+      <li>Auto-hide can feel jumpy when adding several vizs in a row (mitigate: hide only on scrim click / Esc, not on select)</li>
+    </ul></div>
+  </div>
+  <div class="impl">Mostly CSS: <code>.pp-sidebar</code> becomes <code>position:absolute</code> over <code>.pp-layout</code> with a transform transition; the existing collapsed/pin state machine drives it. The 20 px strip replaces today's floating expand button.</div>
+
+  <!-- ================= comparison ================= -->
+  <h2>Side-by-side</h2>
+  <table class="cmp">
+    <tr><th>Option</th><th>Standing cost</th><th>Selection visible?</th><th>Browse/discover</th><th>Effort</th></tr>
+    <tr><td><b>Current</b></td><td>300 px</td><td class="good">Always, labeled</td><td class="good">Best</td><td>—</td></tr>
+    <tr><td><b>1 · Compact rows</b></td><td>232 px</td><td class="good">Always, labeled</td><td class="good">Best</td><td class="good">Tiny (CSS + 1 line R)</td></tr>
+    <tr><td><b>2 · Icon rail</b></td><td>52 px</td><td class="good">Always (icons)</td><td class="ok">Flyout hover</td><td class="ok">Medium (flyout JS)</td></tr>
+    <tr><td><b>3 · Chip bar</b></td><td>~36 px height</td><td class="good">Always (chips + order)</td><td class="ok">Dropdown only</td><td class="ok">Medium–large</td></tr>
+    <tr><td><b>4 · Popover</b></td><td>0</td><td class="ok">Count badge only</td><td class="ok">On demand</td><td class="ok">Medium</td></tr>
+    <tr><td><b>5 · Overlay auto-hide</b></td><td>0 (20 px strip)</td><td class="ok">Hidden until opened</td><td class="good">Full list, 1 hover</td><td class="good">Small (CSS + behavior)</td></tr>
+  </table>
+
+  <div class="reco">
+    <h2>Recommendation</h2>
+    <p class="lead" style="margin-bottom:8px">
+      <b>Ship 1 + 5 together.</b> Compact rows are nearly free and help even while the sidebar is open;
+      overlay + auto-hide makes the steady state 100% charts without redesigning anything, and the
+      existing pin gives conservative users today's layout back. Combined: a 232&nbsp;px overlay that
+      costs 20&nbsp;px when idle.
+    </p>
+    <p class="lead" style="margin-bottom:0">
+      If you want a stronger visual statement later, <b>2 (icon rail)</b> is the natural second step —
+      it reuses the compact rows inside its flyout. Options 3/4 only become attractive if the sidebar
+      concept itself should disappear from the block chrome.
+    </p>
+  </div>
+</div>
+
+<script>
+  // Real viz metadata from blockr.pharma (labels, domains, icons, colors).
+  var ICONS = {
+    "exclamation-triangle": '<path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767z"/><path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>',
+    "droplet": '<path fill-rule="evenodd" d="M7.21.8C7.69.295 8 0 8 0q.164.544.371 1.038c.812 1.946 2.073 3.35 3.197 4.6C12.878 7.096 14 8.345 14 10a6 6 0 0 1-12 0C2 6.668 5.58 2.517 7.21.8m.413 1.021A31 31 0 0 0 5.171 4.9C3.806 6.583 3 8.29 3 10a5 5 0 0 0 10 0c0-1.382-.87-2.501-2.029-3.769-.133-.145-.27-.296-.41-.449a29 29 0 0 1-3.349-4.045 25 25 0 0 1-.413-.916"/>',
+    "droplet-half": '<path fill-rule="evenodd" d="M7.21.8C7.69.295 8 0 8 0q.164.544.371 1.038c.812 1.946 2.073 3.35 3.197 4.6C12.878 7.096 14 8.345 14 10a6 6 0 0 1-12 0C2 6.668 5.58 2.517 7.21.8M8 1.632A30 30 0 0 0 5.252 4.82C3.86 6.532 3 8.266 3 10a5 5 0 0 0 5 5zm0 0A30 30 0 0 1 10.748 4.82C12.14 6.532 13 8.266 13 10a5 5 0 0 1-5 5z"/>',
+    "heart-pulse": '<path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01z"/><path d="M5.966 9.463a.5.5 0 0 0-.416.222l-.98 1.373L3.084 8.66a.5.5 0 0 0-.864.504l1.81 3.163a.5.5 0 0 0 .863.01l1.347-1.886 1.28 1.553a.5.5 0 0 0 .76.02l1.56-1.769 1.378 1.126a.5.5 0 1 0 .634-.776L10.34 9.27a.5.5 0 0 0-.712.02L8.13 10.94l-1.385-1.681a.5.5 0 0 0-.344-.213z" fill="#fff"/>',
+    "capsule": '<path d="M1.828 8.9 8.9 1.827a4 4 0 1 1 5.657 5.657l-7.07 7.071A4 4 0 1 1 1.827 8.9Zm9.128.771 2.893-2.893a3 3 0 1 0-4.243-4.242L6.713 5.429z"/>',
+    "grid-3x3": '<path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5zM1.5 1a.5.5 0 0 0-.5.5V5h4V1zM5 6H1v4h4zm1 4h4V6H6zm-1 1H1v3.5a.5.5 0 0 0 .5.5H5zm1 0v4h4v-4zm5 0v4h3.5a.5.5 0 0 0 .5-.5V11zm0-1h4V6h-4zm0-5h4V1.5a.5.5 0 0 0-.5-.5H11zm-1 0V1H6v4z"/>'
+  };
+
+  var VIZS = [
+    { id:"overview", label:"Patient Overview", domain:"Treatment", icon:"capsule", color:"#059669", desc:"Treatment, exposure, adverse events, visits & milestones", sel:true },
+    { id:"ae", label:"Adverse Events", domain:"Adverse Events", icon:"exclamation-triangle", color:"#7C3AED", desc:"Gantt bars showing AE duration by preferred term", sel:true },
+    { id:"liver", label:"Liver Panel", domain:"Laboratory", icon:"droplet", color:"#2563EB", desc:"ALT, AST, Bilirubin, GGT, ALP", sel:true },
+    { id:"cm", label:"Concomitant Medications", domain:"Medications", icon:"capsule", color:"#0891B2", desc:"Gantt bars showing medication periods", sel:false },
+    { id:"renal", label:"Renal Panel", domain:"Laboratory", icon:"droplet", color:"#2563EB", desc:"BUN, Creatinine, Urate", sel:false },
+    { id:"lytes", label:"Electrolytes", domain:"Laboratory", icon:"droplet", color:"#2563EB", desc:"Sodium, Potassium, Chloride, Calcium, Phosphorus", sel:false },
+    { id:"cbc", label:"CBC", domain:"Laboratory", icon:"droplet-half", color:"#059669", desc:"WBC, RBC, Hemoglobin, Hematocrit, Platelets", sel:false },
+    { id:"bp", label:"Blood Pressure", domain:"Vitals", icon:"heart-pulse", color:"#D97706", desc:"Systolic & Diastolic Blood Pressure", sel:false },
+    { id:"pulse", label:"Pulse", domain:"Vitals", icon:"heart-pulse", color:"#D97706", desc:"Pulse rate", sel:false },
+    { id:"qsheat", label:"Questionnaire Heatmap", domain:"Questionnaires", icon:"grid-3x3", color:"#6366F1", desc:"Heatmap of questionnaire scores across items and visits", sel:false }
+  ];
+
+  function iconBox(v, size, radius, glyph) {
+    var m = v.color.replace("#","");
+    var r = parseInt(m.substr(0,2),16), g = parseInt(m.substr(2,2),16), b = parseInt(m.substr(4,2),16);
+    return '<div style="width:'+size+'px;height:'+size+'px;border-radius:'+radius+'px;background:rgba('+r+','+g+','+b+',0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+      '<svg width="'+glyph+'" height="'+glyph+'" viewBox="0 0 16 16" fill="'+v.color+'">'+ICONS[v.icon]+'</svg></div>';
+  }
+  var CHECK = '<div class="check"><svg viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg></div>';
+
+  // Independent selection state per mockup.
+  function makeState() {
+    var s = {};
+    VIZS.forEach(function(v){ s[v.id] = v.sel; });
+    return s;
+  }
+
+  function chartSkeleton(v) {
+    var pts = "0,34 30,26 60,30 90,18 120,22 150,10 180,16 210,8 240,14 270,4";
+    return '<div class="chart-skel"><div class="chart-skel-title">'+v.label+'</div>' +
+      '<svg viewBox="0 0 280 40" preserveAspectRatio="none">' +
+      '<polyline points="'+pts+'" fill="none" stroke="'+v.color+'" stroke-width="1.6" opacity="0.55"/>' +
+      '<line x1="0" y1="39" x2="280" y2="39" stroke="#e5e7eb"/></svg></div>';
+  }
+
+  function renderCharts(el, state) {
+    var selected = VIZS.filter(function(v){ return state[v.id]; });
+    el.innerHTML = selected.length
+      ? selected.slice(0,3).map(chartSkeleton).join("") +
+        (selected.length > 3 ? '<div style="font-size:11px;color:#9ca3af;text-align:center">+' + (selected.length-3) + ' more below</div>' : "")
+      : '<div style="margin:auto;color:#9ca3af;font-size:13px">Click cards in the sidebar to add charts</div>';
+  }
+
+  // ---- full cards (current / popover / overlay) ----
+  function renderCards(el, state, opts) {
+    opts = opts || {};
+    var selected = VIZS.filter(function(v){ return state[v.id]; });
+    var avail = VIZS.filter(function(v){ return !state[v.id]; });
+    var html = '<div class="section-header">Selected</div>';
+    if (selected.length > 1) html += '<div class="drag-hint">Drag to reorder</div>';
+    selected.forEach(function(v){ html += cardHTML(v, true); });
+    if (!selected.length) html += '<div class="drag-hint">Click a card below to add it here</div>';
+    html += '<div class="section-header" style="margin-top:6px">Available</div>';
+    var domains = [];
+    avail.forEach(function(v){ if (domains.indexOf(v.domain) < 0) domains.push(v.domain); });
+    domains.forEach(function(d){
+      html += '<div class="cat-header">'+d+'</div>';
+      avail.filter(function(v){ return v.domain === d; }).forEach(function(v){ html += cardHTML(v, false); });
+    });
+    el.innerHTML = html;
+    el.querySelectorAll(".card").forEach(function(c){
+      c.addEventListener("click", function(){
+        state[c.dataset.id] = !state[c.dataset.id];
+        renderCards(el, state, opts);
+        if (opts.charts) renderCharts(opts.charts, state);
+        if (opts.after) opts.after();
+      });
+    });
+  }
+  function cardHTML(v, sel) {
+    return '<div class="card'+(sel?" sel":"")+'" data-id="'+v.id+'">' + iconBox(v,40,7,20) +
+      '<div class="card-body"><p class="card-title">'+v.label+'</p><p class="card-desc">'+v.desc+'</p></div>' + CHECK + '</div>';
+  }
+
+  // ---- dense rows ----
+  function renderRows(el, state, chartsEl) {
+    var selected = VIZS.filter(function(v){ return state[v.id]; });
+    var avail = VIZS.filter(function(v){ return !state[v.id]; });
+    var html = '<div class="section-header">Selected</div>';
+    selected.forEach(function(v){ html += rowHTML(v, true); });
+    html += '<div class="section-header" style="margin-top:6px">Available</div>';
+    var domains = [];
+    avail.forEach(function(v){ if (domains.indexOf(v.domain) < 0) domains.push(v.domain); });
+    domains.forEach(function(d){
+      html += '<div class="cat-header">'+d+'</div>';
+      avail.filter(function(v){ return v.domain === d; }).forEach(function(v){ html += rowHTML(v, false); });
+    });
+    el.innerHTML = html;
+    el.querySelectorAll(".row").forEach(function(c){
+      c.addEventListener("click", function(){
+        state[c.dataset.id] = !state[c.dataset.id];
+        renderRows(el, state, chartsEl);
+        renderCharts(chartsEl, state);
+      });
+    });
+  }
+  function rowHTML(v, sel) {
+    return '<div class="row'+(sel?" sel":"")+'" data-id="'+v.id+'" title="'+v.desc+'">' + iconBox(v,22,5,12) +
+      '<span class="row-title">'+v.label+'</span>' + CHECK + '</div>';
+  }
+
+  // ================= instantiate mockups =================
+
+  // Current
+  (function(){
+    var st = makeState();
+    renderCards(document.getElementById("mock-current"), st, { charts: document.getElementById("charts-current") });
+    renderCharts(document.getElementById("charts-current"), st);
+  })();
+
+  // 1 · dense
+  (function(){
+    var st = makeState();
+    renderRows(document.getElementById("mock-dense"), st, document.getElementById("charts-dense"));
+    renderCharts(document.getElementById("charts-dense"), st);
+  })();
+
+  // 2 · rail
+  (function(){
+    var st = makeState();
+    var rail = document.getElementById("rail");
+    var fly = document.getElementById("mock-rail-flyout");
+    var charts = document.getElementById("charts-rail");
+    function render() {
+      var selected = VIZS.filter(function(v){ return st[v.id]; });
+      var avail = VIZS.filter(function(v){ return !st[v.id]; });
+      var html = "";
+      selected.forEach(function(v){
+        html += '<button class="rail-btn sel" data-id="'+v.id+'" title="'+v.label+'">'+iconBox(v,26,6,14)+'</button>';
+      });
+      html += '<div class="rail-divider"></div>';
+      avail.slice(0,5).forEach(function(v){
+        html += '<button class="rail-btn" data-id="'+v.id+'" title="'+v.label+'">'+iconBox(v,26,6,14)+'</button>';
+      });
+      if (avail.length > 5) html += '<div class="rail-more" title="More in flyout">⋯</div>';
+      rail.innerHTML = html;
+      rail.querySelectorAll(".rail-btn").forEach(function(b){
+        b.addEventListener("click", function(){ st[b.dataset.id] = !st[b.dataset.id]; render(); });
+      });
+      renderRowsInto();
+      renderCharts(charts, st);
+    }
+    function renderRowsInto() {
+      renderRows(fly, st, charts);
+      // renderRows re-binds its own clicks but must also refresh the rail:
+      fly.querySelectorAll(".row").forEach(function(c){
+        c.addEventListener("click", function(){ setTimeout(render, 0); });
+      });
+    }
+    render();
+  })();
+
+  // 3 · chip bar
+  (function(){
+    var st = makeState();
+    var bar = document.getElementById("chipbar");
+    var menu = document.getElementById("addmenu");
+    var charts = document.getElementById("charts-chip");
+    function render() {
+      var selected = VIZS.filter(function(v){ return st[v.id]; });
+      var html = "";
+      selected.forEach(function(v){
+        html += '<span class="chip" data-id="'+v.id+'" title="'+v.desc+'"><span class="dot" style="background:'+v.color+'"></span>'+v.label+'<button class="x" data-id="'+v.id+'">×</button></span>';
+      });
+      html += '<span class="chip-add" id="chip-add">＋ Add</span>';
+      bar.innerHTML = html;
+      bar.querySelectorAll(".x").forEach(function(x){
+        x.addEventListener("click", function(e){ e.stopPropagation(); st[x.dataset.id] = false; render(); });
+      });
+      document.getElementById("chip-add").addEventListener("click", function(e){
+        e.stopPropagation(); menu.classList.toggle("open");
+      });
+      renderCards(document.getElementById("mock-addmenu"), st, { charts: charts, after: render });
+      renderCharts(charts, st);
+    }
+    document.addEventListener("click", function(e){
+      if (!menu.contains(e.target) && e.target.id !== "chip-add") menu.classList.remove("open");
+    });
+    render();
+  })();
+
+  // 4 · popover
+  (function(){
+    var st = makeState();
+    var pop = document.getElementById("popover");
+    var btn = document.getElementById("vizbtn");
+    var charts = document.getElementById("charts-pop");
+    function render() {
+      document.getElementById("vizcount").textContent = VIZS.filter(function(v){ return st[v.id]; }).length;
+      renderCards(document.getElementById("mock-popover"), st, { charts: charts, after: render });
+      renderCharts(charts, st);
+    }
+    btn.addEventListener("click", function(e){ e.stopPropagation(); pop.classList.toggle("open"); });
+    document.addEventListener("click", function(e){ if (!pop.contains(e.target)) pop.classList.remove("open"); });
+    render();
+  })();
+
+  // 5 · overlay
+  (function(){
+    var st = makeState();
+    var frame = document.getElementById("frame-overlay");
+    var charts = document.getElementById("charts-overlay");
+    function render() {
+      renderCards(document.getElementById("mock-overlay"), st, {
+        charts: charts,
+        after: function(){ setTimeout(function(){ frame.classList.remove("overlay-open"); }, 350); }
+      });
+      renderCharts(charts, st);
+    }
+    document.getElementById("peek").addEventListener("click", function(){ frame.classList.add("overlay-open"); });
+    document.getElementById("scrim").addEventListener("click", function(){ frame.classList.remove("overlay-open"); });
+    render();
+  })();
+</script>
+</body>
+</html>
