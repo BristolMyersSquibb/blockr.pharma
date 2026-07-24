@@ -30,6 +30,11 @@
 #'   always renders its one subject. Ignored (and cleared) when the value is
 #'   absent from the incoming cohort. Defaults to `NULL`, i.e. no patient
 #'   chosen.
+#' @param smooth Line smoothing for the findings value lines (labs, vitals):
+#'   `"auto"` (default) draws monotone-smoothed lines -- no overshoot, the
+#'   curve never implies values outside the measured range -- `"off"` draws
+#'   straight segments. Also a toggle in the gear popover ("Value lines").
+#'   Same wire values as the chart block's `smooth` option.
 #' @details
 #' The ADSL column holding the treatment / arm label is study-level
 #' configuration, not block state: it is the arm field of the
@@ -86,10 +91,12 @@ new_patient_profile_block <- function(selected = NULL,
                                               timeline_mode = "rday",
                                               subject = NULL,
                                               show_prestudy = FALSE,
+                                              smooth = "auto",
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
   stopifnot(isTRUE(show_prestudy) || isFALSE(show_prestudy))
+  smooth <- match.arg(smooth, c("auto", "off"))
 
   # `arm_var` is study-level configuration, not block state: it is the
   # "arm_var" BOARD option (read reactively in the server below), never
@@ -398,6 +405,16 @@ new_patient_profile_block <- function(selected = NULL,
           r_show_prestudy <- shiny::reactiveVal(isTRUE(show_prestudy))
           shiny::observeEvent(input$show_prestudy, {
             r_show_prestudy(isTRUE(input$show_prestudy))
+          })
+
+          # Line smoothing for the findings value lines ("auto" = monotone,
+          # "off" = straight segments). Same wire values as the chart block's
+          # `smooth` option, so the two timeline surfaces speak one language.
+          r_smooth <- shiny::reactiveVal(smooth)
+          shiny::observeEvent(input$smooth_mode, {
+            if (isTRUE(input$smooth_mode %in% c("auto", "off"))) {
+              r_smooth(input$smooth_mode)
+            }
           })
 
           # Initialize selection to patient_overview + first available
@@ -841,6 +858,7 @@ new_patient_profile_block <- function(selected = NULL,
             ns <- session$ns
             init_mode <- shiny::isolate(r_timeline_mode())
             init_prestudy <- shiny::isolate(r_show_prestudy())
+            init_smooth <- shiny::isolate(r_smooth())
 
             gear_tag <- shiny::div(
               class = "pp-gear-wrap",
@@ -919,6 +937,20 @@ new_patient_profile_block <- function(selected = NULL,
                       "30-day screening window before treatment start"
                     ),
                     if (init_prestudy) "Full history" else "Screening only"
+                  )
+                ),
+                shiny::div(class = "pp-popover-row",
+                  shiny::span(class = "pp-popover-label", "Value lines"),
+                  shiny::tags$button(
+                    class = "pp-popover-toggle",
+                    id = ns("pp_smooth_toggle"),
+                    `data-smooth` = init_smooth,
+                    type = "button",
+                    title = paste0(
+                      "Monotone-smoothed value lines (the curve stays ",
+                      "inside the measured range), or straight segments"
+                    ),
+                    if (identical(init_smooth, "off")) "Straight" else "Smooth"
                   )
                 ),
                 # Data coverage: visuals that can't render for this data,
@@ -1134,6 +1166,9 @@ new_patient_profile_block <- function(selected = NULL,
             if ("cycle" %in% uses) {
               viz_settings$cycle_anchors <- r_cycle_anchors()
             }
+            # Block-level line smoothing rides along like the roles: consumed
+            # by the findings renderers, ignored by every other viz.
+            viz_settings$smooth <- r_smooth()
 
             # Check the declared `requires` / `requires_any` columns (a pure
             # presence check -- names were reconciled dm-wide by
@@ -1243,7 +1278,8 @@ new_patient_profile_block <- function(selected = NULL,
               viz_settings = r_viz_settings,
               timeline_mode = r_timeline_mode,
               subject = r_subject,
-              show_prestudy = r_show_prestudy
+              show_prestudy = r_show_prestudy,
+              smooth = r_smooth
             )
           )
         }
@@ -1438,6 +1474,7 @@ new_patient_profile_block <- function(selected = NULL,
             var dragActive = false;
             var tlModeInputId = '", ns("timeline_mode"), "';
             var prestudyInputId = '", ns("show_prestudy"), "';
+            var smoothInputId = '", ns("smooth_mode"), "';
             var gearBtnId = '", ns("pp_gear_btn"), "';
             var gearPopoverId = '", ns("pp_gear_popover"), "';
 
@@ -1581,6 +1618,18 @@ new_patient_profile_block <- function(selected = NULL,
                 $(this).attr('data-prestudy', next ? '1' : '0');
                 Shiny.setInputValue(prestudyInputId, next,
                                     {priority: 'event'});
+              });
+
+            // Value-line smoothing toggle, same flip-on-click pattern.
+            $(document).on('click',
+              '#' + layoutId + ' .pp-popover-toggle[data-smooth]',
+              function(e) {
+                e.stopPropagation();
+                var cur = $(this).attr('data-smooth');
+                var next = (cur === 'off') ? 'auto' : 'off';
+                $(this).text(next === 'off' ? 'Straight' : 'Smooth');
+                $(this).attr('data-smooth', next);
+                Shiny.setInputValue(smoothInputId, next, {priority: 'event'});
               });
 
             // Card click: toggle selection (server-driven, no optimistic toggle)
@@ -1879,7 +1928,7 @@ new_patient_profile_block <- function(selected = NULL,
     # ctrl chat can never read the input data.
     allow_empty_state = c("selected", "viz_settings", "subject"),
     external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject",
-                      "show_prestudy"),
+                      "show_prestudy", "smooth"),
     class = c("patient_profile_block", "dm_block"),
     ...
   )
