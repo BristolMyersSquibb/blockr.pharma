@@ -12,6 +12,7 @@ new_patient_profile_block(
   timeline_mode = "rday",
   subject = NULL,
   show_prestudy = FALSE,
+  smooth = "auto",
   ...
 )
 
@@ -42,6 +43,12 @@ timeline starts 30 days before treatment start (the screening window,
 so baselines stay visible) -- one medication started years earlier must
 not stretch every axis to it. \code{TRUE} restores the full range; also a
 toggle in the gear popover.}
+
+\item{smooth}{Line smoothing for the findings value lines (labs, vitals):
+\code{"auto"} (default) draws monotone-smoothed lines -- no overshoot, the
+curve never implies values outside the measured range -- \code{"off"} draws
+straight segments. Also a toggle in the gear popover ("Value lines").
+Same wire values as the chart block's \code{smooth} option.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}
 

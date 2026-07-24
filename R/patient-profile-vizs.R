@@ -773,10 +773,13 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
 #' @param table_name Domain table name (e.g., "adlbc")
 #' @param label Display label for the domain
 #' @param base_color Default line color
+#' @param smooth Line smoothing: `"auto"` (default) draws monotone-smoothed
+#'   lines, `"off"` straight segments. Block-level gear option.
 #' @noRd
 pp_render_findings <- function(dm_obj, time_range, table_name, label,
                                base_color, paramcds = NULL,
-                               ref_ms = NA_real_, mode = "date") {
+                               ref_ms = NA_real_, mode = "date",
+                               smooth = "auto") {
   # Structural columns (PARAMCD, AVAL, ADT) are validated upstream by the
   # dispatcher via pp_resolve_requires(). This function only handles row
   # emptiness and value filtering.
@@ -790,10 +793,14 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   if (nrow(tbl) == 0) return(pp_empty_chart(paste("No", label, "records")))
 
   anrind_colors <- list(H = "#dc2626", L = "#2563eb", N = "#059669")
-  param_colors <- c(
-    "#2563EB", "#dc2626", "#059669", "#D97706", "#7C3AED",
-    "#0891B2", "#EA580C", "#374151", "#0D9488", "#BE123C"
-  )
+  # One line color for every parameter: Okabe-Ito slot 1, the shared blockr
+  # palette (chart.js BLOCKR_PALETTE[0]). Each parameter sits in its own
+  # labeled grid, so a per-parameter color cycle did no identification work
+  # and drifted from the ecosystem palette. Color stays reserved for meaning:
+  # ANRIND status on the markers, the reference band. Arm-colored lines
+  # (trajectory -> profile continuity) are a follow-up -- they need the
+  # board scale map so both charts assign the same color per arm.
+  line_color <- "#0072B2"
 
   params <- sort(unique(tbl$PARAMCD))
   has_anrind <- "ANRIND" %in% colnames(tbl)
@@ -823,7 +830,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     p_data <- tbl[tbl$PARAMCD == param, , drop = FALSE]
     p_data <- p_data[order(p_data$ADT), , drop = FALSE]
     grid_idx <- p_idx - 1L
-    color <- param_colors[((p_idx - 1L) %% length(param_colors)) + 1L]
+    color <- line_color
 
     grid_top <- top_pad + 20 + grid_idx * (grid_height + grid_gap)
 
@@ -971,7 +978,12 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       xAxisIndex = grid_idx,
       yAxisIndex = grid_idx,
       data = line_data,
-      smooth = TRUE,
+      # Monotone, not the default spline: the spline overshoots between
+      # points, so it could dip through a reference band via values that
+      # were never measured. Monotone keeps local extrema exactly at the
+      # observations. "off" (block gear, "Line" toggle) = straight segments.
+      smooth = !identical(smooth, "off"),
+      smoothMonotone = "x",
       lineStyle = list(color = color, width = 2.5),
       areaStyle = list(color = area_gradient),
       itemStyle = list(color = color),
@@ -1322,7 +1334,8 @@ pp_findings_vizs <- function(dm_obj) {
               label = .label,
               base_color = .color,
               paramcds = paramcds,
-              ref_ms = ref_ms, mode = mode
+              ref_ms = ref_ms, mode = mode,
+              smooth = settings$smooth %||% "auto"
             )
           }
         })
@@ -1363,7 +1376,8 @@ pp_findings_vizs <- function(dm_obj) {
               label = .pc,
               base_color = .color,
               paramcds = .pc,
-              ref_ms = ref_ms, mode = mode
+              ref_ms = ref_ms, mode = mode,
+              smooth = settings$smooth %||% "auto"
             )
           }
         })
