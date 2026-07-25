@@ -862,6 +862,10 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
 
     y_axes[[p_idx]] <- list(
       type = "value",
+      # Fit the data, do NOT force zero. For lab/vital values (temperature, BP,
+      # ...) a forced 0 baseline just compresses the meaningful range. Matches
+      # the trajectory chart block (which also sets scale = TRUE).
+      scale = TRUE,
       gridIndex = grid_idx,
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
