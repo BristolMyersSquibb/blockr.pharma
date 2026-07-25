@@ -93,5 +93,3 @@ test_that("character reference ranges do not kill the card", {
   adlb$A1HI <- "8.0"
   expect_equal(plotted_values(render_findings_card(adlb)), c(2.7, 3.1, 2.9))
 })
-
-
