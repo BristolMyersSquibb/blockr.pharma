@@ -793,14 +793,14 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   if (nrow(tbl) == 0) return(pp_empty_chart(paste("No", label, "records")))
 
   anrind_colors <- list(H = "#dc2626", L = "#2563eb", N = "#059669")
-  # One line color for every parameter: Okabe-Ito slot 1, the shared blockr
-  # palette (chart.js BLOCKR_PALETTE[0]). Each parameter sits in its own
-  # labeled grid, so a per-parameter color cycle did no identification work
-  # and drifted from the ecosystem palette. Color stays reserved for meaning:
-  # ANRIND status on the markers, the reference band. Arm-colored lines
-  # (trajectory -> profile continuity) are a follow-up -- they need the
-  # board scale map so both charts assign the same color per arm.
-  line_color <- "#0072B2"
+  # One line color for every parameter: the board theme's `categorical`
+  # role, slot 1 (Okabe-Ito blue absent a theme). Each parameter sits in its
+  # own labeled grid, so a per-parameter color cycle did no identification
+  # work and drifted from the ecosystem palette. Color stays reserved for
+  # meaning: ANRIND status on the markers, the reference band. Arm-colored
+  # lines (trajectory -> profile continuity) are a follow-up -- they need
+  # the board scale map so both charts assign the same color per arm.
+  line_color <- blockr.theme::theme_palette("categorical", 1)
 
   params <- sort(unique(tbl$PARAMCD))
   has_anrind <- "ANRIND" %in% colnames(tbl)
