@@ -132,16 +132,13 @@ pp_sev_scale_colors <- function(map, dm_obj, sev_col = NULL) {
     return(NULL)
   }
 
-  # Follow provenance: a severity column copied/renamed upstream (picker
-  # blocks stamp `blockr_source`) inherits its source column's binding.
-  bind_col <- sev_col
-  if (!sev_col %in% names(map)) {
-    src <- attr(adae[[sev_col]], "blockr_source", exact = TRUE)
-    if (is.character(src) && length(src) == 1L && nzchar(src) &&
-          src %in% names(map)) {
-      bind_col <- src
-    }
+  # Follow provenance via the canonical resolver: a severity column
+  # copied/renamed upstream (picker blocks stamp `blockr_source`) inherits
+  # its source column's binding. Falls back to the plain name lookup on an
+  # installed blockr.theme that predates resolve_scales_col().
+  if ("resolve_scales_col" %in% getNamespaceExports("blockr.theme")) {
+    return(blockr.theme::resolve_scales_col(map, sev_col, adae[[sev_col]])$color)
   }
 
-  blockr.theme::resolve_scales(map, bind_col, levels = sev)$color
+  blockr.theme::resolve_scales(map, sev_col, levels = sev)$color
 }
