@@ -13,8 +13,11 @@
 # a cycle whose D1 visit was missing and whose start is therefore inferred
 # (see pp-cycle.R).
 #
-# Cycle NUMBER lives here. Cycle DAY cannot: it is a property of a point, not
-# an interval, so it rides in each viz's own tooltip via pp_with_cycle().
+# Cycle NUMBER lives here, because a band is an interval and no CDISC variable
+# holds one, so it has to be read out of the visit vocabulary. This is the only
+# place that reads it. A point's timepoint is not computed from these bands:
+# each point prints the visit label on its own row (pp_with_visit()), and a
+# point whose row says nothing gets nothing.
 #
 # GENERATED, NOT REGISTERED. Every other static viz can be judged from the
 # schema -- is the table there, are the columns there -- which is exactly what
@@ -34,9 +37,8 @@
 #'
 #' Availability is COHORT-based (the sidebar must not change as you page
 #' through patients), so this asks only whether the study uses the vocabulary
-#' at all -- never whether the patient on screen has cycles. It reads the
-#' DISTINCT visit labels rather than the column: a lab table runs to hundreds
-#' of thousands of rows and carries a few dozen visit names.
+#' at all -- never whether the patient on screen has cycles. Which table
+#' answers is [pp_cycle_source()]'s call, not this one's.
 #'
 #' @param dm_obj A normalized `dm` (unscoped).
 #' @return A named list holding the cycle viz, or an empty list.
@@ -44,19 +46,25 @@
 pp_cycle_vizs <- function(dm_obj) {
   none <- list()
   if (!inherits(dm_obj, "dm")) return(none)
-  tbls <- dm::dm_get_tables(dm_obj)
-  if (!"adlb" %in% names(tbls)) return(none)
-  df <- as.data.frame(tbls[["adlb"]])
-  if (!all(c("AVISIT", "ADT") %in% colnames(df))) return(none)
-  visits <- unique(as.character(df$AVISIT))
-  if (!any(!is.na(pp_parse_cycle_visits(visits)$cycle))) return(none)
-  stats::setNames(list(cycle_viz), cycle_viz$id)
+  src <- pp_cycle_source(dm::dm_get_tables(dm_obj))
+  if (is.null(src)) return(none)
+  # The declaration follows the source the study actually answered to
+  # (dosing first, labs behind it), so the availability filter and Data
+  # coverage name the table this lane really reads.
+  viz <- cycle_viz
+  viz$tables <- src$table
+  viz$requires <- stats::setNames(list(c(src$visit, src$date)), src$table)
+  stats::setNames(list(viz), viz$id)
 }
 
 #' Treatment cycles visualization definition
 #'
 #' Not in [patient_profile_static_vizs()] on purpose -- reached through
 #' [pp_cycle_vizs()]. See the note at the top of this file.
+#'
+#' `tables` / `requires` are the common case written down; [pp_cycle_vizs()]
+#' replaces them with whichever source the study answered to, because the
+#' vocabulary may equally live in the dosing table or in vitals.
 #' @noRd
 cycle_viz <- new_pp_viz(
   id = "cycle_lane",
@@ -73,7 +81,7 @@ cycle_viz <- new_pp_viz(
     anchors <- settings$cycle_anchors
     if (is.null(anchors) || !nrow(anchors)) {
       return(pp_empty_chart(
-        "No CYCLE n DAY m visits in the lab data for this patient"
+        "No CYCLE n DAY m visits for this patient"
       ))
     }
     if (identical(mode, "rday") && is.na(ref_ms)) {

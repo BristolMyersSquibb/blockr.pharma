@@ -120,11 +120,18 @@ pp_column_catalog <- function() {
       ASTDY = i("CMSTDY"),
       AENDY = i("CMENDY")
     ),
-    adex = list(
-      ASTDT = d("ASTDTC", "EXSTDTC"),
-      AENDT = d("AENDTC", "EXENDTC"),
-      ASTDY = i("EXSTDY"),
-      AENDY = i("EXENDY")
+    # The dosing table's VISIT is load-bearing twice over: it is the first
+    # place the cycle vocabulary is looked for (pp_cycle_sources()), and it
+    # is the SCHEDULED label a dose bar reports next to the date it was
+    # actually given ("CYCLE 1 DAY 8" on day 9).
+    adex = c(
+      list(
+        ASTDT = d("ASTDTC", "EXSTDTC"),
+        AENDT = d("AENDTC", "EXENDTC"),
+        ASTDY = i("EXSTDY"),
+        AENDY = i("EXENDY")
+      ),
+      findings_visits()
     )
   )
 }

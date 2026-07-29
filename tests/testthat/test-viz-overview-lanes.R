@@ -53,6 +53,83 @@ test_that("the exposure lane draws deduped dosing periods with the dose", {
   expect_setequal(doses, c("54 mg", "81 mg"))
 })
 
+ov_exposure <- function(chart) {
+  Filter(function(s) identical(s$name, "Exposure"), chart$x$opts$series)[[1]]
+}
+
+test_that("a combination regimen draws both drugs, in a slot each", {
+  # Same day, same dose string. Keying periods on (start, end, dose) made
+  # these ONE bar and dropped a drug outright; clinical review caught it as a
+  # Day 1 tooltip that answered for one of the two drugs given that day.
+  adex <- data.frame(
+    USUBJID = "x",
+    EXTRT = c("STUDY DRUG A", "STUDY DRUG B"),
+    EXDOSE = 200, EXDOSU = "mg",
+    ASTDT = as.Date("2020-01-06"), AENDT = as.Date("2020-01-06"),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+
+  expect_length(ex$data, 2L)
+  drugs <- vapply(ex$data, function(d) as.character(d$value[[5]]), "")
+  expect_setequal(drugs, c("STUDY DRUG A", "STUDY DRUG B"))
+  # Same lane, different slot within it -- so both are hoverable
+  expect_setequal(vapply(ex$data, function(d) d$value[[3]], numeric(1L)), 0)
+  expect_setequal(vapply(ex$data, function(d) d$value[[9]], integer(1L)),
+                  c(0L, 1L))
+  expect_true(all(vapply(ex$data, function(d) d$value[[8]], integer(1L)) == 2L))
+})
+
+test_that("one drug keeps the single slot it always had", {
+  adex <- data.frame(
+    USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = 54, EXDOSU = "mg",
+    ASTDT = as.Date("2020-01-01"), AENDT = as.Date("2020-06-01"),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+  expect_equal(ex$data[[1]]$value[[8]], 1L)
+  expect_equal(ex$data[[1]]$value[[9]], 0L)
+})
+
+test_that("one administration recorded in two units reports both", {
+  # The only route to "show mg/kg as well as mg": the study says it and we
+  # stop throwing the second row away. Nothing is derived from a weight.
+  adex <- data.frame(
+    USUBJID = "x", EXTRT = "STUDY DRUG A",
+    EXDOSE = c(800, 10), EXDOSU = c("mg", "mg/kg"),
+    ASTDT = as.Date("2020-01-06"), AENDT = as.Date("2020-01-06"),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+  expect_length(ex$data, 1L)
+  expect_equal(as.character(ex$data[[1]]$value[[10]]), "800 mg · 10 mg/kg")
+  # The bar itself is labelled with the first, which is what fits in it
+  expect_equal(as.character(ex$data[[1]]$value[[4]]), "800 mg")
+})
+
+test_that("a dose bar reports the visit its own row names", {
+  # Filed as CYCLE 1 DAY 8, infused a day late. Both facts, neither adjusted.
+  adex <- data.frame(
+    USUBJID = "x", EXTRT = "STUDY DRUG A", EXDOSE = 800, EXDOSU = "mg",
+    AVISIT = "CYCLE 1 DAY 8",
+    ASTDT = as.Date("2020-01-09"), AENDT = as.Date("2020-01-09"),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+  expect_equal(as.character(ex$data[[1]]$value[[6]]), "2020-01-09 (CYCLE 1 DAY 8)")
+})
+
+test_that("a dosing row's own label is printed, cycle or not", {
+  adex <- data.frame(
+    USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = 54, EXDOSU = "mg",
+    AVISIT = "WEEK 2",
+    ASTDT = as.Date("2020-01-09"), AENDT = as.Date("2020-01-09"),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+  expect_equal(as.character(ex$data[[1]]$value[[6]]), "2020-01-09 (WEEK 2)")
+})
+
 test_that("exposure present -> no envelope bar drawn beside it", {
   adex <- data.frame(
     USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = 54, EXDOSU = "mg",

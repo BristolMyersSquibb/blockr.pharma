@@ -93,3 +93,22 @@ test_that("character reference ranges do not kill the card", {
   adlb$A1HI <- "8.0"
   expect_equal(plotted_values(render_findings_card(adlb)), c(2.7, 3.1, 2.9))
 })
+
+test_that("a findings point reports the visit its own row names", {
+  # AVISIT on a findings row describes that row's timepoint, so it belongs
+  # beside its date -- printed, not interpreted: see pp-cycle.R.
+  adlb <- neut_adlb(AVISIT = c("CYCLE 1 DAY 1", "Cycle 2, Day 8", "UNSCHEDULED"))
+  chart <- render_findings_card(adlb)
+  pts <- Filter(function(s) identical(s$type, "scatter"),
+                chart$x$opts$series)[[1]]$data
+  expect_match(pts[[1]]$tooltip_text, "2024-01-05 \\(CYCLE 1 DAY 1\\)")
+  expect_match(pts[[2]]$tooltip_text, "2024-02-05 \\(Cycle 2, Day 8\\)")
+  # An off-protocol draw says so, which is the point of printing the label
+  expect_match(pts[[3]]$tooltip_text, "2024-03-05 \\(UNSCHEDULED\\)")
+})
+
+test_that("a study without AVISIT keeps the date it always had", {
+  pts <- Filter(function(s) identical(s$type, "scatter"),
+                render_findings_card(neut_adlb())$x$opts$series)[[1]]$data
+  expect_match(pts[[1]]$tooltip_text, "2024-01-05<")
+})

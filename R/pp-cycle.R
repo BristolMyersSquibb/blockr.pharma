@@ -1,30 +1,39 @@
-# Treatment cycles: turning "CYCLE 7 DAY 1" into dates you can measure from.
+# Treatment cycles: the band, and why no label is computed from it.
 #
-# WHY ANCHORS AND NOT A COLUMN. Oncology is dosed in repeating cycles, and
-# clinicians read the timeline in cycle/day ("C7 D1") because that is how the
-# protocol is written. There is no CDISC-standard cycle variable; studies put
-# the vocabulary in VISIT ("CYCLE 2 DAY 1"). But a visit label only covers
-# scheduled assessments: ADAE carries no VISIT at all, and an AE starts on
-# whatever day it starts. So a per-row label cannot answer the question that
-# matters ("did this AE land just after an infusion?").
+# ONE RULE. A record's timepoint is the string its VISIT says, printed as the
+# study wrote it: "CYCLE 2 DAY 1", "UNSCHEDULED", "WEEK 24", whatever it is.
+# The profile does not parse it, shorten it, renumber it or decide what it
+# means. To this package a visit label is text (pp_with_visit()), and it rides
+# behind the date the row also carries.
 #
-# What generalizes is the CYCLE START DATE. Read the DAY 1 rows as per-subject
-# anchors and any date converts by subtracting the nearest preceding one --
-# for AEs, con-meds, labs, anything. It also tracks reality: cycles get held
-# for toxicity, so the nominal grid
+# That applies to dosing and findings rows, where the visit IS that row's
+# timepoint. Events are left out: an AE has an onset date of its own, and a
+# study that puts AVISIT on its occurrence dataset means the visit the AE was
+# collected at, which can be well after onset. So AE and con-med bars show the
+# date and stop, rather than borrowing a label that describes something else.
 #
-#     cycle = floor((ADY - 1) / 21) + 1
+# WHY SO LITERAL. The profile used to COMPUTE a cycle/day for every row from
+# per-subject anchors, and clinical review caught it: doses given on the
+# protocol's Day 1 were labelled D2, D3, D4. The anchors were built from lab
+# dates, safety labs for a "CYCLE n DAY 1" visit are drawn BEFORE the infusion,
+# and so the whole cycle read a lead time late. The dosing row said "CYCLE 2
+# DAY 1" the entire time. Every correction available for that class of error
+# (prefer the dosing table, snap a lab anchor onto the nearest infusion,
+# reformat the label into C2D1) adds another rule that can be wrong in a study
+# we have not seen. Printing the string cannot be.
 #
-# drifts out of phase exactly for the patients whose delays you care about.
-# Two cycles held a week each and the arithmetic says C6D15 where the CRF says
-# C7D1. Anchors are observed dates; they cannot drift.
+# WHAT THE PARSE IS STILL FOR. Exactly one thing: the cycle BAND
+# (viz-cycle.R). A band is an interval and no CDISC variable holds a cycle
+# start or end, so it has to be read out of the D1 rows, which means reading
+# the vocabulary. That is one lane, deletable in one file, and it is measured
+# against dates the study recorded -- never a value pasted onto another row.
 #
 # WHY D1 WINS AND IS NOT AVERAGED. A cycle holding both a D1 row and a D8 row
 # offers two routes to the same start date, and they disagree when a visit
 # slips (drawn D9, still labelled D8). The D1 row is the fact; the slipped D8
 # is an artifact. Averaging them splits the difference between a right answer
 # and a wrong one, so back-calculation is strictly a FALLBACK for a missing
-# D1, and says so via `estimated`.
+# D1, and says so via `estimated` (the band draws dashed).
 #
 # Measured against real study data before any of this was written: the large
 # majority of cycles carry a real D1 row, and where both exist the back-calc
@@ -35,10 +44,22 @@
 
 #' The cycle/day vocabulary, as it appears in VISIT
 #'
-#' Permissive on separators and case; not anchored, so a trailing qualifier
-#' ("CYCLE 1 DAY 1 PRE-DOSE") still parses.
+#' Read by the BAND only (see the note at the top of this file); no label goes
+#' through here. There is no CDISC-standard spelling, so it has to be
+#' permissive to be worth anything: sponsors write "CYCLE 2 DAY 1",
+#' "Cycle 2, Day 1", "CYCLE 2/DAY 1", "C2D1", any case, often with a qualifier
+#' behind it ("CYCLE 1 DAY 1 PRE-DOSE"). All of those are the same fact and all
+#' of them parse. What does NOT parse stays unparsed rather than being guessed
+#' at.
+#'
+#' The abbreviated form is word-bounded on the left so a token ending in "C"
+#' cannot start a match, and the long form requires the words. Days may be
+#' negative (a screening "DAY -7" belongs to no cycle but is written this way).
 #' @noRd
-PP_CYCLE_PATTERN <- "CYCLE[ _]*([0-9]+)[ _]+DAY[ _]*(-?[0-9]+)"
+PP_CYCLE_PATTERN <- paste0(
+  "(?:\\bCYCLE[ _]*([0-9]+)[ _,/-]*DAY[ _]*(-?[0-9]+)",   # CYCLE 2 DAY 1
+  "|\\bC[ _]*([0-9]+)[ _,/-]*D[ _]*(-?[0-9]+)\\b)"        # C2D1
+)
 
 #' Parse cycle and day out of visit labels
 #'
@@ -53,37 +74,128 @@ pp_parse_cycle_visits <- function(visit) {
     day   = rep(NA_integer_, length(visit))
   )
   if (!length(visit)) return(out)
-  parts <- regmatches(visit, regexec(PP_CYCLE_PATTERN, visit, ignore.case = TRUE))
-  ok <- lengths(parts) == 3L
+  parts <- regmatches(
+    visit, regexec(PP_CYCLE_PATTERN, visit, ignore.case = TRUE, perl = TRUE)
+  )
+  ok <- lengths(parts) == 5L
   if (!any(ok)) return(out)
-  out$cycle[ok] <- as.integer(vapply(parts[ok], `[`, "", 2L))
-  out$day[ok] <- as.integer(vapply(parts[ok], `[`, "", 3L))
+  # One alternative matched, so one pair of groups is empty: whichever is
+  # filled is the answer.
+  grab <- function(p, long, short) {
+    v <- if (nzchar(p[long])) p[long] else p[short]
+    if (nzchar(v)) as.integer(v) else NA_integer_
+  }
+  out$cycle[ok] <- vapply(parts[ok], grab, integer(1L), 2L, 4L)
+  out$day[ok] <- vapply(parts[ok], grab, integer(1L), 3L, 5L)
   out
 }
 
-#' Per-subject treatment cycle anchors
+#' Append a record's own visit label to its timeline label
+#'
+#' The date or study day stays the label and the visit rides behind it in
+#' parentheses, verbatim. Never replaces and never rewritten: a visit label
+#' alone cannot be compared across patients, and reformatting it is how a
+#' delay disappears. An infusion the study filed as `CYCLE 1 DAY 8` and gave
+#' on day 9 reads `2014-01-09 (CYCLE 1 DAY 8)`, which is both facts at once
+#' and needs no vocabulary to produce.
+#'
+#' Whitespace is folded because a label is drawn on one line and a study's own
+#' column may carry line breaks; nothing else is touched.
+#'
+#' @param base An already-formatted label (`"D143"`, `"2014-05-01"`).
+#' @param visit The visit label of the SAME record, or `NA`.
+#' @return `base`, possibly with `" (WEEK 24)"` appended.
+#' @noRd
+pp_with_visit <- function(base, visit) {
+  if (!nzchar(base)) return(base)
+  if (length(visit) != 1L || is.na(visit)) return(base)
+  lab <- trimws(gsub("[[:space:]]+", " ", as.character(visit)))
+  if (!nzchar(lab)) return(base)
+  paste0(base, " (", lab, ")")
+}
+
+#' Where the cycle BAND reads its vocabulary from, best source first
+#'
+#' Dosing first: an administration is the cycle's Day 1, so where the dosing
+#' table labels its rows "CYCLE n DAY 1" the band opens on the infusion. The
+#' lab table is the fallback. It is where studies schedule the dense
+#' D1/D8/D15 visits, but its dates are blood draws and a pre-dose draw puts
+#' the band a day or three left of the infusion that opens the cycle. Visibly
+#' so, which is the point: a band is a ruler you sight along, not a value
+#' stamped on a record.
+#'
+#' @return List of `list(table, visit, date)`, most authoritative first.
+#' @noRd
+pp_cycle_sources <- function() {
+  list(
+    list(table = "adex", visit = "AVISIT", date = "ASTDT"),
+    list(table = "adlb", visit = "AVISIT", date = "ADT")
+  )
+}
+
+#' The first source a study actually answers to
+#'
+#' Presence of the table and columns is not enough: a study can ship `adex`
+#' with a visit column that speaks weeks, or nothing at all, and the lab table
+#' behind it may still carry the cycles. So the vocabulary has to parse.
+#'
+#' Past the two preferences, ANY table that dates its visits is a candidate.
+#' A study whose scheduled visits live in vitals, ECGs, tumour assessments or
+#' a vendor table is not a different kind of study, and gating the band on
+#' `adlb` would leave it with no band at all. Scanned in name order so the
+#' answer does not depend on how the dm was assembled.
+#'
+#' @param tbls Named list of tables (from `dm::dm_get_tables()`).
+#' @param sources Candidate sources, best first.
+#' @return One source entry (`table`, `visit`, `date`), or `NULL`.
+#' @noRd
+pp_cycle_source <- function(tbls, sources = pp_cycle_sources()) {
+  speaks_cycles <- function(src) {
+    if (!src$table %in% names(tbls)) return(FALSE)
+    df <- as.data.frame(tbls[[src$table]])
+    if (!all(c("USUBJID", src$visit, src$date) %in% colnames(df))) return(FALSE)
+    # DISTINCT labels: a dosing table is short but a lab table runs to
+    # hundreds of thousands of rows against a few dozen visit names.
+    visits <- unique(as.character(df[[src$visit]]))
+    any(!is.na(pp_parse_cycle_visits(visits)$cycle))
+  }
+
+  for (src in sources) {
+    if (speaks_cycles(src)) return(src)
+  }
+
+  named <- vapply(sources, `[[`, character(1L), "table")
+  for (nm in sort(setdiff(names(tbls), named))) {
+    cols <- colnames(as.data.frame(tbls[[nm]]))
+    date <- intersect(c("ADT", "ASTDT"), cols)
+    if (!length(date)) next
+    src <- list(table = nm, visit = "AVISIT", date = date[[1L]])
+    if (speaks_cycles(src)) return(src)
+  }
+  NULL
+}
+
+#' Per-subject treatment cycle anchors, for the band and nothing else
 #'
 #' Total on purpose: renders and reactives call this, so a study without the
-#' cycle vocabulary yields `NULL` (no cycle lane, no cycle labels) rather than
-#' a condition. Reads canonical names -- run [pp_normalize_dm()] first.
+#' cycle vocabulary yields `NULL` (no cycle lane) rather than a condition.
+#' Reads canonical names -- run [pp_normalize_dm()] first.
 #'
 #' @param dm_obj A normalized `dm`, subject-scoped or not.
-#' @param table,visit_col,date_col Where the vocabulary lives. The lab table
-#'   is the default because it is where studies schedule the D1/D8/D15 visits
-#'   that make the anchors dense.
+#' @param sources Candidate places to read the vocabulary from, best first;
+#'   see [pp_cycle_sources()].
 #' @return Data frame of `USUBJID`, `cycle`, `cycle_start`, `cycle_end`,
 #'   `estimated`, ordered by subject and cycle; `NULL` when nothing parses.
 #' @noRd
-pp_cycle_anchors <- function(dm_obj, table = "adlb", visit_col = "AVISIT",
-                             date_col = "ADT") {
+pp_cycle_anchors <- function(dm_obj, sources = pp_cycle_sources()) {
   if (!inherits(dm_obj, "dm")) return(NULL)
   tbls <- dm::dm_get_tables(dm_obj)
-  if (!table %in% names(tbls)) return(NULL)
-  df <- as.data.frame(tbls[[table]])
-  if (!all(c("USUBJID", visit_col, date_col) %in% colnames(df))) return(NULL)
+  src <- pp_cycle_source(tbls, sources)
+  if (is.null(src)) return(NULL)
+  df <- as.data.frame(tbls[[src$table]])
 
-  parsed <- pp_parse_cycle_visits(df[[visit_col]])
-  dt <- pp_as_date(df[[date_col]])
+  parsed <- pp_parse_cycle_visits(df[[src$visit]])
+  dt <- pp_as_date(df[[src$date]])
   keep <- !is.na(parsed$cycle) & !is.na(parsed$day) & !is.na(dt)
   if (!any(keep)) return(NULL)
 
@@ -149,72 +261,4 @@ pp_cycle_span <- function(anchors, default = 21) {
   # Rounded: an even number of gaps medians to a half day, and "the typical
   # cycle runs 24.5 days" is not a thing anyone means.
   round(stats::median(gaps))
-}
-
-#' Add relative-day positions to the anchors
-#'
-#' The anchors carry real dates; the labels have to work for rows that ship a
-#' native \*DY and no date at all. Converting the ANCHOR into day space (once,
-#' against the same TRTSDT the axis uses) lets both sides meet without ever
-#' reconstructing a date from a day -- the lossy round trip
-#' [pp_xval_pref_day()] exists to avoid.
-#'
-#' Cycles never precede treatment start, so the continuous relative-day scale
-#' and the ADaM \*DY convention coincide over their whole range and no
-#' [pp_day_to_x()] correction is needed here.
-#'
-#' @param anchors A `pp_cycle_anchors()` frame, or `NULL`.
-#' @param ref_ms Reference timestamp in ms (TRTSDT). May be `NA`, in which
-#'   case the day columns come back `NA` and only the dates stay usable.
-#' @return The frame plus `cycle_start_day` / `cycle_end_day`, or `NULL`.
-#' @noRd
-pp_cycle_anchor_days <- function(anchors, ref_ms = NA_real_) {
-  if (is.null(anchors) || !nrow(anchors)) return(NULL)
-  if (is.na(ref_ms)) {
-    anchors$cycle_start_day <- NA_real_
-    anchors$cycle_end_day <- NA_real_
-    return(anchors)
-  }
-  anchors$cycle_start_day <- pp_xval(anchors$cycle_start, ref_ms, "rday")
-  anchors$cycle_end_day <- pp_xval(anchors$cycle_end, ref_ms, "rday")
-  anchors
-}
-
-#' Cycle/day label for one position on the relative-day axis
-#'
-#' @param x_day A single position on the relative-day scale.
-#' @param anchors A [pp_cycle_anchor_days()] frame for ONE subject, or `NULL`.
-#' @return `"C7 D4"`, or `""` when there is no cycle covering `x_day`
-#'   (screening, or long after the last dose).
-#' @noRd
-pp_cycle_label <- function(x_day, anchors) {
-  if (is.null(anchors) || !nrow(anchors)) return("")
-  if (length(x_day) != 1L || is.na(x_day)) return("")
-  if (!"cycle_start_day" %in% colnames(anchors)) return("")
-  hit <- which(
-    !is.na(anchors$cycle_start_day) & anchors$cycle_start_day <= x_day &
-      !is.na(anchors$cycle_end_day) & anchors$cycle_end_day >= x_day
-  )
-  if (!length(hit)) return("")
-  j <- hit[which.max(anchors$cycle_start_day[hit])]
-  paste0("C", anchors$cycle[j], " D",
-         x_day - anchors$cycle_start_day[j] + 1)
-}
-
-#' Append a cycle/day label to a timeline label
-#'
-#' The "in addition to" of the original request: the study day or date stays
-#' the label, and the cycle rides in parentheses behind it. Never replaces --
-#' `C7 D1` alone loses the ability to compare across patients.
-#'
-#' @param base An already-formatted label (`"D143"`, `"2014-05-01"`).
-#' @param x_day Position on the relative-day scale, or `NA`.
-#' @param anchors A [pp_cycle_anchor_days()] frame, or `NULL` for no-op.
-#' @return `base`, possibly with `" (C7 D4)"` appended.
-#' @noRd
-pp_with_cycle <- function(base, x_day, anchors = NULL) {
-  if (is.null(anchors) || !nzchar(base)) return(base)
-  lab <- pp_cycle_label(x_day, anchors)
-  if (!nzchar(lab)) return(base)
-  paste0(base, " (", lab, ")")
 }

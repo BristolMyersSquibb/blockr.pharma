@@ -602,15 +602,15 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Treatment cycle anchors (see pp-cycle.R). Per-PATIENT, like
           # r_ref_ms and for the same reason: the cycle calendar is this
-          # subject's, delays included. Computed once here rather than per
-          # viz -- the cycle lane and every cycle-labelled tooltip read the
-          # same frame, so they cannot disagree. NULL for a study without the
-          # cycle vocabulary, which is the common case and not an error.
+          # subject's, delays included. The cycle BAND is the only consumer --
+          # no tooltip derives a cycle/day, every label that shows one reads
+          # it off its own record. NULL for a study without the cycle
+          # vocabulary, which is the common case and not an error.
           r_cycle_anchors <- shiny::reactive({
             scoped <- r_scoped_dm()
             shiny::req(inherits(scoped$dm, "dm"))
             if (!isTRUE(scoped$single)) return(NULL)
-            pp_cycle_anchor_days(pp_cycle_anchors(scoped$dm), r_ref_ms())
+            pp_cycle_anchors(scoped$dm)
           })
 
           # Render sidebar cards (re-renders when the cohort's data

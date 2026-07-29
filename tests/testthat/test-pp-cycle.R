@@ -21,6 +21,28 @@ test_that("pp_parse_cycle_visits reads the vocabulary and skips the rest", {
   expect_equal(p$day, c(1L, 15L, 8L, 1L, NA, NA, NA))
 })
 
+test_that("every sponsor spelling of the same fact is the same fact", {
+  # No CDISC standard says how to write this, so the BAND has to recognise it
+  # across studies: separators, punctuation, case, and the short form. Labels
+  # never come through here -- they are printed, not parsed.
+  p <- pp_parse_cycle_visits(c(
+    "Cycle 2, Day 8", "CYCLE 2/DAY 8", "CYCLE_2_DAY_8", "C2D8", "c2 d8"
+  ))
+  expect_equal(p$cycle, rep(2L, 5L))
+  expect_equal(p$day, rep(8L, 5L))
+  # A day before the cycle opened keeps its sign
+  expect_equal(pp_parse_cycle_visits("C1D-1")$day, -1L)
+})
+
+test_that("labels that are not cycles are left alone, not guessed at", {
+  p <- pp_parse_cycle_visits(c(
+    "SCREENING", "BASELINE", "WEEK 2", "DAY -7", "UNSCHEDULED", "VISIT 3",
+    "CYCLE 1", "END OF TREATMENT", "FOLLOW-UP", "CD4 PANEL", "AC1D1"
+  ))
+  expect_true(all(is.na(p$cycle)))
+  expect_true(all(is.na(p$day)))
+})
+
 test_that("the D1 row is the anchor, not an average with slipped visits", {
   # C1D1 on the 1st; C1D8 drawn a day LATE (the 9th) but still labelled D8.
   # Back-calculating from it would say the cycle started on the 2nd. It did
@@ -87,6 +109,79 @@ test_that("no vocabulary / no table / no dm yields NULL, never a condition", {
   expect_null(pp_cycle_anchors("not a dm"))
 })
 
+# ---------------------------------------------------------------------------
+# Where the BAND reads its cycles from
+#
+# The dosing table first. Reported from a study review: doses given on the
+# protocol's Day 1 read D2/D3/D4, because safety labs for a "CYCLE n DAY 1"
+# visit are drawn pre-dose and the band opened at the blood draw. The dose
+# rows said "CYCLE 2 DAY 1" the whole time.
+# ---------------------------------------------------------------------------
+
+ex_doses <- function(..., visits = NULL) {
+  dates <- as.Date(c(...))
+  out <- data.frame(
+    USUBJID = "S1", ASTDT = dates, EXTRT = "DRUG",
+    stringsAsFactors = FALSE
+  )
+  if (!is.null(visits)) out$AVISIT <- visits
+  out
+}
+
+test_that("the band opens on the infusion, not on the pre-dose labs", {
+  a <- pp_cycle_anchors(dm::dm(
+    adlb = lb_cycles(
+      list("S1", "CYCLE 1 DAY 1", "2014-01-01"),
+      list("S1", "CYCLE 2 DAY 1", "2014-01-20")   # drawn two days early
+    ),
+    adex = ex_doses("2014-01-01", "2014-01-22",
+                    visits = c("CYCLE 1 DAY 1", "CYCLE 2 DAY 1"))
+  ))
+  expect_equal(a$cycle_start, as.Date(c("2014-01-01", "2014-01-22")))
+})
+
+test_that("dosing without the vocabulary falls through to the labs", {
+  # A study dosed in cycles whose ex rows say "WEEK 2". No correction is
+  # attempted: the band is the labs' answer, and the dose bars still report
+  # whatever their own rows say (nothing, here).
+  tbls <- list(
+    adlb = lb_cycles(list("S1", "CYCLE 1 DAY 1", "2014-01-01")),
+    adex = ex_doses("2014-01-04", visits = "WEEK 2")
+  )
+  expect_equal(pp_cycle_source(tbls)$table, "adlb")
+  tbls$adex$AVISIT <- "CYCLE 1 DAY 1"
+  expect_equal(pp_cycle_source(tbls)$table, "adex")
+  expect_null(pp_cycle_source(list()))
+})
+
+test_that("a study whose cycles live outside adlb still gets a band", {
+  # Vitals-only, or a vendor table: the vocabulary is what counts, not which
+  # domain shipped it. Gating on adlb would give this study no lane at all.
+  vs <- data.frame(
+    USUBJID = "S1", AVISIT = c("CYCLE 1 DAY 1", "CYCLE 2 DAY 1"),
+    ADT = as.Date(c("2014-01-01", "2014-01-22")),
+    PARAMCD = "SYSBP", AVAL = c(120, 118), stringsAsFactors = FALSE
+  )
+  expect_equal(pp_cycle_source(list(advs = vs))$table, "advs")
+  a <- pp_cycle_anchors(dm::dm(advs = vs))
+  expect_equal(a$cycle_start, as.Date(c("2014-01-01", "2014-01-22")))
+
+  # A table with no dated visits is not a source
+  expect_null(pp_cycle_source(list(
+    adsl = data.frame(USUBJID = "S1", AVISIT = "CYCLE 1 DAY 1")
+  )))
+})
+
+test_that("no dose date is ever consulted to place a band", {
+  # The anchor is the labelled row, full stop. Nothing snaps it onto the
+  # infusion three days later -- that heuristic is what this design drops.
+  a <- pp_cycle_anchors(dm::dm(
+    adlb = lb_cycles(list("S1", "CYCLE 1 DAY 1", "2014-01-01")),
+    adex = ex_doses("2014-01-04")
+  ))
+  expect_equal(a$cycle_start, as.Date("2014-01-01"))
+})
+
 test_that("pp_cycle_span measures the study rather than assuming 21", {
   a <- data.frame(
     USUBJID = c("S1", "S1", "S1"),
@@ -100,91 +195,106 @@ test_that("pp_cycle_span measures the study rather than assuming 21", {
 })
 
 # ---------------------------------------------------------------------------
-# Labels
+# Labels: the visit the row names, printed as the study wrote it
 # ---------------------------------------------------------------------------
 
 anchors_2 <- function() {
-  # TRTSDT = 2014-01-01 -> C1 starts D1, C2 starts D22 (21-day cycle)
-  ref <- pp_ms_ts(as.Date("2014-01-01"))
-  a <- pp_cycle_anchors(dm::dm(adlb = lb_cycles(
+  pp_cycle_anchors(dm::dm(adlb = lb_cycles(
     list("S1", "CYCLE 1 DAY 1", "2014-01-01"),
     list("S1", "CYCLE 2 DAY 1", "2014-01-22")
   )))
-  pp_cycle_anchor_days(a, ref)
 }
 
-test_that("anchors convert into the same day space the axis uses", {
-  a <- anchors_2()
-  expect_equal(a$cycle_start_day, c(1, 22))
-})
-
-test_that("pp_cycle_label finds the cycle covering a day", {
-  a <- anchors_2()
-  expect_equal(pp_cycle_label(1, a), "C1 D1")
-  expect_equal(pp_cycle_label(8, a), "C1 D8")
-  expect_equal(pp_cycle_label(22, a), "C2 D1")
-  expect_equal(pp_cycle_label(25, a), "C2 D4")
-})
-
-test_that("a day outside every cycle gets no label", {
-  a <- anchors_2()
-  expect_equal(pp_cycle_label(-5, a), "")    # screening, before C1
-  expect_equal(pp_cycle_label(500, a), "")   # long after the last dose
-  expect_equal(pp_cycle_label(NA, a), "")
-  expect_equal(pp_cycle_label(5, NULL), "")
-})
-
-test_that("the last cycle is bounded so a late death is not C2 D190", {
-  a <- anchors_2()
-  expect_equal(pp_cycle_label(42, a), "C2 D21")  # last day of the span
-  expect_equal(pp_cycle_label(43, a), "")        # past it
-})
-
-test_that("cycle rides behind the existing label, never replaces it", {
-  a <- anchors_2()
+test_that("the visit rides behind the existing label, never replaces it", {
   ref <- pp_ms_ts(as.Date("2014-01-01"))
   expect_equal(
-    pp_xlabel(as.Date("2014-01-22"), ref, "rday", a), "D22 (C2 D1)"
+    pp_xlabel(as.Date("2014-01-22"), ref, "rday", "CYCLE 2 DAY 1"),
+    "D22 (CYCLE 2 DAY 1)"
   )
   # Date mode too: "in addition to the date" was the actual request
   expect_equal(
-    pp_xlabel(as.Date("2014-01-22"), ref, "date", a), "2014-01-22 (C2 D1)"
+    pp_xlabel(as.Date("2014-01-22"), ref, "date", "CYCLE 2 DAY 1"),
+    "2014-01-22 (CYCLE 2 DAY 1)"
   )
-  expect_equal(pp_day_label(22, a), "D22 (C2 D1)")
+  expect_equal(pp_day_label(22, "CYCLE 2 DAY 1"), "D22 (CYCLE 2 DAY 1)")
 })
 
-test_that("no anchors leaves every label exactly as it was", {
+test_that("the label is not interpreted, whatever it says", {
+  # Cycle vocabulary, weeks, an unscheduled draw and a sponsor's own wording
+  # all reach the tooltip the same way: as text. Nothing is renumbered,
+  # abbreviated or dropped for failing to look like a cycle.
+  expect_equal(pp_with_visit("2014-03-05", "UNSCHEDULED"),
+               "2014-03-05 (UNSCHEDULED)")
+  expect_equal(pp_with_visit("2014-03-05", "WEEK 24"),
+               "2014-03-05 (WEEK 24)")
+  expect_equal(pp_with_visit("2014-03-05", "Cycle 2, Day 8 (pre-dose)"),
+               "2014-03-05 (Cycle 2, Day 8 (pre-dose))")
+  expect_equal(pp_with_visit("2014-03-05", "RETEST / EARLY TERMINATION"),
+               "2014-03-05 (RETEST / EARLY TERMINATION)")
+})
+
+test_that("a delayed administration reports both facts", {
+  # Filed as CYCLE 1 DAY 8, infused on day 9. The date is what happened, the
+  # label is what it was; neither is adjusted to agree with the other.
+  ref <- pp_ms_ts(as.Date("2014-01-01"))
+  expect_equal(
+    pp_xlabel(as.Date("2014-01-09"), ref, "date", "CYCLE 1 DAY 8"),
+    "2014-01-09 (CYCLE 1 DAY 8)"
+  )
+  expect_equal(pp_day_label(9, "CYCLE 1 DAY 8"), "D9 (CYCLE 1 DAY 8)")
+})
+
+test_that("no visit label leaves every label exactly as it was", {
   ref <- pp_ms_ts(as.Date("2014-01-01"))
   expect_equal(pp_xlabel(as.Date("2014-01-22"), ref, "rday"), "D22")
-  expect_equal(pp_xlabel(as.Date("2014-01-22"), ref, "rday", NULL), "D22")
+  expect_equal(pp_xlabel(as.Date("2014-01-22"), ref, "rday", NA), "D22")
+  expect_equal(pp_with_visit("2014-03-05", ""), "2014-03-05")
+  expect_equal(pp_with_visit("2014-03-05", "   "), "2014-03-05")
   expect_equal(pp_day_label(22), "D22")
-  expect_equal(pp_day_label(22, NULL), "D22")
+  expect_equal(pp_day_label(22, NA), "D22")
 })
 
-test_that("no treatment start leaves the anchors dateable but unlabellable", {
-  a <- pp_cycle_anchor_days(pp_cycle_anchors(dm::dm(adlb = lb_cycles(
-    list("S1", "CYCLE 1 DAY 1", "2014-01-01")
-  ))), NA_real_)
-  expect_true(all(is.na(a$cycle_start_day)))
-  expect_equal(a$cycle_start, as.Date("2014-01-01"))  # the lane still works
-  expect_equal(pp_cycle_label(1, a), "")
-  expect_equal(pp_xlabel(as.Date("2014-01-01"), NA_real_, "date", a),
-               "2014-01-01")
+test_that("a label is drawn on one line, so whitespace folds", {
+  # A study's own visit column may carry line breaks the ADaM variables never
+  # do. Folding them is the only thing done to the string.
+  expect_equal(pp_with_visit("D8", "CYCLE 1\n  DAY 8 "), "D8 (CYCLE 1 DAY 8)")
 })
 
-test_that("pp_cycle_anchor_days is total on empty input", {
-  expect_null(pp_cycle_anchor_days(NULL, 0))
+test_that("no treatment start still leaves the band dateable", {
+  a <- anchors_2()
+  expect_equal(a$cycle_start[1], as.Date("2014-01-01"))
+  expect_equal(pp_xlabel(as.Date("2014-01-01"), NA_real_, "date"), "2014-01-01")
 })
 
 # ---------------------------------------------------------------------------
 # The viz
 # ---------------------------------------------------------------------------
 
-test_that("the cycle lane declares against canonical names only", {
+test_that("the cycle lane declares the source the study answered to", {
   expect_equal(cycle_viz$id, "cycle_lane")
-  expect_equal(cycle_viz$tables, "adlb")
   expect_true("cycle" %in% cycle_viz$uses)
-  expect_setequal(cycle_viz$requires$adlb, c("AVISIT", "ADT"))
+
+  lab_only <- pp_cycle_vizs(dm::dm(adlb = lb_cycles(
+    list("S1", "CYCLE 1 DAY 1", "2014-01-01")
+  )))[[1L]]
+  expect_equal(lab_only$tables, "adlb")
+  expect_setequal(lab_only$requires$adlb, c("AVISIT", "ADT"))
+
+  dosed <- pp_cycle_vizs(dm::dm(
+    adlb = lb_cycles(list("S1", "CYCLE 1 DAY 1", "2014-01-01")),
+    adex = ex_doses("2014-01-01", visits = "CYCLE 1 DAY 1")
+  ))[[1L]]
+  expect_equal(dosed$tables, "adex")
+  expect_setequal(dosed$requires$adex, c("AVISIT", "ASTDT"))
+})
+
+test_that("the band is what consumes the anchors", {
+  # Nothing else may derive a timepoint: a viz reads the labels on its own
+  # rows and stops. The CM gantt drops its declaration with the indication
+  # work in flight, so it is not asserted here.
+  expect_equal(cycle_viz$uses, "cycle")
+  expect_false("cycle" %in% ae_gantt_viz$uses)
+  expect_false("cycle" %in% patient_overview_viz$uses)
 })
 
 test_that("the cycle lane is generated, never statically registered", {

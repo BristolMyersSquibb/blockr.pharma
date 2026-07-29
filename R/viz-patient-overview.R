@@ -5,7 +5,8 @@
 #
 # Lanes (each data-gated; absent tables simply drop their lane):
 #   1. Treatment — green bar from TRTSDT to TRTEDT with arm label
-#   2. Exposure — dosing-period bars from adex, labelled with the dose
+#   2. Exposure — dosing-period bars from adex, one slot per drug, labelled
+#      with the dose
 #   3. Adverse Events — compact overlapping bars colored by severity
 #   4. Milestones — point markers: treatment start/end, end of study, death
 #   5. Visits — one tick per visit the subject attended (reconstructed from
@@ -14,7 +15,8 @@
 # Data requirements (declared via new_pp_viz()):
 #   adsl: required TRTSDT, TRTEDT; optional RFENDT, DTHDT, DTHFL
 #   adae (optional table): ASTDT, AENDT, ASTDY, AENDY, AEDECOD, AESER
-#   adex (optional table): ASTDT, AENDT, ASTDY, AENDY, EXDOSE, EXDOSU, EXTRT
+#   adex (optional table): ASTDT, AENDT, ASTDY, AENDY, EXDOSE, EXDOSU, EXTRT,
+#         AVISIT
 #   roles: arm (the ADSL arm column, settings$roles$arm) and severity
 #          (the ADAE severity column, settings$roles$severity)
 #
@@ -32,14 +34,15 @@ patient_overview_viz <- new_pp_viz(
   description = "Treatment, exposure, adverse events, visits & milestones",
   tables = "adsl",
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
-  uses = c("arm", "severity", "cycle"),
+  uses = c("arm", "severity"),
   optional = list(
     adsl = c("RFENDT", "DTHDT", "DTHFL"),
     adae = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER"
     ),
     adex = c(
-      "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT"
+      "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT",
+      "AVISIT"
     )
   ),
   render = function(dm_obj, time_range, settings = list(),
@@ -56,12 +59,12 @@ patient_overview_viz <- new_pp_viz(
 
       trt_start <- pp_xval(sl$TRTSDT[1], ref_ms, mode)
       trt_end <- pp_xval(sl$TRTEDT[1], ref_ms, mode)
-      # Cycle anchors, injected by the block (uses = "cycle"). Deliberately
-      # NOT applied to the treatment start/end or the milestone labels below:
-      # TRTSDT *is* C1 D1 by definition, so labelling it says nothing, and
-      # "EOS (C12 D3)" is noise. It rides on the events whose position within
-      # a cycle is the actual question -- doses, AEs, visits.
-      cyc <- settings$cycle_anchors
+      # Nothing here derives a timepoint (see pp-cycle.R). A dose bar prints
+      # the visit label on its own row, and a visit tick IS a visit label. AE
+      # bars print neither: an event has a start date of its own, and where an
+      # occurrence dataset does carry AVISIT it names the visit the event was
+      # COLLECTED at, which can be a fortnight after onset. Printing that
+      # beside the onset date would read as the visit the AE started in.
       # The arm column is a role, resolved once by the block (board option
       # or ACTARM) and injected -- the render never picks its own, so the
       # lane and the subject picker cannot disagree. An unresolved arm has
@@ -93,9 +96,10 @@ patient_overview_viz <- new_pp_viz(
 
       # Exposure lane, same date-or-day gating as the AE lane. adex is
       # parameterized in ADaM (several rows per dosing period), so periods
-      # dedupe by (start, end, dose).
+      # collapse by (drug, start, end) -- see the lane itself, below.
       has_adex <- "adex" %in% names(tbls)
       ex_use_day <- FALSE
+      ex_drugs <- character()
       if (has_adex) {
         adex_raw <- as.data.frame(tbls[["adex"]])
         ex_use_day <- identical(mode, "rday") &&
@@ -103,6 +107,16 @@ patient_overview_viz <- new_pp_viz(
         ex_src <- if (ex_use_day) "ASTDY" else "ASTDT"
         has_adex <- ex_src %in% colnames(adex_raw) &&
           nrow(adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]) > 0
+        # A combination regimen doses two drugs on the same day, and one lane
+        # would draw them on top of each other -- the reported symptom was a
+        # Day 1 tooltip that showed one of the two. Each drug gets a slot,
+        # sorted so the same drug holds the same slot on every patient.
+        if (has_adex && "EXTRT" %in% colnames(adex_raw)) {
+          ex_drugs <- sort(unique(trimws(stats::na.omit(
+            as.character(adex_raw$EXTRT)
+          ))))
+          ex_drugs <- ex_drugs[nzchar(ex_drugs)]
+        }
       }
 
       # Visit ruler: reconstructed from the findings tables; anchors every
@@ -140,8 +154,17 @@ patient_overview_viz <- new_pp_viz(
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
       # Chrome plus an exact 40px per lane, so lane geometry does not shift
-      # with the number of lanes a subject happens to have.
-      chart_height <- PP_PLOT_TOP + 30 + n_lanes * 40
+      # with the number of lanes a subject happens to have. A category axis
+      # divides the grid evenly, so a treatment lane carrying three or more
+      # drug slots can only get taller by making every lane taller -- which
+      # is the right trade at that point: a 13px slot is not a bar.
+      #
+      # Bounded, because the drug count is the study's, not ours: a regimen
+      # is two or three drugs, but a basket protocol can name a dozen, and an
+      # overview that grows to 500px stops being an overview. Past the cap the
+      # slots thin out instead. Everything is still drawn and still hoverable.
+      lane_px <- 40 + min(max(0L, length(ex_drugs) - 2L), 3L) * 10
+      chart_height <- PP_PLOT_TOP + 30 + n_lanes * lane_px
 
       # A study's arm label is data, not a literal: encode it, never paste it.
       arm_js <- pp_js_str(arm_label)
@@ -266,7 +289,7 @@ patient_overview_viz <- new_pp_viz(
           )
         }
         ae_lab <- function(v) {
-          if (ae_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
+          if (ae_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
         }
 
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
@@ -500,40 +523,77 @@ patient_overview_viz <- new_pp_viz(
             ref_ms, mode
           )
         }
-        ex_lab <- function(v) {
-          if (ex_use_day) pp_day_label(v, cyc) else pp_xlabel(v, ref_ms, mode, cyc)
+        # `visit` is the label of the SAME dosing record, printed as the study
+        # wrote it. An infusion filed as CYCLE 1 DAY 8 and given a day late
+        # reads "2014-01-09 (CYCLE 1 DAY 8)": both facts, neither invented.
+        ex_lab <- function(v, visit = NA) {
+          if (ex_use_day) {
+            pp_day_label(v, visit)
+          } else {
+            pp_xlabel(v, ref_ms, mode, visit)
+          }
         }
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
-        # ADaM adex is parameterized (one row per PARAMCD per period);
-        # the lane wants each dosing period once.
+        # The dose, in the study's own words. SDTM/ADaM keeps the amount and
+        # its unit in two columns, and a study dosing on a per-weight
+        # regimen ships that unit here -- so a record carrying "10 mg/kg"
+        # reaches the tooltip by being read, never by this viz dividing a
+        # dose by a weight it was not given.
         dose_of <- function(i) {
           trimws(paste(opt_chr(adex, "EXDOSE", i), opt_chr(adex, "EXDOSU", i)))
         }
-        key <- vapply(seq_len(nrow(adex)), function(i) {
-          paste(adex[[ex_src]][i], if (ex_has_end) ex_end(i) else "",
-                dose_of(i))
-        }, character(1L))
-        adex <- adex[!duplicated(key), , drop = FALSE]
+        drug_of <- function(i) trimws(opt_chr(adex, "EXTRT", i))
 
-        ex_data <- lapply(seq_len(nrow(adex)), function(i) {
+        # ADaM adex is parameterized (one row per PARAMCD per period), so the
+        # lane wants each administration once -- but ONCE PER DRUG. Keying on
+        # (start, end, dose) alone, as this did, made a combination regimen's
+        # two same-day infusions one bar whenever their dose strings matched,
+        # and stacked them where they did not.
+        key <- vapply(seq_len(nrow(adex)), function(i) {
+          paste(drug_of(i), adex[[ex_src]][i],
+                if (ex_has_end) ex_end(i) else "")
+        }, character(1L))
+        groups <- split(seq_len(nrow(adex)), factor(key, levels = unique(key)))
+
+        # Which slot of the treatment lane a drug draws in. Unnamed doses
+        # (no EXTRT) all share the single slot they had before.
+        slot_of <- function(drug) {
+          if (!length(ex_drugs) || !nzchar(drug)) return(0L)
+          match(drug, ex_drugs) - 1L
+        }
+        n_slot <- max(length(ex_drugs), 1L)
+
+        ex_data <- lapply(groups, function(rows) {
+          i <- rows[[1L]]
           x0 <- ex_x(adex[[ex_src]][i])
           x1 <- if (ex_has_end && !is.na(ex_end(i))) {
             ex_x(ex_end(i))
           } else {
             pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
           }
-          s_lab <- ex_lab(adex[[ex_src]][i])
+          # The visit belongs to the administration, so it rides on the start
+          # label only; a dosing period's end date was never a visit.
+          s_lab <- ex_lab(adex[[ex_src]][i], opt_chr(adex, "AVISIT", i))
           e_lab <- if (ex_has_end && !is.na(ex_end(i))) {
             ex_lab(ex_end(i))
           } else {
             PP_ONGOING_LABEL
           }
+          # Every distinct dose the grouped rows carry, not the first one: a
+          # study recording the same administration in two units (an amount
+          # and a per-weight regimen) states both, and both are the answer to
+          # "what did this patient get".
+          doses <- unique(vapply(rows, dose_of, character(1L)))
+          doses <- doses[nzchar(doses)]
           list(value = list(
-            x0, x1, ex_lane, dose_of(i), opt_chr(adex, "EXTRT", i),
-            s_lab, e_lab
+            x0, x1, ex_lane, if (length(doses)) doses[[1L]] else "",
+            drug_of(i), s_lab, e_lab,
+            n_slot, slot_of(drug_of(i)),
+            paste(doses, collapse = " · ")
           ))
         })
+        names(ex_data) <- NULL
 
         ex_series <- list(
           type = "custom",
@@ -542,12 +602,24 @@ patient_overview_viz <- new_pp_viz(
             function(params, api) {
               var start = api.coord([api.value(0), api.value(2)]);
               var end   = api.coord([api.value(1), api.value(2)]);
-              var h     = api.size([0, 1])[1] * 0.45;
-              var barW  = Math.max(end[0] - start[0], 4);
+              var laneH = api.size([0, 1])[1];
+              var n     = Math.max(+api.value(7) || 1, 1);
+              var k     = +api.value(8) || 0;
+              // One drug keeps the lane it always had; a combination splits
+              // it into a slot each, so same-day infusions sit side by side
+              // and both can be hovered.
+              var band = laneH * 0.9;
+              var slot = band / n;
+              var h    = (n === 1) ? laneH * 0.45 : Math.max(slot - 2, 3);
+              var yc   = (n === 1) ? start[1]
+                                   : start[1] - band / 2 + slot * (k + 0.5);
+              // A single-day infusion is a hairline at study scale; 6px is
+              // the difference between a hover target and a rumour.
+              var barW  = Math.max(end[0] - start[0], 6);
               var children = [{
                 type: 'rect',
                 shape: {
-                  x: start[0], y: start[1] - h/2,
+                  x: start[0], y: yc - h/2,
                   width: barW, height: h, r: 2
                 },
                 style: {
@@ -559,13 +631,13 @@ patient_overview_viz <- new_pp_viz(
               // Dose text when the bar has room for it. echarts coerces
               // numeric-looking dims, so stringify before use.
               var dose = '' + (api.value(3) == null ? '' : api.value(3));
-              if (dose && barW > 46) {
+              if (dose && barW > 46 && h >= 12) {
                 children.push({
                   type: 'text',
                   style: {
                     text: dose,
                     x: start[0] + barW / 2,
-                    y: start[1],
+                    y: yc,
                     fill: '#1e40af',
                     fontSize: 10,
                     fontWeight: 600,
@@ -585,7 +657,7 @@ patient_overview_viz <- new_pp_viz(
             formatter = htmlwidgets::JS("
               function(params) {
                 var v = params.value;
-                var dose = '' + (v[3] == null ? '' : v[3]);
+                var dose = '' + (v[9] == null ? '' : v[9]);
                 var trt = v[4] || '';
                 var s = v[5] || '';
                 var e = v[6] || '';
@@ -627,9 +699,9 @@ patient_overview_viz <- new_pp_viz(
             ref_ms, mode
           )
           x_lab <- if (identical(mode, "rday") && !is.na(visits$day[i])) {
-            pp_day_label(visits$day[i], cyc)
+            pp_day_label(visits$day[i])
           } else {
-            pp_xlabel(visits$date[i], ref_ms, mode, cyc)
+            pp_xlabel(visits$date[i], ref_ms, mode)
           }
           list(value = list(x, vis_lane, visits$visit[i], x_lab))
         })

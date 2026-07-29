@@ -43,7 +43,7 @@ ae_gantt_viz <- new_pp_viz(
   optional = list(adae = c(
     "ASTDT", "AENDT", "ASTDY", "AENDY", "AEBODSYS", "AESER", "AEOUT"
   )),
-  uses = c("severity", "cycle"),
+  uses = "severity",
   legend_ui = function(dm_obj, settings) {
     pp_sev_legend_ui(dm_obj, settings$sev_colors, settings$roles$severity)
   },
@@ -80,14 +80,16 @@ ae_gantt_viz <- new_pp_viz(
         pp_sev_fallback_color(s)
       }
 
+      # No visit label rides on an AE bar. An event carries its own onset date,
+      # and a study that puts AVISIT on its occurrence dataset means the visit
+      # the AE was COLLECTED at, not the one it began in -- so there is no row
+      # label here that describes this bar's position. Nothing gets derived to
+      # fill the gap; the cycle band above the lane is the comparison.
+      #
       # The severity column is a role, resolved once by the block and
       # injected -- never re-detected here, or bars and legend could drift.
       sev_col <- settings$roles$severity
       has_sev <- !is.null(sev_col) && sev_col %in% colnames(tbl)
-      # Cycle anchors, injected by the block (uses = "cycle"). NULL for a
-      # study without the cycle vocabulary, which makes every label helper
-      # below a no-op rather than a special case.
-      cyc <- settings$cycle_anchors
       has_end <- "AENDT" %in% colnames(tbl)
       has_bodsys <- "AEBODSYS" %in% colnames(tbl)
       has_serious <- "AESER" %in% colnames(tbl)
@@ -156,12 +158,12 @@ ae_gantt_viz <- new_pp_viz(
         bodsys <- if (has_bodsys) as.character(tbl$AEBODSYS[i]) else ""
         serious <- if (has_serious) as.character(tbl$AESER[i]) else ""
         outcome <- if (has_outcome) as.character(tbl$AEOUT[i]) else ""
-        s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i], cyc) else {
-          pp_xlabel(tbl$ASTDT[i], ref_ms, mode, cyc)
+        s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i]) else {
+          pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
         }
         e_lab <- if (has_end && !is.na(end_at(i))) {
-          if (use_day) pp_day_label(tbl$AENDY[i], cyc) else {
-            pp_xlabel(tbl$AENDT[i], ref_ms, mode, cyc)
+          if (use_day) pp_day_label(tbl$AENDY[i]) else {
+            pp_xlabel(tbl$AENDT[i], ref_ms, mode)
           }
         } else {
           PP_ONGOING_LABEL

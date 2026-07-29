@@ -56,12 +56,13 @@ pp_day_to_x <- function(dy) {
 #' [pp_xlabel()], which has to undo the continuous scale first.
 #'
 #' @param dy ADaM study day.
-#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
-#'   cycle/day rides behind the study day as `D22 (C2 D1)`.
+#' @param visit The visit label of the SAME record, or `NA`. Rides behind the
+#'   study day verbatim, as `D22 (CYCLE 2 DAY 1)`. Never parsed, never
+#'   derived; see pp-cycle.R.
 #' @noRd
-pp_day_label <- function(dy, cycle = NULL) {
+pp_day_label <- function(dy, visit = NA) {
   if (is.na(dy)) return("")
-  pp_with_cycle(paste0("D", dy), pp_day_to_x(dy), cycle)
+  pp_with_visit(paste0("D", dy), visit)
 }
 
 #' x-axis value, preferring a study day the data already carries
@@ -93,11 +94,12 @@ pp_xval_pref_day <- function(d, day, ref_ms = NA_real_, mode = "date") {
 #' Returns the calendar date (`YYYY-MM-DD`) in date mode, or `D<n>` in
 #' relative-day mode (skipping day 0, matching ADaM's \*DY convention).
 #'
-#' @param cycle A [pp_cycle_anchor_days()] frame, or `NULL`. When given, the
-#'   cycle/day is appended in BOTH modes — the clinician's ask was to see the
-#'   cycle day *in addition to* what is already there, not instead of it.
+#' @param visit The visit label of the SAME record, or `NA`. Appended verbatim
+#'   in BOTH modes — the clinician's ask was to see the cycle day *in addition
+#'   to* what is already there, not instead of it, and the row already says
+#'   which visit it was.
 #' @noRd
-pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", cycle = NULL) {
+pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", visit = NA) {
   base <- if (identical(mode, "rday") && !is.na(ref_ms)) {
     day <- pp_xval(d, ref_ms, "rday")
     if (is.na(day)) return("")
@@ -106,11 +108,7 @@ pp_xlabel <- function(d, ref_ms = NA_real_, mode = "date", cycle = NULL) {
     if (is.na(d)) return("")
     format(as.Date(d))
   }
-  # NA ref_ms leaves pp_xval() returning a millisecond timestamp, which would
-  # be nonsense to look up against day-space anchors; there is no cycle to
-  # report without a treatment start anyway.
-  x_day <- if (is.na(ref_ms)) NA_real_ else pp_xval(d, ref_ms, "rday")
-  pp_with_cycle(base, x_day, cycle)
+  pp_with_visit(base, visit)
 }
 
 #' The axis end points, in the axis's own units -- the same two expressions
@@ -807,6 +805,12 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   has_ref <- all(c("A1LO", "A1HI") %in% colnames(tbl))
   has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
+  # The visit label of one row, for the cycle/day it may carry. Total: a study
+  # shipping no AVISIT (or an unscheduled row) simply has none to report.
+  opt_visit <- function(df, i) {
+    if (!"AVISIT" %in% colnames(df)) return(NA)
+    df$AVISIT[i]
+  }
 
   n_params <- length(params)
   # Fixed per-chart height. Splitting a total budget across the selected
@@ -931,9 +935,15 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
           'font-weight:600;margin-bottom:4px">', anr, '</span><br/>'
         )
       }
+      # A findings row's AVISIT describes the row's own timepoint, so it
+      # belongs beside its date -- unlike an event's collection visit, see
+      # viz-ae-gantt.R. Printed as the study wrote it, cycle vocabulary or
+      # "UNSCHEDULED" alike: to this package it is a text label, not a thing
+      # to interpret.
       tt <- paste0(tt,
         '<div style="font-size:12px;line-height:1.6">',
-        '<span style="color:#6b7280">Date:</span> ', format(p_data$ADT[i]),
+        '<span style="color:#6b7280">Date:</span> ',
+        pp_with_visit(format(p_data$ADT[i]), opt_visit(p_data, i)),
         '<br/><span style="color:#6b7280">AVAL:</span> <b>',
         round(val, 2), '</b>'
       )
