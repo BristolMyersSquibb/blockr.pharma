@@ -12,11 +12,20 @@
 #     required — CMTRT (the reported name; every CM table carries it), and a
 #                time source: ASTDT or ASTDY
 #     optional — CMDECOD (coded name, preferred for lanes), AENDT, AENDY,
-#                CMDOSE, CMDOSU, CMDOSFRQ, CMROUTE, CMCLAS, CMINDC
+#                CMDOSE, CMDOSU, CMDOSFRQ, CMROUTE, CMCLAS
+#     roles    — indication (the resolved column arrives as
+#                settings$roles$indication, its colors as
+#                settings$indc_colors)
 #
 # Lanes are labelled above their bars, exactly like the AE gantt, and for
 # the same reason: the shared left margin (PP_GRID_LEFT) fits only a few
 # characters and medication names collide well before that.
+#
+# Bars are colored by indication (why the medication was given), the way the
+# AE gantt colors by severity. The colors come from blockr.theme -- the
+# board's scale-map binding for the indication column, else the theme's
+# categorical palette -- and this file knows neither the levels nor the hexes;
+# see pp-indication.R, including when the coloring is skipped entirely.
 
 #' Concomitant medications visualization definition
 #' @noRd
@@ -32,9 +41,12 @@ cm_gantt_viz <- new_pp_viz(
   requires_any = list(adcm = list(c("ASTDT", "ASTDY"))),
   optional = list(adcm = c(
     "CMDECOD", "AENDT", "AENDY", "CMDOSE", "CMDOSU", "CMDOSFRQ",
-    "CMROUTE", "CMCLAS", "CMINDC"
+    "CMROUTE", "CMCLAS"
   )),
-  uses = "cycle",
+  uses = "indication",
+  legend_ui = function(dm_obj, settings) {
+    pp_indc_legend_ui(settings$indc_colors)
+  },
   render = function(dm_obj, time_range, settings = list(),
                     ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
@@ -82,9 +94,6 @@ cm_gantt_viz <- new_pp_viz(
 
     day_unit <- if (identical(mode, "rday")) 1 else 86400000
     end_at <- function(i) if (use_day) tbl$AENDY[i] else tbl$AENDT[i]
-    # Cycle anchors, injected by the block (uses = "cycle"); NULL makes the
-    # label helpers below no-ops.
-    cyc <- settings$cycle_anchors
 
     bar_span <- function(i) {
       s <- pp_xval_pref_day(
@@ -127,7 +136,24 @@ cm_gantt_viz <- new_pp_viz(
       rows[order(starts)][1L]
     }, integer(1L))
 
-    bar_color <- "#0891B2"
+    # The indication column is a role, resolved once by the block and
+    # injected -- never re-detected here, or bars and legend could drift.
+    indc_col <- settings$roles$indication
+    has_indc <- !is.null(indc_col) && indc_col %in% colnames(tbl)
+    indc_at <- function(i) if (has_indc) opt_chr(tbl, indc_col, i) else ""
+
+    # Indication colors, resolved ONCE in the block (settings$indc_colors,
+    # via blockr.theme) and read here and by the legend, so the two cannot
+    # disagree. Absent -- no indication column, or levels the theme palette
+    # cannot tell apart -- the panel keeps its single medication color rather
+    # than greying every bar; grey is for the rows that carry no indication
+    # while others do.
+    default_color <- "#0891B2"
+    indc_hex <- if (has_indc) settings$indc_colors else NULL
+    bar_color <- function(indc) {
+      if (is.null(indc_hex) || !length(indc_hex)) return(default_color)
+      if (indc %in% names(indc_hex)) unname(indc_hex[[indc]]) else "#9ca3af"
+    }
 
     bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
       span <- bar_span(i)
@@ -140,23 +166,29 @@ cm_gantt_viz <- new_pp_viz(
         opt_chr(tbl, "CMDOSE", i), opt_chr(tbl, "CMDOSU", i),
         opt_chr(tbl, "CMDOSFRQ", i)
       ))
-      s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i], cyc) else {
-        pp_xlabel(tbl$ASTDT[i], ref_ms, mode, cyc)
+      s_lab <- if (use_day) pp_day_label(tbl$ASTDY[i]) else {
+        pp_xlabel(tbl$ASTDT[i], ref_ms, mode)
       }
       e_lab <- if (has_end && !is.na(end_at(i))) {
-        if (use_day) pp_day_label(tbl$AENDY[i], cyc) else {
-          pp_xlabel(tbl$AENDT[i], ref_ms, mode, cyc)
+        if (use_day) pp_day_label(tbl$AENDY[i]) else {
+          pp_xlabel(tbl$AENDT[i], ref_ms, mode)
         }
       } else {
         PP_ONGOING_LABEL
       }
       lab <- if (i %in% lane_first) pp_term_label(med) else ""
+      indc <- indc_at(i)
+      col <- bar_color(indc)
       list(
+        # Value 12 is the tooltip's badge color: the color resolved in R, so
+        # the badge cannot pick a palette of its own, and empty when the bars
+        # are uniformly colored (a badge would then claim a distinction the
+        # plot does not draw).
         value = list(s, e, lane, med, dose,
                      opt_chr(tbl, "CMROUTE", i), opt_chr(tbl, "CMCLAS", i),
-                     opt_chr(tbl, "CMINDC", i), s_lab, e_lab, lab,
-                     is_ongoing(i)),
-        itemStyle = list(color = bar_color)
+                     indc, s_lab, e_lab, lab,
+                     is_ongoing(i), if (length(indc_hex)) col else ""),
+        itemStyle = list(color = col)
       )
     })
 
@@ -174,12 +206,19 @@ cm_gantt_viz <- new_pp_viz(
             var dose = v[4] || '';
             var route = v[5] || '';
             var klass = v[6] || '';
-            var indc = v[7] || '';
+            var indc = '' + (v[7] == null ? '' : v[7]);
             var s = v[8] || '';
             var e = v[9] || '';
+            var badge = v[12] || '';
             var html = '<div style=\"min-width:180px\">';
             html += '<div style=\"font-size:14px;font-weight:700;' +
               'margin-bottom:4px\">' + med + '</div>';
+            if (indc && badge) {
+              html += '<span style=\"display:inline-block;background:' +
+                badge + ';color:#fff;padding:1px 8px;border-radius:3px;' +
+                'font-size:11px;font-weight:600;margin-bottom:4px\">' +
+                indc + '</span><br/>';
+            }
             if (klass) {
               html += '<span style=\"color:#888;font-size:11px\">' +
                 klass.toUpperCase() + '</span><br/>';
@@ -194,7 +233,7 @@ cm_gantt_viz <- new_pp_viz(
               html += '<span style=\"font-size:12px\">Route: ' +
                 route + '</span><br/>';
             }
-            if (indc) {
+            if (indc && !badge) {
               html += '<span style=\"font-size:12px\">Indication: ' +
                 indc + '</span>';
             }

@@ -37,8 +37,9 @@
 #'   render function branch on which arrived.
 #' @param uses Character vector of role names the render consumes (see
 #'   pp-roles.R). The block injects `settings$roles` (the resolved columns)
-#'   for these, plus `settings$sev_colors` when `"severity"` is used and the
-#'   board scale map resolves. This replaces any viz-id wiring in the block.
+#'   for these, plus `settings$sev_colors` / `settings$indc_colors` when
+#'   `"severity"` / `"indication"` is used and the board scale map resolves.
+#'   This replaces any viz-id wiring in the block.
 #' @param controls Optional named list of per-viz UI controls (passed through
 #'   unchanged to the existing controls toolbar).
 #' @param legend_ui Optional `function(dm_obj, settings)` returning a tag (or

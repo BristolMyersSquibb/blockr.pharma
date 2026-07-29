@@ -1145,8 +1145,9 @@ new_patient_profile_block <- function(selected = NULL,
 
             # Role injection, driven by the viz's `uses` declaration -- no
             # viz-id matching. The resolved role columns arrive as
-            # settings$roles; for the severity role the board scale map's
-            # colors ride along as settings$sev_colors (render-time only,
+            # settings$roles; for the severity and indication roles the board
+            # scale map's colors ride along as settings$sev_colors /
+            # settings$indc_colors (render-time only,
             # r_viz_settings is untouched; each viz falls back to its own
             # constants when no map / no binding resolves).
             viz_settings <- r_viz_settings()[[viz_id]] %||% list()
@@ -1161,6 +1162,14 @@ new_patient_profile_block <- function(selected = NULL,
               )
               if (!is.null(sev_colors)) {
                 viz_settings$sev_colors <- sev_colors
+              }
+            }
+            if ("indication" %in% uses) {
+              indc_colors <- pp_indc_scale_colors(
+                r_scale_map(), dm_obj, indc_col = roles$indication
+              )
+              if (!is.null(indc_colors)) {
+                viz_settings$indc_colors <- indc_colors
               }
             }
             if ("cycle" %in% uses) {

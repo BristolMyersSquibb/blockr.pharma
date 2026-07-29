@@ -32,7 +32,10 @@ test_that("cm_gantt is declared against adcm and resolves", {
 
 test_that("lanes prefer the coded name and fall back per row", {
   chart <- cm_gantt_viz$render(
-    cm_dm(), time_range = as.Date(c("2020-01-01", "2020-06-01"))
+    cm_dm(), time_range = as.Date(c("2020-01-01", "2020-06-01")),
+    # The indication is a role: the tooltip reads the column the block
+    # resolved, never a name detected in here.
+    settings = list(roles = list(indication = "CMINDC"))
   )
   lanes <- unlist(chart$x$opts$yAxis$data)
   # ASPIRIN from CMDECOD; PARACETAMOL's blank CMDECOD falls back to CMTRT
@@ -42,6 +45,60 @@ test_that("lanes prefer the coded name and fall back per row", {
   tips <- vapply(bars, function(b) paste(unlist(b$value), collapse = " "), "")
   expect_true(any(grepl("100 mg", tips)))
   expect_true(any(grepl("PROPHYLAXIS", tips)))
+})
+
+test_that("bars take the indication colors the block resolved", {
+  tr <- as.Date(c("2020-01-01", "2020-06-01"))
+  roles <- list(indication = "CMINDC")
+  bar_cols <- function(chart) {
+    vapply(chart$x$opts$series[[1]]$data, function(b) b$itemStyle$color, "")
+  }
+  badges <- function(chart) {
+    vapply(chart$x$opts$series[[1]]$data,
+           function(b) as.character(b$value[[13]]), "")
+  }
+
+  # The resolved vector is the only source of color: this render invents none
+  # and knows no level.
+  chart <- cm_gantt_viz$render(
+    cm_dm(), time_range = tr,
+    settings = list(
+      roles = roles,
+      indc_colors = c(PROPHYLAXIS = "#111111", HEADACHE = "#222222")
+    )
+  )
+  expect_setequal(bar_cols(chart), c("#111111", "#222222"))
+  # the tooltip badge reads the same color, never a palette of its own
+  expect_setequal(badges(chart), c("#111111", "#222222"))
+
+  # A row whose indication is not in the vector (blank, while others carry
+  # one) is grey -- unknown, not a category.
+  chart <- cm_gantt_viz$render(
+    cm_dm(list(CMINDC = c("PROPHYLAXIS", NA))), time_range = tr,
+    settings = list(roles = roles, indc_colors = c(PROPHYLAXIS = "#111111"))
+  )
+  expect_setequal(bar_cols(chart), c("#111111", "#9ca3af"))
+
+  # No colors resolved (the block skipped it) -> the single medication color,
+  # and no badge, so the tooltip keeps its plain "Indication:" line.
+  chart <- cm_gantt_viz$render(cm_dm(), time_range = tr,
+                               settings = list(roles = roles))
+  expect_identical(unique(bar_cols(chart)), "#0891B2")
+  expect_identical(unique(badges(chart)), "")
+
+  # No indication role at all (a study without CMINDC): unchanged behaviour.
+  chart <- cm_gantt_viz$render(cm_dm(), time_range = tr)
+  expect_identical(unique(bar_cols(chart)), "#0891B2")
+})
+
+test_that("the indication legend reads the same resolved vector", {
+  html <- as.character(cm_gantt_viz$legend_ui(
+    cm_dm(), list(indc_colors = c(PROPHYLAXIS = "#111111"))
+  ))
+  expect_match(html, "Prophylaxis")
+  expect_match(html, "#111111", fixed = TRUE)
+  # nothing resolved -> no legend
+  expect_null(cm_gantt_viz$legend_ui(cm_dm(), list()))
 })
 
 test_that("the medication period feeds the shared time range", {

@@ -8,6 +8,7 @@ new_study_roles_option(
   arm = "",
   severity = "",
   timeline = "",
+  indication = "",
   category = "Study",
   ...
 )
@@ -21,6 +22,9 @@ before the grade, ADaM before SDTM).}
 
 \item{timeline}{ADSL column anchoring relative-day mode; \code{""} =
 undeclared (convention: \code{TRTSDT}).}
+
+\item{indication}{ADCM medication indication column; \code{""} = undeclared
+(convention: \code{CMINDC}).}
 
 \item{category}{Settings sidebar category}
 

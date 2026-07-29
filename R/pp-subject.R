@@ -107,6 +107,11 @@ pp_roles_blocker <- function(dm_obj, declared = NULL) {
     check(function() pp_sev_column(colnames(tbls[[adae]]),
                                    declared$severity))
   }
+  adcm <- find_tbl("adcm")
+  if (!is.null(adcm)) {
+    check(function() pp_indc_column(colnames(tbls[[adcm]]),
+                                    declared$indication))
+  }
 
   if (is.null(acc$err)) return(NULL)
 

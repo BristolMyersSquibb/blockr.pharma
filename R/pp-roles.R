@@ -18,15 +18,19 @@
 #   timeline  -- ADSL column anchoring relative-day mode. Convention:
 #                TRTSDT (which pp_normalize_dm() derives from
 #                RFXSTDTC/RFSTDTC for SDTM-shaped studies).
+#   indication -- ADCM medication indication column. Convention: CMINDC;
+#                none is legitimate (medication bars keep one color). See
+#                pp_indc_column().
 #
 # Table aliases are the option's fourth field but are not resolved here:
 # they feed pp_normalize_dm() directly (a table name is not a per-render
 # question).
 #
 # Vizs consume roles declaratively: new_pp_viz(uses = c("severity", ...))
-# makes the block inject `settings$roles` (and, for the severity role, the
-# board scale map's resolved `settings$sev_colors`) into that viz's render.
-# No viz-id string matching anywhere.
+# makes the block inject `settings$roles` (and, for the severity and
+# indication roles, the board scale map's resolved `settings$sev_colors` /
+# `settings$indc_colors`) into that viz's render. No viz-id string matching
+# anywhere.
 
 #' Resolve the profile's roles against a normalized dm
 #'
@@ -41,12 +45,13 @@
 #'   roles).
 #' @param declared Declared roles (the normalized "study_roles" option
 #'   value, `NULL` entries for undeclared), or `NULL`.
-#' @return List with `arm`, `severity`, `timeline` (column names or `NULL`)
-#'   and `errors` (named list of conditions, empty when all resolve).
+#' @return List with `arm`, `severity`, `timeline`, `indication` (column names
+#'   or `NULL`) and `errors` (named list of conditions, empty when all
+#'   resolve).
 #' @noRd
 pp_resolve_roles <- function(dm_obj, declared = NULL) {
   roles <- list(arm = NULL, severity = NULL, timeline = NULL,
-                errors = list())
+                indication = NULL, errors = list())
   if (!inherits(dm_obj, "dm")) return(roles)
 
   acc <- new.env(parent = emptyenv())
@@ -74,6 +79,12 @@ pp_resolve_roles <- function(dm_obj, declared = NULL) {
   if ("adae" %in% names(tbls)) {
     take("severity", function() {
       pp_sev_column(colnames(tbls[["adae"]]), declared$severity)
+    })
+  }
+
+  if ("adcm" %in% names(tbls)) {
+    take("indication", function() {
+      pp_indc_column(colnames(tbls[["adcm"]]), declared$indication)
     })
   }
 

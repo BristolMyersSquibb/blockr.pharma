@@ -1,4 +1,5 @@
-# The "study_roles" board option: three fields (arm, severity, timeline),
+# The "study_roles" board option: four fields (arm, severity, timeline,
+# indication),
 # uniform semantics -- undeclared = the package convention,
 # declared-but-missing = a named error, never a fallback. Table aliases are
 # NOT a field: SDTM domain names resolve through pp_table_catalog() with no
@@ -13,15 +14,17 @@ test_that("the option normalizes, serializes and restores", {
   # undeclared default
   expect_identical(
     blockr.core::board_option_value(opt),
-    list(arm = "", severity = "", timeline = "")
+    list(arm = "", severity = "", timeline = "", indication = "")
   )
 
   # normalization: ctor keys, the editor's study_* input keys, whitespace
   expect_identical(
     blockr.core::board_option_value(opt, list(
-      study_arm = " TRT ", study_severity = "", study_timeline = "RANDDT"
+      study_arm = " TRT ", study_severity = "", study_timeline = "RANDDT",
+      study_indication = " CMINDC "
     )),
-    list(arm = "TRT", severity = "", timeline = "RANDDT")
+    list(arm = "TRT", severity = "", timeline = "RANDDT",
+         indication = "CMINDC")
   )
 
   # TOTAL over anything a text field can hold: never an error mid-keystroke
