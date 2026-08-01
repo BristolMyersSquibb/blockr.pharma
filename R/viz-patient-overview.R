@@ -592,7 +592,7 @@ patient_overview_viz <- new_pp_viz(
             x0, x1, ex_lane, if (length(doses)) doses[[1L]] else "",
             drug_of(i), s_lab, e_lab,
             n_slot, slot_of(drug_of(i)),
-            paste(doses, collapse = " · ")
+            paste(doses, collapse = " \u00b7 ")
           ))
         })
         names(ex_data) <- NULL

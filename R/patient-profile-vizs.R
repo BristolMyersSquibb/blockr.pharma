@@ -1382,7 +1382,7 @@ pp_param_short <- function(x, max_chars = 28L) {
   out <- sub("\\s*\\([^()]*\\)\\s*$", "", x)
   out[!nzchar(out)] <- x[!nzchar(out)]
   long <- !is.na(out) & nchar(out) > max_chars
-  out[long] <- paste0(substr(out[long], 1L, max_chars - 1L), "…")
+  out[long] <- paste0(substr(out[long], 1L, max_chars - 1L), "\u2026")
   out
 }
 
@@ -1571,5 +1571,5 @@ pp_param_index <- function(vizs) {
 #' @noRd
 pp_truncate <- function(x, max_chars) {
   if (is.na(x) || nchar(x) <= max_chars) return(x)
-  paste0(substr(x, 1L, max_chars - 1L), "…")
+  paste0(substr(x, 1L, max_chars - 1L), "\u2026")
 }
