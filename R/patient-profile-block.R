@@ -732,9 +732,12 @@ new_patient_profile_block <- function(selected = NULL,
                 `data-viz-id` = v$id,
                 `data-domain` = v$domain,
                 title = v$description,
-                `data-search-text` = paste(
-                  v$label, v$description, v$domain, v$search %||% ""
-                ),
+                # The card's OWN text only. Its parameters used to be pasted
+                # in here too, which put the whole lab vocabulary on every
+                # card; they live in the parameter index below, once.
+                `data-card-text` = tolower(paste(
+                  v$label, v$description, v$domain
+                )),
                 shiny::div(class = "pp-card-main",
                   shiny::div(class = "pp-card-icon",
                     shiny::HTML(pp_icon_html(v$icon, v$color))
@@ -776,56 +779,32 @@ new_patient_profile_block <- function(selected = NULL,
             # that happens to hold it. Each result nests under its group so
             # the context is visible, and BOTH levels carry a check mark: the
             # group check adds the whole card, the parameter check adds just
-            # that series. Rendered up front and hidden -- the filter is the
-            # same client-side class toggle the cards use, so typing needs no
-            # server round-trip.
-            index <- pp_param_index(avail)
-            by_viz <- split(index, vapply(index, `[[`, character(1L), "viz_id"))
-            result_groups <- lapply(names(avail), function(vid) {
-              v <- avail[[vid]]
-              rows <- lapply(by_viz[[vid]] %||% list(), function(p) {
-                shiny::div(
-                  class = "pp-result-param",
-                  `data-viz-id` = p$viz_id,
-                  `data-paramcd` = p$code,
-                  `data-search-text` = p$search,
-                  title = paste0(p$label, " (", p$code, ")"),
-                  shiny::span(class = "pp-result-param-label", p$short),
-                  check_mark()
-                )
-              })
-              shiny::div(
-                class = paste("pp-result-group",
-                              if (vid %in% sel) "is-selected"),
-                `data-viz-id` = vid,
-                # The group row is a card in every respect except that the
-                # selection sync must not MOVE it between the browse lists,
-                # so it carries its own class rather than .pp-card.
-                shiny::div(
-                  class = paste("pp-result-card",
-                                if (vid %in% sel) "is-selected"),
-                  `data-viz-id` = vid,
-                  `data-search-text` = paste(v$label, v$description, v$domain),
-                  title = v$description,
-                  shiny::div(class = "pp-card-main",
-                    shiny::div(class = "pp-card-icon",
-                      shiny::HTML(pp_icon_html(v$icon, v$color))
-                    ),
-                    shiny::div(class = "pp-card-content",
-                      shiny::tags$p(class = "pp-card-title", v$label)
-                    ),
-                    check_mark()
-                  )
-                ),
-                if (length(rows)) shiny::div(class = "pp-result-params", rows)
-              )
+            # that series.
+            #
+            # Only the INDEX ships -- one [viz, code, short, full] tuple per
+            # parameter -- and the client builds rows for the handful a query
+            # actually matches. Pre-rendering every row instead cost 454 bytes
+            # apiece to carry about 40 bytes of fact, and put a byte-for-byte
+            # copy of all eleven browse cards underneath them: 30KB of markup
+            # for what is, as a payload, a list of lab and vital-sign names.
+            # Building client-side keeps typing free of server round-trips,
+            # which is the property that mattered.
+            param_index <- lapply(pp_param_index(avail), function(p) {
+              list(p$viz_id, p$code, p$short, p$label)
             })
 
             shiny::tagList(
-              # Matches, shown only while a query is live
+              shiny::tags$script(
+                type = "application/json",
+                id = session$ns("param_index"),
+                shiny::HTML(as.character(jsonlite::toJSON(
+                  param_index, auto_unbox = TRUE
+                )))
+              ),
+              # Matches, built by the client while a query is live
               shiny::div(class = "pp-results-section is-hidden",
                 shiny::div(class = "pp-section-header", "RESULTS"),
-                shiny::div(class = "pp-results-list", result_groups)
+                shiny::div(class = "pp-results-list")
               ),
               shiny::div(class = "pp-no-results is-hidden",
                 "No visualization or parameter matches"),
@@ -1648,6 +1627,7 @@ new_patient_profile_block <- function(selected = NULL,
             var pickParamInputId = '", ns("pick_param"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
+            var paramIndexId = '", ns("param_index"), "';
             var reorderInputId = '", ns("reorder_viz"), "';
 
             var dragActive = false;
@@ -1829,6 +1809,88 @@ new_patient_profile_block <- function(selected = NULL,
                 Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
               });
 
+            // The parameter index: one [viz, code, short, full] tuple per
+            // series, shipped as data and parsed once per sidebar render.
+            // Cached on the node itself, so a re-render invalidates it for
+            // free.
+            function paramIndex() {
+              var el = document.getElementById(paramIndexId);
+              if (!el) return [];
+              if (!el.ppParsed) {
+                try { el.ppParsed = JSON.parse(el.textContent || '[]'); }
+                catch (err) { el.ppParsed = []; }
+              }
+              return el.ppParsed;
+            }
+
+            // PARAM text is study data, so it reaches the DOM escaped.
+            function ppEsc(s) {
+              return String(s === null || s === undefined ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/'/g, '&#39;')
+                .replace(/\"/g, '&quot;');
+            }
+
+            // Build the results tree for a query. A group shows when the
+            // group itself matches or any of its parameters does, and only
+            // the matching parameters come with it. A group matched by NAME
+            // alone lists nothing: typing the word chemistry asks for the
+            // card, not for all eighteen series under it.
+            //
+            // The group row is cloned from the browse card that already
+            // describes it, so the icon and label have exactly one source.
+            function buildResults($sidebar, query) {
+              var $list = $sidebar.find('.pp-results-list');
+              if (!query) { $list.empty(); return 0; }
+
+              var checkHtml = '';
+              var $anyCheck = $sidebar.find('.pp-card-check').first();
+              if ($anyCheck.length) checkHtml = $anyCheck[0].outerHTML;
+
+              var byViz = {}, order = [];
+              paramIndex().forEach(function(e) {
+                var vid = e[0], code = e[1], short = e[2], full = e[3];
+                if ((code + ' ' + full).toLowerCase().indexOf(query) < 0) return;
+                if (!byViz[vid]) { byViz[vid] = []; order.push(vid); }
+                byViz[vid].push([code, short, full]);
+              });
+
+              // Cards whose own name matches, listed even with no parameter hit
+              $sidebar.find('.pp-available-list .pp-card, .pp-active-list .pp-card')
+                .each(function() {
+                  var vid = $(this).attr('data-viz-id');
+                  var own = ($(this).attr('data-card-text') || '');
+                  if (own.indexOf(query) < 0) return;
+                  if (!byViz[vid]) { byViz[vid] = []; order.push(vid); }
+                });
+
+              var html = order.map(function(vid) {
+                var $src = $sidebar.find('.pp-card[data-viz-id=' +
+                  JSON.stringify(vid) + ']').first();
+                if (!$src.length) return '';
+                var on = $src.hasClass('is-selected') ? ' is-selected' : '';
+                var rows = byViz[vid].map(function(p) {
+                  return '<div class=\"pp-result-param\" data-viz-id=' +
+                    JSON.stringify(vid) + ' data-paramcd=' +
+                    JSON.stringify(p[0]) + ' title=\"' +
+                    ppEsc(p[2] + ' (' + p[0] + ')') + '\">' +
+                    '<span class=\"pp-result-param-label\">' + ppEsc(p[1]) +
+                    '</span>' + checkHtml + '</div>';
+                }).join('');
+                return '<div class=\"pp-result-group' + on + '\" data-viz-id=' +
+                  JSON.stringify(vid) + '>' +
+                  '<div class=\"pp-result-card' + on + '\" data-viz-id=' +
+                  JSON.stringify(vid) + '><div class=\"pp-card-main\">' +
+                  $src.find('.pp-card-main').html() + '</div></div>' +
+                  (rows ? '<div class=\"pp-result-params\">' + rows + '</div>' : '') +
+                  '</div>';
+              }).join('');
+
+              $list.html(html);
+              applyParamChecks();
+              return order.length;
+            }
+
             // Search: client-side filtering across both sections.
             //
             // Match on the card's own data-search-text and mark it with a
@@ -1846,29 +1908,7 @@ new_patient_profile_block <- function(selected = NULL,
               $('#' + clearBtnId).toggleClass('is-hidden', !query);
               $sidebar.toggleClass('is-searching', !!query);
 
-              // Results tree: a group shows when the group itself matches or
-              // any of its parameters does, and only the matching parameters
-              // come with it. A group matched by NAME alone lists nothing:
-              // typing the word chemistry asks for the card, not for all
-              // eighteen series under it.
-              var groupHits = 0;
-              $sidebar.find('.pp-result-group').each(function() {
-                var $g = $(this);
-                var own = ($g.find('.pp-result-card').attr('data-search-text')
-                  || '').toLowerCase();
-                var ownHit = !!query && own.indexOf(query) >= 0;
-                var childHits = 0;
-                $g.find('.pp-result-param').each(function() {
-                  var text = ($(this).attr('data-search-text') || '')
-                    .toLowerCase();
-                  var hit = !!query && text.indexOf(query) >= 0;
-                  if (hit) childHits++;
-                  $(this).toggleClass('is-filtered-out', !hit);
-                });
-                var show = ownHit || childHits > 0;
-                if (show) groupHits++;
-                $g.toggleClass('is-filtered-out', !show);
-              });
+              var groupHits = buildResults($sidebar, query);
               $sidebar.find('.pp-results-section')
                 .toggleClass('is-hidden', !query || groupHits === 0);
               // The results tree REPLACES the browse lists while typing --
