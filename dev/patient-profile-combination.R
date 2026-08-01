@@ -3,6 +3,7 @@
 # D1 only, on an SDTM-style `ex` domain carrying VISIT ("CYCLE 2 DAY 1").
 #
 #   Rscript blockr.pharma/dev/patient-profile-combination.R
+#   Rscript blockr.pharma/dev/patient-profile-combination.R 3901   # pick a port
 #
 # WHAT TO LOOK AT
 #   - The treatment lane holds one SLOT PER DRUG. Both same-day infusions are
@@ -29,10 +30,24 @@ for (p in c("blockr.core", "blockr.theme", "blockr.dplyr", "blockr.dm",
 }
 
 host <- "0.0.0.0"
-port <- tryCatch(
-  httpuv::randomPort(min = 3838L, max = 3838L, n = 1L, host = host),
-  error = function(e) httpuv::randomPort(host = host)
-)
+# Positional arg wins, then BLOCKR_PORT, then 3838 (the only port the dev
+# container forwards, so the only shareable one). Falls back to a random port
+# when 3838 is busy -- on the host it always is, because Docker publishes the
+# container's 3838 onto it.
+port <- local({
+  arg <- commandArgs(trailingOnly = TRUE)[1L]
+  env <- Sys.getenv("BLOCKR_PORT", unset = "")
+  raw <- if (!is.na(arg)) arg else if (nzchar(env)) env else ""
+  if (nzchar(raw)) {
+    p <- suppressWarnings(as.integer(raw))
+    if (is.na(p)) stop("Not a port: ", raw, call. = FALSE)
+    return(p)
+  }
+  tryCatch(
+    httpuv::randomPort(min = 3838L, max = 3838L, n = 1L, host = host),
+    error = function(e) httpuv::randomPort(host = host)
+  )
+})
 options(
   shiny.port = port,
   shiny.host = host,
