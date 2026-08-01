@@ -355,9 +355,22 @@ pp_mark_radius_js <- function(h = "h", w = "barW") {
 }
 
 pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
-  # An open-ended bar gets a chevron at the window edge. Without it the bar
-  # just ends where the axis ends, which reads as "resolved on the last day
-  # shown" -- the same misreading in a different place.
+  # An open-ended bar gets a caret at the window edge. Without it the bar just
+  # ends where the axis ends, which reads as "resolved on the last day shown"
+  # -- the same misreading in a different place.
+  #
+  # STROKED and sized to the bar, not filled and sized past it. The mark was a
+  # solid triangle at `rect.height * 0.9` measured BOTH ways from centre, i.e.
+  # 25px of arrowhead on a 14px bar, and five times the height of a 3px
+  # combination slot. Because every open event runs to the same window edge by
+  # construction, those arrowheads lined up into a wall down the right side of
+  # every gantt, which read as chrome rather than as data.
+  #
+  # The 2px detachment is deliberate: separated from the bar, the caret reads
+  # as an annotation ON the event rather than as part of its extent. It lives
+  # in the grid's 20px right margin (needing ~9px), which is also why there is
+  # no bounds check -- an open bar is clipped exactly AT the edge, so a caret
+  # required to fit inside the plot area could never draw at all.
   ongoing_js <- if (is.null(ongoing_idx)) "false" else {
     sprintf("!!api.value(%d)", ongoing_idx)
   }
@@ -383,16 +396,20 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
       }];
 
       if (isOngoing) {
-        var ax = rect.x + rect.width;
         var cy = rect.y + rect.height / 2;
-        var ah = rect.height * 0.9;
-        if (ax + ah <= cs.x + cs.width + ah) {
-          children.push({
-            type: 'polygon',
-            shape: { points: [[ax, cy - ah], [ax + ah, cy], [ax, cy + ah]] },
-            style: { fill: api.style().fill, opacity: 0.9 }
-          });
-        }
+        var a  = Math.max(rect.height * 0.42, 3);
+        var ax = rect.x + rect.width + 2;
+        children.push({
+          type: 'polyline',
+          shape: { points: [[ax, cy - a], [ax + a, cy], [ax, cy + a]] },
+          style: {
+            fill: 'none',
+            stroke: api.style().fill,
+            lineWidth: 1.6,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }
+        });
       }
 
       var label = api.value(%d);
