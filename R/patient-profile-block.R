@@ -717,18 +717,13 @@ new_patient_profile_block <- function(selected = NULL,
             # "Chemistry" is still reachable by typing "alanine" -- the
             # description alone was a fixed prose blurb that named some
             # parameters and not others.
+            # One <use> per row against the sprite in the static UI above.
+            check_svg <- paste0(
+              '<svg width="12" height="12" viewBox="0 0 16 16"><use href="#',
+              session$ns("check"), '"/></svg>'
+            )
             check_mark <- function() {
-              shiny::div(class = "pp-card-check",
-                shiny::HTML(paste0(
-                  '<svg xmlns="http://www.w3.org/2000/svg" ',
-                  'width="12" height="12" fill="currentColor" ',
-                  'viewBox="0 0 16 16">',
-                  '<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7',
-                  'a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-',
-                  '.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 ',
-                  '0z"/></svg>'
-                ))
-              )
+              shiny::div(class = "pp-card-check", shiny::HTML(check_svg))
             }
 
             build_card <- function(v, is_sel) {
@@ -1477,6 +1472,19 @@ new_patient_profile_block <- function(selected = NULL,
         blockr.dplyr::blockr_select_dep(),
         shiny::div(
           class = "pp-layout", id = ns("pp_layout"),
+
+          # The check-mark glyph, defined ONCE and referenced by every card,
+          # group row and parameter row. Inlined, it was 286 bytes per row
+          # and the search results put one on all ~75 of them -- 31KB of
+          # identical markup in a sidebar payload of 72KB.
+          shiny::HTML(paste0(
+            '<svg xmlns="http://www.w3.org/2000/svg" style="display:none" ',
+            'aria-hidden="true"><symbol id="', ns("check"), '" ',
+            'viewBox="0 0 16 16"><path fill="currentColor" ',
+            'd="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5',
+            '-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 ',
+            '.708 0z"/></symbol></svg>'
+          )),
 
           # Left sidebar
           shiny::div(
