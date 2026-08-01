@@ -193,7 +193,8 @@ patient_overview_viz <- new_pp_viz(
                 type: 'rect',
                 shape: {
                   x: start[0], y: start[1] - h/2,
-                  width: barW, height: h, r: 3
+                  width: barW, height: h,
+                  r: Math.min(2, h / 4, barW / 2)
                 },
                 style: {
                   fill: 'rgba(5,150,105,0.2)',
@@ -339,7 +340,8 @@ patient_overview_viz <- new_pp_viz(
                 type: 'rect',
                 shape: {
                   x: start[0], y: start[1] - h/2,
-                  width: barW, height: h, r: 2
+                  width: barW, height: h,
+                  r: Math.min(2, h / 4, barW / 2)
                 },
                 style: { fill: fill, stroke: stroke, lineWidth: 1 }
               }];
@@ -620,7 +622,12 @@ patient_overview_viz <- new_pp_viz(
                 type: 'rect',
                 shape: {
                   x: start[0], y: yc - h/2,
-                  width: barW, height: h, r: 2
+                  width: barW, height: h,
+                  // h floors at 3px for a multi-drug combination, where a flat
+                  // 2px would be two thirds of the height, i.e. a capsule --
+                  // the semantic mark for a soft boundary. h/4 keeps it a
+                  // rectangle at every slot count.
+                  r: Math.min(2, h / 4, barW / 2)
                 },
                 style: {
                   fill: 'rgba(37,99,235,0.25)',

@@ -323,6 +323,37 @@ pp_gantt_open_end <- function(s, time_range, ref_ms = NA_real_,
 #' @noRd
 PP_ONGOING_LABEL <- "ongoing"
 
+# The cosmetic corner radius for an interval bar.
+#
+# CANONICAL SOURCE: --blockr-mark-radius in blockr.dock's design-system CSS
+# (mirrored again as MARK_RADIUS in blockr.viz/inst/js/chart.js). These bars are
+# drawn by an echarts `renderItem`, i.e. by JS built here as a string and
+# embedded in the chart option, which cannot reach a CSS custom property. Keep
+# the three in step.
+#
+# BOTH ends round. A timeline is not a stack: a stack's segments tile by
+# construction and compose one quantity, so a seam between them reads as a gap
+# in that quantity, but a gantt's events overlap, leave gaps, or only
+# incidentally touch, and where two do touch the seam is true -- it says two
+# events, not one long one.
+#
+# The clamp is not decorative here. These bars size themselves at render time
+# from api.size(), and the exposure lane floors at 3px for a multi-drug
+# combination. A flat 2px on a 3px bar is two thirds of its height, i.e. a
+# capsule, which is the SEMANTIC mark for a soft boundary. Clamping to h/4
+# keeps a thin bar a rectangle. Width is clamped too, so a single-day event
+# does not round into a dot.
+PP_MARK_RADIUS <- 2
+
+#' JS expression for the clamped corner radius of an interval bar.
+#'
+#' @param h JS expression for the bar's height.
+#' @param w JS expression for its width.
+#' @noRd
+pp_mark_radius_js <- function(h = "h", w = "barW") {
+  sprintf("Math.min(%d, (%s) / 4, (%s) / 2)", PP_MARK_RADIUS, h, w)
+}
+
 pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
   # An open-ended bar gets a chevron at the window edge. Without it the bar
   # just ends where the axis ends, which reads as "resolved on the last day
@@ -347,7 +378,7 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
 
       var children = [{
         type: 'rect',
-        shape: Object.assign({}, rect, { r: 3 }),
+        shape: Object.assign({}, rect, { r: %s }),
         style: api.style()
       }];
 
@@ -383,8 +414,12 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
       }
       return { type: 'group', children: children };
     }
-  ", ongoing_js, PP_GANTT_BAR_H, PP_GANTT_BAR_DY, label_idx,
-     PP_GANTT_LABEL_DY))
+  ", ongoing_js, PP_GANTT_BAR_H, PP_GANTT_BAR_DY,
+     # Clamp against the CLIPPED box, not the nominal bar: an event running off
+     # the window edge is cut by clipRectByRect(), and a 2px radius on the
+     # 1px sliver that survives would round it into a dot.
+     pp_mark_radius_js("rect.height", "rect.width"),
+     label_idx, PP_GANTT_LABEL_DY))
 }
 
 #' Encode a string as a JavaScript string literal

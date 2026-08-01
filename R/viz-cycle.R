@@ -127,7 +127,11 @@ cycle_viz <- new_pp_viz(
 
           var children = [{
             type: 'rect',
-            shape: Object.assign({}, rect, { r: 2 }),
+            // Clamped against the CLIPPED box: a cycle running past the window
+            // edge is cut, and a flat radius would round the sliver into a dot.
+            shape: Object.assign({}, rect, {
+              r: Math.min(2, rect.height / 4, rect.width / 2)
+            }),
             style: api.style()
           }];
 
