@@ -51,27 +51,30 @@ config_effect.patient_profile_block <- function(block, args, data = NULL, ...) {
 
   desc <- paste0("patient profile configured: ", paste(parts, collapse = "; "))
 
-  # Flag IDs that are neither a known static viz nor a known findings group.
-  # Findings groups are data-derived (and auto-generated adlb_* IDs are valid at
-  # runtime), so an otherwise-unknown ID is most likely a typo or a raw
-  # table/PARAMCD name the model should not have put in `selected`. The group
-  # ids come from the group templates themselves -- a duplicated literal list
-  # here once drifted from them.
+  # Flag IDs that are neither a known static viz nor a plausible findings
+  # card. Findings ids are derived from the study's own parameter categories
+  # (adlb_chemistry, advs_all), so they cannot be enumerated here -- but the
+  # data has already been handed to us, so ask it: the ids the CURRENT dm
+  # yields are the exact valid set.
   static_ids <- tryCatch(names(patient_profile_static_vizs()),
                          error = function(e) character())
-  known_groups <- tryCatch(
-    vapply(pp_findings_groups(), `[[`, character(1L), "id"),
-    error = function(e) character()
+  findings_ids <- tryCatch(
+    names(pp_findings_vizs(pp_normalize_dm(data))),
+    error = function(e) NULL
   )
   # The cycle lane is generated too (only where the study is dosed in cycles),
   # so it is absent from the static ids while still being a real, documented
   # id. Read from the definition rather than spelled again here -- the literal
   # list this replaced is exactly what drifted last time.
   cycle_id <- tryCatch(cycle_viz$id, error = function(e) character())
-  bad <- setdiff(sel, c(static_ids, cycle_id, known_groups))
-  # Auto-generated per-PARAMCD ids ("adlb_trig", "adlbc_alt", "advs_resp")
-  # are valid at runtime.
-  bad <- bad[!grepl("^(adlb[ch]?|advs)_", bad)]
+  bad <- setdiff(sel, c(static_ids, cycle_id, findings_ids))
+  # A dm we could not read tells us nothing about the findings ids, so judge
+  # only their SHAPE (<findings table>_<category>) rather than calling a
+  # perfectly good id invalid.
+  if (is.null(findings_ids)) {
+    known_tbls <- paste(names(pp_findings_table_meta()), collapse = "|")
+    bad <- bad[!grepl(paste0("^(", known_tbls, ")_"), bad)]
+  }
   if (length(bad)) {
     desc <- paste0(
       desc, " -- possibly INVALID view ID(s): ", paste(bad, collapse = ", "),

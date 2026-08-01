@@ -92,7 +92,7 @@ function(...) {
 blocks <- c(
   data = new_function_var_block(fn = build_fn),
   profile = new_patient_profile_block(
-    selected = c("patient_overview", "cycle_lane", "ae_gantt", "liver_panel")
+    selected = c("patient_overview", "cycle_lane", "ae_gantt", "adlb_all")
   )
 )
 

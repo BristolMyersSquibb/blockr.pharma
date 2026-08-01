@@ -284,16 +284,39 @@ new_patient_profile_block <- function(selected = NULL,
             }
           })
 
+          # The study's parameter dictionary (PARAMCD -> PARAM -> category),
+          # accumulated. Findings cards derive their label, description,
+          # search text and chip list from it, so it must describe the STUDY,
+          # not the patient on screen: a drilled single-patient dm reveals
+          # only that patient's parameters, and a dictionary that shrank with
+          # it would rewrite every card on every drill. Growing-only, so it is
+          # complete from the first cohort-level emission and never regresses.
+          r_param_dict <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            dm_obj <- r_norm_dm()
+            shiny::req(inherits(dm_obj, "dm"))
+            merged <- pp_param_dict_merge(
+              shiny::isolate(r_param_dict()), pp_dm_param_dict(dm_obj)
+            )
+            if (!identical(merged, shiny::isolate(r_param_dict()))) {
+              r_param_dict(merged)
+            }
+          })
+
           r_cohort_vizs <- shiny::reactive({
             dm_obj <- r_norm_dm()
             shiny::req(inherits(dm_obj, "dm"))
+            dict <- r_param_dict()
+            shiny::req(!is.null(dict))
             # Static vizs are decidable from the schema, so they are always
             # listed and pp_coverage_report() explains any that cannot render.
             # The generated ones answer a question the schema cannot: findings
             # exist per discovered PARAMCD, the cycle lane only where the study
             # is dosed in cycles. Absent means absent -- no card, no gap report.
             c(patient_profile_static_vizs(), pp_cycle_vizs(dm_obj),
-              pp_findings_vizs(dm_obj))
+              pp_findings_vizs_from_dict(
+                dict, names(dm::dm_get_tables(dm_obj))
+              ))
           })
 
           # Available vizs (those whose tables exist in the dm). Derived
@@ -455,6 +478,66 @@ new_patient_profile_block <- function(selected = NULL,
             } else {
               r_selected(c(sel, viz_id))
             }
+          })
+
+          # Toggle one parameter from the search results. Three cases, and the
+          # middle one is the point of the feature: a card already on the
+          # panel GAINS the parameter (you were adding aspartate next to
+          # alanine), while a card not yet there opens showing that parameter
+          # ALONE -- opening a twenty-parameter Chemistry card because you
+          # searched for one of them would bury the thing you asked for.
+          # Unchecking the last parameter takes the card off the panel: an
+          # empty card would draw an axis and nothing else.
+          shiny::observeEvent(input$pick_param, {
+            msg <- input$pick_param
+            viz_id <- msg$viz_id
+            code <- msg$paramcd
+            if (is.null(viz_id) || is.null(code)) return()
+            viz_id <- as.character(viz_id)
+            code <- as.character(code)
+            viz <- r_available()[[viz_id]]
+            if (is.null(viz) || !code %in% names(viz$params)) return()
+
+            sel <- r_selected()
+            settings <- r_viz_settings()
+            if (is.null(settings[[viz_id]])) {
+              settings[[viz_id]] <- pp_viz_defaults(viz)
+            }
+            cur <- as.character(settings[[viz_id]]$items %||% character())
+
+            if (!viz_id %in% sel) {
+              settings[[viz_id]]$items <- code
+              r_selected(c(sel, viz_id))
+            } else if (code %in% cur) {
+              rest <- setdiff(cur, code)
+              if (length(rest) == 0L) {
+                r_selected(setdiff(sel, viz_id))
+              } else {
+                settings[[viz_id]]$items <- rest
+              }
+            } else {
+              settings[[viz_id]]$items <- union(cur, code)
+            }
+            r_viz_settings(settings)
+          })
+
+          # Ship the parameters currently on screen to the result rows'
+          # check marks. Depends on BOTH the selection and the settings: a
+          # card off the panel shows none of its parameters as checked, however
+          # its items happen to be set.
+          shiny::observe({
+            sel <- r_selected()
+            settings <- r_viz_settings()
+            avail <- r_available()
+            keys <- unlist(lapply(intersect(sel, names(avail)), function(vid) {
+              items <- settings[[vid]]$items %||%
+                pp_viz_defaults(avail[[vid]])$items
+              if (length(items) == 0L) return(NULL)
+              paste0(vid, "@@", as.character(items))
+            }))
+            session$sendCustomMessage(
+              session$ns("sync_params"), as.list(keys %||% character())
+            )
           })
 
           # Reorder vizs via drag-drop
@@ -629,8 +712,25 @@ new_patient_profile_block <- function(selected = NULL,
             }
 
             # Helper to build a single card. One-line row: the description
-            # is a title tooltip, not a visible paragraph, but stays in
-            # data-search-text so searching by PARAMCD still works.
+            # is a title tooltip, not a visible paragraph. `v$search` carries
+            # every PARAMCD and full PARAM the card covers, so a card named
+            # "Chemistry" is still reachable by typing "alanine" -- the
+            # description alone was a fixed prose blurb that named some
+            # parameters and not others.
+            check_mark <- function() {
+              shiny::div(class = "pp-card-check",
+                shiny::HTML(paste0(
+                  '<svg xmlns="http://www.w3.org/2000/svg" ',
+                  'width="12" height="12" fill="currentColor" ',
+                  'viewBox="0 0 16 16">',
+                  '<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7',
+                  'a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-',
+                  '.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 ',
+                  '0z"/></svg>'
+                ))
+              )
+            }
+
             build_card <- function(v, is_sel) {
               shiny::div(
                 class = paste("pp-card", if (is_sel) "is-selected"),
@@ -638,7 +738,7 @@ new_patient_profile_block <- function(selected = NULL,
                 `data-domain` = v$domain,
                 title = v$description,
                 `data-search-text` = paste(
-                  v$label, v$description, v$domain
+                  v$label, v$description, v$domain, v$search %||% ""
                 ),
                 shiny::div(class = "pp-card-main",
                   shiny::div(class = "pp-card-icon",
@@ -647,17 +747,7 @@ new_patient_profile_block <- function(selected = NULL,
                   shiny::div(class = "pp-card-content",
                     shiny::tags$p(class = "pp-card-title", v$label)
                   ),
-                  shiny::div(class = "pp-card-check",
-                    shiny::HTML(paste0(
-                      '<svg xmlns="http://www.w3.org/2000/svg" ',
-                      'width="12" height="12" fill="currentColor" ',
-                      'viewBox="0 0 16 16">',
-                      '<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7',
-                      'a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-',
-                      '.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 ',
-                      '0z"/></svg>'
-                    ))
-                  )
+                  check_mark()
                 )
               )
             }
@@ -685,7 +775,65 @@ new_patient_profile_block <- function(selected = NULL,
             })
             domain_groups <- Filter(Negate(is.null), domain_groups)
 
+            # Search results. Browsing the sidebar lists GROUPS (Chemistry,
+            # Hematology, Vital Signs); searching answers with the individual
+            # SERIES, because what you look for is "alanine", not the card
+            # that happens to hold it. Each result nests under its group so
+            # the context is visible, and BOTH levels carry a check mark: the
+            # group check adds the whole card, the parameter check adds just
+            # that series. Rendered up front and hidden -- the filter is the
+            # same client-side class toggle the cards use, so typing needs no
+            # server round-trip.
+            index <- pp_param_index(avail)
+            by_viz <- split(index, vapply(index, `[[`, character(1L), "viz_id"))
+            result_groups <- lapply(names(avail), function(vid) {
+              v <- avail[[vid]]
+              rows <- lapply(by_viz[[vid]] %||% list(), function(p) {
+                shiny::div(
+                  class = "pp-result-param",
+                  `data-viz-id` = p$viz_id,
+                  `data-paramcd` = p$code,
+                  `data-search-text` = p$search,
+                  title = paste0(p$label, " (", p$code, ")"),
+                  shiny::span(class = "pp-result-param-label", p$short),
+                  check_mark()
+                )
+              })
+              shiny::div(
+                class = paste("pp-result-group",
+                              if (vid %in% sel) "is-selected"),
+                `data-viz-id` = vid,
+                # The group row is a card in every respect except that the
+                # selection sync must not MOVE it between the browse lists,
+                # so it carries its own class rather than .pp-card.
+                shiny::div(
+                  class = paste("pp-result-card",
+                                if (vid %in% sel) "is-selected"),
+                  `data-viz-id` = vid,
+                  `data-search-text` = paste(v$label, v$description, v$domain),
+                  title = v$description,
+                  shiny::div(class = "pp-card-main",
+                    shiny::div(class = "pp-card-icon",
+                      shiny::HTML(pp_icon_html(v$icon, v$color))
+                    ),
+                    shiny::div(class = "pp-card-content",
+                      shiny::tags$p(class = "pp-card-title", v$label)
+                    ),
+                    check_mark()
+                  )
+                ),
+                if (length(rows)) shiny::div(class = "pp-result-params", rows)
+              )
+            })
+
             shiny::tagList(
+              # Matches, shown only while a query is live
+              shiny::div(class = "pp-results-section is-hidden",
+                shiny::div(class = "pp-section-header", "RESULTS"),
+                shiny::div(class = "pp-results-list", result_groups)
+              ),
+              shiny::div(class = "pp-no-results is-hidden",
+                "No visualization or parameter matches"),
               # Active (selected) section
               shiny::div(class = "pp-active-section",
                 shiny::div(class = "pp-section-header", "SELECTED"),
@@ -762,9 +910,20 @@ new_patient_profile_block <- function(selected = NULL,
                 if (is.null(choices)) choices <- character(0)
                 if (is.null(cur_val)) cur_val <- choices
 
-                # Build compact multi-select chips
+                # Build compact multi-select chips. A findings control ships
+                # `choice_labels` (PARAMCD -> PARAM), so the chip reads
+                # "Alanine Aminotransferase" rather than "ALT"; the code
+                # stays the wire value and the untruncated name is the
+                # tooltip. Controls with no label map (visits, questionnaire
+                # domains) caption themselves, as before.
+                labs <- ctrl$choice_labels
                 chips <- lapply(choices, function(ch) {
                   is_active <- ch %in% cur_val
+                  full <- if (!is.null(labs) && ch %in% names(labs)) {
+                    unname(labs[[ch]])
+                  } else {
+                    ch
+                  }
                   shiny::tags$button(
                     class = paste(
                       "pp-ctrl-chip",
@@ -773,7 +932,8 @@ new_patient_profile_block <- function(selected = NULL,
                     `data-viz-id` = viz_id,
                     `data-param` = param,
                     `data-value` = ch,
-                    ch
+                    title = if (!identical(full, ch)) paste0(full, " (", ch, ")"),
+                    pp_param_short(full)
                   )
                 })
                 shiny::div(class = "pp-ctrl-group",
@@ -1477,7 +1637,9 @@ new_patient_profile_block <- function(selected = NULL,
             var toggleInputId = '", ns("toggle_viz"), "';
             var clearBtnId = '", ns("search_clear"), "';
             var ctrlInputId = '", ns("viz_ctrl"), "';
+            var pickParamInputId = '", ns("pick_param"), "';
             var syncMsgId = '", ns("sync_selected"), "';
+            var syncParamsMsgId = '", ns("sync_params"), "';
             var reorderInputId = '", ns("reorder_viz"), "';
 
             var dragActive = false;
@@ -1676,26 +1838,44 @@ new_patient_profile_block <- function(selected = NULL,
               $('#' + clearBtnId).toggleClass('is-hidden', !query);
               $sidebar.toggleClass('is-searching', !!query);
 
-              $sidebar.find('.pp-card').each(function() {
-                var text = ($(this).attr('data-search-text') || '').toLowerCase();
-                var hit = !query || text.indexOf(query) >= 0;
-                $(this).toggleClass('is-filtered-out', !hit);
-              });
-
-              // A section/group is shown when it still holds a matching card.
-              // Empty domain groups stay hidden either way (the sync handler
-              // leaves emptied groups in the DOM).
-              $sidebar.find('.pp-category-group').each(function() {
-                var hits = $(this).find('.pp-card').not('.is-filtered-out').length;
-                $(this).toggleClass('is-hidden', hits === 0);
-              });
-              $sidebar.find('.pp-active-section, .pp-available-section')
-                .each(function() {
-                  var hits = $(this).find('.pp-card').not('.is-filtered-out').length;
-                  // With no query, keep the SELECTED section up even when it
-                  // holds no card: its empty hint is the invitation to add one.
-                  $(this).toggleClass('is-hidden', !!query && hits === 0);
+              // Results tree: a group shows when the group itself matches or
+              // any of its parameters does, and only the matching parameters
+              // come with it. A group matched by NAME alone lists nothing:
+              // typing the word chemistry asks for the card, not for all
+              // eighteen series under it.
+              var groupHits = 0;
+              $sidebar.find('.pp-result-group').each(function() {
+                var $g = $(this);
+                var own = ($g.find('.pp-result-card').attr('data-search-text')
+                  || '').toLowerCase();
+                var ownHit = !!query && own.indexOf(query) >= 0;
+                var childHits = 0;
+                $g.find('.pp-result-param').each(function() {
+                  var text = ($(this).attr('data-search-text') || '')
+                    .toLowerCase();
+                  var hit = !!query && text.indexOf(query) >= 0;
+                  if (hit) childHits++;
+                  $(this).toggleClass('is-filtered-out', !hit);
                 });
+                var show = ownHit || childHits > 0;
+                if (show) groupHits++;
+                $g.toggleClass('is-filtered-out', !show);
+              });
+              $sidebar.find('.pp-results-section')
+                .toggleClass('is-hidden', !query || groupHits === 0);
+              // The results tree REPLACES the browse lists while typing --
+              // one answer to the query, not the same cards in two shapes.
+              $sidebar.find('.pp-active-section, .pp-available-section')
+                .toggleClass('is-searching-away', !!query);
+              $sidebar.find('.pp-no-results')
+                .toggleClass('is-hidden', !query || groupHits > 0);
+
+              // An emptied domain group keeps its header off screen (the
+              // selection sync moves cards out but leaves the group in place).
+              $sidebar.find('.pp-category-group').each(function() {
+                $(this).toggleClass('is-hidden',
+                  $(this).find('.pp-card').length === 0);
+              });
             }
 
             $(document).on('input', '#' + searchId, applyFilter);
@@ -1716,10 +1896,14 @@ new_patient_profile_block <- function(selected = NULL,
               applyFilter();
             });
 
-            // A live query must survive a sidebar re-render (cohort change)
+            // A live query and the parameter check marks must both survive a
+            // sidebar re-render (cohort change, or the first render of all)
             $(document).on('shiny:value', function(e) {
               if (e.name && e.name.indexOf('sidebar_cards') >= 0) {
-                setTimeout(applyFilter, 0);
+                setTimeout(function() {
+                  applyFilter();
+                  applyParamChecks();
+                }, 0);
               }
             });
 
@@ -1740,6 +1924,32 @@ new_patient_profile_block <- function(selected = NULL,
               layout.classList.remove('sidebar-collapsed');
               $('#' + pinBtnId).removeClass('is-unpinned');
             });
+
+            // A search result GROUP row is a card: same toggle input, so the
+            // whole card goes on or off the panel.
+            $(document).on('click', '#' + sidebarId + ' .pp-result-card',
+              function(e) {
+                e.stopPropagation();
+                var vizId = $(this).attr('data-viz-id');
+                if (!vizId) return;
+                Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
+              });
+
+            // A search result PARAMETER row toggles that one series. The
+            // server decides what that means against the card's current
+            // state -- add to a card already open, open a card on this
+            // parameter alone, or drop it again. (No double quotes anywhere
+            // in this script -- it is assembled as an R string.)
+            $(document).on('click', '#' + sidebarId + ' .pp-result-param',
+              function(e) {
+                e.stopPropagation();
+                var vizId = $(this).attr('data-viz-id');
+                var code = $(this).attr('data-paramcd');
+                if (!vizId || !code) return;
+                Shiny.setInputValue(pickParamInputId, {
+                  viz_id: vizId, paramcd: code
+                }, {priority: 'event'});
+              });
 
             // Chip click (checkbox controls)
             $(document).on('click', '#' + layoutId + ' .pp-ctrl-chip', function(e) {
@@ -1779,6 +1989,31 @@ new_patient_profile_block <- function(selected = NULL,
               Shiny.setInputValue(ctrlInputId, {
                 viz_id: vizId, param: param, value: value
               }, {priority: 'event'});
+            });
+
+            // Which parameters are on screen right now, as viz@@PARAMCD
+            // keys. The result rows are checkboxes, so they have to answer
+            // for the panel's actual state -- including changes made from
+            // the chips in the chart header, not just from this list.
+            //
+            // The keys are REMEMBERED and re-applied after every sidebar
+            // render: the server sends them as soon as the selection
+            // settles, which is before the rows exist on a cold start, and a
+            // fire-and-forget handler left every check mark grey.
+            var lastParamKeys = [];
+            function applyParamChecks() {
+              $('#' + layoutId).find('.pp-result-param').each(function() {
+                var key = $(this).attr('data-viz-id') + '@@' +
+                  $(this).attr('data-paramcd');
+                $(this).toggleClass('is-selected',
+                  lastParamKeys.indexOf(key) >= 0);
+              });
+            }
+            Shiny.addCustomMessageHandler(syncParamsMsgId, function(keys) {
+              if (!keys) keys = [];
+              if (typeof keys === 'string') keys = [keys];
+              lastParamKeys = keys;
+              applyParamChecks();
             });
 
             // Sync sidebar state from server
@@ -1823,6 +2058,17 @@ new_patient_profile_block <- function(selected = NULL,
                   $availList.append($group);
                 }
                 $group.append($card);
+              });
+
+              // The results tree carries its own copy of every card, and it
+              // must never be MOVED (it lives in query order, not in the
+              // browse lists) -- only its check mark follows the selection.
+              // The enclosing group border follows it too, so the whole
+              // result block reads as on or off the panel.
+              $layout.find('.pp-result-card').each(function() {
+                var on = selected.indexOf($(this).attr('data-viz-id')) >= 0;
+                $(this).toggleClass('is-selected', on);
+                $(this).closest('.pp-result-group').toggleClass('is-selected', on);
               });
 
               // Toggle empty hint and drag-to-reorder hint

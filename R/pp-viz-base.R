@@ -21,6 +21,13 @@
 #' @param icon Bootstrap icon name shown on the card.
 #' @param color Hex color for the icon.
 #' @param description One-line card description.
+#' @param search Extra text the sidebar search matches this card on, beyond
+#'   its label, description and domain. Findings cards put every PARAMCD and
+#'   every full PARAM here: a card called "Chemistry" must be reachable by
+#'   typing "alanine".
+#' @param params Named character vector of the parameters a findings card
+#'   covers, PARAMCD -> PARAM. Empty for vizs that are not per-parameter.
+#'   Feeds the chip captions and the parameter-level search index.
 #' @param tables Character vector of required tables in the dm. Vizs whose
 #'   tables are missing are hidden from the sidebar entirely.
 #' @param requires Named list keyed by table; each value a character vector
@@ -52,6 +59,8 @@
 #' @noRd
 new_pp_viz <- function(id, label, domain, icon, color, description,
                        tables,
+                       search = NULL,
+                       params = character(),
                        requires = list(),
                        optional = list(),
                        requires_any = list(),
@@ -64,6 +73,9 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     is.character(label), length(label) == 1L,
     is.character(domain), length(domain) == 1L,
     is.character(tables), length(tables) >= 1L,
+    is.null(search) || (is.character(search) && length(search) == 1L),
+    is.character(params),
+    length(params) == 0L || !is.null(names(params)),
     is.list(requires), is.list(optional), is.list(requires_any),
     all(vapply(requires, is.character, logical(1L))),
     all(vapply(optional, is.character, logical(1L))),
@@ -75,6 +87,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     list(
       id = id, label = label, domain = domain, icon = icon, color = color,
       description = description, tables = tables,
+      search = search, params = params,
       requires = requires, optional = optional, requires_any = requires_any,
       uses = uses, controls = controls, legend_ui = legend_ui,
       render = render

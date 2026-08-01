@@ -1107,247 +1107,350 @@ patient_profile_static_vizs <- function() {
 }
 
 # ---------------------------------------------------------------------------
-# Per-group findings vizs
+# Findings vizs, grouped by the study's own parameter categories
 # ---------------------------------------------------------------------------
+#
+# Nothing here spells out a clinical vocabulary. Which parameters exist, what
+# they are called and which group they belong to are all read off the data:
+# PARAMCD, PARAM and whichever category column the study ships. A sponsor
+# unhappy with the grouping changes the data, not this package -- the previous
+# version carried a fixed list of PARAMCD groups (liver_panel, cbc, ...) that
+# silently dropped every study coding its parameters differently into a heap
+# of one-parameter cards.
 
-#' Define clinically meaningful findings parameter groups
+#' Category columns a study may file its parameters under
 #'
-#' Each group specifies the source table, a unique ID, human-readable label,
-#' the PARAMCDs it covers, and display metadata. These templates are matched
-#' against the actual PARAMCDs in the dm data to produce per-group viz cards.
+#' Tried in order against a findings table; the first one present wins. ADaM
+#' ships `PARCAT1` (CHEMISTRY / HEMATOLOGY / URINALYSIS / OTHER in
+#' pharmaverseadam's adlb), SDTM the domain-prefixed `LBCAT` / `VSCAT`. Vital
+#' signs commonly ship none at all, in either standard -- those tables get a
+#' single group (see [pp_findings_vizs()]).
 #'
-#' @return List of group template lists
+#' @return Character vector of column names, in priority order.
 #' @noRd
-pp_findings_groups <- function() {
+pp_param_cat_cols <- function() {
+  c("PARCAT1", "LBCAT", "VSCAT", "EGCAT", "PARCAT2", "CAT")
+}
+
+#' Findings tables that get parameter cards, with their sidebar metadata
+#'
+#' `label` is the card title for a table shipping no category column, and the
+#' fallback for a blank category value. Icon and color are per TABLE, not per
+#' category: a category name is data, and deriving a color from it would put
+#' a vocabulary back in this file. Color does no identification work in the
+#' sidebar anyway (the domain header groups the cards); inside the charts it
+#' stays reserved for meaning.
+#'
+#' Order matters: a parameter is claimed by the first table that carries it,
+#' so a study shipping both the split (adlbc / adlbh) and combined (adlb) lab
+#' tables gets one card per category rather than two.
+#'
+#' @return Named list of table -> metadata.
+#' @noRd
+pp_findings_table_meta <- function() {
   list(
-    # --- Lab Chemistry (adlbc, or combined adlb with LBCAT=CHEMISTRY) ---
-    # paramcds include common synonyms (e.g. ALP/ALKPH, K/POTAS, CHOL/CHOLES)
-    # so the group matches whichever coding the sponsor used.
-    list(
-      table = "adlbc", id = "liver_panel", label = "Liver Panel",
-      paramcds = c("ALT", "AST", "BILI", "GGT", "ALP", "ALKPH"),
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      description = "ALT, AST, Bilirubin, GGT, ALP"
-    ),
-    list(
-      table = "adlbc", id = "renal_panel", label = "Renal Panel",
-      paramcds = c("BUN", "CREAT", "URATE"),
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      description = "BUN, Creatinine, Urate"
-    ),
-    list(
-      table = "adlbc", id = "electrolytes", label = "Electrolytes",
-      paramcds = c("SODIUM", "K", "POTAS", "CL", "CA", "PHOS"),
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      description = "Sodium, Potassium, Chloride, Calcium, Phosphorus"
-    ),
-    list(
-      table = "adlbc", id = "metabolic", label = "Metabolic",
-      paramcds = c("GLUC", "CHOL", "CHOLES", "PROT", "ALB"),
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      description = "Glucose, Cholesterol, Protein, Albumin"
-    ),
-    list(
-      table = "adlbc", id = "muscle_enzymes", label = "Muscle Enzymes",
-      paramcds = c("CK"),
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      description = "Creatine Kinase"
-    ),
-    # --- Lab Hematology (adlbh, or combined adlb with LBCAT=HEMATOLOGY) ---
-    list(
-      table = "adlbh", id = "cbc", label = "CBC",
-      paramcds = c("WBC", "RBC", "HGB", "HCT", "PLAT"),
-      domain = "Laboratory", icon = "droplet-half", color = "#059669",
-      description = "WBC, RBC, Hemoglobin, Hematocrit, Platelets"
-    ),
-    list(
-      table = "adlbh", id = "rbc_indices", label = "RBC Indices",
-      paramcds = c("MCV", "MCH", "MCHC"),
-      domain = "Laboratory", icon = "droplet-half", color = "#059669",
-      description = "MCV, MCH, MCHC"
-    ),
-    list(
-      table = "adlbh", id = "wbc_differential", label = "WBC Differential",
-      paramcds = c("LYM", "LYMPH", "MONO", "EOS", "BASO"),
-      domain = "Laboratory", icon = "droplet-half", color = "#059669",
-      description = "Lymphocytes, Monocytes, Eosinophils, Basophils"
-    ),
-    list(
-      table = "adlbh", id = "rbc_morphology", label = "RBC Morphology",
-      paramcds = c("ANISO", "MACROCY", "MACROC", "MICROCY", "MICROC",
-                   "POIKILO", "POIKIL", "POLYCHR", "POLYCH"),
-      domain = "Laboratory", icon = "droplet-half", color = "#059669",
-      description = "Anisocytosis, Macrocytes, Microcytes, Poikilocytes, Polychromasia"
-    ),
-    # --- Vital Signs (advs) ---
-    list(
-      table = "advs", id = "blood_pressure", label = "Blood Pressure",
-      paramcds = c("SYSBP", "DIABP"),
-      domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-      description = "Systolic & Diastolic Blood Pressure"
-    ),
-    list(
-      table = "advs", id = "pulse", label = "Pulse",
-      paramcds = c("PULSE"),
-      domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-      description = "Pulse rate"
-    ),
-    list(
-      table = "advs", id = "temperature", label = "Temperature",
-      paramcds = c("TEMP"),
-      domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-      description = "Body Temperature"
-    ),
-    list(
-      table = "advs", id = "anthropometrics", label = "Anthropometrics",
-      paramcds = c("HEIGHT", "WEIGHT"),
-      domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-      description = "Height & Weight"
-    )
+    advs  = list(domain = "Vitals", icon = "heart-pulse", color = "#D97706",
+                 label = "Vital Signs"),
+    adlbc = list(domain = "Laboratory", icon = "droplet", color = "#2563EB",
+                 label = "Chemistry"),
+    adlbh = list(domain = "Laboratory", icon = "droplet-half",
+                 color = "#059669", label = "Hematology"),
+    adlb  = list(domain = "Laboratory", icon = "droplet", color = "#2563EB",
+                 label = "Laboratory"),
+    adeg  = list(domain = "Vitals", icon = "activity", color = "#7C3AED",
+                 label = "ECG")
   )
 }
 
-#' Dynamically generate findings viz definitions from dm data
+#' Build the parameter dictionary for one findings table
 #'
-#' For each findings table (adlbc, adlbh, advs) present in the dm:
-#' 1. Extracts available PARAMCDs, filtering out change-from-baseline variants
-#'    (those starting with "_")
-#' 2. Creates a viz card for each pre-defined group that has matching PARAMCDs
-#' 3. Creates individual viz cards for ungrouped PARAMCDs
+#' One row per PARAMCD, carrying the full PARAM text and the category the
+#' study filed it under. This is the single source for everything the sidebar
+#' says about a parameter: which card holds it, the text search matches on,
+#' the caption on its chip.
 #'
-#' Each viz gets an "items" checkbox control to toggle individual params.
+#' Change-from-baseline variants (PARAMCD starting with `_`) are dropped, as
+#' they were before -- they are derivations of a parameter already listed.
 #'
-#' @param dm_obj A dm object
-#' @return Named list of viz definitions
+#' @param tbl A data frame (one findings table of a normalized dm).
+#' @param table_name The table's name in the dm.
+#' @return Data frame with columns `table`, `paramcd`, `param`, `category`;
+#'   `param` falls back to the code, `category` is `NA` when the study ships
+#'   no category column.
 #' @noRd
-pp_findings_vizs <- function(dm_obj) {
-  tbls <- dm::dm_get_tables(dm_obj)
-  groups <- pp_findings_groups()
-
-  # Table-level metadata for ungrouped params
-  table_meta <- list(
-    adlbc = list(
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      label_prefix = "Chemistry"
-    ),
-    adlbh = list(
-      domain = "Laboratory", icon = "droplet-half", color = "#059669",
-      label_prefix = "Hematology"
-    ),
-    adlb = list(
-      domain = "Laboratory", icon = "droplet", color = "#2563EB",
-      label_prefix = "Lab"
-    ),
-    advs = list(
-      domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-      label_prefix = "Vitals"
-    )
+pp_param_dict <- function(tbl, table_name) {
+  empty <- data.frame(
+    table = character(), paramcd = character(),
+    param = character(), category = character(),
+    stringsAsFactors = FALSE
   )
+  if (!"PARAMCD" %in% colnames(tbl)) return(empty)
 
-  # Decide which real table sources which group set. Sponsors ship labs
-  # either split (adlbc + adlbh) or combined (adlb) — support both. When
-  # adlb is present, it fills in for whichever split tables are missing;
-  # when BOTH splits are present, adlb still gets a plan of its own (with no
-  # groups), so a PARAMCD living only in adlb yields an individual card
-  # instead of silently getting no viz and no coverage entry.
-  plans_acc <- new.env(parent = emptyenv())
-  plans_acc$source_plans <- list()
-  add_plan <- function(table, group_tables, meta) {
-    plans_acc$source_plans[[length(plans_acc$source_plans) + 1L]] <- list(
-      table = table, group_tables = group_tables, meta = meta
+  codes <- as.character(tbl$PARAMCD)
+  keep <- !is.na(codes) & nzchar(codes) & !grepl("^_", codes)
+  if (!any(keep)) return(empty)
+  codes <- codes[keep]
+
+  labs <- if ("PARAM" %in% colnames(tbl)) {
+    as.character(tbl$PARAM)[keep]
+  } else {
+    rep(NA_character_, length(codes))
+  }
+  cat_col <- intersect(pp_param_cat_cols(), colnames(tbl))[1L]
+  cats <- if (is.na(cat_col)) {
+    rep(NA_character_, length(codes))
+  } else {
+    as.character(tbl[[cat_col]])[keep]
+  }
+
+  # First usable value per code: a study may leave PARAM or the category
+  # blank on individual rows without meaning the parameter has none.
+  first_ok <- function(x) {
+    x <- x[!is.na(x) & nzchar(trimws(x))]
+    if (length(x)) trimws(x[1L]) else NA_character_
+  }
+  by_param <- vapply(split(labs, codes), first_ok, character(1L))
+  by_cat <- vapply(split(cats, codes), first_ok, character(1L))
+  uc <- names(by_param)
+
+  out <- data.frame(
+    table = rep(table_name, length(uc)),
+    paramcd = uc,
+    param = unname(by_param),
+    category = unname(by_cat),
+    stringsAsFactors = FALSE,
+    row.names = NULL
+  )
+  out$param[is.na(out$param)] <- out$paramcd[is.na(out$param)]
+  out[order(out$param), , drop = FALSE]
+}
+
+#' Build the parameter dictionary for a whole dm
+#'
+#' @param dm_obj A normalized `dm` object.
+#' @return Data frame in [pp_param_dict()] shape, covering every findings
+#'   table present, in [pp_findings_table_meta()] order.
+#' @noRd
+pp_dm_param_dict <- function(dm_obj) {
+  tbls <- dm::dm_get_tables(dm_obj)
+  present <- intersect(names(pp_findings_table_meta()), names(tbls))
+  dicts <- lapply(present, function(nm) {
+    pp_param_dict(as.data.frame(tbls[[nm]]), nm)
+  })
+  dicts <- Filter(function(d) nrow(d) > 0L, dicts)
+  if (length(dicts) == 0L) {
+    return(pp_param_dict(data.frame(), "none"))
+  }
+  do.call(rbind, dicts)
+}
+
+#' Union two parameter dictionaries, keeping what was seen first
+#'
+#' The dictionary must not shrink. A chart drill hands this block a
+#' single-patient dm, which only reveals the parameters THAT patient carries
+#' -- and every card field is now derived from the dictionary, so a shrinking
+#' one would rewrite labels, descriptions and chip lists on every drill and
+#' re-render the whole sidebar. Accumulating instead makes the dictionary a
+#' property of the study, which is what the cards claim to describe. Same
+#' argument, one level down, as the catalog's own "remembers" merge in the
+#' block.
+#'
+#' @param old,new Data frames in [pp_param_dict()] shape (`old` may be NULL).
+#' @return The union, keyed on table + paramcd, `old` winning ties.
+#' @noRd
+pp_param_dict_merge <- function(old, new) {
+  if (is.null(old) || nrow(old) == 0L) return(new)
+  if (nrow(new) == 0L) return(old)
+  key <- function(d) paste(d$table, d$paramcd, sep = "\r")
+  extra <- new[!key(new) %in% key(old), , drop = FALSE]
+  if (nrow(extra) == 0L) return(old)
+  out <- rbind(old, extra)
+  out[order(out$table, out$param), , drop = FALSE]
+}
+
+#' Card id for a table + category pair
+#'
+#' Ids are data-derived and stable for a given study: `adlb_chemistry`,
+#' `advs_all`. They are the values that land in the block's `selected` state,
+#' so they must be a pure function of the data and free of characters that
+#' would not survive a JSON round-trip.
+#'
+#' A table with no category column at all yields `<table>_all`; a parameter
+#' left uncategorized in a table that HAS categories yields
+#' `<table>_uncategorized`, which cannot collide with a study whose own
+#' vocabulary includes "OTHER".
+#'
+#' @param table_name Table name.
+#' @param category Category value, or `NA`.
+#' @param has_cats Whether the table categorizes its parameters at all.
+#' @return A single string.
+#' @noRd
+pp_group_id <- function(table_name, category, has_cats = !is.na(category)) {
+  if (is.na(category)) {
+    return(paste0(table_name, if (has_cats) "_uncategorized" else "_all"))
+  }
+  slug <- tolower(gsub("[^A-Za-z0-9]+", "_", category))
+  slug <- gsub("^_+|_+$", "", slug)
+  if (!nzchar(slug)) slug <- "other"
+  paste0(table_name, "_", slug)
+}
+
+#' Title-case a category value for display
+#'
+#' Sponsors shout their category values (`CHEMISTRY`); a sidebar full of
+#' capitals reads as an error message. A value that is already mixed case is
+#' left exactly as the study wrote it.
+#'
+#' @param x Character vector.
+#' @return Character vector.
+#' @noRd
+pp_title_case <- function(x) {
+  vapply(x, function(v) {
+    if (is.na(v)) return(NA_character_)
+    if (v != toupper(v)) return(v)
+    words <- strsplit(tolower(v), "\\s+")[[1L]]
+    paste(
+      toupper(substr(words, 1L, 1L)), substr(words, 2L, nchar(words)),
+      sep = "", collapse = " "
     )
-  }
-  if ("advs" %in% names(tbls)) {
-    add_plan("advs", "advs", table_meta$advs)
-  }
-  adlb_fills <- character(0)
-  if ("adlbc" %in% names(tbls)) {
-    add_plan("adlbc", "adlbc", table_meta$adlbc)
-  } else if ("adlb" %in% names(tbls)) {
-    adlb_fills <- c(adlb_fills, "adlbc")
-  }
-  if ("adlbh" %in% names(tbls)) {
-    add_plan("adlbh", "adlbh", table_meta$adlbh)
-  } else if ("adlb" %in% names(tbls)) {
-    adlb_fills <- c(adlb_fills, "adlbh")
-  }
-  if ("adlb" %in% names(tbls)) {
-    add_plan("adlb", adlb_fills, table_meta$adlb)
-  }
+  }, character(1L), USE.NAMES = FALSE)
+}
 
+#' Short caption for a parameter
+#'
+#' The unit parenthetical ADaM appends to PARAM ("Albumin (g/L)") is noise on
+#' a chip, where space is scarce and the axis carries the unit anyway. The
+#' full text stays available as the chip's tooltip.
+#'
+#' @param x Character vector of PARAM values.
+#' @param max_chars Truncation width.
+#' @return Character vector.
+#' @noRd
+pp_param_short <- function(x, max_chars = 28L) {
+  out <- sub("\\s*\\([^()]*\\)\\s*$", "", x)
+  out[!nzchar(out)] <- x[!nzchar(out)]
+  long <- !is.na(out) & nchar(out) > max_chars
+  out[long] <- paste0(substr(out[long], 1L, max_chars - 1L), "…")
+  out
+}
+
+#' How many parameters a card shows before the user picks
+#'
+#' A category can hold twenty parameters and each one draws its own stacked
+#' grid, so an all-on default opens a card several screens tall. The rest are
+#' one chip-click away, and a card reached through a parameter search opens
+#' showing that parameter instead of this default.
+#' @noRd
+pp_group_default_n <- 3L
+
+#' Build findings viz definitions from a parameter dictionary
+#'
+#' One card per (table, category) pair the study actually ships. Tables
+#' without a category column contribute a single card. A parameter is claimed
+#' by the first table carrying it, so the split and combined lab tables do not
+#' produce duplicate cards for the same parameter.
+#'
+#' @param dict Data frame in [pp_param_dict()] shape (accumulated across
+#'   emissions by the block; see [pp_param_dict_merge()]).
+#' @param tables Character vector of tables present in the dm. Cards are only
+#'   built for tables still there, so a dictionary that remembers a table the
+#'   current dm lacks contributes nothing.
+#' @return Named list of `pp_viz` definitions.
+#' @noRd
+pp_findings_vizs_from_dict <- function(dict, tables) {
+  meta_all <- pp_findings_table_meta()
   vizs <- list()
-  # Params already covered by an earlier plan: an adlb param that also
-  # lives in a split table must not get a duplicate card.
-  covered_paramcds <- character(0)
+  claimed <- character(0)
 
-  for (plan in plans_acc$source_plans) {
-    tbl_name <- plan$table
-    tbl <- as.data.frame(tbls[[tbl_name]])
-    if (!"PARAMCD" %in% colnames(tbl)) next
+  for (tbl_name in intersect(names(meta_all), tables)) {
+    meta <- meta_all[[tbl_name]]
+    rows <- dict[dict$table == tbl_name & !dict$paramcd %in% claimed, ,
+                 drop = FALSE]
+    if (nrow(rows) == 0L) next
+    claimed <- c(claimed, rows$paramcd)
 
-    all_paramcds <- sort(unique(as.character(tbl$PARAMCD)))
-    # Filter out change-from-baseline variants (start with "_")
-    all_paramcds <- all_paramcds[!grepl("^_", all_paramcds)]
-    if (length(all_paramcds) == 0) next
+    # Alphabetical, uncategorized last: the study names its categories but
+    # not their order, and a stable order keeps the sidebar from reshuffling.
+    # A study WITH categories may still leave a handful of parameters
+    # without one -- those get their own trailing card rather than vanishing.
+    cats <- sort(unique(rows$category))
+    if (anyNA(rows$category)) cats <- c(cats, NA_character_)
+    # A column that puts every parameter in ONE group has not grouped
+    # anything: the split lab tables carry PARCAT1 = "CHEM" throughout, and
+    # honouring it would title the card with the study's abbreviation for a
+    # distinction the table itself already makes. The table is the group.
+    if (length(cats) == 1L) cats <- NA_character_
+    has_cats <- !all(is.na(cats))
+    for (cat in cats) {
+      grp <- if (is.na(cat)) {
+        # With no discriminating category the whole table is this card;
+        # otherwise NA means the parameters the study left uncategorized.
+        if (has_cats) rows[is.na(rows$category), , drop = FALSE] else rows
+      } else {
+        rows[!is.na(rows$category) & rows$category == cat, , drop = FALSE]
+      }
+      if (nrow(grp) == 0L) next
 
-    grouped_paramcds <- character(0)
-    meta <- plan$meta
+      codes <- grp$paramcd
+      labels <- grp$param
+      # A table with no categories at all IS the group, so it takes the
+      # table's own name. A blank category in a table that has them is a
+      # genuine leftover, and says so -- "Other" is a category some studies
+      # ship themselves, and the two must not read alike.
+      label <- if (is.na(cat)) {
+        if (has_cats) paste0(meta$label, ": Uncategorized") else meta$label
+      } else {
+        pp_title_case(cat)
+      }
+      viz_id <- pp_group_id(tbl_name, cat, has_cats)
 
-    # Create viz for each matching group (groups may span multiple virtual
-    # source tables when a combined adlb fills in for both adlbc and adlbh)
-    tbl_groups <- Filter(function(g) g$table %in% plan$group_tables, groups)
-    for (g in tbl_groups) {
-      present <- intersect(g$paramcds, all_paramcds)
-      if (length(present) == 0) next
-      grouped_paramcds <- c(grouped_paramcds, present)
-
-      viz_id <- g$id
       vizs[[viz_id]] <- new_pp_viz(
         id = viz_id,
-        label = g$label,
-        domain = g$domain,
-        icon = g$icon,
-        color = g$color,
-        description = g$description,
+        label = label,
+        domain = meta$domain,
+        icon = meta$icon,
+        color = meta$color,
+        description = pp_truncate(paste(labels, collapse = ", "), 140L),
+        # Every code and every full parameter name, so a search for
+        # "alanine" reaches the card holding ALT even though no card, group
+        # or column is called that.
+        search = paste(c(label, codes, labels), collapse = " "),
+        params = stats::setNames(labels, codes),
         tables = tbl_name,
-        requires = stats::setNames(
-          list(c("PARAMCD", "AVAL", "ADT")),
-          tbl_name
-        ),
+        requires = stats::setNames(list(c("PARAMCD", "AVAL", "ADT")),
+                                   tbl_name),
         optional = stats::setNames(
           list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
           tbl_name
         ),
-        # Choices resolve at DISPATCH (choices_from + choices_subset), never
-        # baked into the definition: a baked `present` made every definition
-        # patient-specific, so a drilled-in upstream (single-patient input)
-        # changed the catalog signature on every patient and the whole
-        # sidebar re-rendered per drill. With data-independent definitions,
-        # two patients sharing the same groups compare identical and the
-        # sidebar stays put.
+        # Baking the parameter list into the definition is safe HERE and was
+        # not before: the dictionary accumulates, so a drilled single-patient
+        # dm no longer shortens the list and the catalog signature holds
+        # still. Dispatch still intersects with the data on hand, which is
+        # what keeps a chip for a parameter this patient lacks out of the UI.
         controls = list(
           items = list(
             type = "checkbox",
             label = "Items",
             choices_from = "PARAMCD",
-            choices_subset = g$paramcds,
-            default = NULL
+            choices_subset = codes,
+            choice_labels = stats::setNames(labels, codes),
+            default = utils::head(codes, pp_group_default_n)
           )
         ),
         render = local({
           .tbl_name <- tbl_name
-          .label <- g$label
-          .color <- g$color
-          .default_paramcds <- g$paramcds
+          .label <- label
+          .color <- meta$color
+          .default <- utils::head(codes, pp_group_default_n)
           function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
-            paramcds <- settings$items %||% .default_paramcds
             pp_render_findings(
               dm_obj, time_range,
               table_name = .tbl_name,
               label = .label,
               base_color = .color,
-              paramcds = paramcds,
+              paramcds = settings$items %||% .default,
               ref_ms = ref_ms, mode = mode,
               smooth = settings$smooth %||% "auto"
             )
@@ -1355,51 +1458,66 @@ pp_findings_vizs <- function(dm_obj) {
         })
       )
     }
-
-    # Create individual viz cards for ungrouped PARAMCDs (skipping params an
-    # earlier plan already covers, e.g. an adlb param that also lives in a
-    # split table)
-    ungrouped <- setdiff(all_paramcds, c(grouped_paramcds, covered_paramcds))
-    for (pc in ungrouped) {
-      viz_id <- paste0(tbl_name, "_", tolower(pc))
-      vizs[[viz_id]] <- new_pp_viz(
-        id = viz_id,
-        label = paste0(meta$label_prefix, ": ", pc),
-        domain = meta$domain,
-        icon = meta$icon,
-        color = meta$color,
-        description = pc,
-        tables = tbl_name,
-        requires = stats::setNames(
-          list(c("PARAMCD", "AVAL", "ADT")),
-          tbl_name
-        ),
-        optional = stats::setNames(
-          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
-          tbl_name
-        ),
-        render = local({
-          .tbl_name <- tbl_name
-          .pc <- pc
-          .color <- meta$color
-          function(dm_obj, time_range, settings = list(),
-                   ref_ms = NA_real_, mode = "date") {
-            pp_render_findings(
-              dm_obj, time_range,
-              table_name = .tbl_name,
-              label = .pc,
-              base_color = .color,
-              paramcds = .pc,
-              ref_ms = ref_ms, mode = mode,
-              smooth = settings$smooth %||% "auto"
-            )
-          }
-        })
-      )
-    }
-
-    covered_paramcds <- c(covered_paramcds, grouped_paramcds, ungrouped)
   }
 
   vizs
+}
+
+#' Findings viz definitions for a dm
+#'
+#' Convenience wrapper reading the dictionary straight off `dm_obj`. The block
+#' uses the two-step form ([pp_dm_param_dict()] into
+#' [pp_findings_vizs_from_dict()]) so it can accumulate the dictionary across
+#' emissions; tests and one-shot callers want this.
+#'
+#' @param dm_obj A normalized `dm` object.
+#' @return Named list of `pp_viz` definitions.
+#' @noRd
+pp_findings_vizs <- function(dm_obj) {
+  pp_findings_vizs_from_dict(
+    pp_dm_param_dict(dm_obj),
+    names(dm::dm_get_tables(dm_obj))
+  )
+}
+
+#' The search index behind the parameter-level search results
+#'
+#' Flattens the card catalog into one entry per parameter: what the client
+#' matches a query against, and which card takes the click. Built from the
+#' cards rather than the dictionary so a parameter whose table dropped out of
+#' the dm cannot be offered.
+#'
+#' @param vizs Named list of `pp_viz` definitions.
+#' @return Unnamed list of `list(code, label, short, viz_id, viz_label,
+#'   domain, color, search)`, ordered by parameter name.
+#' @noRd
+pp_param_index <- function(vizs) {
+  entries <- list()
+  for (v in vizs) {
+    if (length(v$params) == 0L) next
+    codes <- names(v$params)
+    labels <- unname(v$params)
+    shorts <- pp_param_short(labels, max_chars = 40L)
+    for (i in seq_along(codes)) {
+      entries[[length(entries) + 1L]] <- list(
+        code = codes[[i]],
+        label = labels[[i]],
+        short = shorts[[i]],
+        viz_id = v$id,
+        viz_label = v$label,
+        domain = v$domain,
+        color = v$color,
+        search = tolower(paste(codes[[i]], labels[[i]], v$label))
+      )
+    }
+  }
+  if (length(entries) == 0L) return(entries)
+  entries[order(vapply(entries, `[[`, character(1L), "label"))]
+}
+
+#' Truncate a string for a one-line card description
+#' @noRd
+pp_truncate <- function(x, max_chars) {
+  if (is.na(x) || nchar(x) <= max_chars) return(x)
+  paste0(substr(x, 1L, max_chars - 1L), "…")
 }

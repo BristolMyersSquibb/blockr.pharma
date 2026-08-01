@@ -193,11 +193,115 @@
 
 /* --- Search filter states ------------------ */
 .pp-card.is-filtered-out,
+.pp-result-group.is-filtered-out,
+.pp-result-param.is-filtered-out,
+.pp-results-section.is-hidden,
+.pp-no-results.is-hidden,
 .pp-category-group.is-hidden,
 .pp-category-group.is-empty,
 .pp-active-section.is-hidden,
-.pp-available-section.is-hidden {
+.pp-available-section.is-hidden,
+.pp-active-section.is-searching-away,
+.pp-available-section.is-searching-away {
   display: none;
+}
+
+.pp-no-results {
+  padding: 12px 6px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* --- Search results ------------------------ */
+/* Browsing lists GROUPS, searching answers with the individual SERIES: you
+   look for "alanine", not for the card that happens to hold it. Each match
+   sits under its group so the context is visible, and both levels are
+   selectable — the group check adds the whole card, the parameter check adds
+   that one series. The tree replaces the browse lists while a query is live,
+   so the sidebar gives ONE answer to the query. */
+.pp-results-section {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pp-results-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ONE border around the group and its matches. Boxing each row separately
+   made three competing outlines argue about what belongs to what; the
+   enclosing border says "these are Chemistry's" on its own, which leaves the
+   check marks as the only thing carrying selection state. */
+.pp-result-group {
+  margin-bottom: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.pp-result-group.is-selected {
+  border-color: #3b82f6;
+}
+
+/* The group row: a card's contents without a card's box */
+.pp-result-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms ease;
+}
+
+.pp-result-card:hover {
+  background: rgba(249, 250, 251, 0.8);
+}
+
+.pp-result-card.is-selected {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Matches sit inside the same border, set in from the group's icon */
+.pp-result-params {
+  padding: 2px 0 2px 34px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.pp-result-param {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 26px 4px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms ease;
+}
+
+.pp-result-param:hover {
+  background: rgba(249, 250, 251, 0.8);
+}
+
+.pp-result-param-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 150ms ease;
+}
+
+/* A checked parameter is stated by its check mark and by the label stepping
+   up to the group row's weight -- no second box inside the box. */
+.pp-result-param.is-selected .pp-result-param-label {
+  color: #374151;
+  font-weight: 500;
 }
 
 /* The hints describe the full list, so they step aside during a search */
@@ -418,11 +522,15 @@
   transition: color 0.15s ease;
 }
 
-.pp-card.is-selected .pp-card-check {
+.pp-card.is-selected .pp-card-check,
+.pp-result-card.is-selected .pp-card-check,
+.pp-result-param.is-selected .pp-card-check {
   background: #3b82f6;
 }
 
-.pp-card.is-selected .pp-card-check svg {
+.pp-card.is-selected .pp-card-check svg,
+.pp-result-card.is-selected .pp-card-check svg,
+.pp-result-param.is-selected .pp-card-check svg {
   color: #ffffff;
 }
 

@@ -65,7 +65,7 @@ serve(
       data = new_dm_example_block(dataset = "safetydata_adam"),
       cdisc = new_cdisc_dm_block(),
       profile = new_patient_profile_block(
-        selected = c("patient_overview", "ae_gantt", "liver_panel")
+        selected = c("patient_overview", "ae_gantt", "adlbc_all")
       )
     ),
     links = list(

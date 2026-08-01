@@ -19,12 +19,15 @@
 #
 # What to look at, in the Profile view:
 #
-#   1. Search + clear. Type "adverse": the SELECTED section keeps the cards it
-#      matches, AVAILABLE hides when nothing there matches. Click the x in the
-#      box (or press Escape) and the full list comes back WITH the selected
-#      cards on top. That was the bug: the old filter asked ":visible", which
-#      is false for every card inside an already-hidden section, so SELECTED
-#      could never come back once a keystroke had hidden it.
+#   1. Search. Browsing lists GROUPS (Chemistry, Hematology, Vital Signs,
+#      read off the study's own PARCAT1/LBCAT); typing answers with the
+#      individual SERIES, nested under the group that holds them. Type
+#      "alanine": one result, "Alanine Aminotransferase" under "Chemistry".
+#      Both rows are check marks — the group check puts the whole card on the
+#      panel, the parameter check just that series. A parameter whose card is
+#      not on the panel opens it showing that parameter ALONE; unchecking the
+#      last one takes the card back off. Click the x (or press Escape) and the
+#      browse lists come back.
 #
 #   2. Scroll. This cohort offers ~19 vizs. AVAILABLE is its own scroll box
 #      under the SELECTED list, capped at 60vh, so the card list is no longer
@@ -73,8 +76,12 @@ pp_port <- local({
   port
 })
 
+# Bind every interface, not the 127.0.0.1 Shiny defaults to: the
+# devcontainer forwards the port from OUTSIDE, so a loopback-only server is
+# reachable from a browser in the container and from nowhere else.
 options(
   shiny.port = pp_port,
+  shiny.host = "0.0.0.0",
   "g6R.preserve_elements_position" = TRUE
 )
 message("Patient profile sidebar demo on http://127.0.0.1:", pp_port, "/")
@@ -88,7 +95,7 @@ serve(
       # on one patient, so the charts are drawn and the panel x is reachable
       # without picking anyone first.
       profile = new_patient_profile_block(
-        selected = c("patient_overview", "ae_gantt", "liver_panel"),
+        selected = c("patient_overview", "ae_gantt", "adlbc_all"),
         subject = "01-701-1015"
       )
     ),
@@ -106,7 +113,7 @@ serve(
     ),
     grids = list(
       Profile = dock_grid("profile"),
-      Pipeline = dock_grid("dag_extension"),
+      Pipeline = dock_grid("dag"),
       Data = dock_grid(panels("data", "cdisc"))
     ),
     active = "Profile"

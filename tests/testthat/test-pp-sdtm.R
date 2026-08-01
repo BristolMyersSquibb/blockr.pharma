@@ -179,12 +179,11 @@ test_that("the profile's vizs are available and render on SDTM data", {
   expect_true("VIS" %in% unlist(ov$x$opts$yAxis$data))
   expect_false("EX" %in% unlist(ov$x$opts$yAxis$data))
 
-  # one findings viz (labs come from the combined adlb on SDTM)
+  # one findings viz (labs come from the combined adlb on SDTM, grouped by
+  # the study's own LBCAT)
   lab_ids <- grep("^adlb_", names(avail), value = TRUE)
-  fallback <- intersect(c("cbc", "liver_panel", "blood_pressure"),
-                        names(avail))
-  pick <- c(lab_ids, fallback)[1L]
-  chart <- avail[[pick]]$render(one, tr, list(), ref, "date")
+  expect_true(length(lab_ids) > 0L)
+  chart <- avail[[lab_ids[1L]]]$render(one, tr, list(), ref, "date")
   expect_s3_class(chart, "htmlwidget")
 })
 

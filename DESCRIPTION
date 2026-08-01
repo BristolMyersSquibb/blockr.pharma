@@ -1,6 +1,6 @@
 Package: blockr.pharma
 Title: Pharma Blocks for Blockr
-Version: 0.0.0.9004
+Version: 0.0.0.9005
 Authors@R:
     person(given = "Christoph",
            family = "Sax",

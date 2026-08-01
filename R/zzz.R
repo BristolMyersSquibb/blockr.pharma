@@ -50,15 +50,6 @@ register_pharma_blocks <- function() {
 #' Build arguments metadata for the patient profile block
 #' @noRd
 pp_block_arguments <- function() {
-  # Findings group ids and their PARAMCDs, straight from the group templates
-  # (the single copy; a hand-written list here once drifted from them).
-  group_desc <- paste(
-    vapply(pp_findings_groups(), function(g) {
-      sprintf("\"%s\" (%s)", g$id, paste(g$paramcds, collapse = ", "))
-    }, character(1L)),
-    collapse = ", "
-  )
-
   new_arg_specs(
     selected = new_arg_spec(
       paste0(
@@ -72,19 +63,20 @@ pp_block_arguments <- function() {
         "\"npix_radar\" (NPI-X radar chart from adqsnpix), ",
         "\"ortho_bp\" (orthostatic blood pressure from advs), ",
         "\"questionnaire_heatmap\" (heatmap of questionnaire scores). ",
-        "Findings group IDs (generated from data; lab groups source from ",
-        "adlbc/adlbh when those tables exist, or the combined adlb ",
-        "otherwise; the PARAMCD lists include sponsor synonyms): ",
-        group_desc, ". ",
-        "PARAMCDs not in a pre-defined group get auto-generated IDs like ",
-        "\"adlb_paramcd\" (e.g. \"adlb_trig\"). ",
-        "Only use IDs from this list \u2014 do NOT put raw table names (adcm, ",
-        "adae, adlb) or PARAMCDs in `selected`. ",
+        "Findings IDs are DERIVED FROM THE DATA, one card per findings ",
+        "table and parameter category: <table>_<category>, lower case, ",
+        "non-alphanumerics collapsed to \"_\" \u2014 e.g. \"adlb_chemistry\", ",
+        "\"adlb_hematology\", \"adlb_urinalysis\", \"adlbc_chemistry\". The ",
+        "category is the study's own PARCAT1 / LBCAT value; a table ",
+        "shipping none contributes a single \"<table>_all\" card (e.g. ",
+        "\"advs_all\" for vital signs). Pick the card, then narrow it with ",
+        "viz_settings items \u2014 do NOT put raw table names (adcm, adae, ",
+        "adlb) or PARAMCDs in `selected`. ",
         "Set to the IDs the user wants to see. patient_overview is ",
         "usually kept as the first element."
       ),
       example = list(
-        "patient_overview", "liver_panel", "blood_pressure"
+        "patient_overview", "adlb_chemistry", "advs_all"
       ),
       type = arg_array(arg_string())
     ),
@@ -96,8 +88,10 @@ pp_block_arguments <- function() {
         "Object with per-visualization settings. Keys are viz IDs, values ",
         "are setting objects. Only set for vizs that have controls. ",
         "Available settings: ",
-        "Findings groups (liver_panel, cbc, blood_pressure, etc.): ",
+        "Findings cards (adlb_chemistry, advs_all, etc.): ",
         "{items: array of PARAMCDs to show (e.g. [\"ALT\", \"AST\"])}. ",
+        "A findings card shows its first three parameters unless items ",
+        "says otherwise. ",
         "adas_trajectory: {items: array of PARAMCDs (e.g. [\"ACTOT\", ",
         "\"ACITM01\"]), chg: boolean (true=change from baseline)}. ",
         "npix_radar: {visits: array of visit names (e.g. [\"Baseline\", ",
@@ -107,7 +101,7 @@ pp_block_arguments <- function() {
         "value: \"AVAL\" or \"CHG\"}."
       ),
       example = list(
-        liver_panel = list(items = list("ALT", "AST")),
+        adlb_chemistry = list(items = list("ALT", "AST")),
         adas_trajectory = list(items = list("ACTOT"), chg = FALSE),
         questionnaire_heatmap = list(domain = "adqsadas", value = "AVAL")
       )

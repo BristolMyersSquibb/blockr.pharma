@@ -14,7 +14,8 @@ plotted_values <- function(chart) {
   }))
 }
 
-render_findings_card <- function(adlb, id = "adlb_neut") {
+# The fixture ships no category column, so the whole table is one card.
+render_findings_card <- function(adlb, id = "adlb_all") {
   dm_obj <- dm::dm(
     adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
     adlb = adlb

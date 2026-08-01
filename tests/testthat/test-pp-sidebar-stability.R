@@ -28,7 +28,7 @@ pp_one_patient <- function(id, pcs = c("ALT", "AST")) {
 
 test_that("the card catalog object survives a patient switch upstream", {
   blk <- new_patient_profile_block(selected = c("patient_overview",
-                                                "liver_panel"))
+                                                "adlbc_all"))
   srv <- blk[["expr_server"]]
 
   r_in <- shiny::reactiveVal(pp_one_patient("A", c("ALT", "AST")))
@@ -37,22 +37,22 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     cat_a <- r_available_val()
     expect_true(!is.null(cat_a))
-    expect_true("liver_panel" %in% names(cat_a))
+    expect_true("adlbc_all" %in% names(cat_a))
 
-    # another single patient, same tables, other params within the group:
-    # the catalog object must be the SAME (no sidebar invalidation)
-    r_in(pp_one_patient("B", c("ALT", "BILI")))
+    # another single patient, same tables, same params: the catalog object
+    # must be the SAME (no sidebar invalidation)
+    r_in(pp_one_patient("B", c("AST", "ALT")))
     session$flushReact()
     expect_identical(cat_a, r_available_val())
 
-    # per-param cards REMEMBER: a patient revealing an ungrouped param adds
-    # its card once; the next patient without it must NOT drop it again --
-    # this per-drill add/remove churn was the sidebar flash on prod
-    r_in(pp_one_patient("E", c("ALT", "TSH")))   # TSH: ungrouped -> new card
+    # the dictionary REMEMBERS: a patient revealing a parameter nobody has
+    # shown yet grows the card once, and the next patient without it must NOT
+    # shrink it back -- that per-drill churn was the sidebar flash on prod
+    r_in(pp_one_patient("E", c("ALT", "TSH")))   # TSH: first sighting
     session$flushReact()
     cat_e <- r_available_val()
     expect_false(identical(cat_a, cat_e))
-    expect_true("adlbc_tsh" %in% names(cat_e))
+    expect_true("TSH" %in% names(cat_e$adlbc_all$params))
 
     r_in(pp_one_patient("F", c("ALT", "AST")))   # F has no TSH
     session$flushReact()
@@ -70,7 +70,7 @@ test_that("the card catalog object survives a patient switch upstream", {
     expect_identical(cat_a, r_available_val())
 
     # and the next patient lands on the SAME catalog object again
-    r_in(pp_one_patient("D", c("AST", "GGT")))
+    r_in(pp_one_patient("D", c("AST", "ALT")))
     session$flushReact()
     expect_identical(cat_a, r_available_val())
 
@@ -85,6 +85,6 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     cat_c <- r_available_val()
     expect_false(identical(cat_a, cat_c))
-    expect_true("blood_pressure" %in% names(cat_c))
+    expect_true("advs_all" %in% names(cat_c))
   })
 })
