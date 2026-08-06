@@ -98,12 +98,18 @@ test_that("the output filter expression handles the SDTM dm domain", {
   tbls <- dm::dm_get_tables(out)
   expect_true("adsl" %in% names(tbls))
   expect_true(all(as.data.frame(tbls$adsl)$USUBJID == ids[[1L]]))
+  # ...and the filtered result remembers the whole cohort for the
+  # exhibit path (see pp_pick_subject()).
+  expect_identical(
+    pp_subject_ids(attr(out, "pp_cohort")),
+    ids
+  )
 
-  # the ADaM case is the plain filter, untouched
+  # the ADaM case addresses the subject table directly
   plain <- pp_subject_filter_expr("adsl", "x")
   expect_identical(
     plain,
-    bquote(dm::dm_filter(data, adsl = USUBJID == "x"))
+    bquote(blockr.pharma::pp_pick_subject(data, "x"))
   )
 })
 

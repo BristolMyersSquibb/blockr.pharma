@@ -47,6 +47,10 @@ ae_gantt_viz <- new_pp_viz(
   legend_ui = function(dm_obj, settings) {
     pp_sev_legend_ui(dm_obj, settings$sev_colors, settings$roles$severity)
   },
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_ae_gantt(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)

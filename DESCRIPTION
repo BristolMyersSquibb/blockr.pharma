@@ -1,6 +1,6 @@
 Package: blockr.pharma
 Title: Pharma Blocks for Blockr
-Version: 0.0.0.9005
+Version: 0.0.0.9011
 Authors@R:
     person(given = "Christoph",
            family = "Sax",
@@ -27,6 +27,9 @@ Imports:
     shiny
 Suggests:
     blockr.ai,
+    blockr.viz,
+    ggplot2,
+    officer,
     pharmaverseadam,
     pharmaversesdtm,
     safetyData,
@@ -35,6 +38,7 @@ Remotes:
     BristolMyersSquibb/blockr.ai,
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dplyr,
-    BristolMyersSquibb/blockr.theme
+    BristolMyersSquibb/blockr.theme,
+    BristolMyersSquibb/blockr.viz
 Config/testthat/edition: 3
 Config/Needs/website: DiagrammeR, DiagrammeRsvg

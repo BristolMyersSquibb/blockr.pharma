@@ -611,6 +611,111 @@
   color: #6b7280;
 }
 
+/* Download menu: same muted, hover-revealed treatment as the (x) -- an
+   export affordance, not a call to action. A native <details>, so it needs
+   no JS and closes itself on the next click elsewhere. */
+.pp-chart-download {
+  position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* When the download menu is present it carries the auto margin; the (x)
+   then sits right of it without doubling the gap. */
+.pp-chart-download + .pp-chart-remove {
+  margin-left: 0;
+}
+
+.pp-chart-download > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: #d1d5db;
+  opacity: 0;
+  cursor: pointer;
+  list-style: none;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.pp-chart-download > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pp-chart-panel:hover .pp-chart-download > summary,
+.pp-chart-download > summary:focus-visible,
+.pp-chart-download[open] > summary {
+  opacity: 1;
+}
+
+.pp-chart-download > summary:hover,
+.pp-chart-download[open] > summary {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.pp-chart-download-menu {
+  position: absolute;
+  right: 0;
+  top: 24px;
+  z-index: 20;
+  min-width: 120px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.pp-chart-download-menu a {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #374151;
+  text-decoration: none;
+}
+
+.pp-chart-download-menu a:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* Patient info: the key-value facts table. A table, not a chart -- plain
+   rows, muted labels, hairline separators matching the panel chrome. */
+.pp-info-table {
+  width: 100%;
+  max-width: 560px;
+  margin: 4px 12px 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pp-info-table tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.pp-info-table tr:last-child {
+  border-bottom: none;
+}
+
+.pp-info-table th {
+  width: 160px;
+  padding: 6px 12px 6px 0;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.pp-info-table td {
+  padding: 6px 0;
+  color: #1f2937;
+}
+
 /* Severity legend (AE panel): decodes the bar colors. Holds its natural
    width so the levels read as one line -- the header has the room now that
    the domain label is gone. Still wraps rather than overflowing if a study
@@ -903,6 +1008,90 @@
   color: #6b7280;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+/* Block-level download: the whole profile as one file. Same 26px chrome as
+   the gear beside it, same <details> menu pattern as the blockr.viz blocks'
+   download control. */
+
+/* The menu is rendered ONCE and synced over a custom message (labels,
+   section visibility) so a patient switch never re-renders -- and never
+   blinks -- the button. is-hidden gates the whole control and each scope
+   section. */
+.pp-dl-menu {
+  position: relative;
+  margin-right: 2px;
+}
+
+.pp-dl-menu.is-hidden,
+.pp-dl-menu-list .pp-dl-scope.is-hidden {
+  display: none;
+}
+
+.pp-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #6b7280;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.pp-dl-btn::-webkit-details-marker {
+  display: none;
+}
+
+.pp-dl-btn:hover,
+.pp-dl-menu[open] > .pp-dl-btn {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.pp-dl-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 160px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Scope section labels: "This patient: <id>" / "Cohort (N patients)". */
+.pp-dl-menu-label {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.pp-dl-menu-label + a {
+  margin-top: 0;
+}
+
+.pp-dl-menu-list a {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #374151;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pp-dl-menu-list a:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .pp-gear-btn:hover {

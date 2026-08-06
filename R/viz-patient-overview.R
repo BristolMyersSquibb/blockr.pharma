@@ -45,6 +45,10 @@ patient_overview_viz <- new_pp_viz(
       "AVISIT"
     )
   ),
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_overview(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)

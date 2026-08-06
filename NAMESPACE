@@ -2,8 +2,11 @@
 
 S3method(block_output,patient_profile_block)
 S3method(block_ui,patient_profile_block)
+S3method(print,pp_exhibit)
 export(new_patient_profile_block)
 export(new_study_roles_option)
+export(pp_patient_exhibit)
+export(pp_pick_subject)
 importFrom(blockr.core,arg_array)
 importFrom(blockr.core,arg_string)
 importFrom(blockr.core,block_output)

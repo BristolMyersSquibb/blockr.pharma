@@ -231,12 +231,39 @@ pp_validate_subject <- function(subject) {
   subject
 }
 
+#' Scope a dm to one subject, remembering the cohort
+#'
+#' The patient profile block's output expression: filters every table to
+#' `subject` (so a downstream block can never show the cohort while the
+#' charts show one patient) while stashing the UNFILTERED input as the
+#' `pp_cohort` attribute on the result. That attribute is what lets a
+#' report or deck built over this block show the whole cohort -- the
+#' block's true view -- even though its downstream data contract is the
+#' picked patient: [pp_patient_exhibit()] reads the attribute back when no
+#' explicit subject is asked for. Ordinary dm operations downstream drop
+#' the attribute, which is fine -- only the block's own result variable is
+#' ever read for exhibits.
+#'
+#' @param data A keyed dm holding the cohort (raw table names).
+#' @param subject A single USUBJID.
+#' @return The subject-scoped dm, cohort attached as `attr(, "pp_cohort")`.
+#' @export
+pp_pick_subject <- function(data, subject) {
+  out <- dm::dm_filter(data, adsl = USUBJID == subject)
+  attr(out, "pp_cohort") <- data
+  out
+}
+
 #' Quoted subject filter for the block's output expression
 #'
-#' Filters the subject table under its RAW name (`adsl`, or the SDTM `dm`
-#' domain): the expression runs against the block's untouched input, where
-#' downstream blocks want the keyed dm, not the profile's normalized flat
-#' copy.
+#' Emits a self-qualified [pp_pick_subject()] call: the plain
+#' `dm::dm_filter()` for downstream blocks, plus the cohort attribute the
+#' exhibit path reads (see [pp_pick_subject()]).
+#'
+#' The subject table is addressed under its RAW name (`adsl`, or the SDTM
+#' `dm` domain): the expression runs against the block's untouched input,
+#' where downstream blocks want the keyed dm, not the profile's normalized
+#' flat copy.
 #'
 #' A table literally named `dm` cannot be addressed through `dm_filter()`'s
 #' named arguments -- they match its first FORMAL (also `dm`) before any
@@ -260,7 +287,7 @@ pp_subject_filter_expr <- function(subj_tbl, subject) {
     ))
   }
   bquote(
-    dm::dm_filter(.(data_in), adsl = USUBJID == .(subject)),
+    blockr.pharma::pp_pick_subject(.(data_in), .(subject)),
     list(data_in = data_in, subject = subject)
   )
 }

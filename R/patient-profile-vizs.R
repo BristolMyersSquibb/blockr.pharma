@@ -601,6 +601,16 @@ pp_icon_html <- function(icon_name, color) {
       '.708-.708L7.5 13.293V2.707L6.354 3.854a.5.5 0 1 1-.708-.708',
       'l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 2.707v',
       '10.586l1.146-1.147a.5.5 0 0 1 .708.708z"/>'
+    ),
+    `person-vcard` = paste0(
+      '<path d="M5 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m4-2.5a.5.5 0 0 ',
+      '1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5M9 8a.5.5 0 0 ',
+      '1 .5-.5h4a.5.5 0 0 1 0 1h-4A.5.5 0 0 1 9 8m1 2.5a.5.5 0 0 ',
+      '1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5"/>',
+      '<path d="M2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 ',
+      '2-2V4a2 2 0 0 0-2-2zM1 4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v8a',
+      '1 1 0 0 1-1 1H8.96q.04-.245.04-.5C9 10.567 7.21 9 5 9c-',
+      '2.086 0-3.8 1.398-3.984 3.181A1 1 0 0 1 1 12z"/>'
     )
   )
 
@@ -1147,6 +1157,7 @@ pp_viz_defaults <- function(viz) {
 #' @noRd
 patient_profile_static_vizs <- function() {
   vizs <- list(
+    patient_info_viz,
     patient_overview_viz,
     ae_gantt_viz,
     cm_gantt_viz,
@@ -1502,6 +1513,22 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
               table_name = .tbl_name,
               label = .label,
               base_color = .color,
+              paramcds = settings$items %||% .default,
+              ref_ms = ref_ms, mode = mode,
+              smooth = settings$smooth %||% "auto"
+            )
+          }
+        }),
+        exhibit = local({
+          .tbl_name <- tbl_name
+          .label <- label
+          .default <- utils::head(codes, pp_group_default_n)
+          function(dm_obj, time_range, settings = list(),
+                   ref_ms = NA_real_, mode = "date") {
+            pp_static_findings(
+              dm_obj, time_range,
+              table_name = .tbl_name,
+              label = .label,
               paramcds = settings$items %||% .default,
               ref_ms = ref_ms, mode = mode,
               smooth = settings$smooth %||% "auto"

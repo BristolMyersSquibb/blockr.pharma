@@ -47,6 +47,10 @@ cm_gantt_viz <- new_pp_viz(
   legend_ui = function(dm_obj, settings) {
     pp_indc_legend_ui(settings$indc_colors)
   },
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_cm_gantt(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(),
                     ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)

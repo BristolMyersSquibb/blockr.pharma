@@ -1102,17 +1102,97 @@ new_patient_profile_block <- function(selected = NULL,
               )
             )
 
-            # The header row now carries only the gear. The subject picker
-            # lives in the static UI (see `ui=` below) so its Blockr.Select
-            # container is present before the mount message arrives.
+            # Block-level download menu: the WHOLE profile as one artifact,
+            # in the scope the reviewer means. Two sections -- the picked
+            # patient (interactive convenience) and the cohort (the
+            # profile's true view, one slide group per patient) -- each
+            # offering the formats whose writers are installed. Same
+            # <details> pattern as the blockr.viz blocks' download control.
+            #
+            # RENDERED ONCE, like the gear beside it. An output re-rendered
+            # per patient switch made the button visibly blink no matter how
+            # the recalculating fade was styled -- the DOM swap itself reads
+            # as a flicker next to a control that never moves. So the
+            # structure is static (both scope sections in the DOM) and a
+            # custom message updates the two labels and toggles section
+            # visibility; see the dl_menu_state handler in the UI script.
+            dl_tag <- if (pp_exhibit_ready()) {
+              has_pptx <- requireNamespace("officer", quietly = TRUE)
+              entry <- function(id, label) {
+                shiny::downloadLink(ns(id), label)
+              }
+              shiny::tags$details(
+                id = ns("pp_dl_root"),
+                class = "pp-dl-menu is-hidden",
+                shiny::tags$summary(
+                  class = "pp-dl-btn",
+                  title = "Download profile",
+                  `aria-label` = "Download profile",
+                  shiny::HTML(paste0(
+                    '<svg width="14" height="14" viewBox="0 0 16 16" ',
+                    'fill="none" stroke="currentColor" stroke-width="1.6" ',
+                    'stroke-linecap="round" stroke-linejoin="round">',
+                    '<path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/>',
+                    '<path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 ',
+                    'A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg>'
+                  ))
+                ),
+                shiny::div(
+                  class = "pp-dl-menu-list", role = "menu",
+                  shiny::div(
+                    class = "pp-dl-scope pp-dl-scope-patient is-hidden",
+                    shiny::div(class = "pp-dl-menu-label",
+                               id = ns("pp_dl_label_patient"),
+                               "This patient"),
+                    if (has_pptx) {
+                      entry("dl_profile_pptx", "PowerPoint (.pptx)")
+                    },
+                    entry("dl_profile_html", "Web page (.html)")
+                  ),
+                  shiny::div(
+                    class = "pp-dl-scope pp-dl-scope-cohort is-hidden",
+                    shiny::div(class = "pp-dl-menu-label",
+                               id = ns("pp_dl_label_cohort"),
+                               "Cohort"),
+                    if (has_pptx) {
+                      entry("dl_cohort_pptx", "PowerPoint (.pptx)")
+                    },
+                    entry("dl_cohort_html", "Web page (.html)")
+                  )
+                )
+              )
+            }
+
+            # The header row carries the download menu and the gear. The
+            # subject picker lives in the static UI (see `ui=` below) so its
+            # Blockr.Select container is present before the mount message
+            # arrives.
             shiny::div(
               class = paste(
                 "pp-cohort-hint d-flex justify-content-end",
                 "align-items-center"
               ),
+              dl_tag,
               gear_tag
             )
           })
+
+          # Keep the static menu's labels and section visibility in step
+          # with the pick and the cohort -- text updates over a message,
+          # never a re-render, so the button holds as steady as the gear.
+          if (pp_exhibit_ready()) {
+            shiny::observe({
+              scoped <- r_scoped_dm()
+              session$sendCustomMessage(
+                session$ns("dl_menu_state"),
+                list(
+                  single = isTRUE(scoped$single),
+                  picked = if (isTRUE(scoped$single)) scoped$picked else "",
+                  n = length(pp_subject_ids(r_norm_dm()))
+                )
+              )
+            })
+          }
 
           # The data-derived half of the gear popover (see the uiOutput
           # above). This one SHOULD track the data -- what a study collects is
@@ -1283,35 +1363,18 @@ new_patient_profile_block <- function(selected = NULL,
             # scale map's colors ride along as settings$sev_colors /
             # settings$indc_colors (render-time only,
             # r_viz_settings is untouched; each viz falls back to its own
-            # constants when no map / no binding resolves).
-            viz_settings <- r_viz_settings()[[viz_id]] %||% list()
-            roles <- r_roles()
-            uses <- viz$uses %||% character()
-            if (length(uses)) {
-              viz_settings$roles <- roles[intersect(uses, names(roles))]
-            }
-            if ("severity" %in% uses) {
-              sev_colors <- pp_sev_scale_colors(
-                r_scale_map(), dm_obj, sev_col = roles$severity
-              )
-              if (!is.null(sev_colors)) {
-                viz_settings$sev_colors <- sev_colors
-              }
-            }
-            if ("indication" %in% uses) {
-              indc_colors <- pp_indc_scale_colors(
-                r_scale_map(), dm_obj, indc_col = roles$indication
-              )
-              if (!is.null(indc_colors)) {
-                viz_settings$indc_colors <- indc_colors
-              }
-            }
-            if ("cycle" %in% uses) {
-              viz_settings$cycle_anchors <- r_cycle_anchors()
-            }
-            # Block-level line smoothing rides along like the roles: consumed
-            # by the findings renderers, ignored by every other viz.
-            viz_settings$smooth <- r_smooth()
+            # constants when no map / no binding resolves). The assembly
+            # itself is pp_viz_exhibit_settings() -- shared with the static
+            # exhibit path (downloads, deck export), so the live panel and
+            # its printed twin read identical settings.
+            viz_settings <- pp_viz_exhibit_settings(
+              viz, r_viz_settings()[[viz_id]], r_roles(), dm_obj,
+              scale_map = r_scale_map(),
+              cycle_anchors = if ("cycle" %in% (viz$uses %||% character())) {
+                r_cycle_anchors()
+              },
+              smooth = r_smooth()
+            )
 
             # Check the declared `requires` / `requires_any` columns (a pure
             # presence check -- names were reconciled dm-wide by
@@ -1343,11 +1406,65 @@ new_patient_profile_block <- function(selected = NULL,
               viz$legend_ui(dm_obj, viz_settings)
             }
 
+            # Per-viz download menu, only for vizs with a static twin and
+            # only when the writers can run (ggplot2 + blockr.viz). The
+            # files are re-derived from state via viz$exhibit -- the same
+            # rendering a deck slide gets -- never the echarts canvas.
+            # Formats follow the twin's kind: a plot downloads as a
+            # picture, a table as a sheet / page / native slide table. A
+            # format whose writer is missing is left out, not disabled.
+            download_ui <- if (is.function(viz$exhibit) &&
+                                 pp_exhibit_ready()) {
+              ns <- session$ns
+              entries <- if (identical(viz$exhibit_kind, "table")) {
+                list(
+                  if (requireNamespace("openxlsx", quietly = TRUE)) {
+                    list(id = "dl_xlsx_", label = "Excel (.xlsx)")
+                  },
+                  list(id = "dl_html_", label = "Web page (.html)"),
+                  if (requireNamespace("officer", quietly = TRUE)) {
+                    list(id = "dl_pptx_", label = "PowerPoint (.pptx)")
+                  }
+                )
+              } else {
+                list(
+                  list(id = "dl_png_", label = "PNG"),
+                  if (requireNamespace("officer", quietly = TRUE)) {
+                    list(id = "dl_pptx_", label = "PowerPoint")
+                  }
+                )
+              }
+              entries <- Filter(Negate(is.null), entries)
+              shiny::tags$details(
+                class = "pp-chart-download",
+                shiny::tags$summary(
+                  title = paste("Download", viz$label),
+                  shiny::HTML(paste0(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="12" ',
+                    'height="12" fill="currentColor" viewBox="0 0 16 16">',
+                    '<path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12',
+                    'a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 ',
+                    '2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>',
+                    '<path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 ',
+                    '0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L',
+                    '5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>'
+                  ))
+                ),
+                shiny::div(
+                  class = "pp-chart-download-menu",
+                  lapply(entries, function(e) {
+                    shiny::downloadLink(ns(paste0(e$id, viz_id)), e$label)
+                  })
+                )
+              )
+            }
+
             shiny::tagList(
               shiny::div(class = "pp-chart-header",
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
                 legend_ui,
+                download_ui,
                 # Same toggle the sidebar card fires: removing a viz here
                 # deselects it, so the sidebar card slides back to AVAILABLE.
                 shiny::tags$button(
@@ -1369,6 +1486,128 @@ new_patient_profile_block <- function(selected = NULL,
             )
           }
 
+          # The static exhibit behind one viz's download buttons: the same
+          # inputs the live render gets, handed to the viz's `exhibit` twin
+          # instead of its `render`. Re-derived from state at click time --
+          # the file and a deck slide of this block are the same picture.
+          build_slot_exhibit <- function(viz_id) {
+            scoped <- r_scoped_dm()
+            dm_obj <- scoped$dm
+            shiny::req(inherits(dm_obj, "dm"), isTRUE(scoped$single))
+            viz <- r_available()[[viz_id]]
+            shiny::req(!is.null(viz), is.function(viz$exhibit))
+            time_range <- r_time_range()
+            shiny::req(time_range)
+            ref_ms <- r_ref_ms()
+            tl_mode <- r_timeline_mode()
+            if (identical(tl_mode, "rday") && is.na(ref_ms)) {
+              tl_mode <- "date"
+            }
+            settings <- pp_viz_exhibit_settings(
+              viz, r_viz_settings()[[viz_id]], r_roles(), dm_obj,
+              scale_map = r_scale_map(),
+              cycle_anchors = if ("cycle" %in% (viz$uses %||% character())) {
+                r_cycle_anchors()
+              },
+              smooth = r_smooth()
+            )
+            p <- viz$exhibit(dm_obj, time_range, settings, ref_ms, tl_mode)
+            shiny::req(!is.null(p))
+            p
+          }
+
+          slot_file_stem <- function(viz_id) {
+            scoped <- r_scoped_dm()
+            subj <- if (isTRUE(scoped$single)) scoped$picked else NULL
+            paste(
+              c(viz_id, if (!is.null(subj)) gsub("[^A-Za-z0-9_-]+", "-",
+                                                 subj)),
+              collapse = "-"
+            )
+          }
+
+          # The block-level downloads: the whole profile through
+          # pp_patient_exhibit(), from the same live state the panels
+          # render. Two scopes, both offered in the menu: the picked
+          # patient, and the whole incoming cohort (one group of visuals
+          # per patient -- what a deck built over this block shows).
+          build_profile_exhibit <- function(scope = c("patient", "cohort")) {
+            scope <- match.arg(scope)
+            scoped <- r_scoped_dm()
+            shiny::req(inherits(scoped$dm, "dm"))
+            if (identical(scope, "patient")) {
+              shiny::req(isTRUE(scoped$single))
+            }
+            ex <- pp_patient_exhibit(
+              if (identical(scope, "patient")) scoped$dm else r_norm_dm(),
+              selected = r_selected(),
+              viz_settings = r_viz_settings(),
+              timeline_mode = r_timeline_mode(),
+              show_prestudy = r_show_prestudy(),
+              smooth = r_smooth(),
+              roles = r_declared(),
+              scale_map = r_scale_map(),
+              title = if (identical(scope, "patient")) {
+                paste("Patient", scoped$picked)
+              }
+            )
+            shiny::req(!is.null(ex))
+            ex
+          }
+
+          profile_file_stem <- function(scope) {
+            scoped <- r_scoped_dm()
+            if (identical(scope, "patient") && isTRUE(scoped$single)) {
+              paste0("patient-profile-",
+                     gsub("[^A-Za-z0-9_-]+", "-", scoped$picked))
+            } else {
+              "patient-profiles"
+            }
+          }
+
+          output$dl_profile_pptx <- shiny::downloadHandler(
+            filename = function() {
+              paste0(profile_file_stem("patient"), ".pptx")
+            },
+            content = function(file) {
+              blockr.viz::write_exhibit_pptx(
+                build_profile_exhibit("patient"), file
+              )
+            }
+          )
+          output$dl_profile_html <- shiny::downloadHandler(
+            filename = function() {
+              paste0(profile_file_stem("patient"), ".html")
+            },
+            content = function(file) {
+              blockr.viz::write_exhibit_html(
+                build_profile_exhibit("patient"), file,
+                title = paste("Patient", r_scoped_dm()$picked)
+              )
+            }
+          )
+          output$dl_cohort_pptx <- shiny::downloadHandler(
+            filename = function() {
+              paste0(profile_file_stem("cohort"), ".pptx")
+            },
+            content = function(file) {
+              blockr.viz::write_exhibit_pptx(
+                build_profile_exhibit("cohort"), file
+              )
+            }
+          )
+          output$dl_cohort_html <- shiny::downloadHandler(
+            filename = function() {
+              paste0(profile_file_stem("cohort"), ".html")
+            },
+            content = function(file) {
+              blockr.viz::write_exhibit_html(
+                build_profile_exhibit("cohort"), file,
+                title = "Patient profiles"
+              )
+            }
+          )
+
           # Register one output per available viz, once. The id set is
           # cohort-derived and stable across patient switches; a slot whose
           # viz is not currently selected has no container in the DOM and
@@ -1382,6 +1621,65 @@ new_patient_profile_block <- function(selected = NULL,
                 vid <- viz_id
                 output[[paste0("viz_slot_", vid)]] <- shiny::renderUI(
                   render_viz_slot(vid)
+                )
+                output[[paste0("dl_png_", vid)]] <- shiny::downloadHandler(
+                  filename = function() {
+                    paste0(slot_file_stem(vid), ".png")
+                  },
+                  content = function(file) {
+                    blockr.viz::write_exhibit_png(
+                      build_slot_exhibit(vid), file
+                    )
+                  }
+                )
+                output[[paste0("dl_pptx_", vid)]] <- shiny::downloadHandler(
+                  filename = function() {
+                    paste0(slot_file_stem(vid), ".pptx")
+                  },
+                  content = function(file) {
+                    viz <- r_available()[[vid]]
+                    scoped <- r_scoped_dm()
+                    subj <- if (isTRUE(scoped$single)) scoped$picked
+                    blockr.viz::write_exhibit_pptx(
+                      build_slot_exhibit(vid), file,
+                      title = paste(
+                        c(if (!is.null(subj)) paste0("Patient ", subj, ":"),
+                          viz$label),
+                        collapse = " "
+                      )
+                    )
+                  }
+                )
+                # Table-kind twins (a data frame, not a plot) add the table
+                # block's other formats; registered for every slot, offered
+                # only where the menu shows them.
+                output[[paste0("dl_xlsx_", vid)]] <- shiny::downloadHandler(
+                  filename = function() {
+                    paste0(slot_file_stem(vid), ".xlsx")
+                  },
+                  content = function(file) {
+                    blockr.viz::write_annotated_xlsx(
+                      build_slot_exhibit(vid), file
+                    )
+                  }
+                )
+                output[[paste0("dl_html_", vid)]] <- shiny::downloadHandler(
+                  filename = function() {
+                    paste0(slot_file_stem(vid), ".html")
+                  },
+                  content = function(file) {
+                    viz <- r_available()[[vid]]
+                    scoped <- r_scoped_dm()
+                    subj <- if (isTRUE(scoped$single)) scoped$picked
+                    blockr.viz::write_exhibit_html(
+                      build_slot_exhibit(vid), file,
+                      title = paste(
+                        c(if (!is.null(subj)) paste0("Patient ", subj, ":"),
+                          viz$label),
+                        collapse = " "
+                      )
+                    )
+                  }
                 )
               })
             }
@@ -1644,6 +1942,10 @@ new_patient_profile_block <- function(selected = NULL,
             var stepSubjectInputId = '", ns("step_subject"), "';
             var subjectPickerMsgId = '", ns("subject_picker"), "';
             var subjectValueMsgId = '", ns("subject_value"), "';
+            var dlMenuMsgId = '", ns("dl_menu_state"), "';
+            var dlRootId = '", ns("pp_dl_root"), "';
+            var dlLabelPatientId = '", ns("pp_dl_label_patient"), "';
+            var dlLabelCohortId = '", ns("pp_dl_label_cohort"), "';
 
             // Required-empty amber cue on the control itself.
             // `.blockr-field--required-empty` is the canonical class from
@@ -1718,6 +2020,39 @@ new_patient_profile_block <- function(selected = NULL,
               if (root._ppPicker.getValue() === (msg.selected || '')) return;
               root._ppPicker.setOptions(root._ppOptions || [], msg.selected || '');
               syncRequiredEmpty($('#' + pickerId).hasClass('is-locked'));
+            });
+
+            // Download-menu scope sync. The menu is rendered ONCE (see
+            // header_bar); this updates its two section labels and their
+            // visibility so a patient switch never re-renders -- and never
+            // blinks -- the button. The <details> stays as-is: text
+            // updates do not close an open menu.
+            function applyDlMenu(msg, tries) {
+              var $root = $('#' + dlRootId);
+              if (!$root.length) {
+                // The first state message can beat the header render (the
+                // menu mounts with it); retry briefly rather than dropping
+                // the state on the floor.
+                if (tries > 0) {
+                  setTimeout(function() { applyDlMenu(msg, tries - 1); },
+                             100);
+                }
+                return;
+              }
+              var single = !!msg.single;
+              var n = msg.n || 0;
+              $('#' + dlLabelPatientId).text(
+                single ? 'This patient: ' + msg.picked : 'This patient');
+              $('#' + dlLabelCohortId).text(
+                'Cohort (' + n + (n === 1 ? ' patient)' : ' patients)'));
+              $root.find('.pp-dl-scope-patient')
+                .toggleClass('is-hidden', !single);
+              $root.find('.pp-dl-scope-cohort')
+                .toggleClass('is-hidden', !(n > 1));
+              $root.toggleClass('is-hidden', !single && !(n > 1));
+            }
+            Shiny.addCustomMessageHandler(dlMenuMsgId, function(msg) {
+              if (msg) applyDlMenu(msg, 30);
             });
 
             // Prev / next patient

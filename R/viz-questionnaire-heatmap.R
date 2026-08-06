@@ -39,6 +39,10 @@ questionnaire_heatmap_viz <- new_pp_viz(
       choices = c("Absolute" = "AVAL", "Change" = "CHG")
     )
   ),
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_heatmap(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(), ...) {
     tbls <- dm::dm_get_tables(dm_obj)
 

@@ -13,6 +13,9 @@ utils::globalVariables("USUBJID")
   )
   register_pharma_blocks()
   register_patient_profile_ai_effect()
+  # Exhibit / report methods on blockr.viz's generics (a Suggests):
+  # registered softly, now or when blockr.viz loads.
+  pp_register_viz_s3()
   invisible(NULL)
 }
 
@@ -55,6 +58,8 @@ pp_block_arguments <- function() {
       paste0(
         "Array of visualization IDs to display. ",
         "Static IDs: ",
+        "\"patient_info\" (key-value table of demographics, arm, treatment ",
+        "period and baseline facts from ADSL \u2014 the usual opening card), ",
         "\"patient_overview\" (treatment period, exposure/dosing bars, AE bars, ",
         "visit ticks + milestones from ADSL/adae/adex), ",
         "\"ae_gantt\" (adverse events Gantt chart from adae), ",

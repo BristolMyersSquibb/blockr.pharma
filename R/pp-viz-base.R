@@ -54,6 +54,19 @@
 #'   the block needs no per-viz special cases.
 #' @param render Function `function(dm_obj, time_range, settings, ref_ms, mode)`
 #'   returning an htmlwidget. Receives the normalized, subject-scoped dm.
+#' @param exhibit Optional static twin of `render`: same signature, returns
+#'   the viz's printed form (or `NULL` when there is nothing to draw). This
+#'   is what the per-viz download buttons and the deck export
+#'   ([pp_patient_exhibit()]) render -- the export pipeline re-derives every
+#'   picture server-side rather than capturing the echarts canvas, the same
+#'   split blockr.viz's chart block draws between its live view and
+#'   `static_chart()`. A viz without one simply is not exportable (skipped
+#'   with a message; no download button).
+#' @param exhibit_kind What the exhibit function returns: `"plot"` (a
+#'   ggplot; downloads offer PNG + PowerPoint) or `"table"` (an
+#'   [blockr.viz::as_annotated_df()]-coercible data frame, typeset by
+#'   blockr.viz's default exhibit methods; downloads offer Excel + HTML +
+#'   PowerPoint).
 #'
 #' @return A list with class `"pp_viz"`.
 #' @noRd
@@ -67,7 +80,10 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
                        uses = character(),
                        controls = NULL,
                        legend_ui = NULL,
-                       render) {
+                       render,
+                       exhibit = NULL,
+                       exhibit_kind = c("plot", "table")) {
+  exhibit_kind <- match.arg(exhibit_kind)
   stopifnot(
     is.character(id), length(id) == 1L, nzchar(id),
     is.character(label), length(label) == 1L,
@@ -81,7 +97,8 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     all(vapply(optional, is.character, logical(1L))),
     is.character(uses),
     is.null(legend_ui) || is.function(legend_ui),
-    is.function(render)
+    is.function(render),
+    is.null(exhibit) || is.function(exhibit)
   )
   structure(
     list(
@@ -90,7 +107,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
       search = search, params = params,
       requires = requires, optional = optional, requires_any = requires_any,
       uses = uses, controls = controls, legend_ui = legend_ui,
-      render = render
+      render = render, exhibit = exhibit, exhibit_kind = exhibit_kind
     ),
     class = c("pp_viz", "list")
   )

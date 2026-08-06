@@ -32,6 +32,10 @@ adas_trajectory_viz <- new_pp_viz(
       default = FALSE
     )
   ),
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_adas(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
     tbl <- pp_prepare_findings(dm_obj, "adqsadas")

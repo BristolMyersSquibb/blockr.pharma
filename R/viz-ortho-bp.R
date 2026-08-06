@@ -29,6 +29,10 @@ ortho_bp_viz <- new_pp_viz(
       choices_from = "AVISIT"
     )
   ),
+  exhibit = function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+    pp_static_ortho_bp(dm_obj, time_range, settings, ref_ms, mode)
+  },
   render = function(dm_obj, time_range, settings = list(), ...) {
     tbl <- pp_prepare_findings(dm_obj, "advs")
     if (is.null(tbl)) return(pp_empty_chart("No vital sign records"))
