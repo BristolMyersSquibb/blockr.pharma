@@ -103,7 +103,14 @@ pp_block_arguments <- function() {
         "\"Week 8\"])}. ",
         "ortho_bp: {visits: array of visit names}. ",
         "questionnaire_heatmap: {domain: \"adqsadas\" or \"adqsnpix\", ",
-        "value: \"AVAL\" or \"CHG\"}."
+        "value: \"AVAL\" or \"CHG\"}. ",
+        "ae_gantt: {lanes: the ADAE column the gantt draws one row per -- ",
+        "\"AETERM\", \"AEDECOD\" (default, preferred term), \"AEHLT\" or ",
+        "\"AEBODSYS\" (body system / SOC, the coarse read)}. ",
+        "cm_gantt: {lanes: the ADCM column the gantt draws one row per -- ",
+        "\"CMTRT\", \"CMDECOD\" (default, coded name) or \"CMCLAS\" (drug ",
+        "class, the coarse read)}. Only set `lanes` to a column the study ",
+        "actually carries; it is ignored otherwise."
       ),
       example = list(
         adlb_chemistry = list(items = list("ALT", "AST")),

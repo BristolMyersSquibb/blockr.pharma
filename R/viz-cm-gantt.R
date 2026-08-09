@@ -13,6 +13,12 @@
 #                time source: ASTDT or ASTDY
 #     optional — CMDECOD (coded name, preferred for lanes), AENDT, AENDY,
 #                CMDOSE, CMDOSU, CMDOSFRQ, CMROUTE, CMCLAS
+#
+# Which coding level the lanes come from is the user's ("Lanes" radio,
+# settings$lanes) whenever the study carries more than one: the coded name
+# by default, the drug class when the point is what the patient was on
+# rather than which product. See pp-lanes.R. The tooltip always names the
+# medication, at every lane setting.
 #     roles    — indication (the resolved column arrives as
 #                settings$roles$indication, its colors as
 #                settings$indc_colors)
@@ -43,6 +49,7 @@ cm_gantt_viz <- new_pp_viz(
     "CMDECOD", "AENDT", "AENDY", "CMDOSE", "CMDOSU", "CMDOSFRQ",
     "CMROUTE", "CMCLAS"
   )),
+  controls = pp_lane_control(PP_CM_LANES, default = "CMDECOD"),
   uses = "indication",
   legend_ui = function(dm_obj, settings) {
     pp_indc_legend_ui(settings$indc_colors)
@@ -70,17 +77,20 @@ cm_gantt_viz <- new_pp_viz(
     tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No medication records"))
 
-    # Lane label: the coded name reads cleaner than the verbatim report;
-    # fall back per row, a partially coded table must not blank its lanes.
-    med_of <- function(df) {
-      med <- if ("CMDECOD" %in% colnames(df)) as.character(df$CMDECOD)
-      rep_name <- as.character(df$CMTRT)
-      if (is.null(med)) return(rep_name)
-      blank <- is.na(med) | !nzchar(trimws(med))
-      med[blank] <- rep_name[blank]
-      med
-    }
-    tbl$..med <- med_of(tbl)
+    # The medication's name for the tooltip: the coded name reads cleaner
+    # than the verbatim report, falling back per row (a partially coded
+    # table must not blank its labels). This is the tooltip's title at every
+    # lane setting -- grouping by class must not cost the bar its identity.
+    name_col <- if ("CMDECOD" %in% colnames(tbl)) "CMDECOD" else "CMTRT"
+    tbl$..med <- pp_lane_values(tbl, name_col, "CMTRT")
+
+    # Lanes come from whichever coding level the user is reading at; the
+    # coded name unless the header radio says otherwise, and a level this
+    # study does not carry falls back rather than erroring (the control that
+    # could have produced it is data-conditional, so a saved board can name
+    # a level the current study lacks).
+    lane_col <- pp_lane_column(tbl, PP_CM_LANES, settings$lanes, "CMDECOD")
+    tbl$..lane <- pp_lane_values(tbl, lane_col %||% "CMTRT", "CMTRT")
 
     has_end <- if (use_day) {
       "AENDY" %in% colnames(tbl)
@@ -129,11 +139,11 @@ cm_gantt_viz <- new_pp_viz(
     if (nrow(tbl) == 0) {
       return(pp_empty_chart("No medication records in this time range"))
     }
-    meds <- sort(unique(tbl$..med))
+    meds <- sort(unique(tbl$..lane))
 
     # One label per lane, drawn on the lane's earliest bar (see ae_gantt).
     lane_first <- vapply(meds, function(med) {
-      rows <- which(tbl$..med == med)
+      rows <- which(tbl$..lane == med)
       starts <- vapply(rows, function(i) {
         as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
       }, numeric(1L))
@@ -164,7 +174,7 @@ cm_gantt_viz <- new_pp_viz(
       s <- span[1L]
       e <- span[2L]
       med <- tbl$..med[i]
-      lane <- match(med, meds) - 1L
+      lane <- match(tbl$..lane[i], meds) - 1L
 
       dose <- trimws(paste(
         opt_chr(tbl, "CMDOSE", i), opt_chr(tbl, "CMDOSU", i),
@@ -180,7 +190,7 @@ cm_gantt_viz <- new_pp_viz(
       } else {
         PP_ONGOING_LABEL
       }
-      lab <- if (i %in% lane_first) pp_term_label(med) else ""
+      lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
       indc <- indc_at(i)
       col <- bar_color(indc)
       list(

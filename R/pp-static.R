@@ -263,8 +263,12 @@ pp_static_ae_gantt <- function(dm_obj, time_range, settings = list(),
   spans <- spans[, keep, drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
 
-  terms <- sort(unique(as.character(tbl$AEDECOD)))
-  lane <- match(as.character(tbl$AEDECOD), terms) - 1L
+  # Lane granularity follows the panel's own "Lanes" setting (see
+  # pp-lanes.R): the printed twin groups its rows the way the screen does.
+  lane_col <- pp_lane_column(tbl, PP_AE_LANES, settings$lanes, "AEDECOD")
+  lane_lab <- pp_lane_values(tbl, lane_col %||% "AEDECOD", "AEDECOD")
+  terms <- sort(unique(lane_lab))
+  lane <- match(lane_lab, terms) - 1L
   first_of_lane <- !duplicated(lane[order(lane, spans[1L, ])])[
     order(order(lane, spans[1L, ]))
   ]
@@ -280,8 +284,7 @@ pp_static_ae_gantt <- function(dm_obj, time_range, settings = list(),
     ongoing = vapply(seq_len(nrow(tbl)), function(i) {
       !(has_end && !is.na(end_at(i)))
     }, logical(1L)),
-    label = ifelse(first_of_lane, pp_term_label(as.character(tbl$AEDECOD)),
-                   ""),
+    label = ifelse(first_of_lane, pp_term_label(lane_lab), ""),
     stringsAsFactors = FALSE
   )
   pp_static_gantt(bars, time_range, ref_ms, mode)
@@ -299,12 +302,6 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   if (!use_day && !"ASTDT" %in% colnames(tbl)) return(NULL)
   tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
-
-  med <- if ("CMDECOD" %in% colnames(tbl)) as.character(tbl$CMDECOD) else
-    rep(NA_character_, nrow(tbl))
-  rep_name <- as.character(tbl$CMTRT)
-  blank <- is.na(med) | !nzchar(trimws(med))
-  med[blank] <- rep_name[blank]
 
   has_end <- if (use_day) "AENDY" %in% colnames(tbl) else
     "AENDT" %in% colnames(tbl)
@@ -331,12 +328,15 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   keep <- pp_gantt_in_window(spans[1L, ], spans[2L, ], time_range,
                              ref_ms, mode)
   tbl <- tbl[keep, , drop = FALSE]
-  med <- med[keep]
   spans <- spans[, keep, drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
 
-  meds <- sort(unique(med))
-  lane <- match(med, meds) - 1L
+  # Lane granularity follows the panel's own "Lanes" setting (see
+  # pp-lanes.R): the printed twin groups its rows the way the screen does.
+  lane_col <- pp_lane_column(tbl, PP_CM_LANES, settings$lanes, "CMDECOD")
+  lane_lab <- pp_lane_values(tbl, lane_col %||% "CMTRT", "CMTRT")
+  meds <- sort(unique(lane_lab))
+  lane <- match(lane_lab, meds) - 1L
   first_of_lane <- !duplicated(lane[order(lane, spans[1L, ])])[
     order(order(lane, spans[1L, ]))
   ]
@@ -362,7 +362,7 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
     ongoing = vapply(seq_len(nrow(tbl)), function(i) {
       !(has_end && !is.na(end_at(i)))
     }, logical(1L)),
-    label = ifelse(first_of_lane, pp_term_label(med), ""),
+    label = ifelse(first_of_lane, pp_term_label(lane_lab), ""),
     stringsAsFactors = FALSE
   )
   pp_static_gantt(bars, time_range, ref_ms, mode)

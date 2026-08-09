@@ -48,7 +48,12 @@
 #'   `"severity"` / `"indication"` is used and the board scale map resolves.
 #'   This replaces any viz-id wiring in the block.
 #' @param controls Optional named list of per-viz UI controls (passed through
-#'   unchanged to the existing controls toolbar).
+#'   unchanged to the existing controls toolbar). A `"radio"` control may set
+#'   `choices_present = TRUE`, which means its choice values are column
+#'   names: the toolbar offers only the ones the data carries, and draws no
+#'   control at all when that leaves fewer than two. That is how the gantts
+#'   declare a full coding ladder (see [pp_lane_control()]) without
+#'   promising every study a switch.
 #' @param legend_ui Optional `function(dm_obj, settings)` returning a tag (or
 #'   `NULL`) for the panel header, e.g. a severity legend. Declared here so
 #'   the block needs no per-viz special cases.

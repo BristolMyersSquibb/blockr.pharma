@@ -933,6 +933,20 @@ new_patient_profile_block <- function(selected = NULL,
               } else if (ctrl$type == "radio") {
                 choices <- ctrl$choices
                 if (is.null(choices)) choices <- character(0)
+                # `choices_present`: the choice VALUES are column names, so
+                # a level the study does not carry is not a choice. Dropping
+                # to one leaves nothing to choose and the control is not
+                # drawn at all -- the gantts declare the full coding ladder
+                # and most studies carry two rungs of it.
+                if (isTRUE(ctrl$choices_present)) {
+                  choices <- choices[
+                    choices %in% pp_filled_columns(dm_obj, viz$tables)
+                  ]
+                  if (length(choices) < 2L) return(NULL)
+                  if (is.null(cur_val) || !cur_val %in% choices) {
+                    cur_val <- choices[1]
+                  }
+                }
                 if (is.null(cur_val)) cur_val <- choices[1]
                 choice_names <- names(choices) %||% choices
 

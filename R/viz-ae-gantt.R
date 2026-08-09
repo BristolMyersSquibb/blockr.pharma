@@ -16,9 +16,16 @@
 # Data requirements (declared via new_pp_viz()):
 #   adae:
 #     required — AEDECOD, and a time source: ASTDT or ASTDY
-#     optional — AENDT, AENDY, AEBODSYS, AESER, AEOUT
+#     optional — AENDT, AENDY, AETERM, AEHLT, AEBODSYS, AESER, AEOUT
 #     roles    — severity (the resolved column arrives as
 #                settings$roles$severity)
+#
+# Which coding level the lanes come from is the user's ("Lanes" radio,
+# settings$lanes) whenever the study carries more than one: preferred term
+# by default, body system when the point is the pattern rather than the
+# event. See pp-lanes.R. The tooltip always names the preferred term, at
+# every lane setting -- the lane says how the bars are grouped, not what
+# the bar under the cursor is.
 #
 # All names are canonical: pp_normalize_dm() has reconciled the study's
 # spellings (ASTDTC, AESTDTC, AESOC, ...) dm-wide before anything renders.
@@ -41,8 +48,10 @@ ae_gantt_viz <- new_pp_viz(
   requires = list(adae = "AEDECOD"),
   requires_any = list(adae = list(c("ASTDT", "ASTDY"))),
   optional = list(adae = c(
-    "ASTDT", "AENDT", "ASTDY", "AENDY", "AEBODSYS", "AESER", "AEOUT"
+    "ASTDT", "AENDT", "ASTDY", "AENDY", "AETERM", "AEHLT", "AEBODSYS",
+    "AESER", "AEOUT"
   )),
+  controls = pp_lane_control(PP_AE_LANES, default = "AEDECOD"),
   uses = "severity",
   legend_ui = function(dm_obj, settings) {
     pp_sev_legend_ui(dm_obj, settings$sev_colors, settings$roles$severity)
@@ -140,12 +149,19 @@ ae_gantt_viz <- new_pp_viz(
       if (nrow(tbl) == 0) {
         return(pp_empty_chart("No adverse events in this time range"))
       }
-      terms <- sort(unique(as.character(tbl$AEDECOD)))
+      # Lanes come from whichever coding level the user is reading at; the
+      # preferred term unless the header radio says otherwise, and a level
+      # this study does not carry falls back rather than erroring (the
+      # control that could have produced it is data-conditional, so a saved
+      # board can name a level the current study lacks).
+      lane_col <- pp_lane_column(tbl, PP_AE_LANES, settings$lanes, "AEDECOD")
+      tbl$..lane <- pp_lane_values(tbl, lane_col %||% "AEDECOD", "AEDECOD")
+      terms <- sort(unique(tbl$..lane))
 
       # One label per lane, drawn on the lane's earliest bar: the lane *is*
-      # the term, so repeating it on every bar of the lane is noise.
+      # the grouping, so repeating it on every bar of the lane is noise.
       lane_first <- vapply(terms, function(term) {
-        rows <- which(as.character(tbl$AEDECOD) == term)
+        rows <- which(tbl$..lane == term)
         starts <- vapply(rows, function(i) {
           as.numeric(if (use_day) tbl$ASTDY[i] else tbl$ASTDT[i])
         }, numeric(1L))
@@ -157,7 +173,7 @@ ae_gantt_viz <- new_pp_viz(
         s <- span[1L]
         e <- span[2L]
         term <- as.character(tbl$AEDECOD[i])
-        lane <- match(term, terms) - 1L
+        lane <- match(tbl$..lane[i], terms) - 1L
         sev <- if (has_sev) as.character(tbl[[sev_col]][i]) else "UNKNOWN"
         bodsys <- if (has_bodsys) as.character(tbl$AEBODSYS[i]) else ""
         serious <- if (has_serious) as.character(tbl$AESER[i]) else ""
@@ -175,7 +191,7 @@ ae_gantt_viz <- new_pp_viz(
 
         col <- sev_color(sev)
         is_ser <- identical(toupper(serious), "Y")
-        lab <- if (i %in% lane_first) pp_term_label(term) else ""
+        lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
                        s_lab, e_lab, col, lab, is_ongoing(i)),
