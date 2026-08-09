@@ -22,8 +22,9 @@
 # ggplot2 aes() columns -- quasiquotation R CMD check cannot see through.
 utils::globalVariables(c(
   "..x", "..panel", "..series", "..total", "..derived", "..pt_col",
-  "AVAL", "xmin", "xmax", "ymin", "ymax", "y", "lo", "hi",
-  "outlined", "position", "value", "visit", "param", "item", "x"
+  ".data", "AVAL", "xmin", "xmax", "ymin", "ymax", "y", "lo", "hi",
+  "outlined", "position", "value", "visit", "param", "item", "x",
+  "color", "fill", "label", "lwd", "series"
 ))
 
 #' Assert ggplot2 (and stats helpers) are available for static rendering
@@ -201,7 +202,7 @@ pp_static_gantt <- function(bars, time_range, ref_ms = NA_real_,
     # edge and says so, same as the interactive bars.
     p <- p + ggplot2::geom_text(
       data = ongoing_df,
-      ggplot2::aes(x = xmax, y = y - bar_c, label = "›",
+      ggplot2::aes(x = xmax, y = y - bar_c, label = "\u203a",
                    color = I(fill)),
       hjust = 0.1, size = 3.6, fontface = "bold"
     )
@@ -405,7 +406,7 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
     full <- as.character(tbl$PARAM[tbl$PARAMCD == p][1])
     if (is.na(full) || !nzchar(full)) return(p)
     if (nchar(full) > 40) full <- paste0(substr(full, 1, 37), "...")
-    paste0(p, " — ", full)
+    paste0(p, " \u2014 ", full)
   }, character(1L))
 
   tbl$..x <- pp_xval(tbl$ADT, ref_ms, mode)

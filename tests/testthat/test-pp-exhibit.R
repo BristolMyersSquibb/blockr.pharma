@@ -341,6 +341,8 @@ test_that("patient_info exports as a table exhibit", {
 
   # The container method routes the data frame through blockr.viz's
   # DEFAULT pptx method: a native table slide, beside the plot slide.
+  # blockr.viz builds that table with flextable, which it only suggests.
+  skip_if_not_installed("flextable")
   doc <- officer::read_pptx()
   doc <- blockr.viz::pptx_add_exhibit(doc, ex, title = "Profile")
   expect_identical(length(doc), 2L)
