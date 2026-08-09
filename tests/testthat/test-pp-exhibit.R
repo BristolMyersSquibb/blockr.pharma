@@ -184,7 +184,7 @@ test_that("a cohort deck gets patient-per-slide titles", {
   doc <- officer::read_pptx()
   doc <- blockr.viz::pptx_add_exhibit(doc, ex, title = "Profile")
   expect_identical(length(doc), 2L)
-  titles <- vapply(seq_len(length(doc)), function(i) {
+  titles <- vapply(seq_along(doc), function(i) {
     s <- officer::slide_summary(doc, i)
     paste(s$text[!is.na(s$text)], collapse = " ")
   }, character(1L))
@@ -341,6 +341,8 @@ test_that("patient_info exports as a table exhibit", {
 
   # The container method routes the data frame through blockr.viz's
   # DEFAULT pptx method: a native table slide, beside the plot slide.
+  # blockr.viz builds that table with flextable, which it only suggests.
+  skip_if_not_installed("flextable")
   doc <- officer::read_pptx()
   doc <- blockr.viz::pptx_add_exhibit(doc, ex, title = "Profile")
   expect_identical(length(doc), 2L)

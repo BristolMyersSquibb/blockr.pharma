@@ -28,12 +28,15 @@ Imports:
 Suggests:
     blockr.ai,
     blockr.viz,
+    flextable,
     ggplot2,
     officer,
+    openxlsx,
     pharmaverseadam,
     pharmaversesdtm,
     safetyData,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 Remotes:
     BristolMyersSquibb/blockr.ai,
     BristolMyersSquibb/blockr.core,
