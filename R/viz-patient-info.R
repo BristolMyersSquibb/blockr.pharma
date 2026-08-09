@@ -40,11 +40,14 @@ pp_patient_info_fields <- function(dm_obj, settings = list()) {
   if (is.null(adsl) || nrow(adsl) == 0L) return(empty)
   sl <- adsl[1L, , drop = FALSE]
 
-  fields <- list()
+  # add() collects from inside a closure, so the accumulator lives in its own
+  # environment instead of reaching up the call stack with `<<-`.
+  acc <- new.env(parent = emptyenv())
+  acc$fields <- list()
   add <- function(label, value) {
     value <- trimws(as.character(value))
     if (length(value) != 1L || is.na(value) || !nzchar(value)) return()
-    fields[[length(fields) + 1L]] <<- list(label, value)
+    acc$fields[[length(acc$fields) + 1L]] <- list(label, value)
   }
   chr <- function(col) {
     if (!col %in% colnames(sl)) return(NA_character_)
@@ -113,8 +116,8 @@ pp_patient_info_fields <- function(dm_obj, settings = list()) {
   if (!is.na(b)) add("BMI (baseline)", b)
 
   data.frame(
-    Field = vapply(fields, `[[`, character(1L), 1L),
-    Value = vapply(fields, `[[`, character(1L), 2L),
+    Field = vapply(acc$fields, `[[`, character(1L), 1L),
+    Value = vapply(acc$fields, `[[`, character(1L), 2L),
     stringsAsFactors = FALSE
   )
 }

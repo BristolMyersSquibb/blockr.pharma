@@ -184,7 +184,7 @@ test_that("a cohort deck gets patient-per-slide titles", {
   doc <- officer::read_pptx()
   doc <- blockr.viz::pptx_add_exhibit(doc, ex, title = "Profile")
   expect_identical(length(doc), 2L)
-  titles <- vapply(seq_len(length(doc)), function(i) {
+  titles <- vapply(seq_along(doc), function(i) {
     s <- officer::slide_summary(doc, i)
     paste(s$text[!is.na(s$text)], collapse = " ")
   }, character(1L))

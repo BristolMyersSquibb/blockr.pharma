@@ -805,10 +805,13 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   clamp_lo <- function(x) if (is.na(b[1L])) x else pmax(x, b[1L])
   clamp_hi <- function(x) if (is.na(b[2L])) x else pmin(x, b[2L])
 
-  rects <- list()
+  # add_rect() collects from inside a closure, so the rect accumulator lives
+  # in its own environment instead of reaching up the call stack with `<<-`.
+  acc <- new.env(parent = emptyenv())
+  acc$rects <- list()
   texts <- list()
   add_rect <- function(xmin, xmax, y, half_h, fill, color, lwd = 0.4) {
-    rects[[length(rects) + 1L]] <<- data.frame(
+    acc$rects[[length(acc$rects) + 1L]] <- data.frame(
       xmin = clamp_lo(xmin), xmax = clamp_hi(xmax),
       ymin = y - half_h, ymax = y + half_h,
       fill = fill, color = color, lwd = lwd, stringsAsFactors = FALSE
@@ -925,7 +928,7 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     }
   }
 
-  rect_df <- do.call(rbind, rects)
+  rect_df <- do.call(rbind, acc$rects)
 
   # Points are clipped to the window explicitly, the way echarts clips them
   # silently: a milestone past the axis (RFENDT is not among the columns
