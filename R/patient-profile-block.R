@@ -930,18 +930,53 @@ new_patient_profile_block <- function(selected = NULL,
                     )
                   )
                 )
+              } else if (ctrl$type == "pill") {
+                # The house click-through pill: one button carrying the
+                # current value, cycling in place (blockr.docs
+                # design-system/components/blockr-row.md). Used here for an
+                # ordered ladder, so the cycle wraps coarse back to granular
+                # rather than dead-ending. See pp_lane_control().
+                choices <- ctrl$choices
+                if (is.null(choices)) choices <- character(0)
+                choices <- pp_ctrl_present_choices(
+                  choices, ctrl, dm_obj, viz$tables
+                )
+                # Fewer than two rungs is not a choice; draw nothing.
+                if (length(choices) < 2L) return(NULL)
+                if (is.null(cur_val) || !cur_val %in% choices) {
+                  cur_val <- choices[1]
+                }
+                choice_names <- unname(names(choices) %||% choices)
+                idx <- match(cur_val, choices)
+                nxt <- choice_names[idx %% length(choices) + 1L]
+
+                shiny::div(class = "pp-ctrl-group",
+                  shiny::span(class = "pp-ctrl-label", ctrl$label),
+                  shiny::tags$button(
+                    class = "pp-ctrl-pill",
+                    `data-viz-id` = viz_id,
+                    `data-param` = param,
+                    `data-values` = jsonlite::toJSON(unname(choices)),
+                    `data-labels` = jsonlite::toJSON(choice_names),
+                    `data-index` = idx - 1L,
+                    # The pill names the state, so the tooltip is where the
+                    # action goes: what one click will make it.
+                    title = paste0("Switch to ", nxt),
+                    # Reserve the widest rung: the click target must not
+                    # move out from under the cursor as the label cycles.
+                    style = paste0(
+                      "min-width:", max(nchar(choice_names)), "ch"
+                    ),
+                    choice_names[idx]
+                  )
+                )
               } else if (ctrl$type == "radio") {
                 choices <- ctrl$choices
                 if (is.null(choices)) choices <- character(0)
-                # `choices_present`: the choice VALUES are column names, so
-                # a level the study does not carry is not a choice. Dropping
-                # to one leaves nothing to choose and the control is not
-                # drawn at all -- the gantts declare the full coding ladder
-                # and most studies carry two rungs of it.
+                choices <- pp_ctrl_present_choices(
+                  choices, ctrl, dm_obj, viz$tables
+                )
                 if (isTRUE(ctrl$choices_present)) {
-                  choices <- choices[
-                    choices %in% pp_filled_columns(dm_obj, viz$tables)
-                  ]
                   if (length(choices) < 2L) return(NULL)
                   if (is.null(cur_val) || !cur_val %in% choices) {
                     cur_val <- choices[1]
@@ -2372,6 +2407,29 @@ new_patient_profile_block <- function(selected = NULL,
               var isOn = $(this).hasClass('is-on');
               Shiny.setInputValue(ctrlInputId, {
                 viz_id: vizId, param: param, value: isOn
+              }, {priority: 'event'});
+            });
+
+            // Click-through pill: advance to the next value, wrapping. The
+            // index lives in the attribute, not in jQuery's data cache: the
+            // cache is populated once per element and would hand back the
+            // boot value on every later click.
+            $(document).on('click', '#' + layoutId + ' .pp-ctrl-pill', function(e) {
+              e.stopPropagation();
+              var $pill = $(this);
+              var values = $pill.data('values');
+              var labels = $pill.data('labels');
+              if (!values || !values.length) return;
+              var idx = (parseInt($pill.attr('data-index'), 10) + 1) %
+                values.length;
+              $pill.attr('data-index', idx);
+              $pill.text(labels[idx]);
+              $pill.attr('title',
+                'Switch to ' + labels[(idx + 1) % values.length]);
+              Shiny.setInputValue(ctrlInputId, {
+                viz_id: $pill.data('viz-id'),
+                param: $pill.data('param'),
+                value: values[idx]
               }, {priority: 'event'});
             });
 

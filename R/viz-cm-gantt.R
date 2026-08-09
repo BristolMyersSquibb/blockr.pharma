@@ -14,7 +14,7 @@
 #     optional — CMDECOD (coded name, preferred for lanes), AENDT, AENDY,
 #                CMDOSE, CMDOSU, CMDOSFRQ, CMROUTE, CMCLAS
 #
-# Which coding level the lanes come from is the user's ("Lanes" radio,
+# Which coding level the lanes come from is the user's ("Lanes" pill,
 # settings$lanes) whenever the study carries more than one: the coded name
 # by default, the drug class when the point is what the patient was on
 # rather than which product. See pp-lanes.R. The tooltip always names the
@@ -85,7 +85,7 @@ cm_gantt_viz <- new_pp_viz(
     tbl$..med <- pp_lane_values(tbl, name_col, "CMTRT")
 
     # Lanes come from whichever coding level the user is reading at; the
-    # coded name unless the header radio says otherwise, and a level this
+    # coded name unless the header pill says otherwise, and a level this
     # study does not carry falls back rather than erroring (the control that
     # could have produced it is data-conditional, so a saved board can name
     # a level the current study lacks).

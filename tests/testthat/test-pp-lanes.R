@@ -151,6 +151,10 @@ test_that("the printed twins group the way the screen does", {
 })
 
 test_that("both gantts declare the lane control", {
+  # The house click-through pill: four rungs of prose do not fit a
+  # panel header that also carries the title, the legend and the actions.
+  expect_equal(ae_gantt_viz$controls$lanes$type, "pill")
+  expect_equal(cm_gantt_viz$controls$lanes$type, "pill")
   expect_equal(ae_gantt_viz$controls$lanes$default, "AEDECOD")
   expect_true(isTRUE(ae_gantt_viz$controls$lanes$choices_present))
   expect_equal(cm_gantt_viz$controls$lanes$default, "CMDECOD")

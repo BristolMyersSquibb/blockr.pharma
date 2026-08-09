@@ -909,6 +909,33 @@
   font-weight: 500;
 }
 
+/* Click-through pill (cycles a value in place; see blockr.docs
+   design-system/components/blockr-row.md). Geometry matches the chips and
+   radios beside it in this toolbar, tinted like an active radio because the
+   pill always shows a chosen state. */
+.pp-ctrl-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.pp-ctrl-pill:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
 /* --- Empty state --------------------------- */
 .pp-empty-state {
   display: flex;

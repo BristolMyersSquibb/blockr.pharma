@@ -127,10 +127,41 @@ pp_lane_values <- function(tbl, col, fallback) {
   val
 }
 
-#' The "Lanes" radio control for a gantt viz
+#' Drop the choices this study does not carry
+#'
+#' For a control declaring `choices_present`, the choice VALUES are column
+#' names, so a level the data does not carry is not a choice. Shared by the
+#' toolbar's radio and pill branches, which both then draw nothing at all
+#' when fewer than two survive.
+#'
+#' @param choices The control's declared choices.
+#' @param ctrl The control declaration.
+#' @param dm_obj A normalized `dm`.
+#' @param tables The viz's declared tables.
+#' @return `choices`, filtered.
+#' @noRd
+pp_ctrl_present_choices <- function(choices, ctrl, dm_obj, tables) {
+  if (!isTRUE(ctrl$choices_present)) return(choices)
+  choices[choices %in% pp_filled_columns(dm_obj, tables)]
+}
+
+#' The "Lanes" pill control for a gantt viz
 #'
 #' Declared identically by both gantts; the control UI drops the choices the
 #' study does not carry and the whole control when fewer than two survive.
+#'
+#' A click-through pill, the house component for cycling a value in place
+#' (blockr.docs design-system/components/blockr-row.md, "Pills"), rather than
+#' a row of radios: four rungs of prose (`Reported | Preferred term |
+#' High-level term | Body system`) crowd a panel header that also carries the
+#' title, the severity legend and the panel actions, in a column the profile
+#' does not get to widen. The pill obeys the label rule the same doc sets --
+#' it names the current setting ("Body system"), never the mechanism -- and
+#' the group label names the dimension.
+#'
+#' The cost is that the other rungs are invisible until you walk them, and
+#' that walking is one-directional. That is the right trade for a control
+#' most sessions never touch.
 #'
 #' @param ladder Named character vector of levels, granular first.
 #' @param default The rung selected until the user picks another.
@@ -138,7 +169,7 @@ pp_lane_values <- function(tbl, col, fallback) {
 #' @noRd
 pp_lane_control <- function(ladder, default) {
   list(lanes = list(
-    type = "radio",
+    type = "pill",
     label = "Lanes",
     default = default,
     choices = ladder,

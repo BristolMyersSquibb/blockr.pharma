@@ -20,7 +20,7 @@
 #     roles    — severity (the resolved column arrives as
 #                settings$roles$severity)
 #
-# Which coding level the lanes come from is the user's ("Lanes" radio,
+# Which coding level the lanes come from is the user's ("Lanes" pill,
 # settings$lanes) whenever the study carries more than one: preferred term
 # by default, body system when the point is the pattern rather than the
 # event. See pp-lanes.R. The tooltip always names the preferred term, at
@@ -150,7 +150,7 @@ ae_gantt_viz <- new_pp_viz(
         return(pp_empty_chart("No adverse events in this time range"))
       }
       # Lanes come from whichever coding level the user is reading at; the
-      # preferred term unless the header radio says otherwise, and a level
+      # preferred term unless the header pill says otherwise, and a level
       # this study does not carry falls back rather than erroring (the
       # control that could have produced it is data-conditional, so a saved
       # board can name a level the current study lacks).
