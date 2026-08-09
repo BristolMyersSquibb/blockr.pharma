@@ -35,6 +35,10 @@ pp_port <- local({
 
 options(
   shiny.port = pp_port,
+  # The devcontainer forwards the port to the host, which reaches nothing at
+  # all when the app binds the container's loopback (the sibling dev scripts
+  # all bind 0.0.0.0 for this reason).
+  shiny.host = "0.0.0.0",
   "g6R.preserve_elements_position" = TRUE,
   # Match prod (blockr.sandbox/app.R): construct a block only once it is
   # needed (on screen, or on a view switch). Unset, core defaults to 50ms and
@@ -50,7 +54,10 @@ serve(
     blocks = c(
       data = new_dm_example_block(dataset = "pharmaverseadam"),
       profile = new_patient_profile_block(
-        selected = c("patient_overview", "ae_gantt", "cm_gantt")
+        selected = c("patient_overview", "ae_gantt", "cm_gantt"),
+        # Land on a patient rather than the "no patient selected"
+        # placeholder: the panels are the point of this demo.
+        subject = "01-701-1015"
       )
     ),
     links = list(
