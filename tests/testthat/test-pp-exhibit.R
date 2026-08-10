@@ -386,3 +386,25 @@ test_that("vizs without a static twin have no exhibit field set", {
   expect_true(is.function(vizs[["ortho_bp"]]$exhibit))
   expect_true(is.function(vizs[["questionnaire_heatmap"]]$exhibit))
 })
+
+test_that("a static twin declares what it was authored at, and its chrome", {
+  ex <- suppressMessages(pp_patient_exhibit(
+    pp_ex_dm(), selected = c("ae_gantt", "patient_overview")
+  ))
+
+  for (p in ex$patients[["S1"]]$plots) {
+    # The canvas' 11px, in points: blockr.viz scales the whole design by the
+    # ratio the target wants rather than each twin guessing at a slide size.
+    expect_equal(attr(p, "gg_base_pt"), 8.25, tolerance = 1e-6)
+    # And the part of the box that is axis / legend rather than lanes, so
+    # bigger type on a slide does not come out of the lane heights.
+    expect_true(is.numeric(attr(p, "pptx_chrome")))
+    expect_gt(attr(p, "pptx_chrome"), 0)
+    expect_lt(attr(p, "pptx_chrome"), attr(p, "pptx_height"))
+  }
+
+  # The box is the deck's content width, not a narrower one the fit step
+  # would then stretch (and leave the type behind in).
+  expect_equal(attr(ex$patients[["S1"]]$plots[["ae_gantt"]], "pptx_width"),
+               11.9)
+})

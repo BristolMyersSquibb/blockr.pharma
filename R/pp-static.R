@@ -79,46 +79,80 @@ pp_static_x_scale <- function(time_range, ref_ms = NA_real_, mode = "date") {
   }
 }
 
+# The echarts panels draw in CSS pixels and ggplot in points: 1px = 0.75pt.
+# Every static twin authors at the size its interactive sibling uses -- 11px
+# tick labels, the same constant chart.js and blockr.viz's static_chart()
+# work from -- and declares that on the plot as `gg_base_pt`. A target
+# printing for a reader further away than a monitor then scales the whole
+# design by the ratio it wants (blockr.viz's gg_type_scale()), rather than
+# each twin guessing at a slide-sized number.
+PP_PX_PT <- 0.75
+
+#' @noRd
+pp_px_pt <- function(px) px * PP_PX_PT
+
 #' Shared theme: the static face of the panel styling (muted axis text,
 #' dashed hairline grid, no chart junk).
 #' @noRd
-pp_static_theme <- function(base_size = 10) {
+pp_static_theme <- function(base_size = pp_px_pt(11)) {
   ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(
       panel.grid.major = ggplot2::element_line(
         color = PP_SPLIT_LINE_COLOR, linewidth = 0.4, linetype = "dashed"
       ),
       panel.grid.minor = ggplot2::element_blank(),
+      # Tick labels, axis names and legend entries are all 11px on the
+      # canvas, so they are all `base_size` here.
       axis.text = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size * 0.85
+        color = PP_AXIS_LABEL_COLOR, size = base_size
       ),
       axis.title = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size * 0.85
+        color = PP_AXIS_LABEL_COLOR, size = base_size
       ),
       strip.text = ggplot2::element_text(
-        color = "#6b7280", size = base_size * 0.9, hjust = 0
+        color = "#6b7280", size = base_size, hjust = 0
       ),
       legend.position = "bottom",
       legend.text = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size * 0.85
+        color = PP_AXIS_LABEL_COLOR, size = base_size
       ),
       legend.title = ggplot2::element_blank(),
       plot.title = ggplot2::element_text(
-        size = base_size * 1.1, face = "plain", color = "#374151"
+        size = pp_px_pt(12), face = "plain", color = "#374151"
       ),
       plot.background = ggplot2::element_rect(fill = "white", color = NA)
     )
 }
 
-#' Stamp the slide-box size onto a plot, in the attribute contract
-#' blockr.viz's gg exhibit methods read (`pptx_width` / `pptx_height`).
-#' Heights are derived from the interactive panels' pixel heights at 96
-#' px/in, so a ten-lane gantt gets a taller box than a three-lane one and
-#' the deck's fit-to-slide scaling preserves that aspect.
+#' The width a static twin is drawn at. The deck's usable content width, so
+#' the picture is placed at roughly the size it asks for instead of being
+#' stretched to fit: a box that lies about its width hands the fit step a
+#' scale factor, and a plot scaled by its aspect ratio is a plot whose lane
+#' heights and type weight change from slide to slide.
 #' @noRd
-pp_static_sized <- function(p, height_px, width_in = 9) {
+pp_static_width <- function() {
+  w <- getOption("blockr.viz.ft_fit_width", 11.9)
+  if (!is.numeric(w) || length(w) != 1L || !is.finite(w) || w <= 0) 11.9 else w
+}
+
+#' Stamp the slide-box size onto a plot, in the attribute contract
+#' blockr.viz's gg exhibit methods read (`pptx_width` / `pptx_height`),
+#' plus the type scale the plot was authored at (`gg_base_pt`).
+#' Heights are derived from the interactive panels' pixel heights at 96
+#' px/in, so a ten-lane gantt gets a taller box than a three-lane one.
+#'
+#' `chrome_px` is the part of that height which is axis, legend and title
+#' rather than lanes or marks -- the panels' own top / bottom constants. A
+#' target printing at a bigger type scale buys that part more room instead of
+#' taking it out of the lanes (blockr.viz's `pptx_chrome` contract).
+#' @noRd
+pp_static_sized <- function(p, height_px, chrome_px = 0,
+                            width_in = pp_static_width()) {
+  h <- max(1.5, height_px / 96)
   attr(p, "pptx_width") <- width_in
-  attr(p, "pptx_height") <- max(1.5, height_px / 96)
+  attr(p, "pptx_height") <- h
+  attr(p, "pptx_chrome") <- min(max(0, chrome_px) / 96, h)
+  attr(p, "gg_base_pt") <- pp_px_pt(11)
   p
 }
 
@@ -208,7 +242,8 @@ pp_static_gantt <- function(bars, time_range, ref_ms = NA_real_,
     )
   }
 
-  pp_static_sized(p, pp_gantt_height(n_lanes))
+  pp_static_sized(p, pp_gantt_height(n_lanes),
+                  chrome_px = PP_GANTT_TOP + PP_GANTT_BOTTOM)
 }
 
 #' Static twin of the AE gantt render
@@ -467,7 +502,7 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
     pp_static_theme() +
     ggplot2::theme(legend.position = "none")
 
-  pp_static_sized(p, 40 + length(params) * 190)
+  pp_static_sized(p, 40 + length(params) * 190, chrome_px = 40)
 }
 
 #' Static twin of the ADAS-Cog trajectory render
@@ -537,7 +572,7 @@ pp_static_adas <- function(dm_obj, time_range, settings = list(),
       legend.position = if (length(params) > 1) "bottom" else "none"
     )
 
-  pp_static_sized(p, if (length(params) > 1) 390 else 350)
+  pp_static_sized(p, if (length(params) > 1) 390 else 350, chrome_px = 90)
 }
 
 # ---------------------------------------------------------------------------
@@ -641,7 +676,7 @@ pp_static_ortho_bp <- function(dm_obj, time_range, settings = list(),
     ggplot2::labs(x = NULL, y = "mmHg") +
     pp_static_theme()
 
-  pp_static_sized(p, 340)
+  pp_static_sized(p, 340, chrome_px = 90)
 }
 
 # ---------------------------------------------------------------------------
@@ -726,7 +761,7 @@ pp_static_heatmap <- function(dm_obj, time_range, settings = list(),
       )
     )
 
-  pp_static_sized(p, 110 + length(params) * 28)
+  pp_static_sized(p, 110 + length(params) * 28, chrome_px = 110)
 }
 
 # ---------------------------------------------------------------------------
@@ -1029,5 +1064,5 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   }
 
   lane_px <- 40 + min(max(0L, length(ex_drugs) - 2L), 3L) * 10
-  pp_static_sized(p, 50 + length(lanes) * lane_px + 60)
+  pp_static_sized(p, 50 + length(lanes) * lane_px + 60, chrome_px = 110)
 }
