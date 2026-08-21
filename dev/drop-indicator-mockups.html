@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patient Profile — Drop Indicator Proposals</title>
+<style>
+  :root {
+    --ink: #111827;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --line: #e5e7eb;
+    --bg: #f9fafb;
+    --accent: #3b82f6;
+    --accent-deep: #1d4ed8;
+    --accent-soft: rgba(59,130,246,0.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .subtitle { color: var(--muted); margin: 0 0 10px; max-width: 74ch; }
+  .howto {
+    display: inline-block; margin: 0 0 30px; padding: 8px 14px;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    font-size: 13.5px; color: #1e40af;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px 26px; }
+  .card-note h2 { font-size: 17px; margin: 0 0 2px; display: flex; align-items: baseline; gap: 9px; }
+  .card-note h2 .tag {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.4px;
+    padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  }
+  .tag-now  { background: #f3f4f6; color: #6b7280; }
+  .tag-min  { background: #d1fae5; color: #065f46; }
+  .tag-bold { background: #fef3c7; color: #92400e; }
+  .lead { color: var(--muted); margin: 0 0 12px; font-size: 13.5px; }
+  .lead b { color: var(--ink); font-weight: 600; }
+  .verdict { font-size: 12.5px; color: var(--faint); margin: 10px 0 0; }
+
+  /* ---- the sidebar, at the real geometry ---- */
+  .frame {
+    width: 232px; background: #fff; border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px 8px 10px; font-size: 14px;
+  }
+  .sect-head {
+    font-size: 11px; font-weight: 500; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 4px 6px;
+  }
+  .hint { font-size: 10px; color: #d1d5db; padding: 2px 4px 6px; letter-spacing: 0.3px; }
+  .list { position: relative; --gap: 2px; }
+
+  .pp-card {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; margin-bottom: var(--gap);
+    border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--accent-soft); cursor: grab; user-select: none;
+    transition: border-color 150ms ease, opacity 150ms ease;
+  }
+  .pp-card .grip { color: #d1d5db; font-size: 14px; width: 12px; text-align: center; }
+  .pp-card .chip {
+    width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 12px;
+  }
+  .pp-card .title {
+    flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pp-card .check {
+    width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+    color: #fff; font-size: 10px; display: grid; place-items: center; flex-shrink: 0;
+  }
+  .pp-card.dragging { opacity: 0.4; cursor: grabbing; }
+
+  /* ---- the caret, shared skeleton ---- */
+  .caret {
+    position: absolute; left: 5px; right: 0; height: 2px; border-radius: 1px;
+    background: var(--accent); transform: translateY(-50%);
+    z-index: 5; pointer-events: none; display: none;
+  }
+  .list.armed .caret { display: block; }
+  .caret::before {
+    content: ""; position: absolute; left: -10px; top: 50%;
+    transform: translateY(-50%); width: 8px; height: 8px; border-radius: 50%;
+    border: 2px solid var(--accent); background: #fff; box-sizing: border-box;
+  }
+
+  /* ===== A — as shipped ===== */
+  /* nothing to add: --gap 2px, caret as above */
+
+  /* ===== B — reserved breathing room ===== */
+  .v-b .list { --gap: 6px; }
+
+  /* ===== C — quiet hairline, no notch ===== */
+  .v-c .caret { left: 34px; right: 4px; height: 2px; background: var(--accent-deep); }
+  .v-c .caret::before { display: none; }
+  .v-c .list { --gap: 6px; }
+
+  /* ===== D — the landing slot ===== */
+  .v-d .caret {
+    left: 0; right: 0; height: 34px; background: rgba(59,130,246,0.07);
+    border: 1px dashed var(--accent); border-radius: 6px;
+  }
+  .v-d .caret::before { display: none; }
+
+  /* ===== E — mute the field, one blue thing ===== */
+  .v-e .list.armed .pp-card { border-color: var(--line); background: #fff; }
+  .v-e .list.armed .pp-card .check { background: #d1d5db; }
+  .v-e .caret { background: var(--accent-deep); }
+  .v-e .caret::before { border-color: var(--accent-deep); }
+  .v-e .list { --gap: 6px; }
+
+  /* ===== E2 — mute the field, original spacing ===== */
+  .v-e2 .list.armed .pp-card { border-color: var(--line); background: #fff; }
+  .v-e2 .list.armed .pp-card .check { background: #d1d5db; }
+  .v-e2 .caret { background: var(--accent-deep); }
+  .v-e2 .caret::before { border-color: var(--accent-deep); }
+  /* --gap stays 2px: the list is untouched */
+
+  /* ===== F — a band, not a hairline ===== */
+  .v-f .list { --gap: 8px; }
+  .v-f .caret {
+    left: 0; right: 0; height: 8px; border-radius: 4px;
+    background: #dbeafe; box-shadow: inset 0 0 0 1px #bfdbfe;
+  }
+  .v-f .caret::before {
+    left: 3px; width: 6px; height: 6px; border-width: 2px;
+    border-color: var(--accent-deep); background: var(--accent-deep);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Patient Profile — where does the card land?</h1>
+  <p class="subtitle">
+    Six treatments of the reorder drop indicator for the SELECTED list, at the real
+    sidebar geometry: 232px wide, 34px cards, 1px border that is <em>blue while
+    selected</em> — which is the crux, because the indicator is blue too.
+  </p>
+  <p class="howto">
+    Hover the <b>upper or lower half</b> of any card to arm that gap. No dragging needed.
+  </p>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const VARIANTS = [
+  { key: 'a', cls: '', name: 'A · As shipped', tag: 'now', tagCls: 'tag-now',
+    lead: 'Hairline + notch, in the 2px gap the list already had.',
+    verdict: 'The line very nearly touches both card borders. In a 2px gap there is no clearance to be had, and the blue caret sits between two blue borders.' },
+  { key: 'b', cls: 'v-b', name: 'B · Breathing room', tag: 'smallest change', tagCls: 'tag-min',
+    lead: 'Identical caret; the list reserves a <b>6px</b> gap permanently.',
+    verdict: 'Your "extra px above and below". The space is always there, so nothing moves when the drag starts. Costs ~4px per selected card.' },
+  { key: 'c', cls: 'v-c', name: 'C · Quiet hairline', tag: 'smallest change', tagCls: 'tag-min',
+    lead: 'No notch. The line is inset to the <b>title column</b> and darkened.',
+    verdict: 'Nothing to jump or collide, and the inset makes it read as a gap rather than a card edge. Loses the caret-ness the notch gave it.' },
+  { key: 'd', cls: 'v-d', name: 'D · The landing slot', tag: 'boldest', tagCls: 'tag-bold',
+    lead: 'No line at all: the gap shows an empty <b>slot the size of the card</b>.',
+    verdict: 'Unambiguous — you see the destination, not a hint about it. But the layout moves while you aim, which the house rule forbids.' },
+  { key: 'e', cls: 'v-e', name: 'E · Mute the field', tag: 'boldest', tagCls: 'tag-bold',
+    lead: 'While dragging, card borders drop to grey so the caret is the <b>only blue thing</b>.',
+    verdict: 'Attacks the actual problem: the caret is not weak, it is camouflaged. Works with any of the other geometries.' },
+  { key: 'e2', cls: 'v-e2', name: 'E\u2082 · Mute the field, original spacing', tag: 'no space cost', tagCls: 'tag-min',
+    lead: 'Exactly E, but the list keeps its <b>untouched 2px</b> gap.',
+    verdict: 'The test of E\u2019s premise: if the caret was camouflaged rather than cramped, removing the camouflage should be enough on its own — and no space is spent.' },
+  { key: 'f', cls: 'v-f', name: 'F · A band, not a line', tag: '', tagCls: '',
+    lead: 'The gap fills with a soft 8px accent band carrying a solid dot.',
+    verdict: 'Reads as a zone rather than a hairline, so it never looks like a border. Heavier; the 8px gap is the most space of the six.' },
+];
+
+const CARDS = [
+  { icon: '💊', bg: '#d1fae5', title: 'Patient Overview' },
+  { icon: '⚠️', bg: '#ede9fe', title: 'Adverse Events' },
+  { icon: '💊', bg: '#cffafe', title: 'Concomitant Medic…' },
+  { icon: '🧪', bg: '#fef3c7', title: 'Chemistry' },
+];
+
+const grid = document.getElementById('grid');
+VARIANTS.forEach(v => {
+  const cards = CARDS.map((c, i) => `
+    <div class="pp-card${i === 2 ? ' dragging' : ''}">
+      <span class="grip">≡</span>
+      <span class="chip" style="background:${c.bg}">${c.icon}</span>
+      <span class="title">${c.title}</span>
+      <span class="check">✓</span>
+    </div>`).join('');
+  grid.insertAdjacentHTML('beforeend', `
+    <div class="card-note ${v.cls}">
+      <h2>${v.name}${v.tag ? `<span class="tag ${v.tagCls}">${v.tag}</span>` : ''}</h2>
+      <p class="lead">${v.lead}</p>
+      <div class="frame">
+        <div class="sect-head">Selected</div>
+        <div class="hint">Drag to reorder</div>
+        <div class="list" data-v="${v.key}">
+          <div class="caret"></div>
+          ${cards}
+        </div>
+      </div>
+      <p class="verdict">${v.verdict}</p>
+    </div>`);
+});
+
+// Arm the gap under the pointer — the same "which half of the card" rule the
+// real drag uses, and the same "midpoint between the two cards" placement.
+document.querySelectorAll('.list').forEach(list => {
+  const caret = list.querySelector('.caret');
+  list.addEventListener('mousemove', e => {
+    const card = e.target.closest('.pp-card');
+    if (!card) return;
+    const box = card.getBoundingClientRect();
+    const after = (e.clientY - box.top) > box.height / 2;
+    let sib = after ? card.nextElementSibling : card.previousElementSibling;
+    while (sib && !sib.classList.contains('pp-card')) {
+      sib = after ? sib.nextElementSibling : sib.previousElementSibling;
+    }
+    let y;
+    if (sib) {
+      const sb = sib.getBoundingClientRect();
+      y = after ? (box.bottom + sb.top) / 2 : (sb.bottom + box.top) / 2;
+    } else {
+      const edge = parseFloat(getComputedStyle(card).marginBottom) || 2;
+      y = after ? box.bottom + edge / 2 : box.top - edge / 2;
+    }
+    const lb = list.getBoundingClientRect();
+    caret.style.top = (y - lb.top - list.clientTop) + 'px';
+    list.classList.add('armed');
+  });
+  list.addEventListener('mouseleave', () => list.classList.remove('armed'));
+});
+</script>
+</body>
+</html>

@@ -2572,6 +2572,10 @@ new_patient_profile_block <- function(selected = NULL,
             $doc.on('dragstart', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
               dragActive = true;
               $(this).addClass('is-dragging');
+              // Mute the field for the duration of the drag, so the caret is
+              // the only accent-coloured thing in the list (see the drag
+              // states in patient-profile.css for why that is the fix).
+              $(this).closest('.pp-active-list').addClass('is-reordering');
               e.originalEvent.dataTransfer.effectAllowed = 'move';
               e.originalEvent.dataTransfer.setData('text/plain', $(this).data('viz-id'));
             });
@@ -2673,6 +2677,7 @@ new_patient_profile_block <- function(selected = NULL,
 
             $doc.on('dragend', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
               $(this).removeClass('is-dragging');
+              $(this).closest('.pp-active-list').removeClass('is-reordering');
               hideCaret(this);
               setTimeout(function() { dragActive = false; }, 0);
             });

@@ -437,7 +437,7 @@
   right: 0;
   height: 2px;
   border-radius: 1px;
-  background: var(--blockr-blue-500, #3b82f6);
+  background: var(--blockr-blue-700, #1d4ed8);
   /* `top` is the gap's centre, written by the drag; the line straddles it. */
   transform: translateY(-50%);
   z-index: 5;
@@ -458,13 +458,33 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 2px solid var(--blockr-blue-500, #3b82f6);
+  border: 2px solid var(--blockr-blue-700, #1d4ed8);
   background: #fff;
   box-sizing: border-box;
 }
 
 .pp-drop-caret.is-hidden {
   display: none;
+}
+
+/* While a reorder drag is live the cards drop their blue border to grey.
+   This is the whole fix, and it is not decoration: every card in SELECTED
+   carries a blue border, and the caret is blue, so the one thing that has
+   to be findable was the same colour as the entire field it had to be found
+   against. It was never that the line was too thin -- widening the gap to
+   give it room was tried and did not help, which is why the gap is
+   untouched here.
+
+   No selection state is lost meanwhile: everything in this list is selected
+   by definition, so the borders say nothing the section header does not
+   already say. */
+.pp-active-list.is-reordering .pp-card {
+  border-color: var(--blockr-grey-200, #e5e7eb);
+  background: #ffffff;
+}
+
+.pp-active-list.is-reordering .pp-card .pp-card-check {
+  background: var(--blockr-grey-300, #d1d5db);
 }
 
 /* --- Category Headers ---------------------- */
