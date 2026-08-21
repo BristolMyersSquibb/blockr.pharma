@@ -59,7 +59,14 @@ pp_static_x_scale <- function(time_range, ref_ms = NA_real_, mode = "date") {
   if (identical(mode, "rday") && !is.na(ref_ms)) {
     ggplot2::scale_x_continuous(
       limits = limits,
-      breaks = function(lims) pretty(lims, n = 6),
+      # The SAME ticks the interactive axis draws, D1 among them -- a printed
+      # twin whose axis disagreed with the panel it was printed from would be
+      # the export bug all over again. `pretty()` is the fallback for a range
+      # too degenerate to place ticks in.
+      breaks = function(lims) {
+        ticks <- pp_rday_ticks(lims[1], lims[2])
+        if (length(ticks)) ticks else pretty(lims, n = 6)
+      },
       # Same skip-zero rule as the interactive axis: the day before D1 is
       # D-1, matching ADaM's *DY convention.
       labels = function(v) {

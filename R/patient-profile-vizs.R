@@ -147,6 +147,59 @@ pp_gantt_in_window <- function(s, e, time_range, ref_ms = NA_real_,
   drawable & e >= b[1] & s <= b[2]
 }
 
+PP_RDAY_TARGET_TICKS <- 6
+
+#' The tick values for a relative-day axis, D1 always among them
+#'
+#' echarts picks its own ticks on a value axis, and its choice is a round
+#' number sequence -- 0, 50, 100 -- which never lands on day 1. That is the
+#' one day the axis exists to show: it is treatment start, the origin every
+#' other day is counted from. Worse, the tick it does draw there sits at x=0,
+#' which [pp_time_axis()]'s formatter correctly reads as the day BEFORE
+#' treatment start and labels `D-1` -- so the axis appeared to say that
+#' treatment started a day before it did.
+#'
+#' So the ticks are chosen here instead and handed to echarts through
+#' `customValues`: a round sequence over the window, plus the two end points,
+#' plus day 1. An auto tick falling too close to D1 is dropped rather than
+#' allowed to collide with it -- D1 wins, it is the anchor.
+#'
+#' @param lo,hi Axis end points, in relative days. Either may be absent or
+#'   unusable -- `time_range` is optional, and a render without one leaves the
+#'   axis unbounded for echarts to fit to the data.
+#' @return Numeric vector of tick positions, ascending, or `numeric(0)` when
+#'   there is no window to place ticks in. Callers must read the empty case as
+#'   "let echarts choose", never as "draw no ticks".
+#' @noRd
+pp_rday_ticks <- function(lo, hi) {
+  if (length(lo) != 1L || length(hi) != 1L ||
+      !is.finite(lo) || !is.finite(hi) || hi <= lo) {
+    return(numeric(0))
+  }
+  # A "nice" step: 1, 2, 5 x 10^k, whichever gets closest to the target
+  # number of intervals.
+  raw <- (hi - lo) / PP_RDAY_TARGET_TICKS
+  mag <- 10^floor(log10(raw))
+  # Closest rung of the 1-2-5 ladder, measured in log space: taking the
+  # first rung at or above the raw step instead always rounds up, and on a
+  # window that lands just past a rung that halves the tick count.
+  ladder <- c(1, 2, 5, 10)
+  step <- mag * ladder[which.min(abs(log(ladder) - log(raw / mag)))]
+  # A day is a whole number: on a window of a few days the nice-step ladder
+  # would otherwise offer halves, and the formatter would print "D0.5".
+  step <- max(1, round(step))
+
+  auto <- seq(ceiling(lo / step) * step, floor(hi / step) * step, by = step)
+  # Day 1 and the window's own ends are not negotiable; the round sequence
+  # in between is. Anything crowding one of the three gives way to it, so no
+  # label is ever drawn on top of another -- three fifths of a step apart
+  # is the closest two labels may sit.
+  gap <- 0.6 * step
+  keep <- c(1, lo, hi)
+  auto <- auto[vapply(auto, function(x) all(abs(x - keep) >= gap), logical(1L))]
+  sort(unique(c(lo, hi, auto, if (lo <= 1 && hi >= 1) 1)))
+}
+
 #' Build shared echarts x-axis config for date OR relative-day mode
 #'
 #' @param time_range Length-2 Date vector (min, max)
@@ -157,10 +210,12 @@ pp_gantt_in_window <- function(s, e, time_range, ref_ms = NA_real_,
 pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
                          show_labels = TRUE) {
   if (identical(mode, "rday") && !is.na(ref_ms)) {
-    list(
+    lo <- pp_xval(time_range[1], ref_ms, "rday")
+    hi <- pp_xval(time_range[2], ref_ms, "rday")
+    ax <- list(
       type = "value",
-      min = pp_xval(time_range[1], ref_ms, "rday"),
-      max = pp_xval(time_range[2], ref_ms, "rday"),
+      min = lo,
+      max = hi,
       # No axis name: every tick already reads "D50", and an "Day" pinned to
       # the axis end only crowded the last tick.
       axisLine = list(show = FALSE),
@@ -177,6 +232,16 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
         lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
       )
     )
+    # One gridline per label, D1's included -- the readability the clinicians
+    # asked for is the line under the tick they are reading. Only when there
+    # is a window to place them in: an empty `customValues` is echarts for
+    # "no ticks at all", so an unbounded axis must not carry the field.
+    ticks <- pp_rday_ticks(lo, hi)
+    if (length(ticks)) {
+      ax$axisLabel$customValues <- ticks
+      ax$splitLine$customValues <- ticks
+    }
+    ax
   } else {
     list(
       type = "time",
@@ -265,7 +330,11 @@ pp_compact_num_js <- function() {
 #' @noRd
 PP_AXIS_LABEL_COLOR <- "#666"
 PP_AXIS_LINE_COLOR <- "#ccc"
-PP_SPLIT_LINE_COLOR <- "#f3f4f6"
+# Gridlines. #f3f4f6 on the panel's near-white background was a line only in
+# principle -- the clinicians read the charts as having none and asked for
+# them. One step darker is still quieter than the axis labels it sits under,
+# so the data stays the loudest thing in the panel.
+PP_SPLIT_LINE_COLOR <- "#e5e7eb"
 
 #' Lane geometry for the patient-profile gantt charts (AE, CM).
 #'

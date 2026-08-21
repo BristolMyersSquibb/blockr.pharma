@@ -729,6 +729,17 @@ new_patient_profile_block <- function(selected = NULL,
             build_card <- function(v, is_sel) {
               shiny::div(
                 class = paste("pp-card", if (is_sel) "is-selected"),
+                # Selected cards live in the SELECTED list and are the ones
+                # you drag to reorder the panels. The `sync_selected` handler
+                # maintains this attribute as cards move between the two
+                # lists, but it cannot be the only place it is set: at boot
+                # that message races this renderUI and usually wins, finding
+                # no cards to mark. A board that opens with vizs already
+                # selected -- every CDEx board does -- then had a SELECTED
+                # list where nothing was draggable, and reordering simply did
+                # not work until you toggled some card and forced a resync.
+                # So the server states it for the cards it renders selected.
+                draggable = if (is_sel) "true",
                 `data-viz-id` = v$id,
                 `data-domain` = v$domain,
                 title = v$description,
@@ -819,6 +830,11 @@ new_patient_profile_block <- function(selected = NULL,
                   "Drag to reorder"
                 ),
                 shiny::div(class = "pp-active-list",
+                  # The drop caret: ONE element for the whole list, moved to
+                  # the target gap by the drag (see the drag states in
+                  # patient-profile.css). Rendered here rather than created
+                  # on demand in JS so it survives this output re-rendering.
+                  shiny::div(class = "pp-drop-caret is-hidden"),
                   active_cards,
                   shiny::div(
                     class = paste(
@@ -2560,21 +2576,69 @@ new_patient_profile_block <- function(selected = NULL,
               e.originalEvent.dataTransfer.setData('text/plain', $(this).data('viz-id'));
             });
 
+            // Which gap the drop targets: the pointer's half of the hovered
+            // card decides -- lower half means the gap BELOW it, upper half
+            // the gap above. ONE predicate, two callers (the caret and the
+            // drop), so the line can never promise a position the drop will
+            // not use.
+            function dropAfter(ev, card) {
+              var box = card.getBoundingClientRect();
+              return (ev.clientY - box.top) > box.height / 2;
+            }
+
+            // Put the caret in the targeted gap. The gap's centre is the
+            // midpoint between the two cards that bound it, measured from
+            // what is actually on screen -- so it needs to know nothing
+            // about the card's border, radius or margin, and cannot drift
+            // if any of them change. At the ends of the list there is no
+            // second card, so the caret sits half a margin clear of the
+            // only edge there is.
+            function moveCaret(card, after) {
+              var list = card.closest('.pp-active-list');
+              if (!list) return;
+              var caret = list.querySelector('.pp-drop-caret');
+              if (!caret) return;
+              var box = card.getBoundingClientRect();
+              var sib = after ? card.nextElementSibling
+                              : card.previousElementSibling;
+              while (sib && !sib.classList.contains('pp-card')) {
+                sib = after ? sib.nextElementSibling
+                            : sib.previousElementSibling;
+              }
+              var y;
+              if (sib) {
+                var sb = sib.getBoundingClientRect();
+                y = after ? (box.bottom + sb.top) / 2
+                          : (sb.bottom + box.top) / 2;
+              } else {
+                var edge = parseFloat(getComputedStyle(card).marginBottom) || 2;
+                y = after ? box.bottom + edge / 2 : box.top - edge / 2;
+              }
+              var lb = list.getBoundingClientRect();
+              caret.style.top = (y - lb.top - list.clientTop) + 'px';
+              caret.classList.remove('is-hidden');
+            }
+
+            function hideCaret(el) {
+              var list = el && el.closest ? el.closest('.pp-active-list') : null;
+              var carets = list ? [list.querySelector('.pp-drop-caret')]
+                : document.querySelectorAll(
+                    '#' + layoutId + ' .pp-drop-caret');
+              Array.prototype.forEach.call(carets, function(c) {
+                if (c) c.classList.add('is-hidden');
+              });
+            }
+
+            // No dragleave handler on purpose. `dragleave` fires when the
+            // pointer crosses between a card's own CHILDREN (.pp-card-main,
+            // .pp-card-title), so hiding the caret there makes it flicker as
+            // you move down a card. dragover simply moves the one caret to
+            // wherever the pointer now points.
             $doc.on('dragover', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
               if (!dragActive) return;
               e.preventDefault();
               e.originalEvent.dataTransfer.dropEffect = 'move';
-              var rect = this.getBoundingClientRect();
-              var midY = rect.top + rect.height / 2;
-              if (e.originalEvent.clientY < midY) {
-                $(this).addClass('drop-above').removeClass('drop-below');
-              } else {
-                $(this).addClass('drop-below').removeClass('drop-above');
-              }
-            });
-
-            $doc.on('dragleave', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
-              $(this).removeClass('drop-above drop-below');
+              moveCaret(this, dropAfter(e.originalEvent, this));
             });
 
             $doc.on('drop', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
@@ -2582,21 +2646,21 @@ new_patient_profile_block <- function(selected = NULL,
               var draggedId = e.originalEvent.dataTransfer.getData('text/plain');
               var $target = $(this);
               var targetId = $target.data('viz-id');
-              $target.removeClass('drop-above drop-below');
+              var $list = $target.closest('.pp-active-list');
+              hideCaret(this);
 
               if (draggedId === targetId) return;
 
-              var $dragged = $target.closest('.pp-active-list')
+              var $dragged = $list
                 .find('.pp-card[data-viz-id=' + JSON.stringify(draggedId) + ']');
               if (!$dragged.length) return;
 
-              // Determine insertion position
-              var rect = this.getBoundingClientRect();
-              var midY = rect.top + rect.height / 2;
-              if (e.originalEvent.clientY < midY) {
-                $dragged.insertBefore($target);
-              } else {
+              // Same predicate the indicator drew with, so the card lands in
+              // the gap the line was pointing at.
+              if (dropAfter(e.originalEvent, this)) {
                 $dragged.insertAfter($target);
+              } else {
+                $dragged.insertBefore($target);
               }
 
               // Read new order and send to server
@@ -2609,8 +2673,7 @@ new_patient_profile_block <- function(selected = NULL,
 
             $doc.on('dragend', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
               $(this).removeClass('is-dragging');
-              $(this).closest('.pp-active-list')
-                .find('.pp-card').removeClass('drop-above drop-below');
+              hideCaret(this);
               setTimeout(function() { dragActive = false; }, 0);
             });
 
@@ -2618,6 +2681,70 @@ new_patient_profile_block <- function(selected = NULL,
               if (!dragActive) return;
               e.preventDefault();
             });
+
+            // --- Keep every chart the width of its container --------------
+            // echarts sizes its canvas once, when the widget renders, and
+            // htmlwidgets only re-sizes it on a WINDOW resize. That covers
+            // exactly one of the ways this panel changes width. Collapsing
+            // the sidebar, dragging a dock sash, the dock's maximize button,
+            // a view switch -- all of them move the container without any
+            // window event, and the canvas stays at its old width with dead
+            // space beside it. Reported as 'the plot does not resize when
+            // the window is maximized'; the window was never the trigger.
+            //
+            // So watch the CONTAINER, not the window: ONE observer on the
+            // chart area, resizing whatever echarts instances are inside it.
+            //
+            // A ResizeObserver is not a poll -- it costs nothing while
+            // nothing resizes, and does not wake on scroll, hover or a
+            // tooltip. What it does do is fire once per animation frame
+            // while a width is ANIMATING: collapsing the sidebar is a CSS
+            // width transition and wakes it ~30 times. Hence the debounce:
+            // those 30 wakes settle into one resize pass, because a resize()
+            // is a full re-layout of the chart (~3ms each) and running it
+            // per frame across a full profile would be the janky option.
+            var chartRO = null;
+            var chartROEl = null;
+            var chartResizeTimer = null;
+
+            function resizeChartsIn(root) {
+              if (typeof echarts === 'undefined') return;
+              $(root).find('.echarts4r').each(function() {
+                var inst = echarts.getInstanceByDom(this);
+                if (inst) inst.resize();
+              });
+            }
+
+            function watchChartArea() {
+              if (!window.ResizeObserver) return;
+              var el = document.querySelector(
+                '#' + layoutId + ' .pp-chart-area'
+              );
+              // Same element we are already on: nothing to do. This is the
+              // common case, so it stays a single id-anchored lookup.
+              if (!el || el === chartROEl) return;
+              // A different one means the block's UI was re-mounted. An
+              // observer keeps a STRONG reference to what it observes, so
+              // holding the detached chart area would pin that whole subtree
+              // in memory -- and the new one would never be watched, which
+              // is the original bug back again on every view switch.
+              if (chartRO) chartRO.disconnect();
+              chartROEl = el;
+              chartRO = new ResizeObserver(function() {
+                clearTimeout(chartResizeTimer);
+                chartResizeTimer = setTimeout(function() {
+                  resizeChartsIn(el);
+                }, 80);
+              });
+              chartRO.observe(el);
+            }
+
+            // The layout may not be in the document yet when this script
+            // runs (the block's UI arrives as one fragment), and in a dock
+            // panel it may not arrive for a while -- so try now and again
+            // whenever Shiny renders something in here.
+            watchChartArea();
+            $doc.on('shiny:value', watchChartArea);
           });
         ")))
       )

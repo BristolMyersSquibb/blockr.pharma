@@ -400,19 +400,71 @@
   color: #9ca3af;
 }
 
-/* Drag states */
+/* Drag states.
+
+   The drop indicator takes the REPORT BUILDER'S LOOK -- a straight 2px
+   accent line where the card will land, with an open notch on its leading
+   edge so it reads as an insertion caret rather than a border -- but not
+   its implementation.
+
+   The report builder hangs the line off the row's own ::after, which is
+   right for it: its rows are borderless and flush, so a row's bottom edge
+   IS the next row's top edge, and `bottom: -1px` on one row and
+   `top: -1px` on the next land on the same pixel. Cards are not flush --
+   they have a 1px border and a 2px gap -- and a pseudo-element is laid out
+   against the PADDING box, which the border insets. Marking the same gap
+   from the card above and from the card below therefore drew it 2px apart,
+   and the caret visibly jumped between clinging to one card and the other
+   as the pointer crossed a midpoint.
+
+   That is a defect of anchoring a gap's indicator to a card at all. So
+   there is ONE caret element, it lives in the list, and the drag moves it
+   to the target gap. One gap, one position, by construction rather than by
+   arithmetic -- and it stays correct if the card's border, radius, gap or
+   height ever change. */
 .pp-card.is-dragging {
   opacity: 0.4;
+  cursor: grabbing;
 }
 
-.pp-card.drop-above {
-  box-shadow: inset 0 3px 0 0 #3b82f6;
-  border-top-color: #3b82f6;
+.pp-active-list {
+  position: relative;
 }
 
-.pp-card.drop-below {
-  box-shadow: inset 0 -3px 0 0 #3b82f6;
-  border-bottom-color: #3b82f6;
+.pp-drop-caret {
+  position: absolute;
+  left: 5px;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--blockr-blue-500, #3b82f6);
+  /* `top` is the gap's centre, written by the drag; the line straddles it. */
+  transform: translateY(-50%);
+  z-index: 5;
+  /* The caret sits under the pointer during a drag and must never become a
+     drop target itself -- that would swallow the dragover it exists to
+     visualise. */
+  pointer-events: none;
+}
+
+/* The notch hangs off the LEFT of the line, half of it outside the card
+   edge, so the caret is findable without reading the line it belongs to. */
+.pp-drop-caret::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--blockr-blue-500, #3b82f6);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.pp-drop-caret.is-hidden {
+  display: none;
 }
 
 /* --- Category Headers ---------------------- */
