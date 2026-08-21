@@ -330,11 +330,24 @@ pp_compact_num_js <- function() {
 #' @noRd
 PP_AXIS_LABEL_COLOR <- "#666"
 PP_AXIS_LINE_COLOR <- "#ccc"
-# Gridlines. #f3f4f6 on the panel's near-white background was a line only in
-# principle -- the clinicians read the charts as having none and asked for
-# them. One step darker is still quieter than the axis labels it sits under,
-# so the data stays the loudest thing in the panel.
-PP_SPLIT_LINE_COLOR <- "#e5e7eb"
+# Gridlines. Measured against the panel background (#f9fafb, L=249.9), which
+# is what decides whether these are visible at all:
+#
+#   #f3f4f6  L=243.9  dL= 6   the original: a line only in principle
+#   #e5e7eb  L=231.0  dL=19   one step darker, still read as "no gridlines"
+#   #d1d5db  L=212.8  dL=37   this
+#
+# Two steps were needed, not one. dL=19 is 7% of the range, and these lines
+# are DASHED, which spends some of that again on the gaps -- so the first
+# bump was still being reported as invisible. At dL=37 the line is present
+# and remains far quieter than the axis labels above it (#666, L=102), so
+# the data is still the loudest thing in the panel.
+#
+# The washes are NOT the cause and darkening these is not compensating for
+# them: measured inside the findings reference band the gridline holds
+# dL=17.5 against dL=19 outside it, so the area gradient and markArea cost
+# under two levels.
+PP_SPLIT_LINE_COLOR <- "#d1d5db"
 
 #' Lane geometry for the patient-profile gantt charts (AE, CM).
 #'
@@ -1008,8 +1021,11 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
                        formatter = pp_compact_num_js()),
       splitLine = list(
         show = TRUE,
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed",
-                         opacity = 0.5)
+        # No opacity here. It used to carry opacity = 0.5, which halved an
+        # already-light line to about 3% contrast and is why this panel's
+        # horizontal gridlines read as absent while the gantts' verticals
+        # did not. One gridline weight across the profile.
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
       )
     )
 
