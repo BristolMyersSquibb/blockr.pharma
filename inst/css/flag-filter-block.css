@@ -1,0 +1,157 @@
+/* Flag filter block.
+   Checkbox markup is vendored from blockr.dplyr's settings-band control (the
+   design-system boolean), same vendoring convention blockr.dm's value filter
+   uses. Radius/height literals name their token in a comment, because those
+   two scales are documented but not shipped as CSS variables. */
+
+.ffb-card {
+  position: relative;
+}
+
+.ffb-settings {
+  background: var(--blockr-color-bg-input, #f9fafb);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px; /* --blockr-radius-lg */
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.ffb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ffb-empty {
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  padding: 6px 0;
+}
+
+.ffb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0; /* row padding */
+  cursor: pointer;
+  min-width: 0;
+}
+
+.ffb-name {
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  font-weight: 500;
+  color: var(--blockr-color-text-primary, #111827);
+  flex: 0 0 auto;
+}
+
+/* The label is the sublabel: it may be long, so it is the part that shrinks. */
+.ffb-label {
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ffb-bar {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 4px;
+  border-radius: 2px; /* data mark, cosmetic */
+  background: var(--blockr-color-border, #e5e7eb);
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.ffb-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--blockr-color-primary, #2563eb);
+}
+
+.ffb-count {
+  flex: 0 0 auto;
+  min-width: 38px;
+  text-align: right;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+.ffb-readout {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- vendored: .blockr-checkbox ------------------------------------------
+   The design-system boolean lives in blockr.dplyr's settings-band.css, which
+   blockr_blocks_css_dep() does NOT carry. blockr.dm vendored it into the
+   value filter for the same reason; this is the same copy. If it ever moves
+   into a shared dep, delete this block. */
+.blockr-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-grey-700, #374151);
+  min-height: 26px;
+  user-select: none;
+  position: relative;
+  margin-bottom: 0;           /* neutralize bootstrap label margin */
+  font-weight: var(--blockr-font-weight-normal, 400);
+}
+
+.blockr-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.blockr-checkbox__box {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--blockr-grey-300, #d1d5db);
+  border-radius: 4px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.blockr-checkbox:hover .blockr-checkbox__box {
+  border-color: var(--blockr-grey-400, #9ca3af);
+}
+
+.blockr-checkbox input:checked + .blockr-checkbox__box {
+  background: var(--blockr-color-primary, #2563eb);
+  border-color: var(--blockr-color-primary, #2563eb);
+}
+
+.blockr-checkbox input:focus-visible + .blockr-checkbox__box {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.blockr-checkbox__box svg {
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.blockr-checkbox input:checked + .blockr-checkbox__box svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Tighter stacking for a run of flag checkboxes. */

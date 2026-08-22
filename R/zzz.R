@@ -48,6 +48,44 @@ register_pharma_blocks <- function() {
     package = utils::packageName(),
     overwrite = TRUE
   )
+  register_blocks(
+    "new_flag_filter_block",
+    name = "Flag Filter",
+    description = paste0(
+      "Filter rows on ADaM Y/N indicator columns; ticked flags union."
+    ),
+    category = "transform",
+    icon = "flag",
+    guidance = paste0(
+      "Use for ADaM indicator columns (PREFL, TRTEMFL, FUPFL, AESER, SAFFL, ",
+      "...), which encode a boolean as \"Y\" against \"N\", \"\" or NA. Each ",
+      "chosen column gets a checkbox: ticked keeps the flagged rows, unticked ",
+      "adds NO constraint (it never means 'show me the unflagged ones'). ",
+      "Ticked boxes UNION, so the treatment-period family PREFL/TRTEMFL/FUPFL ",
+      "answers 'any of these periods' in one block -- combining them with AND ",
+      "would return zero rows, since the periods are mutually exclusive. ",
+      "To AND a flag against something else, chain a second filter block. ",
+      "To ask for the negative, or to separate 'assessed as N' from 'never ",
+      "assessed', use the value filter and pick values directly."
+    ),
+    arguments = list(
+      new_arg_specs(
+        columns = new_arg_spec(
+          "Character vector of flag column names. All of them union.",
+          example = list("PREFL", "TRTEMFL", "FUPFL")
+        ),
+        selected = new_arg_spec(
+          paste0(
+            "Which flags start ticked. Empty passes every row through, so a ",
+            "view that should open filtered must name one."
+          ),
+          example = list("TRTEMFL")
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
 }
 
 #' Build arguments metadata for the patient profile block
