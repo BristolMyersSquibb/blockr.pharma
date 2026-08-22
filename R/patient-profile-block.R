@@ -549,10 +549,37 @@ new_patient_profile_block <- function(selected = NULL,
             }
             new_order <- as.character(unlist(new_order))
             cur <- r_selected()
-            # Validate: must be a permutation of current selection
-            if (setequal(new_order, cur)) {
-              r_selected(new_order)
+
+            # Validate against what the client could SEE, not against the whole
+            # selection. `selected` may name vizs this data cannot offer -- the
+            # sidebar renders intersect(sel, avail) and the chart area does the
+            # same -- so a card id that is selected but unavailable is invisible
+            # to the user and can never come back in the drag payload.
+            #
+            # Comparing the payload against all of `cur` therefore FAILED on
+            # exactly the boards that matter: a real study whose findings cards
+            # are derived from its own PARCAT1 / LBCAT categories, restored
+            # against a patient or a study that does not produce one of them.
+            # One stale id in the selection and setequal() is FALSE for every
+            # drag, forever, silently -- no error, no message, the card just
+            # snaps back. Demo boards never showed it because their selection
+            # is always a subset of what the demo data offers.
+            avail <- names(r_available())
+            visible <- intersect(cur, avail)
+
+            # Still a permutation check, so a malformed payload is still
+            # refused; it is just the permutation of the VISIBLE cards.
+            if (!setequal(new_order, visible)) {
+              return()
             }
+
+            # Write the new order into the visible slots and leave the rest
+            # pinned where they are. The unavailable ids belong to the board,
+            # not to this patient, so they must survive the reorder -- and
+            # reordering what you can see should not move what you cannot.
+            out <- cur
+            out[cur %in% visible] <- new_order
+            r_selected(out)
           })
 
           # Sync sidebar toggle state to client whenever selection changes
