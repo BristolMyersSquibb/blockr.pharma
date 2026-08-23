@@ -89,15 +89,19 @@ new_flag_filter_block <- function(columns = character(),
         self_write <- new.env(parent = emptyenv())
         self_write$active <- FALSE
 
-        push_meta <- function() {
+        # `meta_only` carries the labels and counts WITHOUT the column set:
+        # the client already has that set, having just picked it, and echoing
+        # it back would rebuild the picker under the user's cursor.
+        push_meta <- function(meta_only = FALSE) {
           d <- tryCatch(data(), error = function(e) NULL)
           session$sendCustomMessage(
             "pharma-flag-meta",
             list(
-              id       = ns("flags"),
-              columns  = flag_column_meta(d, r_cols()),
-              choices  = as.list(flag_all_columns(d)),
-              selected = as.list(r_sel())
+              id        = ns("flags"),
+              columns   = flag_column_meta(d, r_cols()),
+              choices   = as.list(flag_all_columns(d)),
+              selected  = as.list(r_sel()),
+              meta_only = meta_only
             )
           )
         }
@@ -146,6 +150,11 @@ new_flag_filter_block <- function(columns = character(),
         shiny::observeEvent(list(r_cols(), r_sel()), {
           if (self_write$active) {
             self_write$active <- FALSE
+            # A column the user just added through the gear has no label and
+            # no count on the client -- only the server can supply them. So
+            # the echo guard suppresses the COLUMN SET, not the metadata;
+            # returning here left every gear-picked column bare.
+            push_meta(meta_only = TRUE)
             return()
           }
           push_meta()

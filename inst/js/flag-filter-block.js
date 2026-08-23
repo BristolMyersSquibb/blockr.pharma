@@ -215,15 +215,23 @@
 
     updateMeta(payload) {
       const cols = (payload && payload.columns) || [];
-      this.meta = {};
-      this.columns = cols.map((c) => {
-        this.meta[c.name] = {
+      const meta = {};
+      const names = cols.map((c) => {
+        meta[c.name] = {
           label: c.label || '',
           count: (c.count === null || c.count === undefined) ? undefined : c.count
         };
         if (c.total !== null && c.total !== undefined) this.total = c.total;
         return c.name;
       });
+      this.meta = meta;
+      // Labels and counts for a column set the client picked itself. Touching
+      // the picker or the ticks here would fight the click that caused it.
+      if (payload && payload.meta_only) {
+        this._renderBody();
+        return;
+      }
+      this.columns = names;
       this.choices = ((payload && payload.choices) || []).map(String);
       const sel = {};
       ((payload && payload.selected) || []).forEach((n) => { sel[String(n)] = true; });
