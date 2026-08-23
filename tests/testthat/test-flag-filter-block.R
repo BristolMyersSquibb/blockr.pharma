@@ -138,3 +138,14 @@ test_that("no selection matches every row, like the pass-through expr", {
   expect_equal(flag_matched_rows(d, "GONE"), nrow(d))
   expect_null(flag_matched_rows(NULL, "PREFL"))
 })
+
+test_that("the picker's choices carry the column labels", {
+  ch <- flag_choice_meta(flag_df())
+  expect_length(ch, 6L)
+  expect_identical(vapply(ch, `[[`, character(1), "value"), names(flag_df()))
+  labs <- vapply(ch, `[[`, character(1), "label")
+  expect_identical(labs[[5L]], "Serious Event")
+  # A column without a label attribute renders as the bare name.
+  expect_identical(labs[[1L]], "")
+  expect_identical(flag_choice_meta(NULL), list())
+})

@@ -24,7 +24,7 @@
       this.meta = {};         // name -> {label, count}
       this.matched = null;    // rows kept by the current tick set (server)
       this.total = null;      // rows in the upstream
-      this.choices = [];      // every upstream column, for the picker
+      this.choices = [];      // every upstream column as {value, label}
       this._submitted = false;
       this._callback = null;
       this._popoverOpen = false;
@@ -232,7 +232,12 @@
         return;
       }
       this.columns = names;
-      this.choices = ((payload && payload.choices) || []).map(String);
+      // {value, label} options, so the picker prints the ADaM label beside
+      // the column name. A bare string is still accepted.
+      this.choices = ((payload && payload.choices) || []).map((c) =>
+        (c && typeof c === 'object')
+          ? { value: String(c.value), label: c.label || '' }
+          : { value: String(c), label: '' });
       const sel = {};
       ((payload && payload.selected) || []).forEach((n) => { sel[String(n)] = true; });
       this.selected = sel;

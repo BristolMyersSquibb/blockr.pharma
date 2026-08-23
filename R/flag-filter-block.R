@@ -99,7 +99,7 @@ new_flag_filter_block <- function(columns = character(),
             list(
               id        = ns("flags"),
               columns   = flag_column_meta(d, r_cols()),
-              choices   = as.list(flag_all_columns(d)),
+              choices   = flag_choice_meta(d),
               selected  = as.list(r_sel()),
               meta_only = meta_only
             )
@@ -225,6 +225,23 @@ flag_all_columns <- function(data) {
   names(data)
 }
 
+#' Every upstream column as a `{value, label}` option, so the gear's picker
+#' shows the ADaM label beside the name the way blockr.dm's value filter
+#' does. A bare string option would render the name alone.
+#' @noRd
+flag_choice_meta <- function(data) {
+  lapply(flag_all_columns(data), function(cn) {
+    list(value = cn, label = flag_column_label(data[[cn]]))
+  })
+}
+
+#' One column's label attribute, "" when it has none.
+#' @noRd
+flag_column_label <- function(col) {
+  lbl <- attr(col, "label", exact = TRUE)
+  if (is.null(lbl)) "" else as.character(lbl)[1L]
+}
+
 #' Per-column metadata the client renders: label, and the count of rows the
 #' box would keep if ticked.
 #' @noRd
@@ -233,8 +250,7 @@ flag_column_meta <- function(data, columns) {
     out <- list(name = cn, label = "", count = NA, total = NA)
     if (!is.data.frame(data) || !cn %in% names(data)) return(out)
     col <- data[[cn]]
-    lbl <- attr(col, "label", exact = TRUE)
-    out$label <- if (is.null(lbl)) "" else as.character(lbl)[1L]
+    out$label <- flag_column_label(col)
     out$total <- nrow(data)
     out$count <- sum(flag_is_true(col), na.rm = TRUE)
     out
