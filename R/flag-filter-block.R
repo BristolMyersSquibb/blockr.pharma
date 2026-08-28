@@ -307,7 +307,14 @@ flag_input_shape <- function(data) {
 # blockr.dm's filters carry, and not exported from blockr.core.
 #' @noRd
 data_slot <- function() {
-  call(".", as.name("data"))
+  input_slot("data")
+}
+
+#' The same, for a block with more than one data input (see
+#' [new_population_join_block()], whose second input is `population`).
+#' @noRd
+input_slot <- function(name) {
+  call(".", as.name(name))
 }
 
 #' Union of the ticked boxes. No ticks is no constraint, NOT an empty result.

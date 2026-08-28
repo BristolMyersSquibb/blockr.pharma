@@ -86,6 +86,53 @@ register_pharma_blocks <- function() {
     package = utils::packageName(),
     overwrite = TRUE
   )
+  register_blocks(
+    "new_population_join_block",
+    name = "Population Join",
+    description = paste0(
+      "Append the subjects an event table never mentions, so rates divide by ",
+      "the population."
+    ),
+    category = "transform",
+    icon = "people",
+    guidance = paste0(
+      "Two inputs: `data` is the events (ADAE, ADCM, ...), `population` is ",
+      "the subject-level table they came from (ADSL, usually restricted to a ",
+      "population flag such as SAFFL). It appends one row per subject the ",
+      "events do not mention, carrying the population's columns and NA for ",
+      "everything event-level. ",
+      "USE IT when a view shows a PERCENTAGE OF SUBJECTS. Subjects with no ",
+      "event are absent from the event table, so a percentage computed from ",
+      "the events alone divides by 'subjects who had one' rather than by ",
+      "'subjects who were treated' -- which inflates every rate, and inflates ",
+      "the comparator arm most. ",
+      "PLACE IT LAST in the branch, immediately before the chart or table. ",
+      "Everything that filters events -- the flag filter, value filters, a ",
+      "term cut -- belongs UPSTREAM of it. A filter placed after it deletes ",
+      "the appended rows and silently restores the bug. That single link is ",
+      "the whole contract. ",
+      "DOWNSTREAM, a chart wants `func = \"pct_distinct\"` with ",
+      "`na_group = \"drop\"`, so the appended rows draw no bar and still ",
+      "count; a summary table takes one row per subject from the same frame. ",
+      "Both give the same N. ",
+      "Do NOT use it to join covariates onto events for their own sake -- ",
+      "that is an ordinary join. This block is about the denominator."
+    ),
+    arguments = list(
+      new_arg_specs(
+        id = new_arg_spec(
+          paste0(
+            "Subject identifier, present in both inputs. Defaults to a ",
+            "column the two share, normally USUBJID."
+          ),
+          example = "USUBJID",
+          type = arg_string()
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
 }
 
 #' Build arguments metadata for the patient profile block
