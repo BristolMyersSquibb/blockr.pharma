@@ -140,13 +140,32 @@ join_population <- function(events, population, id = "USUBJID") {
 #' @export
 new_population_join_block <- function(id = "USUBJID", ...) {
 
-  force(id)
+  # NOT `id`: the server's first parameter is the MODULE id, so a formal of
+  # the same name is shadowed the moment the closure is entered and the
+  # constructor argument becomes unreachable. blockr.core restores a block by
+  # re-calling the constructor with the saved state, so shadowing it does not
+  # look like a bug -- it looks like a block that quietly forgets its setting.
+  # The state key must stay `id` to match this formal, hence the rename here
+  # rather than in the signature.
+  init_id <- as.character(id %||% "")[1L]
+  if (is.na(init_id)) init_id <- ""
 
   blockr.core::new_transform_block(
     server = function(id, data, population) {
       shiny::moduleServer(id, function(input, output, session) {
 
-        r_id <- shiny::reactiveVal(NULL)
+        r_id <- shiny::reactiveVal(init_id)
+
+        # Whether the CURRENT identifier is usable against the CURRENT inputs.
+        # Kept as a reactiveVal so `expr` reads no data: blockr.core re-runs a
+        # block whenever its expression is a new object, and an expr touching
+        # data() would rebuild the chain on every upstream blip. Same
+        # discipline as the flag filter's shape_rv.
+        r_ok <- shiny::reactiveVal(FALSE)
+
+        usable <- function(x, choices) {
+          length(x) == 1L && !is.na(x) && nzchar(x) && x %in% choices
+        }
 
         # The identifier has to exist in BOTH inputs, so the choices are the
         # intersection. Keep the current pick when it survives a data change;
@@ -158,30 +177,41 @@ new_population_join_block <- function(id = "USUBJID", ...) {
           if (!is.data.frame(d) || !is.data.frame(p)) return()
           choices <- intersect(names(d), names(p))
           cur <- shiny::isolate(r_id())
-          sel <- if (!is.null(cur) && cur %in% choices) cur
-                 else if (length(choices)) choices[[1L]] else ""
+          r_ok(usable(cur, choices))
+          # An empty intersection does not wipe a good value. Data arrives
+          # late, and a panel not yet opened can see an empty frame first;
+          # clearing the setting there would lose it for good, because the
+          # clear is what gets saved. `r_ok` is what stops the join running on
+          # an identifier the inputs do not actually have.
+          if (!length(choices)) return()
+          sel <- if (usable(cur, choices)) cur else choices[[1L]]
           shiny::updateSelectInput(session, "id", choices = choices,
                                    selected = sel)
           if (!identical(sel, cur)) r_id(sel)
+          r_ok(TRUE)
         })
 
+        # The guard makes ignoreInit redundant: the server's own
+        # updateSelectInput echo arrives equal to r_id() and writes nothing.
         shiny::observeEvent(input$id, {
           if (!identical(input$id, shiny::isolate(r_id()))) r_id(input$id)
-        }, ignoreInit = TRUE)
+        })
 
         list(
           expr = shiny::reactive({
             key <- r_id()
-            # Unset: pass the events through untouched. An unconfigured block
-            # returns its input, it does not error -- blockr.docs
-            # design-system/ux-principles.md.
             # Both inputs go in as `.()` slots. A bare `population` symbol
             # works in the app (the eval env binds it) and breaks in EXPORTED
             # code, which is the trap data_slot() was written for -- see its
             # note in flag-filter-block.R.
             d <- data_slot()
             p <- input_slot("population")
-            if (is.null(key) || !nzchar(key)) {
+            # Unset, or naming a column the inputs do not share: pass the
+            # events through untouched. An unconfigured block returns its
+            # input, it does not error (blockr.docs
+            # design-system/ux-principles.md), and erroring here would also
+            # make a board unopenable while its data was still loading.
+            if (is.null(key) || !nzchar(key) || !isTRUE(r_ok())) {
               return(bquote(dplyr::filter(.(d), TRUE), list(d = d)))
             }
             bquote(

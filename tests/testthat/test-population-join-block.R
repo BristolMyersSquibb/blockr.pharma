@@ -89,3 +89,72 @@ test_that("a non-frame input is refused, saying which one", {
     "subject-level"
   )
 })
+
+# --- the identifier has to survive a save and a pick -------------------------
+# Both halves were broken on the first cut. The constructor formal is `id` and
+# so is the server's FIRST PARAMETER, which is the module id -- so the formal
+# was shadowed the moment the closure was entered and never read. blockr.core
+# restores a block by re-calling the constructor with the saved state, so a
+# shadowed formal does not look like a bug, it looks like a block that quietly
+# forgets its setting. The default masked it: the fallback picks the first
+# shared column, which on real data IS USUBJID.
+#
+# Note the scope. A block's inputs live under "expr"; setting them on the
+# outer session silently does nothing and every assertion here passes for the
+# wrong reason.
+
+two_ids_ev <- data.frame(SUBJ = "S1", USUBJID = "S1", AEDECOD = "D",
+                         stringsAsFactors = FALSE)
+two_ids_pop <- data.frame(SUBJ = c("S1", "S2"), USUBJID = c("S1", "S2"),
+                          TRT01A = "A", stringsAsFactors = FALSE)
+
+pj_id <- function(blk, pick = NULL) {
+  out <- NULL
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    {
+      session$flushReact()
+      if (!is.null(pick)) {
+        session$makeScope("expr")$setInputs(id = pick)
+        session$flushReact()
+      }
+      out <<- session$returned$state$id()
+    },
+    args = list(x = blk, data = list(data = function() two_ids_ev,
+                                     population = function() two_ids_pop))
+  )
+  out
+}
+
+test_that("the constructor's identifier is used, not the first shared column", {
+  # SUBJ comes first in both frames, so a block that ignores its argument
+  # answers SUBJ here and looks fine on data where USUBJID happens to be first.
+  expect_equal(pj_id(new_population_join_block()), "USUBJID")
+})
+
+test_that("a restored identifier survives", {
+  expect_equal(pj_id(new_population_join_block(id = "SUBJ")), "SUBJ")
+})
+
+test_that("a user pick reaches state, and can override a restored value", {
+  expect_equal(pj_id(new_population_join_block(), pick = "SUBJ"), "SUBJ")
+  expect_equal(pj_id(new_population_join_block(id = "SUBJ"), pick = "USUBJID"),
+               "USUBJID")
+})
+
+test_that("an empty intersection does not wipe a good value", {
+  # Data arrives late, and a panel not yet opened can see an empty frame
+  # first. Clearing the setting there loses it for good, because the clear is
+  # what gets saved.
+  blk <- new_population_join_block(id = "SUBJ")
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    {
+      session$flushReact()
+      expect_equal(session$returned$state$id(), "SUBJ")
+    },
+    args = list(x = blk,
+                data = list(data = function() data.frame(A = 1),
+                            population = function() data.frame(B = 2)))
+  )
+})
