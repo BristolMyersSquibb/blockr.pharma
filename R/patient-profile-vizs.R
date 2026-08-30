@@ -65,6 +65,32 @@ pp_day_label <- function(dy, visit = NA) {
   pp_with_visit(paste0("D", dy), visit)
 }
 
+#' The study day a record carries, or the one the axis would draw for it
+#'
+#' ADaM findings tables ship `ADY`, and SDTM's `LBDY` / `VSDY` normalize onto
+#' it, so a lab row usually states its own day on treatment and the profile
+#' prints that number untouched. A study shipping none gets the day the
+#' relative-day axis computes, from the same reference and by the same
+#' skip-zero rule: a tooltip disagreeing with the axis it is drawn on would
+#' be worse than reporting no day at all. With no reference either, there is
+#' no day to report and the caller keeps the date it always had.
+#'
+#' @param day The record's own \*DY value, or `NA`.
+#' @param d The record's analysis date, for the fallback.
+#' @param ref_ms Reference timestamp in ms (treatment start). May be NA.
+#' @return Numeric study day, or `NA`.
+#' @noRd
+pp_record_day <- function(day, d = NULL, ref_ms = NA_real_) {
+  dy <- pp_as_numeric(day)
+  if (length(dy) == 1L && !is.na(dy)) return(dy)
+  if (is.na(ref_ms) || is.null(d) || length(d) != 1L || is.na(d)) {
+    return(NA_real_)
+  }
+  x <- pp_xval(d, ref_ms, "rday")
+  if (is.na(x)) return(NA_real_)
+  if (x > 0) x else x - 1
+}
+
 #' x-axis value, preferring a study day the data already carries
 #'
 #' Relative-day mode plots study days, and many studies ship them outright
@@ -955,6 +981,13 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     if (!"AVISIT" %in% colnames(df)) return(NA)
     df$AVISIT[i]
   }
+  # The day on treatment, so a lab value can be lined up against the AE
+  # timeline without counting calendar dates: an AE bar labels itself
+  # "D43" - "D50" (viz-ae-gantt.R) and clinical review asked for the same
+  # unit here. Added, not substituted -- the date and the visit are what an
+  # unscheduled draw has, and the ask was for the day besides.
+  has_day <- "ADY" %in% colnames(tbl)
+  opt_day <- function(df, i) if (has_day) df$ADY[i] else NA
 
   n_params <- length(params)
   # Fixed per-chart height. Splitting a total budget across the selected
@@ -1090,7 +1123,15 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       tt <- paste0(tt,
         '<div style="font-size:12px;line-height:1.6">',
         '<span style="color:#6b7280">Date:</span> ',
-        pp_with_visit(format(p_data$ADT[i]), opt_visit(p_data, i)),
+        pp_with_visit(format(p_data$ADT[i]), opt_visit(p_data, i))
+      )
+      dy <- pp_record_day(opt_day(p_data, i), p_data$ADT[i], ref_ms)
+      if (!is.na(dy)) {
+        tt <- paste0(tt,
+          '<br/><span style="color:#6b7280">Day:</span> ', pp_day_label(dy)
+        )
+      }
+      tt <- paste0(tt,
         '<br/><span style="color:#6b7280">AVAL:</span> <b>',
         round(val, 2), '</b>'
       )

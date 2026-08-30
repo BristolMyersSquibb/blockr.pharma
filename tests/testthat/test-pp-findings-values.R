@@ -15,7 +15,7 @@ plotted_values <- function(chart) {
 }
 
 # The fixture ships no category column, so the whole table is one card.
-render_findings_card <- function(adlb, id = "adlb_all") {
+render_findings_card <- function(adlb, id = "adlb_all", ref_ms = NA_real_) {
   dm_obj <- dm::dm(
     adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
     adlb = adlb
@@ -23,7 +23,14 @@ render_findings_card <- function(adlb, id = "adlb_all") {
   dm_obj <- pp_scope_subject(pp_normalize_dm(dm_obj), "S1")
   vizs <- pp_findings_vizs(dm_obj)
   expect_true(id %in% names(vizs))
-  vizs[[id]]$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")))
+  vizs[[id]]$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")),
+                    ref_ms = ref_ms)
+}
+
+tooltips <- function(chart) {
+  pts <- Filter(function(s) identical(s$type, "scatter"),
+                chart$x$opts$series)[[1]]$data
+  vapply(pts, function(p) p$tooltip_text, character(1))
 }
 
 neut_adlb <- function(...) {
@@ -112,4 +119,40 @@ test_that("a study without AVISIT keeps the date it always had", {
   pts <- Filter(function(s) identical(s$type, "scatter"),
                 render_findings_card(neut_adlb())$x$opts$series)[[1]]$data
   expect_match(pts[[1]]$tooltip_text, "2024-01-05<")
+})
+
+test_that("a lab point reports the day on treatment its own row carries", {
+  # The ask from clinical review: AE bars read "D43" - "D50" while labs read
+  # a date and a visit, so the two cannot be lined up by eye. ADY is the
+  # record's own number and is printed as such.
+  adlb <- neut_adlb(ADY = c(5, 36, 65),
+                    AVISIT = c("CYCLE 1 DAY 1", "Cycle 2, Day 8", "UNSCHEDULED"))
+  tt <- tooltips(render_findings_card(adlb))
+  expect_match(tt[1], "Day:</span> D5")
+  expect_match(tt[3], "Day:</span> D65")
+  # Added, never substituted -- the date and the visit are still there.
+  expect_match(tt[3], "2024-03-05 \\(UNSCHEDULED\\)")
+})
+
+test_that("LBDY reaches the tooltip as the day", {
+  # SDTM ships the day as LBDY; pp_column_catalog() maps it onto ADY, so a
+  # raw-SDTM study gets the same line an ADaM one does.
+  tt <- tooltips(render_findings_card(neut_adlb(LBDY = c(5, 36, 65))))
+  expect_match(tt[2], "Day:</span> D36")
+})
+
+test_that("a study shipping no *DY takes the day from the axis reference", {
+  # Same arithmetic and same skip-zero rule as the relative-day axis, so the
+  # tooltip cannot disagree with the axis under it. Treatment starts
+  # 2024-01-01, so the draw on 2024-01-05 is D5.
+  ref_ms <- as.numeric(as.POSIXct(as.Date("2024-01-01"))) * 1000
+  tt <- tooltips(render_findings_card(neut_adlb(), ref_ms = ref_ms))
+  expect_match(tt[1], "Day:</span> D5")
+})
+
+test_that("no *DY and no reference leaves the tooltip as it was", {
+  # Nothing to report is reported as nothing: no invented day, no empty row.
+  tt <- tooltips(render_findings_card(neut_adlb()))
+  expect_false(grepl("Day:", tt[1], fixed = TRUE))
+  expect_match(tt[1], "2024-01-05<")
 })
