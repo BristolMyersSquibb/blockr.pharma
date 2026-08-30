@@ -1,6 +1,6 @@
 Package: blockr.pharma
 Title: Pharma Blocks for Blockr
-Version: 0.0.0.9018
+Version: 0.0.0.9019
 Authors@R:
     person(given = "Christoph",
            family = "Sax",
@@ -27,7 +27,7 @@ Imports:
     shiny
 Suggests:
     blockr.ai,
-    blockr.viz,
+    blockr.viz (>= 0.2.78),
     flextable,
     ggplot2,
     officer,
