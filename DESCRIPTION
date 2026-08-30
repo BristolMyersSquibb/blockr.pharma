@@ -27,7 +27,7 @@ Imports:
     shiny
 Suggests:
     blockr.ai,
-    blockr.viz (>= 0.2.78),
+    blockr.viz,
     flextable,
     ggplot2,
     officer,
