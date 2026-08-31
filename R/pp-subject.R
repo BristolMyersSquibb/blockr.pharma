@@ -54,6 +54,49 @@ pp_arm_column <- function(cols, arm_var = NULL) {
   ))
 }
 
+#' Resolve the ADSL column holding the SHORT arm name
+#'
+#' The arm label is prose ("Compound A 20 mg QD + Compound B 100 mg BID") and
+#' does not fit anywhere a list has to print one per row. ADaM already splits
+#' this: `ARM`/`ACTARM` carry the label, `ARMCD`/`ACTARMCD` carry a code CDISC
+#' caps at 20 characters. So the short name is usually in the data and nobody
+#' has to invent abbreviations.
+#'
+#' Unlike the arm role, absent is LEGITIMATE and returns `NULL`: a study
+#' without a code column falls back to the arm's colour plus a legend, which
+#' is a design the sidebar supports. A DECLARED column the data lacks is still
+#' an error, on the same principle as every other role.
+#'
+#' The code cannot be derived from the label column's name. CEDX declares
+#' `arm = "TRT"`, a column its adapter builds from `TRT01A`/`ACTARM`, and
+#' there is no `TRTCD`. It has to be its own declaration.
+#'
+#' @param cols ADSL column names.
+#' @param code_var The study's declared arm-code column, or `NULL`.
+#' @return A column name, or `NULL` when the study has no arm code.
+#' @noRd
+pp_arm_code_column <- function(cols, code_var = NULL) {
+  if (!is.null(code_var) && nzchar(code_var)) {
+    if (code_var %in% cols) {
+      return(code_var)
+    }
+    stop(errorCondition(
+      sprintf(
+        paste0(
+          "Declared arm code column \"%s\" is not in ADSL. Fix the ",
+          "declaration in the board sidebar (Study > Arm code column), or ",
+          "clear it to fall back on the arm colour."
+        ),
+        code_var
+      ),
+      class = "pp_arm_code_var_missing"
+    ))
+  }
+  hit <- c("ACTARMCD", "ARMCD")
+  hit <- hit[hit %in% cols]
+  if (length(hit)) hit[[1L]] else NULL
+}
+
 #' Quoted role assertion for the block's eval path
 #'
 #' Returns `NULL` when every role resolves for `dm_obj`, otherwise a quoted

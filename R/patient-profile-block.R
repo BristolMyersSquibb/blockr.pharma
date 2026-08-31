@@ -209,6 +209,43 @@ new_patient_profile_block <- function(selected = NULL,
             pp_subject_choices(nd, r_roles()$arm)
           })
 
+          # The cohort as a LIST: one row per patient, for the sidebar and
+          # the download. Separate from r_cohort() (which is the picker's
+          # ids/labels) because it answers a different question -- not "who
+          # can I pick" but "what does each of them look like".
+          r_cohort_frame <- shiny::reactive({
+            nd <- r_norm_dm()
+            if (is.null(nd)) return(pp_cohort_frame(NULL))
+            pp_cohort_frame(nd, r_roles())
+          })
+
+          # Event geometry for the row bands. Split from the frame so the
+          # download never carries it and a richer band never widens the
+          # export.
+          r_cohort_marks <- shiny::reactive({
+            nd <- r_norm_dm()
+            if (is.null(nd)) return(pp_cohort_marks(NULL))
+            pp_cohort_marks(nd, r_roles())
+          })
+
+          # Which key the list is sorted by. Not block state: it is a way of
+          # looking at the cohort, not a fact about the board, and persisting
+          # it would restore a board sorted by a column the next study may
+          # not have.
+          r_cohort_sort <- shiny::reactiveVal("id")
+          shiny::observeEvent(input$cohort_sort, {
+            key <- as.character(input$cohort_sort)
+            if (length(key) == 1L && nzchar(key)) r_cohort_sort(key)
+          })
+
+          # Pick a patient from the cohort list. The whole point of the
+          # merge: the click never leaves the block, so it needs no control
+          # channel and cannot be gated off by the sender leaving the screen.
+          shiny::observeEvent(input$pick_subject, {
+            sel <- pp_cohort_pick(input$pick_subject, r_cohort()$ids)
+            if (!is.null(sel)) r_subject(sel)
+          })
+
           # Stale-selection guard. When the upstream cohort changes and the
           # picked subject is no longer in it, clear the pick rather than
           # falling back to another patient. `subject` is in
@@ -726,6 +763,135 @@ new_patient_profile_block <- function(selected = NULL,
           # Render sidebar cards (re-renders when the cohort's data
           # changes; availability is cohort-based, so patient switches
           # leave the sidebar untouched)
+          # The cohort list. Rows are built server-side, like the viz cards:
+          # the row's marks are data-derived SVG, and shipping them as
+          # markup keeps the client with no cohort logic of its own.
+          output$sidebar_cohort <- shiny::renderUI({
+            frame <- r_cohort_frame()
+            # ISOLATED, deliberately. A pick must not invalidate this output:
+            # taking a dependency on r_subject() rebuilt all 254 rows on every
+            # click, which is a visible redraw of the list you are clicking
+            # in. The class is stamped once for the initial render and moved
+            # by the sync_subject message afterwards -- the same "update over
+            # a message, never a re-render" treatment the download menu's
+            # labels get, and for the same reason.
+            picked <- shiny::isolate(r_subject())
+
+            if (!nrow(frame)) {
+              return(shiny::div(class = "pp-cohort-empty",
+                "No patients in the cohort"))
+            }
+
+            marks <- r_cohort_marks()
+            color <- pp_cohort_sev_color(
+              pp_sev_scale_colors(r_scale_map(), r_norm_dm(),
+                                  r_roles()$severity)
+            )
+            arm_col <- pp_cohort_arm_colors(frame, r_scale_map(), r_norm_dm(),
+                                            r_roles()$arm)
+
+            ord <- pp_cohort_order(frame, r_cohort_sort())
+            has <- function(col) col %in% names(frame)
+
+            rows <- lapply(ord, function(i) {
+              id <- frame$USUBJID[[i]]
+              arm <- if (has("ARM")) as.character(frame$ARM[[i]]) else ""
+              code <- if (has("ARMCD")) as.character(frame$ARMCD[[i]]) else ""
+              demo <- paste(
+                c(if (has("SEX")) as.character(frame$SEX[[i]]),
+                  if (has("AGE")) as.character(frame$AGE[[i]])),
+                collapse = " "
+              )
+              band <- pp_cohort_band_svg(
+                marks$subjects[[id]] %||% list(events = NULL, trt_end = NA),
+                marks$days, color
+              )
+              # The chip when the study has a code, a colour swatch when it
+              # does not. Same information either way; only one of them needs
+              # a legend, which is why the code is worth resolving.
+              tint <- unname(arm_col[[arm]] %||% "#9ca3af")
+              badge <- if (nzchar(code)) {
+                shiny::span(class = "pp-pt-code", title = arm,
+                            style = pp_cohort_chip_style(tint), code)
+              } else if (nzchar(arm)) {
+                shiny::span(class = "pp-pt-swatch", title = arm,
+                            style = paste0("background:", tint))
+              }
+              shiny::div(
+                class = paste("pp-pt", if (identical(id, picked)) "is-selected"),
+                `data-usubjid` = id,
+                # Search matches the same text a reader sees, plus the arm,
+                # which is not printed in full anywhere in the row.
+                `data-search-text` = tolower(paste(id, demo, arm, code)),
+                title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
+                shiny::div(class = "pp-pt-line",
+                  shiny::span(class = "pp-pt-id", id),
+                  if (nzchar(demo)) {
+                    shiny::span(class = "pp-pt-demo", demo)
+                  },
+                  shiny::span(class = "pp-pt-gap"),
+                  badge
+                ),
+                shiny::HTML(band)
+              )
+            })
+
+            shiny::tagList(rows)
+          })
+
+          # Move the selected class when the pick changes from ANYWHERE: the
+          # header picker, the step arrows, an external ctrl_send(), or the
+          # stale-selection guard clearing it. The row click also moves it
+          # optimistically client-side, so this is what keeps the other four
+          # paths in step without touching the list's markup.
+          shiny::observeEvent(r_subject(), {
+            cur <- r_subject()
+            session$sendCustomMessage(
+              session$ns("sync_subject"),
+              list(id = if (length(cur) == 1L) cur else "")
+            )
+          }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+          # Sort keys follow the data: a study with no adae is not offered a
+          # sort by event count.
+          # The house click-through pill, same component as the gantt's LANES
+          # control (pp_lane_control()): the pill names the current setting,
+          # a click walks to the next, and the group label names the
+          # dimension. A select was three too many rungs and read as a form
+          # field in a list that is not a form.
+          output$cohort_sort_ui <- shiny::renderUI({
+            choices <- pp_cohort_sort_choices(r_cohort_frame())
+            # Fewer than two rungs is not a choice; draw nothing (the rule
+            # pp_lane_control() follows).
+            if (length(choices) < 2L) return(NULL)
+            cur <- shiny::isolate(r_cohort_sort())
+            if (!cur %in% names(choices)) cur <- names(choices)[[1L]]
+            idx <- match(cur, names(choices))
+            labels <- unname(choices)
+            shiny::div(class = "pp-ctrl-group pp-cohort-sort",
+              shiny::span(class = "pp-ctrl-label", "Sort"),
+              shiny::tags$button(
+                class = "pp-ctrl-pill",
+                id = session$ns("cohort_sort_pill"),
+                `data-values` = jsonlite::toJSON(names(choices)),
+                `data-labels` = jsonlite::toJSON(labels),
+                `data-index` = idx - 1L,
+                # The pill names the state, so the tooltip carries the action.
+                title = paste0("Sort by ",
+                               labels[idx %% length(labels) + 1L]),
+                # Reserve the widest rung so the target does not move out
+                # from under the cursor as the label cycles.
+                style = paste0("min-width:", max(nchar(labels)), "ch"),
+                labels[idx]
+              )
+            )
+          })
+
+          output$cohort_count <- shiny::renderText({
+            n <- nrow(r_cohort_frame())
+            if (n == 1L) "1 patient" else paste(n, "patients")
+          })
+
           output$sidebar_cards <- shiny::renderUI({
             avail <- r_available()
             sel <- shiny::isolate(r_selected())
@@ -1208,8 +1374,13 @@ new_patient_profile_block <- function(selected = NULL,
             # structure is static (both scope sections in the DOM) and a
             # custom message updates the two labels and toggles section
             # visibility; see the dl_menu_state handler in the UI script.
-            dl_tag <- if (pp_exhibit_ready()) {
-              has_pptx <- requireNamespace("officer", quietly = TRUE)
+            # The gate is per ENTRY, not per menu: the exhibit formats need
+            # ggplot2 and blockr.viz, but the cohort list is a plain xlsx and
+            # must stay reachable on a deployment without them.
+            dl_tag <- local({
+              has_exhibit <- pp_exhibit_ready()
+              has_pptx <- has_exhibit &&
+                requireNamespace("officer", quietly = TRUE)
               entry <- function(id, label) {
                 shiny::downloadLink(ns(id), label)
               }
@@ -1239,21 +1410,28 @@ new_patient_profile_block <- function(selected = NULL,
                     if (has_pptx) {
                       entry("dl_profile_pptx", "PowerPoint (.pptx)")
                     },
-                    entry("dl_profile_html", "Web page (.html)")
+                    if (has_exhibit) {
+                      entry("dl_profile_html", "Web page (.html)")
+                    }
                   ),
                   shiny::div(
                     class = "pp-dl-scope pp-dl-scope-cohort is-hidden",
                     shiny::div(class = "pp-dl-menu-label",
                                id = ns("pp_dl_label_cohort"),
                                "Cohort"),
+                    # First, because it is the one people asked for: the
+                    # cohort as a LIST, not as N rendered profiles.
+                    entry("dl_cohort_xlsx", "Patient list (.xlsx)"),
                     if (has_pptx) {
                       entry("dl_cohort_pptx", "PowerPoint (.pptx)")
                     },
-                    entry("dl_cohort_html", "Web page (.html)")
+                    if (has_exhibit) {
+                      entry("dl_cohort_html", "Web page (.html)")
+                    }
                   )
                 )
               )
-            }
+            })
 
             # The header row carries the download menu and the gear. The
             # subject picker lives in the static UI (see `ui=` below) so its
@@ -1272,19 +1450,22 @@ new_patient_profile_block <- function(selected = NULL,
           # Keep the static menu's labels and section visibility in step
           # with the pick and the cohort -- text updates over a message,
           # never a re-render, so the button holds as steady as the gear.
-          if (pp_exhibit_ready()) {
-            shiny::observe({
-              scoped <- r_scoped_dm()
-              session$sendCustomMessage(
-                session$ns("dl_menu_state"),
-                list(
-                  single = isTRUE(scoped$single),
-                  picked = if (isTRUE(scoped$single)) scoped$picked else "",
-                  n = length(pp_subject_ids(r_norm_dm()))
-                )
+          # Unconditional, unlike the exhibit entries it also drives: the
+          # menu now carries the cohort xlsx, which needs neither ggplot2 nor
+          # officer, so gating the state message on the exhibit would leave
+          # the whole menu hidden on a deployment that can still write the
+          # one file people asked for.
+          shiny::observe({
+            scoped <- r_scoped_dm()
+            session$sendCustomMessage(
+              session$ns("dl_menu_state"),
+              list(
+                single = isTRUE(scoped$single),
+                picked = if (isTRUE(scoped$single)) scoped$picked else "",
+                n = length(pp_subject_ids(r_norm_dm()))
               )
-            })
-          }
+            )
+          })
 
           # The data-derived half of the gear popover (see the uiOutput
           # above). This one SHOULD track the data -- what a study collects is
@@ -1657,6 +1838,33 @@ new_patient_profile_block <- function(selected = NULL,
             }
           }
 
+          # The cohort as a list. Deliberately the SAME frame the sidebar
+          # rows are built from (pp_cohort_frame()), so what you export is
+          # what you were looking at -- a second column set assembled here
+          # would drift from the list the first time either changed.
+          #
+          # The column set is a v1 default, not a decision: the frame is the
+          # seam, so a study-configured or panel-derived set later replaces
+          # one function and leaves this handler alone. Panel-derived is the
+          # obvious next step and needs one thing first -- a panel is a
+          # per-patient series and a row is one value, so somebody has to say
+          # which value (last, worst, baseline, change) before a picked
+          # panel can name a column.
+          output$dl_cohort_xlsx <- shiny::downloadHandler(
+            filename = function() {
+              paste0("cohort-", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+            },
+            content = function(file) {
+              frame <- r_cohort_frame()
+              # Export in the order on screen. A file sorted differently
+              # from the list it came from is a small betrayal that costs
+              # someone twenty minutes.
+              frame <- frame[pp_cohort_order(frame, r_cohort_sort()), ,
+                             drop = FALSE]
+              blockr.viz::write_annotated_xlsx(frame, file)
+            }
+          )
+
           output$dl_profile_pptx <- shiny::downloadHandler(
             filename = function() {
               paste0(profile_file_stem("patient"), ".pptx")
@@ -1861,7 +2069,9 @@ new_patient_profile_block <- function(selected = NULL,
 
             # Header
             shiny::div(class = "pp-sidebar-header",
-              shiny::tags$h3(class = "pp-sidebar-title", "Visualizations"),
+              # Not "Visualizations" any more: the sidebar has two tenants,
+              # and each names itself in its own section header below.
+              shiny::tags$h3(class = "pp-sidebar-title", "Profile"),
               shiny::tags$button(
                 class = "pp-pin-btn",
                 id = ns("pin_btn"),
@@ -1898,7 +2108,7 @@ new_patient_profile_block <- function(selected = NULL,
                   type = "text",
                   class = "pp-sidebar-search-input",
                   id = ns("search"),
-                  placeholder = "Search visualizations..."
+                  placeholder = "Search patients and panels..."
                 ),
                 # Clear: appears only while the box has text. Restores the
                 # full list, SELECTED section included.
@@ -1919,9 +2129,34 @@ new_patient_profile_block <- function(selected = NULL,
               )
             ),
 
+            # The cohort. Above the panels because it is what you come back
+            # to: panels are set once, patients are stepped through. Fixed
+            # height so the panel list below never gets squeezed out by a
+            # 200-patient study; the well scrolls instead.
+            shiny::div(class = "pp-sidebar-section",
+              shiny::div(class = "pp-section-head",
+                shiny::span(class = "pp-section-title", "Cohort"),
+                shiny::span(class = "pp-section-count",
+                            shiny::textOutput(ns("cohort_count"), inline = TRUE))
+              ),
+              # No label of its own: the pill arrives with the house
+              # group label ("Sort"), and "Sorted by" above it said the
+              # same thing twice.
+              shiny::uiOutput(ns("cohort_sort_ui")),
+              shiny::div(class = "pp-cohort-well", id = ns("pp_cohort_well"),
+                shiny::uiOutput(ns("sidebar_cohort"))
+              )
+            ),
+
             # Card list
-            shiny::div(class = "pp-sidebar-content",
-              shiny::uiOutput(ns("sidebar_cards"), class = "pp-sidebar-cards")
+            shiny::div(class = "pp-sidebar-section pp-sidebar-section--grow",
+              shiny::div(class = "pp-section-head",
+                shiny::span(class = "pp-section-title", "Panels")
+              ),
+              shiny::div(class = "pp-sidebar-content",
+                shiny::uiOutput(ns("sidebar_cards"),
+                                class = "pp-sidebar-cards")
+              )
             )
           ),
 
@@ -2015,6 +2250,10 @@ new_patient_profile_block <- function(selected = NULL,
             var clearBtnId = '", ns("search_clear"), "';
             var ctrlInputId = '", ns("viz_ctrl"), "';
             var pickParamInputId = '", ns("pick_param"), "';
+            var pickSubjectInputId = '", ns("pick_subject"), "';
+            var cohortSortInputId = '", ns("cohort_sort"), "';
+            var cohortSortPillId = '", ns("cohort_sort_pill"), "';
+            var syncSubjectMsgId = '", ns("sync_subject"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
             var paramIndexId = '", ns("param_index"), "';
@@ -2218,6 +2457,55 @@ new_patient_profile_block <- function(selected = NULL,
                 Shiny.setInputValue(smoothInputId, next, {priority: 'event'});
               });
 
+            // Patient row click: pick that patient. The selected class is
+            // applied optimistically so the list responds at click speed --
+            // the server re-renders it from r_subject() a flush later and
+            // agrees, since the click is the only thing that sets it.
+            $(document).on('click', '#' + layoutId + ' .pp-pt', function() {
+              var id = $(this).attr('data-usubjid');
+              if (!id) return;
+              $('#' + layoutId + ' .pp-pt').removeClass('is-selected');
+              $(this).addClass('is-selected');
+              Shiny.setInputValue(pickSubjectInputId, id, {priority: 'event'});
+            });
+
+            // Sort key: the house click-through pill. Its own handler
+            // rather than the viz one, because that sends {viz_id, param,
+            // value} to a viz-settings observer and this is neither.
+            $(document).on('click', '#' + cohortSortPillId, function(e) {
+              e.stopPropagation();
+              var $pill = $(this);
+              var values = $pill.data('values');
+              var labels = $pill.data('labels');
+              if (!values || !values.length) return;
+              var idx = (parseInt($pill.attr('data-index'), 10) + 1) %
+                values.length;
+              $pill.attr('data-index', idx);
+              $pill.text(labels[idx]);
+              $pill.attr('title',
+                'Sort by ' + labels[(idx + 1) % values.length]);
+              Shiny.setInputValue(cohortSortInputId, values[idx],
+                                  {priority: 'event'});
+            });
+
+            // The pick, from anywhere that is not this list. Moves a class;
+            // never re-renders the rows.
+            Shiny.addCustomMessageHandler(syncSubjectMsgId, function(msg) {
+              var id = msg && msg.id ? msg.id : null;
+              var $rows = $('#' + layoutId + ' .pp-pt');
+              $rows.removeClass('is-selected');
+              if (!id) return;
+              var $row = $rows.filter('[data-usubjid=' +
+                JSON.stringify(id) + ']');
+              $row.addClass('is-selected');
+              // Bring it back into view: on a long cohort the pick can be
+              // hundreds of rows away (the step arrows walk it there), and a
+              // selected row nobody can see is the same as no selection.
+              if ($row.length && $row[0].scrollIntoView) {
+                $row[0].scrollIntoView({block: 'nearest'});
+              }
+            });
+
             // Card click: toggle selection (server-driven, no optimistic toggle)
             $(document).on('click', '#' + layoutId + ' .pp-card', function(e) {
               if (dragActive) return;
@@ -2345,6 +2633,17 @@ new_patient_profile_block <- function(selected = NULL,
               $sidebar.find('.pp-no-results')
                 .toggleClass('is-hidden', !query || groupHits > 0);
 
+              // One search box, two tenants. A query hides non-matching
+              // PATIENTS in place rather than switching the cohort to a
+              // results tree: the list is already flat, so there is nothing
+              // to restructure, and the count in the header keeps telling
+              // you the size of the cohort rather than of the query.
+              $sidebar.find('.pp-pt').each(function() {
+                var hay = $(this).attr('data-search-text') || '';
+                $(this).toggleClass('is-filtered-out',
+                  !!query && hay.indexOf(query) === -1);
+              });
+
               // An emptied domain group keeps its header off screen (the
               // selection sync moves cards out but leaves the group in place).
               $sidebar.find('.pp-category-group').each(function() {
@@ -2458,8 +2757,14 @@ new_patient_profile_block <- function(selected = NULL,
             // cache is populated once per element and would hand back the
             // boot value on every later click.
             $(document).on('click', '#' + layoutId + ' .pp-ctrl-pill', function(e) {
-              e.stopPropagation();
               var $pill = $(this);
+              // The pill is a shared component, and not every one of them
+              // belongs to a viz: the cohort sort borrows the look and has
+              // its own handler. Without this guard both fire, the index
+              // advances twice (skipping a rung) and this one sends an
+              // undefined viz_id to the viz-settings observer.
+              if (!$pill.data('viz-id')) return;
+              e.stopPropagation();
               var values = $pill.data('values');
               var labels = $pill.data('labels');
               if (!values || !values.length) return;

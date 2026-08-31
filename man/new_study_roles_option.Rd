@@ -6,6 +6,7 @@
 \usage{
 new_study_roles_option(
   arm = "",
+  arm_code = "",
   severity = "",
   timeline = "",
   indication = "",
@@ -15,6 +16,11 @@ new_study_roles_option(
 }
 \arguments{
 \item{arm}{ADSL arm column; \code{""} = undeclared (convention: \code{ACTARM}).}
+
+\item{arm_code}{ADSL short arm-code column, used where the arm label does
+not fit (the cohort list's chip); \code{""} = undeclared (convention:
+\code{ACTARMCD} then \code{ARMCD}). Unlike the other roles, a study with no such
+column is fine -- the arm's colour carries the arm instead.}
 
 \item{severity}{ADAE severity column; \code{""} = undeclared (convention:
 detect \code{ASEV}, \code{AESEV}, \code{ATOXGR}, then \code{AETOXGR} -- the word scale

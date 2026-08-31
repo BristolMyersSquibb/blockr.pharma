@@ -9,6 +9,8 @@
 # declared-but-missing = a named error, never a fallback):
 #
 #   arm        -- ADSL treatment/arm label column. Default ACTARM.
+#   arm_code   -- ADSL short arm-code column (the cohort list's chip).
+#                 Default: ACTARMCD then ARMCD; none is legitimate.
 #   severity   -- ADAE severity column. Default: detect the word scale before
 #                 the grade, ADaM before SDTM (ASEV, AESEV, ATOXGR, AETOXGR);
 #                 a grade-coded study declares its column here.
@@ -49,6 +51,10 @@
 #' must stop, not draw something plausible.
 #'
 #' @param arm ADSL arm column; `""` = undeclared (convention: `ACTARM`).
+#' @param arm_code ADSL short arm-code column, used where the arm label does
+#'   not fit (the cohort list's chip); `""` = undeclared (convention:
+#'   `ACTARMCD` then `ARMCD`). Unlike the other roles, a study with no such
+#'   column is fine -- the arm's colour carries the arm instead.
 #' @param severity ADAE severity column; `""` = undeclared (convention:
 #'   detect `ASEV`, `AESEV`, `ATOXGR`, then `AETOXGR` -- the word scale
 #'   before the grade, ADaM before SDTM).
@@ -62,10 +68,11 @@
 #' @return A `board_option` with id `"study_roles"`.
 #'
 #' @export
-new_study_roles_option <- function(arm = "", severity = "", timeline = "",
-                                   indication = "", category = "Study", ...) {
+new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
+                                   timeline = "", indication = "",
+                                   category = "Study", ...) {
   value <- study_roles_normalize(list(
-    arm = arm, severity = severity, timeline = timeline,
+    arm = arm, arm_code = arm_code, severity = severity, timeline = timeline,
     indication = indication
   ))
 
@@ -86,6 +93,8 @@ new_study_roles_option <- function(arm = "", severity = "", timeline = "",
     ui = function(id) {
       htmltools::tagList(
         field(id, "study_arm", "Arm column", "ACTARM (default)"),
+        field(id, "study_arm_code", "Arm code column",
+              "ACTARMCD / ARMCD (detected)"),
         field(id, "study_severity", "Severity column",
               "AESEV / AETOXGR (detected)"),
         field(id, "study_timeline", "Timeline reference",
@@ -105,6 +114,8 @@ new_study_roles_option <- function(arm = "", severity = "", timeline = "",
             blockr.core::get_board_option_value("study_roles", session)
           )
           shiny::updateTextInput(session, "study_arm", value = val$arm)
+          shiny::updateTextInput(session, "study_arm_code",
+                                 value = val$arm_code)
           shiny::updateTextInput(session, "study_severity",
                                  value = val$severity)
           shiny::updateTextInput(session, "study_timeline",
@@ -114,8 +125,8 @@ new_study_roles_option <- function(arm = "", severity = "", timeline = "",
         }
       )
     },
-    update_trigger = c("study_arm", "study_severity", "study_timeline",
-                       "study_indication"),
+    update_trigger = c("study_arm", "study_arm_code", "study_severity",
+                       "study_timeline", "study_indication"),
     transform = function(x) study_roles_normalize(x),
     category = category,
     ...
@@ -132,7 +143,7 @@ new_study_roles_option <- function(arm = "", severity = "", timeline = "",
 #' resolution instead.
 #'
 #' @param x Raw value.
-#' @return `list(arm, severity, timeline, indication)`.
+#' @return `list(arm, arm_code, severity, timeline, indication)`.
 #' @noRd
 study_roles_normalize <- function(x) {
   if (is.null(x)) x <- list()
@@ -149,6 +160,7 @@ study_roles_normalize <- function(x) {
 
   list(
     arm = scalar(key("arm")),
+    arm_code = scalar(key("arm_code")),
     severity = scalar(key("severity")),
     timeline = scalar(key("timeline")),
     indication = scalar(key("indication"))

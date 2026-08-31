@@ -33,8 +33,8 @@
 
 # Works from the workspace root or from the package dir.
 root <- if (file.exists("blockr.pharma/DESCRIPTION")) "." else ".."
-for (p in c("blockr.core", "blockr.theme", "blockr.dplyr", "blockr.dm",
-            "blockr.pharma", "blockr.dag", "blockr.dock")) {
+for (p in c("blockr.core", "blockr.theme", "blockr.ui", "blockr.dplyr",
+            "blockr.dm", "blockr.pharma", "blockr.dag", "blockr.dock")) {
   pkgload::load_all(file.path(root, p), quiet = TRUE)
 }
 
@@ -83,11 +83,14 @@ serve(
     # Current dock API: named PLAIN list of `grids =` (the old `layouts =` is
     # swallowed by ... and silently ignored). Views are derived from the grids.
     # A grid leaf is a bare panel id, or panels(...) for a tabbed group;
-    # "dag_extension" is the DAG panel's extension_id(). A block that appears
+    # "dag" is the DAG panel's key: an unnamed extension is keyed by its
+    # class with the `_extension` suffix stripped (stamp_extension_keys()),
+    # so "dag_extension" is not a panel and aborts the board build. A block
+    # that appears
     # in no grid is HIDDEN, so all three are listed.
     grids = list(
       Profile = dock_grid("profile"),
-      Pipeline = dock_grid("dag_extension"),
+      Pipeline = dock_grid(ext("dag")),
       Data = dock_grid(panels("data", "cdisc"))
     ),
     # Land on the profile: the picker is the thing to look at.

@@ -12,6 +12,10 @@
 #                (the data can carry several correct-looking answers at
 #                once, so even the undeclared case never guesses beyond the
 #                actual arm). See pp_arm_column().
+#   arm_code  -- ADSL SHORT arm name, for surfaces with no room for the
+#                label (the cohort list's chip). Convention: ACTARMCD then
+#                ARMCD; none is legitimate (the arm colour carries it
+#                instead). See pp_arm_code_column().
 #   severity  -- ADAE severity column. Convention: detect AETOXGR over
 #                AESEV (distinguishable by their values); none is
 #                legitimate (uncolored bars). See pp_sev_column().
@@ -45,12 +49,12 @@
 #'   roles).
 #' @param declared Declared roles (the normalized "study_roles" option
 #'   value, `NULL` entries for undeclared), or `NULL`.
-#' @return List with `arm`, `severity`, `timeline`, `indication` (column names
+#' @return List with `arm`, `arm_code`, `severity`, `timeline`, `indication` (column names
 #'   or `NULL`) and `errors` (named list of conditions, empty when all
 #'   resolve).
 #' @noRd
 pp_resolve_roles <- function(dm_obj, declared = NULL) {
-  roles <- list(arm = NULL, severity = NULL, timeline = NULL,
+  roles <- list(arm = NULL, arm_code = NULL, severity = NULL, timeline = NULL,
                 indication = NULL, errors = list())
   if (!inherits(dm_obj, "dm")) return(roles)
 
@@ -71,6 +75,9 @@ pp_resolve_roles <- function(dm_obj, declared = NULL) {
   if ("adsl" %in% names(tbls)) {
     adsl_cols <- colnames(tbls[["adsl"]])
     take("arm", function() pp_arm_column(adsl_cols, declared$arm))
+    take("arm_code", function() {
+      pp_arm_code_column(adsl_cols, declared$arm_code)
+    })
     take("timeline", function() {
       pp_timeline_column(adsl_cols, declared$timeline)
     })

@@ -15,8 +15,8 @@
 # NOTE: load_all() ALL of them, never a mix (assets + extension contracts;
 # see patient-profile-sidebar.R for the long form of why).
 root <- if (file.exists("blockr.pharma/DESCRIPTION")) "." else ".."
-for (p in c("blockr.core", "blockr.theme", "blockr.dplyr", "blockr.dm",
-            "blockr.pharma", "blockr.dag", "blockr.dock")) {
+for (p in c("blockr.core", "blockr.theme", "blockr.ui", "blockr.dplyr",
+            "blockr.dm", "blockr.pharma", "blockr.dag", "blockr.dock")) {
   pkgload::load_all(file.path(root, p), quiet = TRUE)
 }
 

@@ -1416,3 +1416,183 @@
   background: var(--blockr-grey-100, #f3f4f6);
   color: var(--blockr-color-text-primary, #111827);
 }
+
+/* === Cohort list ============================================================
+   The sidebar has two tenants now: the cohort above, the panels below. The
+   cohort well is a FIXED height that scrolls, deliberately -- a 200-patient
+   study would otherwise push the panel list off the bottom of the sidebar,
+   and the panel list is the thing that was there first. It collapses to its
+   content when the cohort is shorter than the well, so a cohort of one does
+   not sit in 230px of empty space.
+
+   Row geometry (38px, two lines) comes from the design round in
+   _blockr.design/open/cohort-in-profile-sidebar/mock/final.html. Type is at
+   the design system's floor already (12px / 11px against a 12px smallest
+   token), so the size came out of padding and the band, never the text.
+   ========================================================================= */
+
+.pp-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pp-sidebar-section--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.pp-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.pp-section-title {
+  flex: 1 1 auto;
+}
+
+.pp-section-count {
+  font-size: 11px;
+  color: #6b7280;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+}
+
+/* Sort. The house click-through pill (.pp-ctrl-group / .pp-ctrl-pill, shared
+   with the gantt's LANES control), so it needs no styling of its own beyond
+   sitting in the sidebar's margins rather than a panel header. */
+.pp-cohort-sort {
+  padding: 0 10px 6px;
+  flex-shrink: 0;
+}
+
+.pp-cohort-well {
+  /* Exactly 5 rows: 5 x 38px (the row is border-box, so its 1px borders are
+     inside that) plus the well's own 5px bottom padding. A half-visible row
+     at the fold reads as a rendering fault rather than as "there is more",
+     which is what the scrollbar is for. */
+  max-height: 195px;
+  overflow-y: auto;
+  padding: 0 5px 5px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.pp-cohort-well::-webkit-scrollbar {
+  width: 7px;
+}
+
+.pp-cohort-well::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.pp-cohort-well .recalculating {
+  opacity: 1 !important;
+}
+
+.pp-cohort-empty {
+  padding: 10px 7px 12px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* --- One patient --------------------------- */
+.pp-pt {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: 38px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pp-pt:hover {
+  border-color: #e5e7eb;
+  background: rgba(249, 250, 251, 0.9);
+}
+
+.pp-pt.is-selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.pp-pt.is-filtered-out {
+  display: none;
+}
+
+.pp-pt-line {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pp-pt-id {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.pp-pt-demo {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.pp-pt-gap {
+  flex: 1 1 auto;
+}
+
+/* The arm. A chip when the study carries an arm code, a swatch when it does
+   not -- same information, but only the swatch needs a legend, which is what
+   makes ACTARMCD worth resolving.
+
+   The chip is LIGHT, per the house badge: a tint of the arm colour carrying
+   the same colour as text (pp_cohort_chip_style() computes both, since the
+   colour is per-arm and comes from the scale map). Solid colour with white
+   text turned a 200-row list into a wall of paint, and the chip should be
+   the quietest thing in the row after the band. */
+.pp-pt-code {
+  font-size: 10px;
+  line-height: 15px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 4px; /* --blockr-radius-sm */
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pp-pt-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: 0 0 9px;
+  align-self: center;
+}
+
+/* Stretched to whatever width the sidebar has. The element carries
+   preserveAspectRatio="none" (set in pp_cohort_band_svg(), not here -- it is
+   an SVG attribute, and the CSS property of that name is not reliably
+   supported): without it the default uniform scale is capped by the 7px
+   height and the band letterboxes, leaving a gap at both ends. A density
+   strip has no aspect ratio to preserve -- x is study days, y is nothing. */
+.pp-pt-band {
+  display: block;
+  width: 100%;
+}
+

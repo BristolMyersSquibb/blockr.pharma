@@ -1,5 +1,5 @@
-# The "study_roles" board option: four fields (arm, severity, timeline,
-# indication),
+# The "study_roles" board option: five fields (arm, arm_code, severity,
+# timeline, indication),
 # uniform semantics -- undeclared = the package convention,
 # declared-but-missing = a named error, never a fallback. Table aliases are
 # NOT a field: SDTM domain names resolve through pp_table_catalog() with no
@@ -14,7 +14,8 @@ test_that("the option normalizes, serializes and restores", {
   # undeclared default
   expect_identical(
     blockr.core::board_option_value(opt),
-    list(arm = "", severity = "", timeline = "", indication = "")
+    list(arm = "", arm_code = "", severity = "", timeline = "",
+         indication = "")
   )
 
   # normalization: ctor keys, the editor's study_* input keys, whitespace
@@ -23,7 +24,7 @@ test_that("the option normalizes, serializes and restores", {
       study_arm = " TRT ", study_severity = "", study_timeline = "RANDDT",
       study_indication = " CMINDC "
     )),
-    list(arm = "TRT", severity = "", timeline = "RANDDT",
+    list(arm = "TRT", arm_code = "", severity = "", timeline = "RANDDT",
          indication = "CMINDC")
   )
 
@@ -39,12 +40,36 @@ test_that("the option normalizes, serializes and restores", {
   )
 
   # a declared value round-trips through ser/deser (the saved-board path)
-  declared <- new_study_roles_option(arm = "TRT", severity = "AETOXGR")
+  declared <- new_study_roles_option(arm = "TRT", arm_code = "ACTARMCD",
+                                     severity = "AETOXGR")
   restored <- blockr.core::blockr_deser(blockr.core::blockr_ser(declared))
   expect_s3_class(restored, "board_option")
   val <- blockr.core::board_option_value(restored)
   expect_identical(val$arm, "TRT")
+  expect_identical(val$arm_code, "ACTARMCD")
   expect_identical(val$severity, "AETOXGR")
+})
+
+# The arm CODE is the one role where absent is legitimate: the label column
+# is prose and does not fit a 232px row, ADaM already carries a capped code
+# beside it, and a study without one falls back to the arm's colour rather
+# than to an error. It cannot be derived from the label column's name --
+# CEDX declares arm = "TRT" and there is no TRTCD.
+test_that("the arm code resolves, and absent is legitimate", {
+  cols <- c("USUBJID", "TRT", "ACTARM", "ACTARMCD", "ARMCD")
+  expect_identical(pp_arm_code_column(cols, "ARMCD"), "ARMCD")
+  # undeclared: the actual arm's code before the planned one
+  expect_identical(pp_arm_code_column(cols, NULL), "ACTARMCD")
+  expect_identical(pp_arm_code_column(c("USUBJID", "ARMCD"), NULL), "ARMCD")
+  # no code column at all is NOT an error
+  expect_null(pp_arm_code_column(c("USUBJID", "TRT", "ACTARM"), NULL))
+  expect_null(pp_arm_code_column(c("USUBJID", "TRT"), ""))
+
+  # declared-but-missing still errors, like every other role
+  err <- tryCatch(pp_arm_code_column(cols, "NOPE"), error = function(e) e)
+  expect_s3_class(err, "pp_arm_code_var_missing")
+  expect_match(conditionMessage(err), "NOPE")
+  expect_match(conditionMessage(err), "sidebar")
 })
 
 test_that("a declared severity column wins, and errors when absent", {
