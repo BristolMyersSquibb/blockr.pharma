@@ -158,3 +158,72 @@ test_that("an empty intersection does not wipe a good value", {
                             population = function() data.frame(B = 2)))
   )
 })
+
+# --- the picker has to survive a panel that opens LATE ------------------------
+# A block on a dock panel nobody has opened still runs its server, because a
+# visible block downstream needs its data, and its UI does not exist yet. The
+# picker used to be a static selectInput() filled in by updateSelectInput(),
+# and that push resolves against a bound element: with no element it is
+# dropped, silently. So the block was right, the picker was empty, and the
+# first thing the empty picker did when the panel was finally opened was
+# report "" back -- which the input observer took for a user pick. The
+# identifier went, the join fell back to pass-through, and every percentage
+# downstream lost its denominator. The clear is also what gets saved.
+
+# blockr.core wraps the block module in a proxy scope, so the output's full
+# name carries a prefix that is not ours to know. Match the tail.
+pj_control <- function(session) {
+  outs <- names(session$.__enclos_env__$private$outs)
+  nm <- grep("expr-control$", outs, value = TRUE)
+  paste(as.character(session$getOutput(nm[[1L]])), collapse = "")
+}
+
+test_that("the picker is rendered, so a late mount gets it configured", {
+  blk <- new_population_join_block(id = "USUBJID")
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    {
+      session$flushReact()
+      html <- pj_control(session)
+      expect_match(html, "<option value=\"USUBJID\" selected>", fixed = TRUE)
+      expect_match(html, "SUBJ", fixed = TRUE)
+    },
+    args = list(x = blk, data = list(data = function() two_ids_ev,
+                                     population = function() two_ids_pop))
+  )
+})
+
+test_that("an empty picker binding does not clear the identifier", {
+  blk <- new_population_join_block(id = "USUBJID")
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    {
+      session$flushReact()
+      # what a select with no options reports the first time it binds
+      session$makeScope("expr")$setInputs(id = "")
+      session$flushReact()
+      expect_equal(session$returned$state$id(), "USUBJID")
+      expect_match(paste(deparse(session$returned$expr()), collapse = " "),
+                   "join_population", fixed = TRUE)
+    },
+    args = list(x = blk, data = list(data = function() two_ids_ev,
+                                     population = function() two_ids_pop))
+  )
+})
+
+test_that("a value the inputs do not share is not taken for a pick", {
+  # Same shape as the empty echo: the widget is a view, the block state is
+  # the truth.
+  blk <- new_population_join_block(id = "USUBJID")
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    {
+      session$flushReact()
+      session$makeScope("expr")$setInputs(id = "AEDECOD")
+      session$flushReact()
+      expect_equal(session$returned$state$id(), "USUBJID")
+    },
+    args = list(x = blk, data = list(data = function() two_ids_ev,
+                                     population = function() two_ids_pop))
+  )
+})

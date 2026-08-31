@@ -163,6 +163,10 @@ new_population_join_block <- function(id = "USUBJID", ...) {
         # discipline as the flag filter's shape_rv.
         r_ok <- shiny::reactiveVal(FALSE)
 
+        # What the picker offers. It drives a RENDERED control rather than an
+        # updateSelectInput() push -- see the renderUI below for why.
+        r_choices <- shiny::reactiveVal(character())
+
         usable <- function(x, choices) {
           length(x) == 1L && !is.na(x) && nzchar(x) && x %in% choices
         }
@@ -185,16 +189,54 @@ new_population_join_block <- function(id = "USUBJID", ...) {
           # an identifier the inputs do not actually have.
           if (!length(choices)) return()
           sel <- if (usable(cur, choices)) cur else choices[[1L]]
-          shiny::updateSelectInput(session, "id", choices = choices,
-                                   selected = sel)
+          r_choices(choices)
           if (!identical(sel, cur)) r_id(sel)
           r_ok(TRUE)
         })
 
-        # The guard makes ignoreInit redundant: the server's own
-        # updateSelectInput echo arrives equal to r_id() and writes nothing.
+        # The control is RENDERED, and that is the whole point of it.
+        #
+        # A block sitting on a dock panel nobody has opened still runs its
+        # server -- a visible block downstream needs its data -- while its UI
+        # does not exist yet. `updateSelectInput()` resolves against a bound
+        # element and is dropped, silently, when there is none. So the block
+        # came up correct and its picker came up EMPTY, and the first thing
+        # that empty picker did on being opened was report "" back (below).
+        #
+        # Shiny suspends a render whose output is not on the page and runs it
+        # when the element binds, so a rendered control arrives configured on
+        # first paint however late that is. It is the only mechanism that
+        # covers this for a block with no JS of its own to announce itself.
+        # `isolate()` on the selection keeps the widget from being rebuilt
+        # under the user's cursor on their own pick.
+        output$control <- shiny::renderUI({
+          choices <- r_choices()
+          sel <- shiny::isolate(r_id())
+          # No data yet: show the identifier the block holds rather than an
+          # empty box, so the panel never renders a picker that disagrees
+          # with the block.
+          if (!length(choices) && nzchar(sel)) choices <- sel
+          shiny::selectInput(
+            inputId = session$ns("id"),
+            label = "Subject identifier",
+            choices = choices,
+            selected = if (nzchar(sel)) sel
+          )
+        })
+
+        # Stock inputs echo: a select reports its value the first time it
+        # binds, and that is the widget talking about itself, not a user
+        # decision. Only a value the current choices actually OFFER counts as
+        # a pick. Comparing against r_id() alone is not enough -- the echo
+        # from an empty select is "", which differs from a restored
+        # identifier and would be adopted, taking the population back out of
+        # the frame and saving the clear.
         shiny::observeEvent(input$id, {
-          if (!identical(input$id, shiny::isolate(r_id()))) r_id(input$id)
+          incoming <- as.character(input$id)[1L]
+          if (identical(incoming, shiny::isolate(r_id()))) return()
+          if (!usable(incoming, shiny::isolate(r_choices()))) return()
+          r_id(incoming)
+          r_ok(TRUE)
         })
 
         list(
@@ -227,12 +269,7 @@ new_population_join_block <- function(id = "USUBJID", ...) {
       shiny::tagList(
         shiny::div(
           class = "block-container",
-          shiny::selectInput(
-            inputId = shiny::NS(id, "id"),
-            label = "Subject identifier",
-            choices = character(),
-            selected = NULL
-          )
+          shiny::uiOutput(shiny::NS(id, "control"))
         )
       )
     },
