@@ -150,16 +150,35 @@ pp_sev_rank <- function(x) {
 #' rather than dropped: an empty band is a legitimate reading, a missing row
 #' is not.
 #'
+#' @section The pre-treatment floor:
+#' Study days go negative, and ADaM occurrence data carries medical history
+#' among them: pharmaverseadam has AE onsets at day -13469. An axis honest
+#' enough to include that would squeeze every on-study event into a sliver at
+#' the right edge of all 254 rows. The profile solved this once already --
+#' [pp_clip_prestudy()] floors the timeline 30 days before treatment start
+#' unless the user opts into the full history -- and the band follows the same
+#' rule, in study days: the axis floors at `-prestudy_days`, an event
+#' straddling the floor enters from the left edge, and only an event entirely
+#' before it drops out.
+#'
+#' Before this the axis simply started at day 0, so a pre-treatment event was
+#' drawn at the wrong place or not at all, and the list disagreed with the
+#' panel it opens.
+#'
 #' @param dm_obj A normalized `dm`.
 #' @param roles Resolved roles, for the severity column.
-#' @return `list(days, subjects)` where `days` is the axis maximum and
-#'   `subjects` is a named list, one entry per USUBJID, each
+#' @param prestudy_days How far before treatment start the axis may reach.
+#'   `Inf` for the full history (the block passes this when the user turns
+#'   the profile's Pre-treatment toggle on, so the two agree).
+#' @return `list(day0, days, subjects)` -- the axis bounds in study days and a
+#'   named list, one entry per USUBJID, each
 #'   `list(events = data.frame(start, end, sev), trt_end = <num or NA>)`.
 #' @noRd
-pp_cohort_marks <- function(dm_obj, roles = NULL) {
+pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
 
   ids <- pp_subject_ids(dm_obj)
-  empty <- list(days = 1, subjects = stats::setNames(list(), character()))
+  empty <- list(day0 = 0, days = 1,
+                subjects = stats::setNames(list(), character()))
   if (!length(ids)) return(empty)
 
   tbls <- dm::dm_get_tables(dm_obj)
@@ -175,13 +194,24 @@ pp_cohort_marks <- function(dm_obj, roles = NULL) {
 
   ev <- pp_cohort_ae_events(tbls, roles$severity)
 
-  # ONE axis for every row. The maximum is the largest day anything reaches,
-  # so the longest-treated patient's bar ends at the right edge and everyone
-  # else is read against them. Open-ended events are excluded from the
-  # maximum and then stretched to it below -- including them would be
-  # circular, since where they end IS the axis.
+  # The floor, in study days. Day 1 is treatment start and there is no day 0,
+  # so 30 days before it is day -30.
+  floor_day <- if (is.finite(prestudy_days)) -abs(prestudy_days) else -Inf
+
+  # Only events entirely before the floor drop out; one straddling it enters
+  # from the left edge. Same rule pp_clip_prestudy() states for the panel.
+  keep <- is.infinite(floor_day) | ev$end >= floor_day | ev$open
+  ev <- lapply(ev, function(x) x[keep])
+  ev$start <- pmax(ev$start, floor_day)
+
+  # ONE axis for every row, so the rows compare. The bounds are the widest
+  # anything reaches, floored below. Open-ended events are excluded from the
+  # maximum and then stretched to it -- including them would be circular,
+  # since where they end IS the axis.
+  day0 <- suppressWarnings(min(c(ev$start, 1), na.rm = TRUE))
+  if (!is.finite(day0)) day0 <- 0
   days <- suppressWarnings(max(c(trt_end, ev$end, ev$start, 1), na.rm = TRUE))
-  if (!is.finite(days) || days <= 0) days <- 1
+  if (!is.finite(days) || days <= day0) days <- day0 + 1
 
   # An event with no end date is ONGOING, and runs to the end of the axis.
   # This is the AE gantt's convention (pp_gantt_open_end(): the bar reaches
@@ -203,7 +233,7 @@ pp_cohort_marks <- function(dm_obj, roles = NULL) {
   })
   names(subjects) <- ids
 
-  list(days = days, subjects = subjects)
+  list(day0 = day0, days = days, subjects = subjects)
 }
 
 #' Adverse events as day intervals
@@ -281,10 +311,13 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
 #' @param bins How many segments the axis is painted in. 60 over 176px is
 #'   about 3px a segment, which is the width below which a fill stops reading
 #'   as a colour.
+#' @param day0 Axis minimum. Negative when the cohort has pre-treatment
+#'   events (see [pp_cohort_marks()]); the band is NOT anchored at zero, and
+#'   assuming it was is what put those events in the wrong place.
 #' @return An HTML string (an `<svg>`).
 #' @noRd
 pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
-                               bins = 60) {
+                               bins = 60, day0 = 0) {
 
   esc <- function(x) gsub("\"", "&quot;", x, fixed = TRUE)
   h <- height
@@ -295,12 +328,14 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
   ))
 
   ev <- sub$events
+  span <- days - day0
+  if (!is.finite(span) || span <= 0) span <- 1
   if (is.data.frame(ev) && nrow(ev)) {
-    step <- days / bins
+    step <- span / bins
     seg_w <- width / bins
     for (i in seq_len(bins)) {
-      d0 <- (i - 1) * step
-      d1 <- i * step
+      d0 <- day0 + (i - 1) * step
+      d1 <- day0 + i * step
       hit <- ev$start <= d1 & ev$end >= d0
       if (!any(hit)) next
       sev <- ev$sev[hit]
@@ -319,8 +354,8 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
   # End of treatment: the one treatment fact that carries information once
   # the study is complete. A patient still on treatment has no marker.
   te <- sub$trt_end
-  if (is.finite(te) && te > 0 && te < days) {
-    cx <- round((te / days) * width, 2)
+  if (is.finite(te) && te > day0 && te < days) {
+    cx <- round(((te - day0) / span) * width, 2)
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(

@@ -254,3 +254,86 @@ test_that("the arm chip is a light tint, not a solid block", {
   # anything unparseable falls back to the neutral badge rather than erroring
   expect_match(pp_cohort_chip_style("not a colour"), "background:#f3f4f6")
 })
+
+# --- The pre-treatment floor ------------------------------------------------
+# Study days go negative and ADaM occurrence data carries medical history
+# among them (pharmaverseadam has AE onsets at day -13469). The band's axis
+# used to start at day 0, so those events landed in the wrong place or
+# vanished, and the list disagreed with the panel it opens.
+
+hist_adae <- function() {
+  data.frame(
+    USUBJID = c("S-1", "S-1", "S-2", "S-3"),
+    AEDECOD = c("History", "Screening rash", "Headache", "Old injury"),
+    ASTDY = c(-4000, -12, 5, -900),
+    AENDY = c(-3990, -2, 12, -880),
+    AESEV = c("MILD", "MODERATE", "SEVERE", "MILD"),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("the floor bounds how far back the axis reaches", {
+  d <- cohort_dm(test_adsl(), hist_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+
+  # A BOUND, not a fixed start: the axis begins at the earliest event that
+  # survives the floor (-12), rather than always spending 30 days of width on
+  # a screening window the cohort may not use. What it must not be is -4000 --
+  # one medical-history record squeezing every on-study event into a sliver
+  # on all 254 rows.
+  expect_identical(m$day0, -12)
+  expect_identical(m$days, 180)
+})
+
+test_that("a straddling event enters from the edge, an older one drops", {
+  d <- cohort_dm(test_adsl(), hist_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+
+  ev <- m$subjects[["S-1"]]$events
+  # the -4000 history is gone, the -12 screening rash stays
+  expect_identical(nrow(ev), 1L)
+  expect_identical(ev$start[[1]], -12)
+  # S-3's only event is entirely before the floor, so the patient keeps a row
+  # with an empty band rather than losing one
+  expect_identical(nrow(m$subjects[["S-3"]]$events), 0L)
+  expect_true("S-3" %in% names(m$subjects))
+})
+
+test_that("an event straddling the floor is clamped, not dropped", {
+  adae <- hist_adae()
+  adae$AENDY <- c(-3990, 40, 12, -880)
+  adae$ASTDY <- c(-4000, -900, 5, -900)   # runs from -900 to day 40
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  ev <- m$subjects[["S-1"]]$events
+  expect_identical(nrow(ev), 1L)
+  expect_identical(ev$start[[1]], -30)    # enters from the left edge
+  expect_identical(ev$end[[1]], 40)
+})
+
+test_that("the full history is available, and then the axis really reaches it", {
+  d <- cohort_dm(test_adsl(), hist_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")),
+                       prestudy_days = Inf)
+  expect_identical(m$day0, -4000)
+  expect_identical(nrow(m$subjects[["S-1"]]$events), 2L)
+})
+
+test_that("the band maps from day0, not from zero", {
+  d <- cohort_dm(test_adsl(), hist_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  col <- pp_cohort_sev_color(NULL)
+
+  # S-1's only surviving event is at day -12, which is in the FIRST tenth of
+  # a -30..180 axis. Anchored at zero it would have been dropped entirely.
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col, day0 = m$day0)
+  xs <- as.numeric(regmatches(svg, gregexpr('(?<=x=")[0-9.]+', svg,
+                                            perl = TRUE))[[1]])
+  painted <- xs[-1]                       # drop the track
+  expect_gt(length(painted), 0)
+  expect_lt(max(painted), 176 * 0.2)
+
+  # a cohort with no pre-treatment events still starts at day 1
+  d2 <- cohort_dm(test_adsl(), test_adae())
+  expect_identical(pp_cohort_marks(d2, pp_resolve_roles(d2))$day0, 1)
+})

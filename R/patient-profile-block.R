@@ -225,7 +225,12 @@ new_patient_profile_block <- function(selected = NULL,
           r_cohort_marks <- shiny::reactive({
             nd <- r_norm_dm()
             if (is.null(nd)) return(pp_cohort_marks(NULL))
-            pp_cohort_marks(nd, r_roles())
+            # Follows the profile's Pre-treatment toggle, so the band and the
+            # panels floor their axis at the same place.
+            pp_cohort_marks(
+              nd, r_roles(),
+              prestudy_days = if (r_show_prestudy()) Inf else 30
+            )
           })
 
           # Which key the list is sorted by. Not block state: it is a way of
@@ -804,7 +809,7 @@ new_patient_profile_block <- function(selected = NULL,
               )
               band <- pp_cohort_band_svg(
                 marks$subjects[[id]] %||% list(events = NULL, trt_end = NA),
-                marks$days, color
+                marks$days, color, day0 = marks$day0
               )
               # The chip when the study has a code, a colour swatch when it
               # does not. Same information either way; only one of them needs
