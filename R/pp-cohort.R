@@ -192,7 +192,20 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
     rep(NA_real_, length(ids))
   }
 
-  ev <- pp_cohort_ae_events(tbls, roles$severity)
+  # The anchor each AE date is measured from, aligned to adae's rows. Same
+  # column the panels anchor on (the `timeline` role, TRTSDT by convention).
+  ref_col <- roles$timeline %||% "TRTSDT"
+  ae_ref <- NULL
+  if ("adae" %in% names(tbls) && ref_col %in% colnames(adsl)) {
+    adae_sub <- as.character(as.data.frame(tbls[["adae"]])$USUBJID)
+    if (!is.null(adae_sub)) {
+      ae_ref <- pp_as_date(adsl[[ref_col]])[
+        match(adae_sub, as.character(adsl$USUBJID))
+      ]
+    }
+  }
+
+  ev <- pp_cohort_ae_events(tbls, roles$severity, ref = ae_ref)
 
   # The floor, in study days. Day 1 is treatment start and there is no day 0,
   # so 30 days before it is day -30.
@@ -305,27 +318,81 @@ pp_cohort_subject_end <- function(tbls, ids, trt_end, ev = NULL) {
   acc
 }
 
+#' Convert an analysis date to an ADaM study day
+#'
+#' Day 1 is the reference (treatment start) and there is no day 0: the day
+#' before is -1. The inverse of what [pp_day_to_x()] undoes on the way out.
+#'
+#' @param date Dates.
+#' @param ref Reference dates, recycled against `date`.
+#' @return Numeric study days, `NA` where either side is missing.
+#' @noRd
+pp_date_to_day <- function(date, ref) {
+  d <- pp_as_date(date)
+  r <- pp_as_date(ref)
+  delta <- as.numeric(d - r)
+  ifelse(is.na(delta), NA_real_, ifelse(delta >= 0, delta + 1, delta))
+}
+
 #' Adverse events as day intervals
 #'
 #' A missing end is reported as `open`, not resolved here: it means ongoing,
 #' and an ongoing event runs to the end of the axis, which this function does
 #' not know. [pp_cohort_marks()] closes them once the axis is fixed.
+#'
+#' @section Days, or dates converted to days:
+#' The band's axis is in study days, so this preferred `ASTDY`/`AENDY` and
+#' returned NOTHING when they were absent -- every band an empty track, on a
+#' study whose profile panels drew the same events perfectly. The panels do
+#' not have this problem because the AE gantt picks its source by MODE
+#' (`viz-ae-gantt.R`): in the default date mode it reads `ASTDT`/`AENDT` and
+#' never looks at a day column at all.
+#'
+#' A study that ships analysis dates and no analysis days is entirely
+#' ordinary, so the day column is now a preference rather than a requirement.
+#' Absent, the dates are converted against the patient's own timeline anchor
+#' -- the `timeline` role, `TRTSDT` by convention, which is the same
+#' reference `pp_compute_ref_ms()` gives the panels.
+#'
+#' The native day still wins where both exist, for the reason
+#' `pp_xval_pref_day()` gives: a study's own derived day is authoritative, and
+#' re-deriving it from dates is a lossy round trip past the same anchor.
+#'
+#' @param ref Per-row reference dates (the patient's treatment start), or
+#'   `NULL`. Only consulted when a day column is missing.
 #' @noRd
-pp_cohort_ae_events <- function(tbls, sev_col = NULL) {
+pp_cohort_ae_events <- function(tbls, sev_col = NULL, ref = NULL) {
 
   none <- list(subject = character(), start = numeric(), end = numeric(),
                sev = character(), open = logical())
   if (!"adae" %in% names(tbls)) return(none)
 
   adae <- as.data.frame(tbls[["adae"]])
-  if (!all(c("USUBJID", "ASTDY") %in% colnames(adae))) return(none)
+  if (!"USUBJID" %in% colnames(adae)) return(none)
 
-  start <- suppressWarnings(as.numeric(adae$ASTDY))
-  end <- if ("AENDY" %in% colnames(adae)) {
-    suppressWarnings(as.numeric(adae$AENDY))
-  } else {
-    rep(NA_real_, nrow(adae))
+  # The study's own day, else the date converted against this patient's
+  # anchor. Coalesced PER ROW, not per column: a day column that exists but
+  # is only partly populated is common, and preferring it wholesale silently
+  # dropped every record it had no value for -- while the panel, reading
+  # dates, drew all of them. That is the shape of the disagreement this
+  # whole function exists to avoid.
+  day_of <- function(day_col, date_col) {
+    native <- if (day_col %in% colnames(adae)) {
+      suppressWarnings(as.numeric(adae[[day_col]]))
+    } else {
+      rep(NA_real_, nrow(adae))
+    }
+    derived <- if (!is.null(ref) && date_col %in% colnames(adae)) {
+      pp_date_to_day(adae[[date_col]], ref)
+    } else {
+      rep(NA_real_, nrow(adae))
+    }
+    ifelse(is.na(native), derived, native)
   }
+
+  start <- day_of("ASTDY", "ASTDT")
+  end <- day_of("AENDY", "AENDT")
+  if (all(is.na(start))) return(none)
   # An end before the start is data we cannot draw; treat it as no end at
   # all rather than as a backwards bar.
   open <- is.na(end) | end < start
@@ -343,13 +410,22 @@ pp_cohort_ae_events <- function(tbls, sev_col = NULL) {
 }
 
 # ---------------------------------------------------------------------------
-# Drawing. The band is deliberately NOT a scaled-down gantt: at 176px for a
-# whole study, one event is about a pixel, and drawing them as separate marks
-# smears a patient with a dozen events into an unreadable picket fence. So the
-# band bins the axis and paints each bin with the WORST severity active that
-# day. Overlaps merge instead of fighting, and the colour always answers "how
-# bad was it here". This is what the profile's own AE lane already looks like
-# once the events overlap; the band just makes it explicit.
+# Drawing. The band paints one span per event, in the order adae carries them,
+# later over earlier -- because that is exactly what the patient overview's AE
+# lane does, and the two have to look alike.
+#
+# It used to bin the axis and paint each bin with the WORST severity active
+# that day, on the claim that this "is what the AE lane already looks like once
+# the events overlap". That claim was wrong, and visibly so. The lane draws
+# every AE as its own bar at 0.7 alpha in row order, so a patient whose events
+# are mostly grade 1 and 2 reads as teal with a couple of amber ticks. Under
+# worst-wins the same patient came out almost entirely amber: one long grade-3
+# event repainted every day it spanned, burying a dozen milder ones underneath
+# it. Side by side the sidebar and the panel were different colours for the
+# same patient, which is worse than either rule being wrong on its own.
+#
+# The picket-fence worry the binning was meant to solve does not arise: these
+# are spans, not ticks, so overlapping events overwrite rather than stripe.
 # ---------------------------------------------------------------------------
 
 #' Severity colour resolver for the cohort band
@@ -373,23 +449,30 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
 
 #' The AE band for one patient
 #'
+#' One span per event, in adae order, later over earlier -- the patient
+#' overview's AE lane rule, so the strip and the panel agree.
+#'
 #' @param sub One entry of [pp_cohort_marks()]`$subjects`.
 #' @param days Axis maximum (shared across every row).
 #' @param color A resolver from [pp_cohort_sev_color()].
 #' @param width,height Band geometry in px.
-#' @param bins How many segments the axis is painted in. 60 over 176px is
-#'   about 3px a segment, which is the width below which a fill stops reading
-#'   as a colour.
 #' @param day0 Axis minimum. Negative when the cohort has pre-treatment
 #'   events (see [pp_cohort_marks()]); the band is NOT anchored at zero, and
 #'   assuming it was is what put those events in the wrong place.
+#' @param min_px Narrowest a span may draw. A same-day event is a fraction of
+#'   a pixel over a whole study and would vanish; the lane has the same floor
+#'   for the same reason.
 #' @return An HTML string (an `<svg>`).
 #' @noRd
 pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
-                               bins = 60, day0 = 0) {
+                               day0 = 0, min_px = 1.5) {
 
   esc <- function(x) gsub("\"", "&quot;", x, fixed = TRUE)
   h <- height
+  span <- days - day0
+  if (!is.finite(span) || span <= 0) span <- 1
+  x_of <- function(d) ((d - day0) / span) * width
+
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
            'fill="var(--pp-cohort-track, #f3f4f6)"/>'),
@@ -397,25 +480,16 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
   ))
 
   ev <- sub$events
-  span <- days - day0
-  if (!is.finite(span) || span <= 0) span <- 1
   if (is.data.frame(ev) && nrow(ev)) {
-    step <- span / bins
-    seg_w <- width / bins
-    for (i in seq_len(bins)) {
-      d0 <- day0 + (i - 1) * step
-      d1 <- day0 + i * step
-      hit <- ev$start <= d1 & ev$end >= d0
-      if (!any(hit)) next
-      sev <- ev$sev[hit]
-      rank <- pp_sev_rank(sev)
-      # An event with no severity still darkens the band: it happened, and
-      # showing nothing would read as an uneventful stretch.
-      worst <- if (all(rank == 0)) sev[[1L]] else sev[[which.max(rank)]]
+    for (i in seq_len(nrow(ev))) {
+      x0 <- max(x_of(ev$start[[i]]), 0)
+      x1 <- min(x_of(ev$end[[i]]), width)
+      w <- max(x1 - x0, min_px)
+      if (x0 >= width) next
       parts <- c(parts, sprintf(
-        '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.92"/>',
-        round((i - 1) * seg_w, 2), round(seg_w + 0.5, 2), h,
-        esc(color(worst))
+        '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
+        round(x0, 2), round(min(w, width - x0), 2), h,
+        esc(color(ev$sev[[i]]))
       ))
     }
   }
@@ -424,7 +498,7 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
   # the study is complete. A patient still on treatment has no marker.
   te <- sub$trt_end
   if (is.finite(te) && te > day0 && te < days) {
-    cx <- round(((te - day0) / span) * width, 2)
+    cx <- round(x_of(te), 2)
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(

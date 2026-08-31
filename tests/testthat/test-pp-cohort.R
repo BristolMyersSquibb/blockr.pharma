@@ -149,16 +149,16 @@ test_that("an end before the start is treated as no end, not a backwards bar", {
   expect_gte(ev$end[[1]], ev$start[[1]])
 })
 
-test_that("the band paints overlaps once, by worst severity", {
+test_that("the band draws one span per event, in adae order", {
   d <- cohort_dm(test_adsl(), test_adae())
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   col <- pp_cohort_sev_color(NULL)
 
   svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col)
   expect_match(svg, "^<svg")
-  # the track plus one rect per painted bin -- not one per event
-  expect_gt(length(gregexpr("<rect", svg)[[1]]), 1)
-  # SEVERE is in there (the second event), by its constant
+  fills <- regmatches(svg, gregexpr('fill="#[0-9A-Fa-f]{6}', svg))[[1]]
+  # S-1 has two events, so two spans -- not a bin count
+  expect_length(fills, 2L)
   expect_match(svg, pp_sev_fallback_color("SEVERE"), fixed = TRUE)
 
   # An eventless patient still draws: the track alone reads as "nothing
@@ -166,6 +166,31 @@ test_that("the band paints overlaps once, by worst severity", {
   empty <- pp_cohort_band_svg(m$subjects[["S-3"]], m$days, col)
   expect_match(empty, "^<svg")
   expect_identical(length(gregexpr("<rect", empty)[[1]]), 1L)
+})
+
+test_that("a severe event does not repaint the mild ones underneath it", {
+  # The band used to paint each bin with the WORST severity active that day.
+  # A patient whose events are mostly grade 1 and 2 then came out almost
+  # entirely grade-3 amber, while the profile's AE lane -- which draws one
+  # bar per event in row order -- showed the same patient as mostly teal.
+  # Two different-looking patients from one set of records.
+  adae <- data.frame(
+    USUBJID = rep("S-1", 4),
+    AEDECOD = c("Long severe", "Mild a", "Mild b", "Mild c"),
+    ASTDY = c(2, 10, 40, 90), AENDY = c(170, 30, 70, 130),
+    AESEV = c("SEVERE", "MILD", "MILD", "MILD"),
+    stringsAsFactors = FALSE
+  )
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days,
+                            pp_cohort_sev_color(NULL))
+  fills <- regmatches(svg, gregexpr('fill="#[0-9A-Fa-f]{6}', svg))[[1]]
+
+  # four events, four spans, and the three mild ones survive the severe one
+  expect_length(fills, 4L)
+  mild <- sum(grepl(pp_sev_fallback_color("MILD"), fills, fixed = TRUE))
+  expect_identical(mild, 3L)
 })
 
 test_that("the end-of-treatment diamond is drawn only when it ended early", {
@@ -422,4 +447,76 @@ test_that("the download and the click keep the full id", {
   # would be rejected -- which is what proves the row must send the full one
   expect_null(pp_cohort_pick(short[[1]], ids))
   expect_identical(pp_cohort_pick(ids[[1]], ids), ids[[1]])
+})
+
+# --- Studies that ship dates and no analysis days ---------------------------
+# The band's axis is in study days, so it read ASTDY/AENDY and returned
+# NOTHING when they were absent: every strip an empty track, on a study whose
+# profile panels drew the same events perfectly. The panels do not have the
+# problem because the AE gantt picks its source by MODE and in the default
+# date mode never looks at a day column.
+
+date_adae <- function() {
+  data.frame(
+    USUBJID = c("S-1", "S-1", "S-2"),
+    AEDECOD = c("Headache", "Nausea", "Rash"),
+    ASTDT = as.Date(c("2024-01-05", "2024-02-10", "2024-01-03")),
+    AENDT = as.Date(c("2024-01-09", "2024-02-14", "2024-01-12")),
+    AESEV = c("MILD", "SEVERE", "MODERATE"),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("dates become study days when the study ships no day column", {
+  d <- cohort_dm(test_adsl(), date_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  ev <- m$subjects[["S-1"]]$events
+  expect_identical(nrow(ev), 2L)
+  # TRTSDT is 2024-01-01, so 2024-01-05 is day 5 (day 1 is treatment start)
+  expect_identical(ev$start[[1]], 5)
+  expect_identical(ev$end[[1]], 9)
+})
+
+test_that("a native day beats a date, and there is no day zero", {
+  adae <- date_adae()
+  adae$ASTDY <- c(99, 99, 99)
+  adae$AENDY <- c(100, 100, 100)
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  # the study's own derived day is authoritative; re-deriving from dates is
+  # a lossy round trip past the same anchor
+  expect_identical(m$subjects[["S-1"]]$events$start[[1]], 99)
+
+  pre <- date_adae()
+  pre$ASTDT[1] <- as.Date("2023-12-30")
+  d2 <- cohort_dm(test_adsl(), pre)
+  m2 <- pp_cohort_marks(d2, pp_resolve_roles(d2, list(arm = "ACTARM")))
+  # two days before treatment start is -2, never 0
+  expect_identical(m2$subjects[["S-1"]]$events$start[[1]], -2)
+})
+
+test_that("a part-filled day column falls back per ROW, not per column", {
+  # Preferring a day column wholesale silently dropped every record it had no
+  # value for, while the panel drew all of them from the dates. On grade data
+  # that showed up as a strip missing exactly the severe events.
+  adae <- date_adae()
+  adae$ASTDY <- c(5, NA, NA)
+  adae$AENDY <- c(9, NA, NA)
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  ev <- m$subjects[["S-1"]]$events
+  expect_identical(nrow(ev), 2L)
+  expect_identical(ev$sev, c("MILD", "SEVERE"))
+  expect_identical(ev$start, c(5, 41))
+})
+
+test_that("a study with neither days nor dates has no AE timeline", {
+  adae <- date_adae()
+  adae$ASTDT <- NULL
+  adae$AENDT <- NULL
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  expect_identical(nrow(m$subjects[["S-1"]]$events), 0L)
+  # ...and every patient keeps their row
+  expect_length(m$subjects, 3L)
 })
