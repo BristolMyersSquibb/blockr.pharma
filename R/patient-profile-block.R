@@ -798,8 +798,16 @@ new_patient_profile_block <- function(selected = NULL,
             ord <- pp_cohort_order(frame, r_cohort_sort())
             has <- function(col) col %in% names(frame)
 
+            # A prod USUBJID is ~20 characters and most of them are the study
+            # id, which is the same on every row of the board. Lift the shared
+            # prefix out to the section header; the row keeps every character
+            # that distinguishes one patient from another, and the full id
+            # stays in the tooltip, the click payload and the download.
+            disp <- pp_cohort_id_display(frame$USUBJID)
+
             rows <- lapply(ord, function(i) {
               id <- frame$USUBJID[[i]]
+              shown <- disp$short[[i]]
               arm <- if (has("ARM")) as.character(frame$ARM[[i]]) else ""
               code <- if (has("ARMCD")) as.character(frame$ARMCD[[i]]) else ""
               demo <- paste(
@@ -828,9 +836,11 @@ new_patient_profile_block <- function(selected = NULL,
                 # Search matches the same text a reader sees, plus the arm,
                 # which is not printed in full anywhere in the row.
                 `data-search-text` = tolower(paste(id, demo, arm, code)),
+                # The tooltip carries the id in full, always: the row shows
+                # the part that varies, never the whole thing.
                 title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
                 shiny::div(class = "pp-pt-line",
-                  shiny::span(class = "pp-pt-id", id),
+                  shiny::span(class = "pp-pt-id", shown),
                   if (nzchar(demo)) {
                     shiny::span(class = "pp-pt-demo", demo)
                   },
@@ -895,6 +905,15 @@ new_patient_profile_block <- function(selected = NULL,
           output$cohort_count <- shiny::renderText({
             n <- nrow(r_cohort_frame())
             if (n == 1L) "1 patient" else paste(n, "patients")
+          })
+
+          # What the rows no longer print. Nothing is hidden -- it is here,
+          # once, instead of 254 times.
+          output$cohort_id_prefix <- shiny::renderUI({
+            pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
+            if (!nzchar(pre)) return(NULL)
+            shiny::span(class = "pp-cohort-prefix",
+                        title = "Shared by every patient in the cohort", pre)
           })
 
           output$sidebar_cards <- shiny::renderUI({
@@ -2144,10 +2163,22 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::span(class = "pp-section-count",
                             shiny::textOutput(ns("cohort_count"), inline = TRUE))
               ),
-              # No label of its own: the pill arrives with the house
-              # group label ("Sort"), and "Sorted by" above it said the
-              # same thing twice.
-              shiny::uiOutput(ns("cohort_sort_ui")),
+              # The sort pill, and at the other end the id prefix the rows no
+              # longer print. The prefix belongs directly above the ids it
+              # explains; next to the patient count it read as part of the
+              # count ("CA2440001-01- 306 patients").
+              #
+              # The pill needs no label of its own: it arrives with the house
+              # group label ("Sort"), and "Sorted by" above it said the same
+              # thing twice.
+              # NOT `pp-cohort-sort`: that class is on the pill's own
+              # `pp-ctrl-group` inside this row, and reusing it here would
+              # nest the same padding twice.
+              shiny::div(class = "pp-cohort-sortrow",
+                shiny::uiOutput(ns("cohort_sort_ui"), inline = TRUE),
+                shiny::span(class = "pp-cohort-sort-gap"),
+                shiny::uiOutput(ns("cohort_id_prefix"), inline = TRUE)
+              ),
               shiny::div(class = "pp-cohort-well", id = ns("pp_cohort_well"),
                 shiny::uiOutput(ns("sidebar_cohort"))
               )

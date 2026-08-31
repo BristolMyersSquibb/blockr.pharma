@@ -528,3 +528,72 @@ pp_cohort_pick <- function(sel, ids) {
   if (!sel %in% ids) return(NULL)
   sel
 }
+
+#' Split a cohort's ids into the part that is shared and the part that varies
+#'
+#' A prod USUBJID is around twenty characters and most of them are constant:
+#' `CA2440001-01-703-1129` is study, then site, then subject, and the study is
+#' the same for every row of the board. Printing it 254 times is what pushes
+#' the row past the sidebar's width.
+#'
+#' So this is not truncation. Nothing that distinguishes two patients is ever
+#' hidden -- only a prefix that is byte-identical across the whole cohort is
+#' lifted out, and the caller prints it once in the section header. An
+#' ellipsis at either end would be worse in both directions: cutting the tail
+#' hides the subject number, and cutting the head hides which site.
+#'
+#' @section Why it trims to a separator, and keeps two segments:
+#' The common prefix of a cohort at one site is `CA2440001-01-703-1` -- one
+#' character into the subject number. Cutting there would leave `129`, which
+#' is not an id anyone recognises, so the prefix is trimmed back to the last
+#' separator it contains.
+#'
+#' It also never strips so far that fewer than two segments remain. Without
+#' that floor a patient reads as `703-1129` in the whole cohort and `1129`
+#' once you filter to their site, and the id under the cursor changes as you
+#' filter. Two segments is stable across every narrowing.
+#'
+#' @param ids Character vector of USUBJIDs.
+#' @param min_prefix Shortest prefix worth lifting. Below this the row is not
+#'   meaningfully shorter and the header gains a line for nothing.
+#' @return `list(prefix, short)` -- the lifted prefix (`""` when nothing is
+#'   shared) and the ids as they should be displayed.
+#' @noRd
+pp_cohort_id_display <- function(ids, min_prefix = 4L) {
+
+  ids <- as.character(ids)
+  none <- list(prefix = "", short = ids)
+  if (length(ids) < 2L || anyNA(ids)) return(none)
+
+  chars <- strsplit(ids, "", fixed = TRUE)
+  n <- min(lengths(chars))
+  if (n == 0L) return(none)
+
+  first <- chars[[1L]]
+  same <- vapply(seq_len(n), function(i) {
+    all(vapply(chars, function(x) identical(x[[i]], first[[i]]), logical(1)))
+  }, logical(1))
+  k <- if (all(same)) n else which(!same)[[1L]] - 1L
+  if (k <= 0L) return(none)
+
+  prefix <- substr(ids[[1L]], 1L, k)
+
+  # Back off to the last separator, so the cut never lands mid-segment.
+  seps <- gregexpr("[-_./ ]", prefix)[[1L]]
+  if (seps[[1L]] == -1L) return(none)
+  prefix <- substr(prefix, 1L, max(seps))
+
+  # ...and back off further while fewer than two segments would remain, so
+  # the displayed id does not change as the cohort narrows.
+  repeat {
+    if (!nzchar(prefix)) return(none)
+    short <- substring(ids, nchar(prefix) + 1L)
+    if (min(lengths(strsplit(short, "[-_./ ]"))) >= 2L) break
+    inner <- gregexpr("[-_./ ]", substr(prefix, 1L, nchar(prefix) - 1L))[[1L]]
+    if (inner[[1L]] == -1L) return(none)
+    prefix <- substr(prefix, 1L, max(inner))
+  }
+
+  if (nchar(prefix) < min_prefix) return(none)
+  list(prefix = prefix, short = short)
+}

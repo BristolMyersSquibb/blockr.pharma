@@ -337,3 +337,64 @@ test_that("the band maps from day0, not from zero", {
   d2 <- cohort_dm(test_adsl(), test_adae())
   expect_identical(pp_cohort_marks(d2, pp_resolve_roles(d2))$day0, 1)
 })
+
+# --- Long ids ---------------------------------------------------------------
+# A prod USUBJID is around twenty characters against the demo's eleven, and
+# the row overflowed a 232px sidebar into a horizontal scrollbar. Most of
+# those characters are the study id, which is the same on every row of the
+# board, so the fix is to lift the shared prefix out rather than to cut
+# characters off an id.
+
+test_that("the shared prefix is lifted, and only the shared part", {
+  ids <- c("CA2440001-01-701-1115", "CA2440001-01-703-1129",
+           "CA2440001-01-702-1122")
+  d <- pp_cohort_id_display(ids)
+  expect_identical(d$prefix, "CA2440001-01-")
+  expect_identical(d$short, c("701-1115", "703-1129", "702-1122"))
+  # nothing that distinguishes two patients is dropped
+  expect_identical(length(unique(d$short)), length(unique(ids)))
+})
+
+test_that("the displayed id does not change as the cohort narrows", {
+  # Filtered to one site the common prefix reaches into the subject number.
+  # Without the two-segment floor a patient would read as 703-1129 in the
+  # whole cohort and 1129 at their own site, and the id under the cursor
+  # would change as you filter.
+  one_site <- c("CA2440001-01-703-1129", "CA2440001-01-703-1130",
+                "CA2440001-01-703-1141")
+  d <- pp_cohort_id_display(one_site)
+  expect_identical(d$prefix, "CA2440001-01-")
+  expect_identical(d$short[[1]], "703-1129")
+})
+
+test_that("the cut lands on a separator, never mid-segment", {
+  d <- pp_cohort_id_display(c("STUDY_01_701_1115", "STUDY_01_702_1122"))
+  expect_identical(d$prefix, "STUDY_01_")
+  expect_identical(d$short, c("701_1115", "702_1122"))
+})
+
+test_that("nothing is lifted when there is nothing to lift", {
+  # short demo ids: the shared part is under min_prefix, so the row is not
+  # meaningfully shorter and the header would gain a line for nothing
+  demo <- c("01-701-1015", "01-702-1023", "01-703-1028")
+  expect_identical(pp_cohort_id_display(demo)$prefix, "")
+  expect_identical(pp_cohort_id_display(demo)$short, demo)
+
+  # no shared prefix at all
+  expect_identical(pp_cohort_id_display(c("AAA-1", "BBB-2"))$prefix, "")
+  # ids with no separator are left alone rather than cut at a guessed point
+  expect_identical(pp_cohort_id_display(c("ABC1115", "ABC1122"))$prefix, "")
+  # one patient has nothing to compare against
+  expect_identical(pp_cohort_id_display("CA2440001-01-703-1129")$prefix, "")
+  expect_identical(pp_cohort_id_display(character())$short, character())
+})
+
+test_that("the download and the click keep the full id", {
+  # The row shows the short form; everything that leaves the block must not.
+  ids <- c("CA2440001-01-701-1115", "CA2440001-01-703-1129")
+  short <- pp_cohort_id_display(ids)$short
+  # the click guard is checked against the real cohort ids, so a short form
+  # would be rejected -- which is what proves the row must send the full one
+  expect_null(pp_cohort_pick(short[[1]], ids))
+  expect_identical(pp_cohort_pick(ids[[1]], ids), ids[[1]])
+})

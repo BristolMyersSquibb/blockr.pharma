@@ -1469,9 +1469,36 @@
 /* Sort. The house click-through pill (.pp-ctrl-group / .pp-ctrl-pill, shared
    with the gantt's LANES control), so it needs no styling of its own beyond
    sitting in the sidebar's margins rather than a panel header. */
-.pp-cohort-sort {
+.pp-cohort-sortrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 10px 6px;
   flex-shrink: 0;
+  min-width: 0;
+}
+
+/* The pill's own group sits inside the row and brings no padding of its
+   own -- the row above owns the margins. */
+.pp-cohort-sortrow .pp-cohort-sort {
+  padding: 0;
+}
+
+.pp-cohort-sort-gap {
+  flex: 1 1 auto;
+}
+
+/* The lifted id prefix, named once so nothing is hidden. */
+.pp-cohort-prefix {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #9ca3af;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .pp-cohort-well {
@@ -1481,6 +1508,10 @@
      which is what the scrollbar is for. */
   max-height: 195px;
   overflow-y: auto;
+  /* Never sideways. A row that cannot fit must shrink or ellipsize, and the
+     rules below make sure it can -- a horizontal scrollbar in a 232px
+     sidebar is the symptom of a row that was allowed to be rigid. */
+  overflow-x: hidden;
   padding: 0 5px 5px;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
@@ -1538,19 +1569,30 @@
   align-items: baseline;
   gap: 5px;
   min-width: 0;
+  overflow: hidden;
 }
 
+/* Shrink ORDER, longest-lived first. The id never gives way (it is already
+   only the part that varies), sex and age go first, and the arm chip gives
+   way before the id does. Every one of them needs `min-width: 0`, or a flex
+   child refuses to shrink below its intrinsic width and the row overflows
+   instead -- which is exactly what a 20-character prod id did. */
 .pp-pt-id {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: #111827;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .pp-pt-demo {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pp-pt-gap {
@@ -1574,7 +1616,14 @@
   border-radius: 4px; /* --blockr-radius-sm */
   font-weight: 500;
   white-space: nowrap;
-  flex-shrink: 0;
+  /* Shrinks, but last, and only after sex and age have gone. An arm code
+     differs at its END (CMPA20-B100 against CMPB-200BID), so an ellipsis
+     here loses the distinguishing part -- the same failure as truncating an
+     id, which is why the row would rather drop other things first. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pp-pt-swatch {
