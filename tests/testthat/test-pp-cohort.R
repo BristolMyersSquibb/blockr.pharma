@@ -98,6 +98,31 @@ test_that("marks put every patient on one axis", {
   expect_identical(m$subjects[["S-2"]]$trt_end, 30)
 })
 
+test_that("an ongoing event stops at the PATIENT's end, not the cohort's", {
+  # Where the band and the panel disagreed. pp_gantt_open_end() ends an open
+  # bar at the patient's own axis end, because the panel is drawn on one
+  # patient's time range; the band shares one axis across the cohort, so
+  # stretching to THAT end paints the event across every day the
+  # longest-treated patient was on study.
+  #
+  # S-2 stops at day 30 on a cohort axis of 180. An ongoing event of theirs
+  # must end at 30, or their strip reads as five months of illness.
+  adae <- data.frame(
+    USUBJID = c("S-2", "S-1"),
+    AEDECOD = c("Rash", "Headache"),
+    ASTDY = c(3, 5), AENDY = c(NA, NA),
+    AESEV = c("MILD", "MILD"),
+    stringsAsFactors = FALSE
+  )
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+
+  expect_identical(m$days, 180)
+  expect_identical(m$subjects[["S-2"]]$events$end[[1]], 30)
+  # ...and the patient who really does run to the end still does
+  expect_identical(m$subjects[["S-1"]]$events$end[[1]], 180)
+})
+
 test_that("an event with no end day is ongoing, and runs to the axis end", {
   # The AE gantt draws a missing end as an open bar reaching the axis end
   # (pp_gantt_open_end()). The band has to agree: a patient whose profile

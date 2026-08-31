@@ -213,13 +213,23 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
   days <- suppressWarnings(max(c(trt_end, ev$end, ev$start, 1), na.rm = TRUE))
   if (!is.finite(days) || days <= day0) days <- day0 + 1
 
-  # An event with no end date is ONGOING, and runs to the end of the axis.
-  # This is the AE gantt's convention (pp_gantt_open_end(): the bar reaches
-  # the axis end and the panel draws an arrow on it), and the two have to
-  # agree -- a patient whose profile shows an event running the whole study
-  # must not show a one-day tick in the list that opened it. The band cannot
-  # draw the arrow, so the only thing it can be honest about is the extent.
-  ev$end[ev$open] <- days
+  # An event with no end date is ONGOING, and runs to the end of THAT
+  # PATIENT'S timeline -- not to the end of the cohort axis.
+  #
+  # This is where the band and the panel disagreed. pp_gantt_open_end() ends
+  # an open bar at the patient's own axis end, because the panel is drawn on
+  # one patient's time range. The band shares one axis across the cohort, so
+  # stretching an open event to THAT end paints it across every day the
+  # longest-treated patient in the study was on it. Patient 701-1047 has two
+  # ongoing MILD events from day 23 and two MODERATE ones on day 1: the panel
+  # showed the mild pair ending at day 55, the band painted them to day 212
+  # and 47 of 60 bins came out mild, burying the moderate. Same data, two
+  # different-looking patients.
+  own_end <- pp_cohort_subject_end(tbls, ids, trt_end, ev)
+  ev$end[ev$open] <- own_end[match(ev$subject[ev$open], ids)]
+  # A patient whose own end is unknowable keeps the axis end: an open event
+  # with nothing to bound it really does run off the far side.
+  ev$end[ev$open & is.na(ev$end)] <- days
 
   subjects <- lapply(seq_along(ids), function(i) {
     keep <- ev$subject == ids[[i]]
@@ -234,6 +244,65 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
   names(subjects) <- ids
 
   list(day0 = day0, days = days, subjects = subjects)
+}
+
+#' The last study day each patient has any data for
+#'
+#' The band's per-patient bound for an ongoing event, and the cheap stand-in
+#' for what the panel computes exactly. `pp_compute_time_range()` scans every
+#' table's date and day columns for ONE patient at a time, which is the right
+#' answer and the wrong cost at 300 rows; this takes the same columns but
+#' groups by subject in one pass per table.
+#'
+#' It reads days only, never dates. The band's axis is in study days, and a
+#' date would have to be converted back through the per-patient reference to
+#' be comparable -- the lossy round trip pp_xval_pref_day() exists to avoid.
+#'
+#' @param tbls The dm's tables.
+#' @param ids Cohort USUBJIDs.
+#' @param trt_end Per-subject treatment end day (same order as `ids`).
+#' @param ev Event list from [pp_cohort_ae_events()], for the days it already
+#'   resolved.
+#' @return Numeric, one per id; `NA` where the patient has no usable day.
+#' @noRd
+pp_cohort_subject_end <- function(tbls, ids, trt_end, ev = NULL) {
+
+  day_cols <- c("ASTDY", "AENDY", "ADY")
+  acc <- trt_end
+
+  bump <- function(subject, day) {
+    ok <- !is.na(day) & !is.na(subject)
+    if (!any(ok)) return(invisible(NULL))
+    at <- match(subject[ok], ids)
+    d <- day[ok]
+    keep <- !is.na(at)
+    if (!any(keep)) return(invisible(NULL))
+    # max per subject, without splitting the frame
+    o <- order(at[keep], d[keep])
+    a <- at[keep][o]
+    v <- d[keep][o]
+    last <- !duplicated(a, fromLast = TRUE)
+    acc[a[last]] <<- pmax(acc[a[last]], v[last], na.rm = TRUE)
+    invisible(NULL)
+  }
+
+  for (nm in names(tbls)) {
+    tbl <- as.data.frame(tbls[[nm]])
+    if (!"USUBJID" %in% colnames(tbl)) next
+    sub <- as.character(tbl$USUBJID)
+    for (col in intersect(day_cols, colnames(tbl))) {
+      bump(sub, suppressWarnings(as.numeric(tbl[[col]])))
+    }
+  }
+
+  # Events already resolved (an open one contributes its start, which is the
+  # least it can be).
+  if (!is.null(ev) && length(ev$subject)) {
+    bump(ev$subject, ev$start)
+    bump(ev$subject, ev$end)
+  }
+
+  acc
 }
 
 #' Adverse events as day intervals
