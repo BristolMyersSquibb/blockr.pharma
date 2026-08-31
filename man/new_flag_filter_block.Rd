@@ -4,7 +4,12 @@
 \alias{new_flag_filter_block}
 \title{Flag filter block}
 \usage{
-new_flag_filter_block(columns = character(), selected = character(), ...)
+new_flag_filter_block(
+  columns = character(),
+  selected = character(),
+  table = NULL,
+  ...
+)
 }
 \arguments{
 \item{columns}{Character vector of flag column names. All of them union.
@@ -12,6 +17,12 @@ To AND a flag against something else, chain a second filter block.}
 
 \item{selected}{Character vector of the columns whose box starts ticked.
 Defaults to none, which passes every row through.}
+
+\item{table}{Name of a table in an incoming \code{dm} to filter, or \code{NULL} (the
+default) to filter the data frame the block is handed. Naming a table
+makes the block dm-in, dm-out: that table is narrowed and every other
+one passes through with its rows and keys intact. One table per block;
+chain a second to narrow another.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}.}
 }
@@ -36,6 +47,15 @@ which mean explicitly-no, unknown, and two flavours of not-recorded.
 only ever ADDS an inclusion never has to choose between them. To ask for
 the negative, or to separate "assessed as N" from "never assessed", use
 \code{\link[blockr.dm:new_value_filter_block]{blockr.dm::new_value_filter_block()}} and pick values directly.
+}
+
+\section{Filtering one table of a dm}{
+\code{table} exists because a patient profile takes a \code{dm}, not a flat frame,
+so a filter that only speaks data frames can never reach it. What it must
+not do is reduce the cohort: getting rid of the non-treatment-emergent AEs
+is the point, getting rid of the patients who have none is a bug. That
+rules out \code{dm::dm_filter()}, whose FK cascade does exactly that -- see
+\code{\link[=flag_zoom_expr]{flag_zoom_expr()}}.
 }
 
 \section{What a ticked box emits}{

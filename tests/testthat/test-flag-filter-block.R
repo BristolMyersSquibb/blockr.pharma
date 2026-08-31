@@ -149,3 +149,110 @@ test_that("the picker's choices carry the column labels", {
   expect_identical(labs[[1L]], "")
   expect_identical(flag_choice_meta(NULL), list())
 })
+
+# --- Filtering one table of a dm --------------------------------------------
+# A patient profile takes a dm, so a filter that only speaks data frames can
+# never reach it. What `table` must not do is reduce the COHORT: dropping the
+# non-treatment-emergent AEs is the point, dropping the patients who have none
+# is a bug, and in a safety review those patients are a finding.
+
+flag_dm <- function() {
+  dm::dm(
+    adsl = data.frame(USUBJID = c("A", "B", "C"), AGE = c(61, 74, 55),
+                      stringsAsFactors = FALSE),
+    adae = data.frame(USUBJID = c("A", "A", "B"),
+                      TRTEMFL = c("Y", "N", "N"),
+                      AEDECOD = c("Headache", "Rash", "Nausea"),
+                      stringsAsFactors = FALSE)
+  ) |>
+    dm::dm_add_pk(adsl, USUBJID) |>
+    dm::dm_add_fk(adae, USUBJID, adsl)
+}
+
+flag_eval <- function(expr, data) {
+  eval(expr, list(data = data, `.` = function(x) x))
+}
+
+test_that("a table-scoped filter reduces that table and no other", {
+  d <- flag_dm()
+  shape <- flag_target_df(d, "adae")[0L, , drop = FALSE]
+  out <- flag_eval(make_flag_filter_expr("TRTEMFL", shape, "adae"), d)
+  tbls <- dm::dm_get_tables(out)
+
+  expect_identical(nrow(tbls$adae), 1L)
+  # C has no AE rows at all and B has only a non-emergent one. Both keep
+  # their ADSL row: this is the whole reason the block cannot use
+  # dm::dm_filter(), whose FK cascade takes adsl from 3 rows to 1.
+  expect_identical(nrow(tbls$adsl), 3L)
+  expect_identical(tbls$adsl$USUBJID, c("A", "B", "C"))
+})
+
+test_that("the keys survive, which rebuilding the dm would not", {
+  d <- flag_dm()
+  shape <- flag_target_df(d, "adae")[0L, , drop = FALSE]
+  out <- flag_eval(make_flag_filter_expr("TRTEMFL", shape, "adae"), d)
+
+  expect_identical(nrow(dm::dm_get_all_pks(out)), 1L)
+  expect_identical(nrow(dm::dm_get_all_fks(out)), 1L)
+})
+
+test_that("dm_filter is the wrong call, and this is why", {
+  # Pinned as a regression: if a future refactor reaches for dm_filter()
+  # this is the behaviour it would silently reintroduce.
+  cascaded <- dm::dm_filter(flag_dm(), adae = TRTEMFL == "Y")
+  expect_identical(nrow(dm::dm_get_tables(cascaded)$adsl), 1L)
+})
+
+test_that("frame mode is untouched by the new argument", {
+  shape <- flag_df()[0L, , drop = FALSE]
+  expect_identical(
+    make_flag_filter_expr("TRTEMFL", shape, NULL),
+    make_flag_filter_expr("TRTEMFL", shape)
+  )
+  expect_match(deparse1(make_flag_filter_expr("TRTEMFL", shape)),
+               "^dplyr::filter")
+})
+
+test_that("no ticked box is no constraint, in dm mode too", {
+  d <- flag_dm()
+  shape <- flag_target_df(d, "adae")[0L, , drop = FALSE]
+  out <- flag_eval(make_flag_filter_expr(character(), shape, "adae"), d)
+  tbls <- dm::dm_get_tables(out)
+  expect_identical(nrow(tbls$adae), 3L)
+  expect_identical(nrow(tbls$adsl), 3L)
+})
+
+test_that("the table argument is normalized and bounded to one", {
+  expect_null(flag_validate_table(NULL))
+  expect_null(flag_validate_table(""))
+  expect_null(flag_validate_table(character()))
+  expect_identical(flag_validate_table("adae"), "adae")
+  expect_identical(flag_validate_table(list("adae")), "adae")
+  expect_error(flag_validate_table(c("adae", "adcm")), "ONE table")
+})
+
+test_that("the block reads flags from the named table, not the dm", {
+  d <- flag_dm()
+  # the dm itself is not a data frame; without `table` there is nothing to
+  # read, with it the adae columns come through
+  expect_null(flag_target_df(d, NULL))
+  expect_identical(names(flag_target_df(d, "adae")),
+                   c("USUBJID", "TRTEMFL", "AEDECOD"))
+  # a table the dm does not carry is no metadata, not an error: the block's
+  # dat_valid raises that, where the user can read it
+  expect_null(flag_target_df(d, "advs"))
+})
+
+test_that("the block rejects the input that cannot answer", {
+  blk <- new_flag_filter_block(columns = "TRTEMFL", table = "adae")
+  expect_s3_class(blk, "flag_filter_block")
+  valid <- environment(blk[["dat_valid"]])
+  expect_error(blk[["dat_valid"]](flag_df()), "must be a dm")
+  expect_error(blk[["dat_valid"]](flag_dm() |> dm::dm_select_tbl(adsl)),
+               "no table")
+  expect_silent(blk[["dat_valid"]](flag_dm()))
+
+  # and without `table` it still wants a frame
+  expect_error(new_flag_filter_block()[["dat_valid"]](flag_dm()),
+               "data frame")
+})

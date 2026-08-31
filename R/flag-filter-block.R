@@ -41,6 +41,15 @@
 #' the negative, or to separate "assessed as N" from "never assessed", use
 #' [blockr.dm::new_value_filter_block()] and pick values directly.
 #'
+#' # Filtering one table of a dm
+#'
+#' `table` exists because a patient profile takes a `dm`, not a flat frame,
+#' so a filter that only speaks data frames can never reach it. What it must
+#' not do is reduce the cohort: getting rid of the non-treatment-emergent AEs
+#' is the point, getting rid of the patients who have none is a bug. That
+#' rules out `dm::dm_filter()`, whose FK cascade does exactly that -- see
+#' [flag_zoom_expr()].
+#'
 #' # What a ticked box emits
 #'
 #' * a `logical` column: `col %in% TRUE`
@@ -55,6 +64,11 @@
 #'   To AND a flag against something else, chain a second filter block.
 #' @param selected Character vector of the columns whose box starts ticked.
 #'   Defaults to none, which passes every row through.
+#' @param table Name of a table in an incoming `dm` to filter, or `NULL` (the
+#'   default) to filter the data frame the block is handed. Naming a table
+#'   makes the block dm-in, dm-out: that table is narrowed and every other
+#'   one passes through with its rows and keys intact. One table per block;
+#'   chain a second to narrow another.
 #' @param ... Forwarded to [blockr.core::new_transform_block()].
 #'
 #' @examples
@@ -72,9 +86,11 @@
 #' @export
 new_flag_filter_block <- function(columns = character(),
                                   selected = character(),
+                                  table = NULL,
                                   ...) {
   columns <- as.character(columns %||% character())
   selected <- intersect(as.character(selected %||% character()), columns)
+  table <- flag_validate_table(table)
 
   blockr.core::new_transform_block(
     function(id, data) {
@@ -92,8 +108,14 @@ new_flag_filter_block <- function(columns = character(),
         # `meta_only` carries the labels and counts WITHOUT the column set:
         # the client already has that set, having just picked it, and echoing
         # it back would rebuild the picker under the user's cursor.
+        # Everything that INSPECTS the input goes through here, so dm mode
+        # and frame mode differ in exactly one place.
+        target <- function() {
+          flag_target_df(tryCatch(data(), error = function(e) NULL), table)
+        }
+
         push_meta <- function(meta_only = FALSE) {
-          d <- tryCatch(data(), error = function(e) NULL)
+          d <- target()
           session$sendCustomMessage(
             "pharma-flag-meta",
             list(
@@ -112,7 +134,7 @@ new_flag_filter_block <- function(columns = character(),
         # including the client's own, which the metadata echo deliberately
         # suppresses.
         push_counts <- function() {
-          d <- tryCatch(data(), error = function(e) NULL)
+          d <- target()
           session$sendCustomMessage(
             "pharma-flag-counts",
             list(
@@ -170,7 +192,7 @@ new_flag_filter_block <- function(columns = character(),
         shiny::observe({
           shape_rv(
             tryCatch(
-              list(ok = TRUE, shape = flag_input_shape(data())),
+              list(ok = TRUE, shape = flag_input_shape(target())),
               error = function(e) list(ok = FALSE, cond = e)
             )
           )
@@ -181,9 +203,13 @@ new_flag_filter_block <- function(columns = character(),
             derived <- shape_rv()
             shiny::req(derived)
             if (!isTRUE(derived$ok)) stop(derived$cond)
-            make_flag_filter_expr(r_sel(), derived$shape)
+            make_flag_filter_expr(r_sel(), derived$shape, table)
           }),
-          state = list(columns = r_cols, selected = r_sel)
+          # `table` is configuration, not a control: nothing in the UI edits
+          # it, but it must round-trip or a saved board comes back filtering
+          # a data frame it is no longer being handed.
+          state = list(columns = r_cols, selected = r_sel,
+                       table = shiny::reactiveVal(table))
         )
       })
     },
@@ -200,13 +226,24 @@ new_flag_filter_block <- function(columns = character(),
       )
     },
     dat_valid = function(data) {
-      if (!is.data.frame(data)) {
-        stop("Input must be a data frame. Flatten a dm first.")
+      if (is.null(table)) {
+        if (!is.data.frame(data)) {
+          stop("Input must be a data frame. Flatten a dm first, or set ",
+               "`table` to filter one table of a dm.")
+        }
+        return(invisible(NULL))
+      }
+      if (!inherits(data, "dm")) {
+        stop("`table = \"", table, "\"` filters one table of a dm, so the ",
+             "input must be a dm. Drop `table` to filter a data frame.")
+      }
+      if (!table %in% names(dm::dm_get_tables(data))) {
+        stop("The dm carries no table \"", table, "\".")
       }
     },
     class = "flag_filter_block",
     expr_type = "bquoted",
-    allow_empty_state = c("columns", "selected"),
+    allow_empty_state = c("columns", "selected", "table"),
     ...
   )
 }
@@ -318,17 +355,90 @@ input_slot <- function(name) {
 }
 
 #' Union of the ticked boxes. No ticks is no constraint, NOT an empty result.
+#'
+#' With `table` set the same condition is applied to ONE table of a dm and
+#' every other table passes through untouched. See [flag_zoom_expr()] for why
+#' that is not `dm::dm_filter()`.
 #' @noRd
-make_flag_filter_expr <- function(selected, shape) {
+make_flag_filter_expr <- function(selected, shape, table = NULL) {
   d <- data_slot()
   selected <- as.character(selected %||% character())
   if (!is.null(shape)) selected <- selected[selected %in% names(shape)]
-  if (length(selected) == 0L) {
-    return(bquote(dplyr::filter(.(d), TRUE), list(d = d)))
+
+  cond <- if (length(selected) == 0L) {
+    TRUE
+  } else {
+    conds <- lapply(selected, flag_condition_expr, df = shape)
+    Reduce(function(a, b) bquote(.(a) | .(b)), conds)
   }
-  conds <- lapply(selected, flag_condition_expr, df = shape)
-  combined <- Reduce(function(a, b) bquote(.(a) | .(b)), conds)
-  as.call(list(quote(dplyr::filter), d, combined))
+
+  if (is.null(table)) {
+    return(as.call(list(quote(dplyr::filter), d, cond)))
+  }
+  flag_zoom_expr(d, table, cond)
+}
+
+#' Filter one table of a dm, and only that table
+#'
+#' `dm::dm_filter()` is the obvious call and the wrong one: it cascades over
+#' foreign keys, so filtering `adae` down to the treatment-emergent records
+#' also drops from `adsl` every patient who has none. Verified on a
+#' three-patient dm -- adsl went 3 rows to 1. In a safety review those
+#' patients are a finding, and the cohort list is exactly where their absence
+#' would be noticed.
+#'
+#' Rebuilding the dm from filtered tables (what [pp_scope_subject()] does)
+#' keeps the rows but drops every primary and foreign key, which is fine for
+#' the profile's internal flat dm and wrong for a block whose output feeds
+#' other blocks.
+#'
+#' `dm_zoom_to()` / `dm_update_zoomed()` is the only one that gets both
+#' halves right: other tables keep their rows, and the keys survive.
+#'
+#' @param d The data slot.
+#' @param table Table name.
+#' @param cond The filter condition (or `TRUE`).
+#' @return A call.
+#' @noRd
+flag_zoom_expr <- function(d, table, cond) {
+  bquote(
+    dm::dm_update_zoomed(
+      dplyr::filter(dm::dm_zoom_to(.(d), .(tbl)), .(cond))
+    ),
+    list(d = d, tbl = as.name(table), cond = cond)
+  )
+}
+
+#' Normalize the `table` constructor argument
+#'
+#' `NULL` and `""` both mean "filter the data frame I am handed", which is
+#' the block's original behaviour and stays the default.
+#' @noRd
+flag_validate_table <- function(table) {
+  if (is.null(table)) return(NULL)
+  table <- as.character(unlist(table, use.names = FALSE))
+  table <- table[!is.na(table) & nzchar(table)]
+  if (length(table) == 0L) return(NULL)
+  if (length(table) > 1L) {
+    stop("`table` names ONE table of the dm, got ", length(table),
+         ". A second flag filter can narrow another table.", call. = FALSE)
+  }
+  table
+}
+
+#' The frame the block reads: the dm's table, or the input itself
+#'
+#' Returns `NULL` when there is nothing to read (no dm yet, or a dm without
+#' that table), which every caller already treats as "no metadata".
+#' @noRd
+flag_target_df <- function(data, table = NULL) {
+  if (is.null(table)) {
+    return(if (is.data.frame(data)) as.data.frame(data) else NULL)
+  }
+  if (!inherits(data, "dm")) return(NULL)
+  tbls <- dm::dm_get_tables(data)
+  if (!table %in% names(tbls)) return(NULL)
+  as.data.frame(tbls[[table]])
 }
 
 #' @noRd
