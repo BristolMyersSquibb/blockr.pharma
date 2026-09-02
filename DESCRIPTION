@@ -28,6 +28,8 @@ Imports:
     shiny
 Suggests:
     blockr.ai,
+    blockr.assistant,
+    blockr.outline,
     flextable,
     ggplot2,
     officer,
@@ -39,6 +41,8 @@ Suggests:
     withr
 Remotes:
     BristolMyersSquibb/blockr.ai,
+    BristolMyersSquibb/blockr.assistant,
+    cynkra/blockr.outline,
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dplyr,
     BristolMyersSquibb/blockr.theme,
