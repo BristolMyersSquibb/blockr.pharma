@@ -7,7 +7,7 @@
 #
 #   source(system.file("examples/clinical-explorer.R", package = "blockr.pharma"))
 #
-# It is a demo, deliberately small: 24 blocks over six views. The production
+# It is a demo, deliberately small: 21 blocks over five views. The production
 # CDEx board it is modelled on carries about 110 blocks over ten views, most of
 # them clinical tables composed with an internal package. Those do not appear
 # here. Where the production board composes a table, this one uses
@@ -26,12 +26,15 @@ blockr_pkgs <- c(
   "blockr.ui",        # html_table_display, the tabular display below
   "blockr.dock",
   "blockr.dag",
+  # No board block comes from these three any more (the Data Explorer view
+  # that used them is gone). They stay attached so their blocks are in the
+  # block browser and within the assistant's reach.
   "blockr.dplyr",
   "blockr.io",
+  "blockr.extra",
   "blockr.viz",       # charts, summary tables, table renderer
   "blockr.dm",        # the dm, the crossfilter, the value filters
   "blockr.pharma",    # patient profile, AE heatmap, the study roles option
-  "blockr.extra",     # the search block
   "blockr.outline",   # the outline rail
   "blockr.assistant", # the LLM chat pane
   "blockr.session"
@@ -113,7 +116,9 @@ blocks <- blockr.core::as_blocks(list(
   ),
 
   # -- One flat table per domain, each joined back to adsl for the arm ------
-  dx_pull = blockr.dm::new_dm_pull_block(
+  # One row per subject, which is what Table 1 and the disposition chart are
+  # computed from. Plumbing: it takes no panel in any view.
+  subjects = blockr.dm::new_dm_pull_block(
     table = "adsl",
     block_name = "Subjects"
   ),
@@ -192,18 +197,6 @@ blocks <- blockr.core::as_blocks(list(
     ctrl_target = "pt_drill",
     visible = "inputs",
     block_name = "Disposition"
-  ),
-
-  # -- Data explorer --------------------------------------------------------
-  dx_select = blockr.dplyr::new_select_block(
-    visible = "inputs",
-    block_name = "Columns"
-  ),
-  dx_search = blockr.extra::new_search_block(block_name = "Search"),
-  dx_download = blockr.io::new_download_block(
-    format = "csv",
-    visible = "inputs",
-    block_name = "Download"
   ),
 
   # -- Adverse events -------------------------------------------------------
@@ -362,8 +355,7 @@ links <- blockr.core::links(
   from = c(
     "data", "cdisc",
     "global_filter", "global_filter", "global_filter", "global_filter",
-    "dx_pull", "dx_pull", "dx_pull",
-    "dx_select", "dx_search",
+    "subjects", "subjects",
     "pop_demog",
     "ae_flat", "ae_summary", "ae_flat", "ae_flat", "ae_flat",
     "lab_flat", "lab_param",
@@ -372,9 +364,8 @@ links <- blockr.core::links(
   ),
   to = c(
     "cdisc", "global_filter",
-    "dx_pull", "ae_flat", "lab_flat", "vs_flat",
-    "pop_demog", "dispo_chart", "dx_select",
-    "dx_search", "dx_download",
+    "subjects", "ae_flat", "lab_flat", "vs_flat",
+    "pop_demog", "dispo_chart",
     "pop_demog_tbl",
     "ae_summary", "ae_summary_tbl", "ae_heatmap", "ae_freq", "ae_gantt",
     "lab_param", "lab_traj",
@@ -421,11 +412,6 @@ views <- list(
   Population = vw(c(
     "global_filter", "pop_demog_tbl", "dispo_chart", side_panels
   )),
-  DataExplorer = vw(
-    c("global_filter", "dx_pull", "dx_select", "dx_search", "dx_download",
-      side_panels),
-    name = "Data Explorer"
-  ),
   AdverseEvents = vw(
     c("global_filter", "ae_heatmap", "ae_freq", "ae_gantt", "ae_summary_tbl",
       side_panels),
@@ -443,15 +429,6 @@ grids <- list(
   Population = dg(
     "global_filter",
     pn("pop_demog_tbl", "dispo_chart", active = "pop_demog_tbl"),
-    side_rail(),
-    sizes = c(1.3, 4)
-  ),
-  # The searchable table, not the raw pull, and not the download button that
-  # follows it.
-  DataExplorer = dg(
-    "global_filter",
-    pn("dx_pull", "dx_select", "dx_search", "dx_download",
-       active = "dx_search"),
     side_rail(),
     sizes = c(1.3, 4)
   ),
@@ -478,11 +455,62 @@ grids <- list(
   )
 )
 
+# ---- Stacks ----------------------------------------------------------------
+# One stack per section of the board. A stack is a NAMED, COLOURED grouping of
+# blocks, and it is what turns the outline rail from a flat list of 21 rows
+# into something you can read: each row carries its stack's colour, and the
+# graph beside it reads as five sections rather than one long chain.
+#
+# A block belongs to at most one stack (blockr.core enforces it), so these
+# cannot simply mirror the views -- the crossfilter and the profile appear in
+# every view. They partition the board by what a block IS instead: the shared
+# source chain, one section per clinical domain, and the drill.
+#
+# Colours are stated rather than left to `suggest_new_colors()`, so the rail
+# looks the same on every boot and matches the domain colours the patient
+# profile already uses (labs blue, vitals amber, AEs red).
+ds <- blockr.dock::new_dock_stack
+
+stacks <- blockr.core::stacks(
+  source = ds(
+    c("data", "cdisc", "global_filter"),
+    name = "Data",
+    color = "#64748B"
+  ),
+  population = ds(
+    c("subjects", "pop_demog", "pop_demog_tbl", "dispo_chart"),
+    name = "Population",
+    color = "#0891B2"
+  ),
+  adverse = ds(
+    c("ae_flat", "ae_summary", "ae_summary_tbl", "ae_heatmap", "ae_freq",
+      "ae_gantt"),
+    name = "Adverse Events",
+    color = "#DC2626"
+  ),
+  laboratory = ds(
+    c("lab_flat", "lab_param", "lab_traj"),
+    name = "Laboratory",
+    color = "#2563EB"
+  ),
+  vitals = ds(
+    c("vs_flat", "vs_param", "vs_traj"),
+    name = "Vital Signs",
+    color = "#D97706"
+  ),
+  patient = ds(
+    c("pt_drill", "pt_profile"),
+    name = "Patient",
+    color = "#7C3AED"
+  )
+)
+
 # ---- Board -----------------------------------------------------------------
 
 board <- blockr.dock::new_dock_board(
   blocks = blocks,
   links = links,
+  stacks = stacks,
   # Named, so the ids the layout refers to (`ext("outline")` and friends) are
   # these names rather than a class-derived fallback.
   extensions = list(
