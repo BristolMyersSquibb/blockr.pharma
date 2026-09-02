@@ -93,6 +93,17 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
 #' `NULL` when there is no adae, which is the difference between "this study
 #' has no AE data" and "this patient had none" -- the first drops the columns,
 #' the second is a zero.
+#'
+#' @section One pass over adae, not one per patient:
+#' This used to scan the whole AE table once per subject
+#' (`vapply(ids, function(id) sum(sub == id))`, twice over), which is
+#' `length(ids) * nrow(adae)` comparisons: at 1251 patients and 31k AE rows
+#' that is 39 million, and it measured 0.32s -- most of the cohort frame's
+#' cost, growing with the PRODUCT of the two. Matching the subjects into the
+#' cohort once and reducing by that index is the same answer in one pass.
+#'
+#' `pp_sev_rank()` is likewise called once on the whole severity column
+#' rather than once per patient on their slice.
 #' @noRd
 pp_cohort_ae_summary <- function(tbls, ids, sev_col = NULL) {
 
@@ -101,41 +112,56 @@ pp_cohort_ae_summary <- function(tbls, ids, sev_col = NULL) {
   adae <- as.data.frame(tbls[["adae"]])
   if (!"USUBJID" %in% colnames(adae)) return(NULL)
 
-  sub <- as.character(adae$USUBJID)
-  n <- vapply(ids, function(id) sum(sub == id, na.rm = TRUE), integer(1L),
-              USE.NAMES = FALSE)
+  # Every AE row's position in the cohort; NA for a row belonging to nobody
+  # we are listing (an adae wider than the cohort is normal after a
+  # drill-down narrows the subjects).
+  at <- match(as.character(adae$USUBJID), ids)
+  keep <- !is.na(at)
+  at <- at[keep]
 
-  worst <- if (!is.null(sev_col) && sev_col %in% colnames(adae)) {
-    sev <- as.character(adae[[sev_col]])
-    vapply(ids, function(id) {
-      v <- sev[sub == id]
-      v <- v[!is.na(v) & nzchar(v)]
-      if (!length(v)) return(NA_character_)
+  n <- tabulate(at, nbins = length(ids))
+
+  worst <- rep(NA_character_, length(ids))
+  if (!is.null(sev_col) && sev_col %in% colnames(adae)) {
+    sev <- as.character(adae[[sev_col]])[keep]
+    ok <- !is.na(sev) & nzchar(sev)
+    if (any(ok)) {
       # Grades order numerically, words by the severity vocabulary. Anything
       # unranked sorts last rather than winning by accident.
-      ord <- pp_sev_rank(v)
-      v[[which.max(ord)]]
-    }, character(1L), USE.NAMES = FALSE)
-  } else {
-    rep(NA_character_, length(ids))
+      rank <- pp_sev_rank(sev[ok])
+      i <- at[ok]
+      v <- sev[ok]
+      # The worst per patient, without splitting the frame: sort by
+      # (patient, rank) and take each patient's last row. The descending
+      # position is what keeps this identical to the `which.max` it replaces
+      # -- two values can share a rank ("3" and "SEVERE" both rank 3, and
+      # everything unranked shares 0), and which.max takes the FIRST of them.
+      o <- order(i, rank, -seq_along(i))
+      last <- !duplicated(i[o], fromLast = TRUE)
+      worst[i[o][last]] <- v[o][last]
+    }
   }
 
-  list(n = n, worst = worst)
+  list(n = as.integer(n), worst = worst)
 }
 
 #' Rank severity values so "worst" means worst
 #'
 #' Numeric grades rank by their value, the word vocabulary by its own order.
 #' Unknown values rank 0, so they never beat a real severity.
+#'
+#' Vectorised, because it is called on a whole AE severity column (31k rows on
+#' a large study) rather than on one patient's handful.
 #' @noRd
 pp_sev_rank <- function(x) {
   s <- toupper(trimws(as.character(x)))
   words <- c(MILD = 1, MODERATE = 2, SEVERE = 3)
-  vapply(s, function(v) {
-    if (grepl("^[0-9]+$", v)) return(as.numeric(v))
-    if (v %in% names(words)) return(unname(words[[v]]))
-    0
-  }, numeric(1L), USE.NAMES = FALSE)
+  out <- rep(0, length(s))
+  num <- grepl("^[0-9]+$", s)
+  out[num] <- as.numeric(s[num])
+  hit <- !num & s %in% names(words)
+  out[hit] <- unname(words[s[hit]])
+  out
 }
 
 #' Event geometry for the cohort band
@@ -469,9 +495,7 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
 
   esc <- function(x) gsub("\"", "&quot;", x, fixed = TRUE)
   h <- height
-  span <- days - day0
-  if (!is.finite(span) || span <= 0) span <- 1
-  x_of <- function(d) ((d - day0) / span) * width
+  geom <- pp_cohort_band_geom(sub, days, color, width, day0, min_px)
 
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
@@ -479,26 +503,17 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
     width, h
   ))
 
-  ev <- sub$events
-  if (is.data.frame(ev) && nrow(ev)) {
-    for (i in seq_len(nrow(ev))) {
-      x0 <- max(x_of(ev$start[[i]]), 0)
-      x1 <- min(x_of(ev$end[[i]]), width)
-      w <- max(x1 - x0, min_px)
-      if (x0 >= width) next
-      parts <- c(parts, sprintf(
-        '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
-        round(x0, 2), round(min(w, width - x0), 2), h,
-        esc(color(ev$sev[[i]]))
-      ))
-    }
+  if (length(geom$x)) {
+    parts <- c(parts, sprintf(
+      '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
+      geom$x, geom$w, h, esc(geom$fill)
+    ))
   }
 
   # End of treatment: the one treatment fact that carries information once
   # the study is complete. A patient still on treatment has no marker.
-  te <- sub$trt_end
-  if (is.finite(te) && te > day0 && te < days) {
-    cx <- round(x_of(te), 2)
+  if (!is.na(geom$eot)) {
+    cx <- geom$eot
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(
@@ -513,6 +528,256 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
     '" preserveAspectRatio="none" aria-hidden="true">',
     paste(parts, collapse = ""), '</svg>'
   )
+}
+
+#' The band's geometry, before it is drawn
+#'
+#' Split out of [pp_cohort_band_svg()] so the SVG and the compact attribute
+#' the client draws from ([pp_cohort_band_attr()]) can never disagree about
+#' where a span sits. Everything about the axis lives here; both callers only
+#' format.
+#'
+#' @section Merging runs of one colour:
+#' Consecutive spans of the same severity that touch or overlap are merged
+#' into one. This is not a simplification of the picture -- overlapping spans
+#' of one colour paint exactly the merged span -- and it is worth doing
+#' because a patient's 25 events are mostly one grade: on the measured study
+#' it takes the cohort from 32k rects to a fraction of that.
+#'
+#' Only CONSECUTIVE spans merge, never all spans sharing a colour. The band
+#' paints later over earlier, so merging a red across an intervening blue
+#' would bury the blue -- which is the bug the worst-wins binning already made
+#' once (see the note above this section of the file).
+#'
+#' @section Plain vectors, and why:
+#' This runs once per patient -- 1251 times per render -- so it holds `x`,
+#' `w` and `fill` as three vectors and never builds a per-patient data frame.
+#' The first cut merged by `rbind`-ing rows onto a growing frame and cost
+#' 1.38s over the cohort, more than the SVG it was meant to replace; the same
+#' loop over bare vectors costs 0.1s. The colour resolver is likewise called
+#' once per DISTINCT severity, not once per event.
+#'
+#' @inheritParams pp_cohort_band_svg
+#' @return `list(x, w, fill, eot)` in px, the first three parallel and in
+#'   paint order; `eot` is `NA` when there is no marker to draw.
+#' @noRd
+pp_cohort_band_geom <- function(sub, days, color, width = 176, day0 = 0,
+                                min_px = 1.5) {
+
+  span <- days - day0
+  if (!is.finite(span) || span <= 0) span <- 1
+  x_of <- function(d) ((d - day0) / span) * width
+
+  x <- numeric()
+  w <- numeric()
+  fill <- character()
+
+  ev <- sub$events
+  if (is.data.frame(ev) && nrow(ev)) {
+    x0 <- pmax(x_of(ev$start), 0)
+    x1 <- pmin(x_of(ev$end), width)
+    ww <- pmax(x1 - x0, min_px)
+    keep <- which(x0 < width)
+    x <- round(x0[keep], 2)
+    w <- round(pmin(ww[keep], width - x0[keep]), 2)
+    sev <- as.character(ev$sev)[keep]
+    lvl <- unique(sev)
+    fill <- vapply(lvl, color, character(1L), USE.NAMES = FALSE)[match(sev, lvl)]
+  }
+
+  n <- length(x)
+  if (n > 1L) {
+    # Merge consecutive same-colour spans that touch or overlap. Written as a
+    # sequential scan because the running extent of the group being built is
+    # what the next span is tested against.
+    kx <- numeric(n)
+    kw <- numeric(n)
+    kf <- character(n)
+    k <- 1L
+    kx[[1L]] <- x[[1L]]
+    kw[[1L]] <- w[[1L]]
+    kf[[1L]] <- fill[[1L]]
+    for (i in seq_len(n)[-1L]) {
+      lo <- kx[[k]]
+      hi <- lo + kw[[k]]
+      # Overlap or touch, in EITHER direction: adae is in record order, not
+      # start order, so the next event can perfectly well begin to the left
+      # of the one before it. Extending only the right edge silently dropped
+      # the part that stuck out on the left -- 10 of 254 patients on
+      # safetyData painted differently before this was two-sided.
+      if (fill[[i]] == kf[[k]] && x[[i]] <= hi && x[[i]] + w[[i]] >= lo) {
+        start <- min(lo, x[[i]])
+        end <- min(max(hi, x[[i]] + w[[i]]), width)
+        kx[[k]] <- start
+        kw[[k]] <- round(end - start, 2)
+      } else {
+        k <- k + 1L
+        kx[[k]] <- x[[i]]
+        kw[[k]] <- w[[i]]
+        kf[[k]] <- fill[[i]]
+      }
+    }
+    x <- kx[seq_len(k)]
+    w <- kw[seq_len(k)]
+    fill <- kf[seq_len(k)]
+  }
+
+  te <- sub$trt_end
+  eot <- if (length(te) == 1L && is.finite(te) && te > day0 && te < days) {
+    round(x_of(te), 2)
+  } else {
+    NA_real_
+  }
+
+  list(x = x, w = w, fill = fill, eot = eot)
+}
+
+#' The band as an attribute the client draws from
+#'
+#' The same geometry [pp_cohort_band_svg()] paints, as the shortest string
+#' that carries it: `x,w,fill` per span, space separated, and the
+#' end-of-treatment marker as its own attribute.
+#'
+#' @section Why the row does not ship its SVG:
+#' At 1251 patients the server-rendered bands were 32,232 `<rect>` elements,
+#' 33k of the sidebar's 42k DOM nodes and 2.6 MB of its 3.1 MB payload. The
+#' nodes are the expensive half: a full-document style recalculation measured
+#' 22 ms with the bands in the DOM against 3 ms without, and Shiny's
+#' `:has(> *)` rule (blockr.ui#41) makes the whole document restyle on
+#' reactive updates -- so every chart redraw anywhere on the board paid for
+#' the sidebar's rects. The row keeps its geometry and the client draws the
+#' band when the row scrolls into view.
+#'
+#' The rows themselves are NOT windowed. They are seven nodes each, the
+#' search filter and the sort read them in place, and the well's scrollbar
+#' has to mean the size of the cohort.
+#'
+#' @inheritParams pp_cohort_band_svg
+#' @return `list(band, eot)` -- two attribute strings; `band` is `""` for a
+#'   patient with nothing to draw, which still renders the empty track.
+#' @noRd
+pp_cohort_band_attr <- function(sub, days, color, width = 176, day0 = 0,
+                                min_px = 1.5) {
+  geom <- pp_cohort_band_geom(sub, days, color, width, day0, min_px)
+  list(
+    band = paste(geom$x, geom$w, geom$fill, sep = ",", collapse = " "),
+    eot = if (is.na(geom$eot)) NULL else as.character(geom$eot)
+  )
+}
+
+#' The cohort list's rows, as HTML
+#'
+#' One `sprintf()` over the whole cohort rather than a tag tree per row.
+#'
+#' @section Why this is not htmltools:
+#' The row is nine nested `div`/`span` calls, so 1251 patients built ~11,000
+#' small R objects and `renderTags()` then walked the tree to serialise them:
+#' 0.92s, the single biggest cost left in a cohort render once the bands were
+#' off the wire. The identical markup from one vectorised `sprintf()` costs
+#' 0.01s.
+#'
+#' The price is that htmltools is what escapes interpolated values, so every
+#' one of them goes through [htmltools::htmlEscape()] here by hand --
+#' `attribute = TRUE` for anything inside quotes. Study data reaches this
+#' function (an arm label is free text), so a missed call is broken markup at
+#' best. If you add a column to the row, escape it.
+#'
+#' @param frame A [pp_cohort_frame()] result.
+#' @param ord Row order from [pp_cohort_order()].
+#' @param disp A [pp_cohort_id_display()] result.
+#' @param marks A [pp_cohort_marks()] result.
+#' @param color A resolver from [pp_cohort_sev_color()].
+#' @param arm_col Arm colours from [pp_cohort_arm_colors()].
+#' @param picked The selected USUBJID, or `NULL`/`character()`.
+#' @return An `HTML` string.
+#' @noRd
+pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
+                                picked = NULL) {
+
+  has <- function(col) col %in% names(frame)
+  chr <- function(col) {
+    if (has(col)) as.character(frame[[col]])[ord] else rep("", length(ord))
+  }
+  esc <- function(x) htmltools::htmlEscape(x)
+  esca <- function(x) htmltools::htmlEscape(x, attribute = TRUE)
+
+  id <- frame$USUBJID[ord]
+  shown <- disp$short[ord]
+  arm <- chr("ARM")
+  code <- chr("ARMCD")
+  demo <- trimws(paste(chr("SEX"), chr("AGE")))
+
+  # The band's geometry, not the band. The client draws it when the row
+  # scrolls into view -- see pp_cohort_band_attr() for what shipping 32k
+  # rects cost.
+  bands <- lapply(id, function(x) {
+    pp_cohort_band_attr(
+      marks$subjects[[x]] %||% list(events = NULL, trt_end = NA),
+      marks$days, color, day0 = marks$day0
+    )
+  })
+  band <- vapply(bands, function(b) b$band, character(1L))
+  eot <- vapply(bands, function(b) b$eot %||% "", character(1L))
+
+  # The chip when the study has a code, a colour swatch when it does not.
+  # Same information either way; only one of them needs a legend, which is
+  # why the code is worth resolving. The chip style is resolved once per ARM
+  # LEVEL, not once per row -- it parses a colour, and a study has a handful
+  # of arms and a thousand patients.
+  tint <- unname(arm_col[arm])
+  tint[is.na(tint)] <- "#9ca3af"
+  lvl <- unique(tint)
+  chip <- vapply(lvl, pp_cohort_chip_style, character(1L),
+                 USE.NAMES = FALSE)[match(tint, lvl)]
+
+  badge <- ifelse(
+    nzchar(code),
+    sprintf('<span class="pp-pt-code" title="%s" style="%s">%s</span>',
+            esca(arm), esca(chip), esc(code)),
+    ifelse(
+      nzchar(arm),
+      sprintf(
+        '<span class="pp-pt-swatch" title="%s" style="background:%s"></span>',
+        esca(arm), esca(tint)
+      ),
+      ""
+    )
+  )
+
+  html <- sprintf(
+    paste0(
+      # The selected class is stamped once here and MOVED by the
+      # sync_subject message afterwards; the list never re-renders on a pick.
+      '<div class="pp-pt%s" data-usubjid="%s"',
+      # Search matches the same text a reader sees, plus the arm, which is
+      # not printed in full anywhere in the row.
+      ' data-search-text="%s" data-band="%s"%s',
+      # The tooltip carries the id in full, always: the row shows the part
+      # that varies, never the whole thing.
+      ' title="%s">',
+      '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
+      '<span class="pp-pt-gap"></span>%s</div>',
+      # The empty track, always: the row is 38px tall whether or not its band
+      # has been drawn, so filling one in later never moves the list under
+      # the cursor.
+      '<svg class="pp-pt-band" width="176" height="7" viewBox="0 0 176 7"',
+      ' preserveAspectRatio="none" aria-hidden="true">',
+      '<rect x="0" y="0" width="176" height="7" rx="2"',
+      ' fill="var(--pp-cohort-track, #f3f4f6)"/></svg></div>'
+    ),
+    ifelse(id %in% picked, " is-selected", ""),
+    esca(id),
+    esca(tolower(paste(id, demo, arm, code))),
+    esca(band),
+    ifelse(nzchar(eot), sprintf(' data-eot="%s"', esca(eot)), ""),
+    esca(ifelse(nzchar(arm), paste0(id, " · ", arm), id)),
+    esc(shown),
+    ifelse(nzchar(demo),
+           sprintf('<span class="pp-pt-demo">%s</span>', esc(demo)), ""),
+    badge
+  )
+
+  htmltools::HTML(paste(html, collapse = ""))
 }
 
 #' Order the cohort rows

@@ -193,6 +193,221 @@ test_that("a severe event does not repaint the mild ones underneath it", {
   expect_identical(mild, 3L)
 })
 
+# The row builder htmltools would have written, kept as the reference the
+# fast one is checked against. pp_cohort_rows_html() exists only because this
+# costs 0.92s at 1251 patients where the sprintf costs 0.01s; the markup is
+# supposed to be the same, and this is what says so.
+reference_rows <- function(frame, ord, disp, marks, color, arm_col,
+                           picked = NULL) {
+  has <- function(col) col %in% names(frame)
+  rows <- lapply(ord, function(i) {
+    id <- frame$USUBJID[[i]]
+    arm <- if (has("ARM")) as.character(frame$ARM[[i]]) else ""
+    code <- if (has("ARMCD")) as.character(frame$ARMCD[[i]]) else ""
+    demo <- paste(c(if (has("SEX")) as.character(frame$SEX[[i]]),
+                    if (has("AGE")) as.character(frame$AGE[[i]])),
+                  collapse = " ")
+    band <- pp_cohort_band_attr(
+      marks$subjects[[id]] %||% list(events = NULL, trt_end = NA),
+      marks$days, color, day0 = marks$day0)
+    tint <- unname(arm_col[[arm]] %||% "#9ca3af")
+    badge <- if (nzchar(code)) {
+      shiny::span(class = "pp-pt-code", title = arm,
+                  style = pp_cohort_chip_style(tint), code)
+    } else if (nzchar(arm)) {
+      shiny::span(class = "pp-pt-swatch", title = arm,
+                  style = paste0("background:", tint))
+    }
+    shiny::div(
+      class = paste("pp-pt", if (identical(id, picked)) "is-selected"),
+      `data-usubjid` = id,
+      `data-search-text` = tolower(paste(id, demo, arm, code)),
+      `data-band` = band$band, `data-eot` = band$eot,
+      title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
+      shiny::div(class = "pp-pt-line",
+        shiny::span(class = "pp-pt-id", disp$short[[i]]),
+        if (nzchar(demo)) shiny::span(class = "pp-pt-demo", demo),
+        shiny::span(class = "pp-pt-gap"), badge),
+      shiny::tags$svg(class = "pp-pt-band", width = 176, height = 7,
+        viewBox = "0 0 176 7", preserveAspectRatio = "none",
+        `aria-hidden` = "true",
+        shiny::tags$rect(x = 0, y = 0, width = 176, height = 7, rx = 2,
+                         fill = "var(--pp-cohort-track, #f3f4f6)")))
+  })
+  as.character(htmltools::renderTags(shiny::tagList(rows))$html)
+}
+
+# Three differences are allowed, and only these three: htmltools indents
+# between tags, it wrote `class="pp-pt "` with a trailing space on every
+# unselected row (paste() with a NULL branch), and it closes the track with
+# `</rect>` where the string writes `/>`. None of the three reaches a parser.
+normalise_rows <- function(x) {
+  x <- gsub(">[ \t\r\n]+<", "><", x)
+  x <- gsub('class="pp-pt "', 'class="pp-pt"', x, fixed = TRUE)
+  x <- gsub('"></rect>', '"/>', x, fixed = TRUE)
+  gsub("^[ \t\r\n]+|[ \t\r\n]+$", "", x)
+}
+
+rows_agree <- function(adsl, adae, picked = NULL) {
+  d <- cohort_dm(adsl, adae)
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
+  frame <- pp_cohort_frame(d, roles)
+  marks <- pp_cohort_marks(d, roles)
+  color <- pp_cohort_sev_color(NULL)
+  arm_col <- pp_cohort_arm_colors(frame, NULL, d, roles$arm)
+  ord <- pp_cohort_order(frame, "id")
+  disp <- pp_cohort_id_display(frame$USUBJID)
+  expect_identical(
+    normalise_rows(as.character(
+      pp_cohort_rows_html(frame, ord, disp, marks, color, arm_col, picked))),
+    normalise_rows(
+      reference_rows(frame, ord, disp, marks, color, arm_col, picked))
+  )
+}
+
+test_that("the fast row builder writes the markup htmltools would have", {
+  rows_agree(test_adsl(), test_adae())
+  rows_agree(test_adsl(), test_adae(), picked = "S-2")
+
+  # No arm code: the chip becomes a swatch
+  no_code <- test_adsl()
+  no_code$ACTARMCD <- NULL
+  rows_agree(no_code, test_adae())
+
+  # The demography span disappears rather than rendering empty
+  no_sex <- test_adsl(); no_sex$SEX <- NULL
+  rows_agree(no_sex, test_adae())
+  no_age <- test_adsl(); no_age$AGE <- NULL
+  rows_agree(no_age, test_adae())
+  bare <- test_adsl(); bare$SEX <- NULL; bare$AGE <- NULL
+  rows_agree(bare, test_adae())
+
+  # No adae: every band is empty, every row still renders
+  rows_agree(test_adsl(), NULL)
+})
+
+test_that("study text is escaped, in attributes and in content alike", {
+  # htmltools did this; writing the HTML by hand means doing it by hand, and
+  # an arm label is free text a study controls.
+  nasty <- test_adsl()
+  nasty$USUBJID <- c('S"1', "S<2>", "S&3")
+  nasty$ACTARM <- c('Placebo "high"', "A<b>10</b>", "R&D")
+  nasty$ACTARMCD <- c("", "", "")
+  adae <- test_adae()
+  adae$USUBJID <- nasty$USUBJID[[1]]
+  rows_agree(nasty, adae)
+
+  d <- cohort_dm(nasty, adae)
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
+  frame <- pp_cohort_frame(d, roles)
+  html <- as.character(pp_cohort_rows_html(
+    frame, pp_cohort_order(frame, "id"), pp_cohort_id_display(frame$USUBJID),
+    pp_cohort_marks(d, roles), pp_cohort_sev_color(NULL),
+    pp_cohort_arm_colors(frame, NULL, d, roles$arm)))
+
+  # Nothing a study wrote closes an attribute or opens a tag
+  expect_match(html, 'data-usubjid="S&quot;1"', fixed = TRUE)
+  expect_match(html, 'title="S&lt;2&gt; · A&lt;b&gt;10&lt;/b&gt;"',
+               fixed = TRUE)
+  expect_false(grepl("<b>10</b>", html, fixed = TRUE))
+  expect_match(html, "S&amp;3", fixed = TRUE)
+})
+
+test_that("the row ships the band's geometry, and it matches the drawn one", {
+  # The client draws the band from data-band when the row scrolls into view,
+  # so the attribute and the SVG have to be the same picture.
+  d <- cohort_dm(test_adsl(), test_adae())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  col <- pp_cohort_sev_color(NULL)
+
+  attr <- pp_cohort_band_attr(m$subjects[["S-1"]], m$days, col)
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col)
+
+  # x,w,fill per span, and the first <rect> of the svg is the track
+  from_svg <- regmatches(
+    svg, gregexpr('<rect x="[^"]*" y="0" width="[^"]*"[^>]*fill="#[^"]*"', svg)
+  )[[1]]
+  triplets <- strsplit(attr$band, " ", fixed = TRUE)[[1]]
+  expect_length(triplets, length(from_svg))
+  for (i in seq_along(triplets)) {
+    f <- strsplit(triplets[[i]], ",", fixed = TRUE)[[1]]
+    expect_match(from_svg[[i]], paste0('x="', f[[1]], '"'), fixed = TRUE)
+    expect_match(from_svg[[i]], paste0('width="', f[[2]], '"'), fixed = TRUE)
+    expect_match(from_svg[[i]], paste0('fill="', f[[3]]), fixed = TRUE)
+  }
+
+  # S-2 stopped early, S-1 did not: the marker is its own attribute
+  expect_null(attr$eot)
+  expect_false(is.null(pp_cohort_band_attr(m$subjects[["S-2"]], m$days,
+                                           col)$eot))
+
+  # A patient with no events ships an empty band, not a missing one: the row
+  # still renders the track.
+  expect_identical(
+    pp_cohort_band_attr(m$subjects[["S-3"]], m$days, col)$band, ""
+  )
+})
+
+test_that("consecutive spans of one colour merge, and only those", {
+  # Merging is what takes a 25-event patient from 25 rects to a handful. It
+  # must never merge ACROSS a different colour: the band paints later over
+  # earlier, so that would bury the one in the middle.
+  same <- data.frame(
+    USUBJID = rep("S-1", 3), AEDECOD = c("a", "b", "c"),
+    ASTDY = c(2, 20, 40), AENDY = c(30, 50, 70),
+    AESEV = rep("MILD", 3), stringsAsFactors = FALSE
+  )
+  d <- cohort_dm(test_adsl(), same)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m$days,
+                           pp_cohort_sev_color(NULL))
+  # three overlapping mild events are one span, day 2 to day 70
+  expect_length(g$x, 1L)
+
+  # the same three with a severe one in the middle stay four spans
+  split <- same
+  split$AESEV <- c("MILD", "SEVERE", "MILD")
+  d2 <- cohort_dm(test_adsl(), split)
+  m2 <- pp_cohort_marks(d2, pp_resolve_roles(d2, list(arm = "ACTARM")))
+  g2 <- pp_cohort_band_geom(m2$subjects[["S-1"]], m2$days,
+                            pp_cohort_sev_color(NULL))
+  expect_length(g2$x, 3L)
+
+  # a gap between two same-colour events is a gap, not a merge
+  apart <- same
+  apart$ASTDY <- c(2, 100, 140)
+  apart$AENDY <- c(10, 110, 150)
+  d3 <- cohort_dm(test_adsl(), apart)
+  m3 <- pp_cohort_marks(d3, pp_resolve_roles(d3, list(arm = "ACTARM")))
+  g3 <- pp_cohort_band_geom(m3$subjects[["S-1"]], m3$days,
+                            pp_cohort_sev_color(NULL))
+  expect_length(g3$x, 3L)
+})
+
+test_that("merging a span that starts LEFT of the one before keeps its left", {
+  # adae is in record order, not start order. Extending only the right edge
+  # dropped the part sticking out on the left, and 10 of safetyData's 254
+  # patients painted differently because of it.
+  back <- data.frame(
+    USUBJID = rep("S-1", 2), AEDECOD = c("late", "early"),
+    ASTDY = c(100, 20), AENDY = c(150, 120),
+    AESEV = rep("MILD", 2), stringsAsFactors = FALSE
+  )
+  d <- cohort_dm(test_adsl(), back)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m$days,
+                           pp_cohort_sev_color(NULL), day0 = m$day0)
+
+  expect_length(g$x, 1L)
+  # the merged span covers both events end to end: it starts where the
+  # EARLIER-starting one does and runs to the far end of the other
+  ev <- m$subjects[["S-1"]]$events
+  span <- m$days - m$day0
+  x_of <- function(d) round(((d - m$day0) / span) * 176, 2)
+  expect_equal(g$x[[1]], x_of(min(ev$start)))
+  expect_equal(g$x[[1]] + g$w[[1]], x_of(max(ev$end)), tolerance = 0.02)
+})
+
 test_that("the end-of-treatment diamond is drawn only when it ended early", {
   d <- cohort_dm(test_adsl(), test_adae())
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))

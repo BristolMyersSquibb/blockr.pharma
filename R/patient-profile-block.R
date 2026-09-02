@@ -796,7 +796,6 @@ new_patient_profile_block <- function(selected = NULL,
                                             r_roles()$arm)
 
             ord <- pp_cohort_order(frame, r_cohort_sort())
-            has <- function(col) col %in% names(frame)
 
             # A prod USUBJID is ~20 characters and most of them are the study
             # id, which is the same on every row of the board. Lift the shared
@@ -805,53 +804,10 @@ new_patient_profile_block <- function(selected = NULL,
             # stays in the tooltip, the click payload and the download.
             disp <- pp_cohort_id_display(frame$USUBJID)
 
-            rows <- lapply(ord, function(i) {
-              id <- frame$USUBJID[[i]]
-              shown <- disp$short[[i]]
-              arm <- if (has("ARM")) as.character(frame$ARM[[i]]) else ""
-              code <- if (has("ARMCD")) as.character(frame$ARMCD[[i]]) else ""
-              demo <- paste(
-                c(if (has("SEX")) as.character(frame$SEX[[i]]),
-                  if (has("AGE")) as.character(frame$AGE[[i]])),
-                collapse = " "
-              )
-              band <- pp_cohort_band_svg(
-                marks$subjects[[id]] %||% list(events = NULL, trt_end = NA),
-                marks$days, color, day0 = marks$day0
-              )
-              # The chip when the study has a code, a colour swatch when it
-              # does not. Same information either way; only one of them needs
-              # a legend, which is why the code is worth resolving.
-              tint <- unname(arm_col[[arm]] %||% "#9ca3af")
-              badge <- if (nzchar(code)) {
-                shiny::span(class = "pp-pt-code", title = arm,
-                            style = pp_cohort_chip_style(tint), code)
-              } else if (nzchar(arm)) {
-                shiny::span(class = "pp-pt-swatch", title = arm,
-                            style = paste0("background:", tint))
-              }
-              shiny::div(
-                class = paste("pp-pt", if (identical(id, picked)) "is-selected"),
-                `data-usubjid` = id,
-                # Search matches the same text a reader sees, plus the arm,
-                # which is not printed in full anywhere in the row.
-                `data-search-text` = tolower(paste(id, demo, arm, code)),
-                # The tooltip carries the id in full, always: the row shows
-                # the part that varies, never the whole thing.
-                title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
-                shiny::div(class = "pp-pt-line",
-                  shiny::span(class = "pp-pt-id", shown),
-                  if (nzchar(demo)) {
-                    shiny::span(class = "pp-pt-demo", demo)
-                  },
-                  shiny::span(class = "pp-pt-gap"),
-                  badge
-                ),
-                shiny::HTML(band)
-              )
-            })
-
-            shiny::tagList(rows)
+            # The rows are built as HTML rather than as a tag tree, and the
+            # escaping that costs is done there. See pp_cohort_rows_html().
+            pp_cohort_rows_html(frame, ord, disp, marks, color, arm_col,
+                                picked)
           })
 
           # Move the selected class when the pick changes from ANYWHERE: the
@@ -2289,6 +2245,7 @@ new_patient_profile_block <- function(selected = NULL,
             var pickSubjectInputId = '", ns("pick_subject"), "';
             var cohortSortInputId = '", ns("cohort_sort"), "';
             var cohortSortPillId = '", ns("cohort_sort_pill"), "';
+            var cohortWellId = '", ns("pp_cohort_well"), "';
             var syncSubjectMsgId = '", ns("sync_subject"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
@@ -2503,6 +2460,92 @@ new_patient_profile_block <- function(selected = NULL,
               $('#' + layoutId + ' .pp-pt').removeClass('is-selected');
               $(this).addClass('is-selected');
               Shiny.setInputValue(pickSubjectInputId, id, {priority: 'event'});
+            });
+
+            // The AE band, drawn when its row scrolls into view.
+            //
+            // The row arrives carrying its geometry (data-band, one
+            // x,width,fill triplet per span) and an empty track. Painting
+            // all of it server-side put 32,232 rects in the document on a
+            // 1251-patient study, and a document that size makes every
+            // full-page style recalculation cost 22ms instead of 3ms -- a
+            // bill every chart redraw on the board pays, because of the
+            // :has(> *) passthrough restyle (blockr.ui#41).
+            //
+            // Rows are NOT windowed. All 1251 stay in the DOM: the search
+            // filter and the scrollbar both have to see the whole cohort.
+            var SVGNS = 'http://www.w3.org/2000/svg';
+            var bandObserver = null;
+
+            function drawBand(row) {
+              if (row.getAttribute('data-band-drawn')) return;
+              row.setAttribute('data-band-drawn', '1');
+              var svg = row.querySelector('.pp-pt-band');
+              if (!svg) return;
+              var frag = document.createDocumentFragment();
+              var spec = row.getAttribute('data-band') || '';
+              if (spec) {
+                spec.split(' ').forEach(function(s) {
+                  var f = s.split(',');
+                  if (f.length < 3) return;
+                  var r = document.createElementNS(SVGNS, 'rect');
+                  r.setAttribute('x', f[0]);
+                  r.setAttribute('y', '0');
+                  r.setAttribute('width', f[1]);
+                  r.setAttribute('height', '7');
+                  r.setAttribute('fill', f[2]);
+                  r.setAttribute('opacity', '0.9');
+                  frag.appendChild(r);
+                });
+              }
+              // End of treatment, the same diamond and the same radius the
+              // server drew (r = 3 at a 7px band).
+              var eot = row.getAttribute('data-eot');
+              if (eot) {
+                var cx = parseFloat(eot), cy = 3.5, rr = 3;
+                var p = document.createElementNS(SVGNS, 'path');
+                p.setAttribute('d',
+                  'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
+                  'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +
+                  'Z');
+                p.setAttribute('fill', 'var(--pp-cohort-eot, #6b7280)');
+                frag.appendChild(p);
+              }
+              svg.appendChild(frag);
+            }
+
+            function observeBands() {
+              var well = document.getElementById(cohortWellId);
+              if (!well) return;
+              var rows = well.querySelectorAll('.pp-pt');
+              // No IntersectionObserver: draw the lot. A slower first paint
+              // beats a list of empty tracks.
+              if (!window.IntersectionObserver) {
+                Array.prototype.forEach.call(rows, drawBand);
+                return;
+              }
+              if (bandObserver) bandObserver.disconnect();
+              bandObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(e) {
+                  if (!e.isIntersecting) return;
+                  drawBand(e.target);
+                  bandObserver.unobserve(e.target);
+                });
+              // A row is 38px, so 200px draws about five rows past either
+              // edge -- enough that a scroll never uncovers a bare track.
+              }, {root: well, rootMargin: '200px 0px'});
+              Array.prototype.forEach.call(rows, function(r) {
+                bandObserver.observe(r);
+              });
+            }
+
+            // Every cohort re-render brings undrawn rows. applyFilter() runs
+            // too, so a live query survives a re-render -- the treatment the
+            // panel list already had, which the cohort list never got.
+            $(document).on('shiny:value', function(e) {
+              if (e.name && e.name.indexOf('sidebar_cohort') >= 0) {
+                setTimeout(function() { observeBands(); applyFilter(); }, 0);
+              }
             });
 
             // Sort key: the house click-through pill. Its own handler
