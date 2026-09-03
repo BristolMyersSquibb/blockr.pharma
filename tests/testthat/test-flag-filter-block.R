@@ -256,3 +256,25 @@ test_that("the block rejects the input that cannot answer", {
   expect_error(new_flag_filter_block()[["dat_valid"]](flag_dm()),
                "data frame")
 })
+
+test_that("dm mode previews as a dm, frame mode as a table", {
+  # A dm cannot go through the table preview -- nrow(<dm>) is NULL and the
+  # preview's slice arithmetic ends in `if (NA)`. The `dm_block` class routes
+  # dm mode to blockr.dm's diagram instead; frame mode must NOT pick it up, or
+  # it loses the ordinary table preview.
+  expect_s3_class(new_flag_filter_block(table = "adae"), "dm_block")
+  expect_false(inherits(new_flag_filter_block(), "dm_block"))
+  # `table = ""` is frame mode too (flag_validate_table() folds it to NULL)
+  expect_false(inherits(new_flag_filter_block(table = ""), "dm_block"))
+
+  # the three methods that class buys, all of which must be present: a
+  # block_output without the matching block_ui sends a renderUI payload into
+  # a DT container and takes down the Shiny message batch it rides in
+  for (gen in c("block_output", "block_ui", "block_render_trigger")) {
+    expect_true(
+      is.function(
+        utils::getS3method(gen, "dm_block", envir = asNamespace("blockr.dm"))
+      )
+    )
+  }
+})

@@ -50,6 +50,9 @@
 #' rules out `dm::dm_filter()`, whose FK cascade does exactly that -- see
 #' [flag_zoom_expr()].
 #'
+#' In dm mode the block previews as blockr.dm's dm diagram, click a table to
+#' page through it, because the table preview cannot render a dm.
+#'
 #' # What a ticked box emits
 #'
 #' * a `logical` column: `col %in% TRUE`
@@ -83,6 +86,7 @@
 #'   )
 #' }
 #'
+#' @importFrom blockr.dm new_value_filter_block
 #' @export
 new_flag_filter_block <- function(columns = character(),
                                   selected = character(),
@@ -241,7 +245,26 @@ new_flag_filter_block <- function(columns = character(),
         stop("The dm carries no table \"", table, "\".")
       }
     },
-    class = "flag_filter_block",
+    # With `table` set the block is dm-in, dm-out, and a dm cannot go
+    # through the table preview: nrow(<dm>) is NULL, so the preview's slice
+    # arithmetic ends in `if (NA)` and the block shows "Error rendering
+    # table: missing value where TRUE/FALSE needed" instead of a result.
+    # Carrying `dm_block` picks up blockr.dm's three paired methods (the
+    # unused importFrom on this function's doc block is what loads that
+    # namespace, so the methods are registered by the time we dispatch) --
+    # block_output (the diagram + click-to-preview), block_ui (the uiOutput
+    # the renderUI needs; a DT container would bind the payload as an
+    # htmlwidget and take down the whole Shiny message batch) and a NULL
+    # block_render_trigger. blockr.dm's own dual-mode blocks (value filter,
+    # crossfilter) branch on `inherits(result, "dm")` at render time because
+    # their mode follows the incoming data; here `table` settles it at
+    # construction, so the class does it, and frame mode keeps the ordinary
+    # table preview.
+    class = if (is.null(table)) {
+      "flag_filter_block"
+    } else {
+      c("flag_filter_block", "dm_block")
+    },
     expr_type = "bquoted",
     allow_empty_state = c("columns", "selected", "table"),
     ...

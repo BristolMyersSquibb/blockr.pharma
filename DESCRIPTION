@@ -17,6 +17,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     blockr.core,
+    blockr.dm,
     blockr.dplyr,
     blockr.theme (>= 0.0.0.9002),
     blockr.viz,
