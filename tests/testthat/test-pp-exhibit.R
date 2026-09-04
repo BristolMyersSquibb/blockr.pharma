@@ -72,6 +72,8 @@ pp_ex_cohort <- function() {
 test_that("pp_patient_exhibit renders selected vizs as ggplots", {
   ex <- suppressMessages(pp_patient_exhibit(
     pp_ex_dm(),
+    # "adlb_all" is a group id from before parameters became cards: the
+    # export expands it exactly as the block does on restore.
     selected = c("patient_overview", "ae_gantt", "cm_gantt", "adlb_all")
   ))
   expect_s3_class(ex, "pp_exhibit")
@@ -79,8 +81,10 @@ test_that("pp_patient_exhibit renders selected vizs as ggplots", {
   expect_length(ex$patients, 1L)
   patient <- ex$patients[["S1"]]
   expect_identical(patient$subject, "S1")
-  expect_named(patient$plots,
-               c("patient_overview", "ae_gantt", "cm_gantt", "adlb_all"))
+  expect_identical(names(patient$plots)[1:3],
+                   c("patient_overview", "ae_gantt", "cm_gantt"))
+  # ...and the group became the parameter cards it used to draw.
+  expect_true(all(grepl("^adlb_all__", names(patient$plots)[-(1:3)])))
   for (p in patient$plots) {
     expect_s3_class(p, "ggplot")
     # The size contract blockr.viz's gg methods read.

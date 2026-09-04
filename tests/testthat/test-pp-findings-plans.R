@@ -1,4 +1,21 @@
 # Findings source plans and visit ordering.
+#
+# A findings card used to be one viz per GROUP, holding its parameters as
+# chips. It is one viz per PARAMETER now, each carrying the group it came
+# from -- so the grouping these tests are about is unchanged, and they assert
+# on group membership rather than on a card that no longer exists.
+
+# The PARAMCDs whose cards belong to a group.
+codes_in <- function(vizs, group_id) {
+  keep <- vapply(vizs, function(v) identical(v$group_id, group_id),
+                 logical(1L))
+  unname(vapply(vizs[keep], function(v) names(v$params)[[1L]], character(1L)))
+}
+
+# One group's cards, by group id.
+cards_in <- function(vizs, group_id) {
+  vizs[vapply(vizs, function(v) identical(v$group_id, group_id), logical(1L))]
+}
 
 test_that("params living only in adlb get cards even when both splits exist", {
   # adlb was dropped entirely when adlbc AND adlbh were present, so any
@@ -17,10 +34,9 @@ test_that("params living only in adlb get cards even when both splits exist", {
   vizs <- pp_findings_vizs(dm_obj)
 
   # No category column anywhere here, so each table is one card.
-  expect_true("adlb_all" %in% names(vizs))
-  expect_identical(names(vizs$adlb_all$params), "TRIG")
+  expect_identical(codes_in(vizs, "adlb_all"), "TRIG")
   # ...and ALT is not duplicated: adlbc claimed it first.
-  expect_identical(sort(names(vizs$adlbc_all$params)), c("ALT", "AST"))
+  expect_setequal(codes_in(vizs, "adlbc_all"), c("ALT", "AST"))
 })
 
 test_that("cards group by the study's own category column", {
@@ -42,15 +58,17 @@ test_that("cards group by the study's own category column", {
   vizs <- pp_findings_vizs(dm_obj)
 
   expect_setequal(
-    names(vizs),
+    unique(vapply(vizs, function(v) v$group_id, character(1L))),
     c("adlb_chemistry", "adlb_hematology", "adlb_uncategorized")
   )
-  # Shouted category values are title-cased for display; the card holding a
+  # Shouted category values are title-cased for display; the group holding a
   # parameter with no category says so rather than pretending to be "Other",
   # which is a value some studies ship themselves.
-  expect_identical(vizs$adlb_chemistry$label, "Chemistry")
-  expect_identical(vizs$adlb_uncategorized$label, "Laboratory: Uncategorized")
-  expect_setequal(names(vizs$adlb_chemistry$params), c("ALT", "AST"))
+  expect_identical(cards_in(vizs, "adlb_chemistry")[[1L]]$group_label,
+                   "Chemistry")
+  expect_identical(cards_in(vizs, "adlb_uncategorized")[[1L]]$group_label,
+                   "Laboratory: Uncategorized")
+  expect_setequal(codes_in(vizs, "adlb_chemistry"), c("ALT", "AST"))
 })
 
 test_that("a card is searchable by full parameter name, not just code", {
@@ -69,17 +87,17 @@ test_that("a card is searchable by full parameter name, not just code", {
     )
   )
   vizs <- pp_findings_vizs(dm_obj)
-  expect_match(tolower(vizs$adlb_chemistry$search), "alanine")
-  expect_match(vizs$adlb_chemistry$search, "ALT")
 
-  # ...and the parameter-level index points the click at the right card
-  idx <- pp_param_index(vizs)
-  hit <- Filter(function(p) grepl("alanine", p$search), idx)
-  expect_length(hit, 1L)
-  expect_identical(hit[[1L]]$viz_id, "adlb_chemistry")
-  expect_identical(hit[[1L]]$code, "ALT")
-  # the chip caption drops the unit parenthetical the axis already carries
-  expect_identical(hit[[1L]]$short, "Alanine Aminotransferase")
+  # The card for ALT is findable by its full name. It is its OWN card now, so
+  # the name is on the thing you are looking for rather than on a container
+  # of sixteen things, one of which you wanted.
+  alt <- vizs[["adlb_chemistry__ALT"]]
+  expect_match(tolower(alt$search), "alanine")
+  expect_match(alt$search, "ALT")
+
+  # And a sibling's name is NOT on it: the group's whole parameter list used
+  # to ride on every card, so one code returned all of them.
+  expect_false(grepl("aspartate", tolower(alt$search), fixed = TRUE))
 })
 
 test_that("a parameter with no PARAM falls back to its code", {
@@ -90,10 +108,13 @@ test_that("a parameter with no PARAM falls back to its code", {
     )
   )
   vizs <- pp_findings_vizs(dm_obj)
-  expect_identical(unname(vizs$adlb_all$params[["TRIG"]]), "TRIG")
+  expect_identical(unname(vizs[["adlb_all__TRIG"]]$params[["TRIG"]]), "TRIG")
 })
 
-test_that("a card shows three parameters until told otherwise", {
+test_that("a group of five parameters is five cards", {
+  # This replaced "a card shows three parameters until told otherwise". The
+  # three was the chip default on a container; there is no container and no
+  # chips, so every parameter the study has is a card you can add.
   dm_obj <- dm::dm(
     adlb = data.frame(
       USUBJID = "x", PARAMCD = c("A", "B", "C", "D", "E"),
@@ -102,7 +123,10 @@ test_that("a card shows three parameters until told otherwise", {
     )
   )
   vizs <- pp_findings_vizs(dm_obj)
-  expect_length(pp_viz_defaults(vizs$adlb_all)$items, 3L)
+  expect_length(cards_in(vizs, "adlb_all"), 5L)
+
+  # The three survives as what a saved board naming the old group expands to.
+  expect_length(pp_expand_groups("adlb_all", vizs), 3L)
 })
 
 test_that("a category column with one value does not group anything", {
@@ -116,8 +140,8 @@ test_that("a category column with one value does not group anything", {
     )
   )
   vizs <- pp_findings_vizs(dm_obj)
-  expect_identical(names(vizs), "adlbc_all")
-  expect_identical(vizs$adlbc_all$label, "Chemistry")
+  expect_setequal(names(vizs), c("adlbc_all__ALT", "adlbc_all__AST"))
+  expect_identical(vizs[["adlbc_all__ALT"]]$group_label, "Chemistry")
 })
 
 test_that("the catalog signature ignores card ORDER", {
@@ -200,11 +224,11 @@ test_that("the accumulated dictionary keeps definitions patient-independent", {
   expect_true("CHOL" %in% extra$paramcd)
   expect_true(all(cohort$paramcd %in% extra$paramcd))
 
-  # the chips still resolve their choices against the data on hand
-  ctrl <- pp_findings_vizs_from_dict(merged, tbls)$adlbc_all$controls$items
-  expect_null(ctrl$choices)
-  expect_identical(ctrl$choices_from, "PARAMCD")
-  expect_true(all(c("ALT", "AST", "GGT") %in% ctrl$choices_subset))
+  # ...and every remembered parameter still gets a card, which is what the
+  # chips' choices used to be for.
+  expect_true(all(c("ALT", "AST", "GGT") %in%
+                    codes_in(pp_findings_vizs_from_dict(merged, tbls),
+                             "adlbc_all")))
 })
 
 test_that("visit levels order by AVISITN, not lexically", {

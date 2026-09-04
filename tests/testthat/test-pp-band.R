@@ -274,12 +274,11 @@ test_that("the hit count is the patient's records, not the cohort's", {
   expect_null(pp_ctrl_search_hits(ctrl, scoped, "adae", ""))
 })
 
-test_that("the series band draws the panel's first CHART, not its first chip", {
-  # The chips are ordered by parameter NAME and the charts by PARAMCD
-  # (pp_render_findings() sorts them), so the two disagree whenever the
-  # alphabet does. On safetyData's chemistry card that put "Chemistry . ALT"
-  # in the sidebar caption above a panel whose top plot was ALB -- the band
-  # and the panel naming different parameters for the same card.
+test_that("a parameter card is one card, drawing one parameter", {
+  # This replaces a test that pinned "the band draws the panel's first CHART,
+  # not its first chip". A findings card was a container of charts and the
+  # strip had to pick one of them; the rule was subtle enough to get wrong
+  # twice. A parameter is a card now, so there is nothing to pick.
   lb <- data.frame(
     USUBJID = rep(c("S-1", "S-2"), each = 4L),
     PARAMCD = rep(c("ZAL", "ABC"), times = 4L),
@@ -290,13 +289,51 @@ test_that("the series band draws the panel's first CHART, not its first chip", {
     stringsAsFactors = FALSE
   )
   d <- band_dm(adsl = band_adsl()[1:2, ], adlbc = lb)
-  viz <- pp_findings_vizs(d)[["adlbc_all"]]
+  vizs <- pp_findings_vizs(d)
 
-  # By name the card leads with "Aaa First By Name" (ZAL); by code the panel
-  # draws ABC first. The band follows the panel.
-  expect_identical(names(viz$params)[[1L]], "ZAL")
-  expect_identical(viz$band$paramcd, "ABC")
-  expect_identical(viz$band$param, "Zzz Last By Name")
+  # One card per parameter, each drawing its own.
+  expect_setequal(names(vizs), c("adlbc_all__ZAL", "adlbc_all__ABC"))
+  expect_identical(vizs[["adlbc_all__ABC"]]$band$paramcd, "ABC")
+  expect_identical(vizs[["adlbc_all__ZAL"]]$band$paramcd, "ZAL")
+
+  # It says which card it came from and what it is: the title is what you
+  # scan a stack by, the sublabel what you read once you have found it.
+  expect_identical(vizs[["adlbc_all__ABC"]]$label, "Chemistry \u00b7 ABC")
+  expect_identical(vizs[["adlbc_all__ABC"]]$sublabel, "Zzz Last By Name")
+
+  # And no chips: there is no second level left to control.
+  expect_null(vizs[["adlbc_all__ABC"]]$controls$items)
+})
+
+test_that("a board saved against the old group cards keeps its panels", {
+  # A findings card used to be one viz per group, so a saved board names
+  # "adlbc_all". That viz is gone; restoring such a board must not silently
+  # drop its laboratory panels.
+  lb <- data.frame(
+    USUBJID = "S-1",
+    PARAMCD = c("ALB", "ALP", "ALT", "AST"),
+    PARAM = c("Albumin", "Alkaline Phosphatase", "Alanine Amino",
+              "Aspartate Amino"),
+    AVAL = c(40, 80, 20, 25), ADY = 1,
+    ADT = as.Date("2024-01-01"), stringsAsFactors = FALSE
+  )
+  d <- band_dm(adsl = band_adsl()[1, ], adlbc = lb)
+  vizs <- pp_findings_vizs(d)
+
+  grown <- pp_expand_groups(c("patient_overview", "adlbc_all"), vizs)
+  # The group becomes the parameters that card would have drawn -- its first
+  # three -- and everything else is left exactly as it was.
+  expect_identical(grown[[1L]], "patient_overview")
+  expect_identical(grown[-1L],
+                   c("adlbc_all__ALB", "adlbc_all__ALP", "adlbc_all__ALT"))
+
+  # An id that is neither a viz nor a group is left alone rather than given
+  # an invented meaning: the selection guard already ignores what the data
+  # cannot offer, and expanding it here would hide a real mismatch.
+  expect_identical(pp_expand_groups("no_such_thing", vizs), "no_such_thing")
+
+  # A board already on parameter cards is untouched.
+  expect_identical(pp_expand_groups("adlbc_all__ALT", vizs), "adlbc_all__ALT")
 })
 
 # --- the curve ---------------------------------------------------------------
@@ -398,62 +435,74 @@ picker_html <- function(vizs) {
   )$html)
 }
 
-test_that("the picker lists panels with their domain, parameters with theirs", {
+test_that("the picker styles a parameter card by its code and its group", {
   vizs <- list(
     ae = viz_stub("ae", pp_band_ae(), "adae"),
-    chem = viz_stub("chem", pp_band_series("adlbc", "ALB", "Albumin"), "adlbc")
+    alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"), "adlbc")
   )
-  vizs$chem$params <- c(ALB = "Albumin", ALT = "Alanine Aminotransferase")
+  vizs$alt$params <- c(ALT = "Alanine Aminotransferase")
+  vizs$alt$sublabel <- "Alanine Aminotransferase"
+  vizs$alt$group_label <- "Chemistry"
+  vizs$alt$group_id <- "adlbc_all"
   html <- picker_html(vizs)
 
-  # A panel row carries its viz id and no PARAMCD; a parameter row carries
-  # both, and starts hidden -- an empty box lists the panels, because a
-  # study's whole parameter set is not a menu.
-  expect_match(html, 'data-kind="panel"', fixed = TRUE)
-  expect_match(html, 'data-kind="param"', fixed = TRUE)
-  expect_match(html, 'data-paramcd="ALT"', fixed = TRUE)
-  expect_match(html, "pp-add-row is-param", fixed = TRUE)
+  # Both add the same way -- since parameters became cards there is only one
+  # kind of thing on the profile -- so both are data-kind="panel".
+  expect_false(grepl('data-kind="param"', html, fixed = TRUE))
 
-  # The parameter says where it lives. This is the whole answer to "ALB, but
-  # where is that?".
-  expect_match(html, "Alanine Aminotransferase", fixed = TRUE)
+  # A parameter card reads as "ALT, Alanine Aminotransferase, in Chemistry".
+  expect_match(html, "pp-add-code", fixed = TRUE)
+  expect_match(html, ">ALT<", fixed = TRUE)
+  expect_match(html, ">Chemistry<", fixed = TRUE)
+
+  # And it is hidden until something is typed: a study's whole parameter set
+  # is sixty-odd rows, which is not a menu.
+  expect_match(html, "pp-add-row is-param", fixed = TRUE)
 })
 
-test_that("a parameter matches its own name, never its panel's keywords", {
-  # The trap: a findings card's `search` text carries every PARAMCD and PARAM
-  # it covers, so folding it into each parameter's haystack made every one of
-  # them a hit for any of the others. Typing one code returned the whole card.
-  vizs <- list(chem = viz_stub("chem",
-                               pp_band_series("adlbc", "ALB", "Albumin"),
-                               "adlbc"))
-  vizs$chem$params <- c(ALB = "Albumin", ALT = "Alanine Aminotransferase")
-  vizs$chem$search <- "CHEM ALB Albumin ALT Alanine Aminotransferase"
+test_that("a parameter matches its own name, never its group's keywords", {
+  # The trap: a findings card's search text carries every PARAMCD and PARAM
+  # it covers. Folding it into each parameter made every one of them a hit
+  # for any of the others -- one code returned the whole card.
+  vizs <- list(alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"),
+                              "adlbc"))
+  vizs$alt$params <- c(ALT = "Alanine Aminotransferase")
+  vizs$alt$sublabel <- "Alanine Aminotransferase"
+  vizs$alt$group_label <- "Chemistry"
+  vizs$alt$search <- "CHEM ALB Albumin ALT Alanine Aminotransferase"
 
   html <- picker_html(vizs)
-  rows <- regmatches(html, gregexpr("<div class=\"pp-add-row[^>]*>", html))[[1]]
-  hay <- function(kind, code) {
-    r <- grep(paste0('data-kind="', kind, '"'), rows, value = TRUE)
-    if (!is.null(code)) r <- grep(paste0('data-paramcd="', code, '"'), r,
-                                  value = TRUE)
-    sub('.*data-search-text="([^"]*)".*', "\\1", r)
-  }
+  hay <- sub('.*data-search-text="([^"]*)".*', "\\1", html)
 
-  # The panel's row keeps the full search text, so "alanine" still finds the
-  # CARD -- that is how a card called Chemistry is reachable by a parameter
-  # name, and it predates this picker.
-  expect_match(hay("panel", NULL), "alanine")
-
-  # The ALB row must not mention alanine, or typing "alanine" returns Albumin.
-  expect_false(grepl("alanine", hay("param", "ALB"), fixed = TRUE))
-  expect_match(hay("param", "ALB"), "albumin")
-  expect_match(hay("param", "ALB"), "chem")
+  expect_match(hay, "alt")
+  expect_match(hay, "chemistry")
+  # Albumin is a different card; typing it must not return this one.
+  expect_false(grepl("albumin", hay, fixed = TRUE))
 })
 
 test_that("a study with no parameters gets a panels-only picker", {
   vizs <- list(ae = viz_stub("ae", pp_band_ae(), "adae"))
   html <- picker_html(vizs)
-  expect_false(grepl('data-kind="param"', html, fixed = TRUE))
+  expect_false(grepl("is-param", html, fixed = TRUE))
   # And the box says so rather than promising a search it cannot answer.
   expect_match(html, "Search panels", fixed = TRUE)
   expect_false(grepl("Search panels and parameters", html, fixed = TRUE))
+})
+
+test_that("a parameter card's caption does not name its parameter twice", {
+  # The card's own label IS "Chemistry . ALT", so appending the code again
+  # read "Chemistry . ALT . ALT" in the sidebar.
+  band <- pp_band_series("adlbc", "ALT", "Alanine Aminotransferase (U/L)")
+  expect_identical(pp_band_caption("Chemistry · ALT", band),
+                   "Chemistry · ALT")
+  expect_match(pp_band_title("Chemistry · ALT", band),
+               "Alanine Aminotransferase", fixed = TRUE)
+
+  # A viz that declares a series band without being a parameter card still
+  # gets the code appended, because its label does not carry one.
+  expect_identical(pp_band_caption("Chemistry", band), "Chemistry · ALT")
+
+  # A spans band names the panel and nothing else.
+  expect_identical(pp_band_caption("Adverse Events", pp_band_ae()),
+                   "Adverse Events")
 })

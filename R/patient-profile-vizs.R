@@ -1574,102 +1574,98 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
       # table's own name. A blank category in a table that has them is a
       # genuine leftover, and says so -- "Other" is a category some studies
       # ship themselves, and the two must not read alike.
-      label <- if (is.na(cat)) {
+      group_label <- if (is.na(cat)) {
         if (has_cats) paste0(meta$label, ": Uncategorized") else meta$label
       } else {
         pp_title_case(cat)
       }
-      viz_id <- pp_group_id(tbl_name, cat, has_cats)
+      group_id <- pp_group_id(tbl_name, cat, has_cats)
 
-      vizs[[viz_id]] <- new_pp_viz(
-        id = viz_id,
-        label = label,
-        domain = meta$domain,
-        icon = meta$icon,
-        color = meta$color,
-        description = pp_truncate(paste(labels, collapse = ", "), 140L),
-        # Every code and every full parameter name, so a search for
-        # "alanine" reaches the card holding ALT even though no card, group
-        # or column is called that.
-        search = paste(c(label, codes, labels), collapse = " "),
-        params = stats::setNames(labels, codes),
-        # The cohort strip draws the parameter this card draws FIRST, on the
-        # same shared axis as every other row.
-        #
-        # "First" is the panel's first CHART, not the card's first chip. The
-        # two differ: the chips are ordered by parameter name and the charts
-        # by PARAMCD (pp_render_findings() sorts them), so a Chemistry card
-        # leads with the Alanine Aminotransferase chip and the Albumin plot.
-        # Taking codes[[1]] captioned the strip "Chemistry . ALT" above a
-        # panel whose top chart was ALB -- the band and the panel naming
-        # different parameters for the same card.
-        #
-        # Fixed at declaration rather than read off the chip selection: the
-        # strip is a property of the cohort and 254 rows cannot re-derive on
-        # every chip click. So it follows the card's DEFAULT selection, which
-        # is what the panel shows when it opens.
-        band = local({
-          shown <- sort(utils::head(codes, pp_group_default_n))
-          first <- shown[[1L]]
-          pp_band_series(tbl_name, first, labels[[match(first, codes)]])
-        }),
-        tables = tbl_name,
-        requires = stats::setNames(list(c("PARAMCD", "AVAL", "ADT")),
-                                   tbl_name),
-        optional = stats::setNames(
-          list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
-          tbl_name
-        ),
-        # Baking the parameter list into the definition is safe HERE and was
-        # not before: the dictionary accumulates, so a drilled single-patient
-        # dm no longer shortens the list and the catalog signature holds
-        # still. Dispatch still intersects with the data on hand, which is
-        # what keeps a chip for a parameter this patient lacks out of the UI.
-        controls = list(
-          items = list(
-            type = "checkbox",
-            label = "Items",
-            choices_from = "PARAMCD",
-            choices_subset = codes,
-            choice_labels = stats::setNames(labels, codes),
-            default = utils::head(codes, pp_group_default_n)
-          )
-        ),
-        render = local({
-          .tbl_name <- tbl_name
-          .label <- label
-          .color <- meta$color
-          .default <- utils::head(codes, pp_group_default_n)
-          function(dm_obj, time_range, settings = list(),
-                   ref_ms = NA_real_, mode = "date") {
-            pp_render_findings(
-              dm_obj, time_range,
-              table_name = .tbl_name,
-              label = .label,
-              base_color = .color,
-              paramcds = settings$items %||% .default,
-              ref_ms = ref_ms, mode = mode,
-              smooth = settings$smooth %||% "auto"
-            )
-          }
-        }),
-        exhibit = local({
-          .tbl_name <- tbl_name
-          .label <- label
-          .default <- utils::head(codes, pp_group_default_n)
-          function(dm_obj, time_range, settings = list(),
-                   ref_ms = NA_real_, mode = "date") {
-            pp_static_findings(
-              dm_obj, time_range,
-              table_name = .tbl_name,
-              label = .label,
-              paramcds = settings$items %||% .default,
-              ref_ms = ref_ms, mode = mode,
-              smooth = settings$smooth %||% "auto"
-            )
-          }
-        })
-      )
+      # ONE CARD PER PARAMETER.
+      #
+      # A findings card used to be a container: Chemistry held sixteen
+      # parameters, you ticked chips in its header, and it drew one chart per
+      # ticked chip stacked inside itself. Every chart on the profile could be
+      # ordered except those -- they sat where their card sat, in PARAMCD
+      # order, and nothing could be placed between them. Wanting albumin and
+      # alanine in different places on the profile was simply not expressible.
+      #
+      # So a parameter is a card, exactly like a panel is. One list, one drag,
+      # one way to add and remove. It also collapses the cohort strip's rule
+      # to "the band draws the first card", where it used to have to say "the
+      # first chart of the first card that has one".
+      #
+      # The chart itself is unchanged: pp_render_findings() already drew one
+      # grid per code, so it is handed a single code instead of three.
+      for (i in seq_along(codes)) {
+        code <- codes[[i]]
+        param_label <- labels[[i]]
+        viz_id <- pp_param_viz_id(group_id, code)
+
+        vizs[[viz_id]] <- new_pp_viz(
+          id = viz_id,
+          # The card says which group it came from and which parameter it is;
+          # the full name rides behind as the sublabel, because "Chemistry ·
+          # ALT" is what a reader scans a stack of twelve cards by.
+          label = paste0(group_label, " \u00b7 ", code),
+          sublabel = param_label,
+          domain = meta$domain,
+          icon = meta$icon,
+          color = meta$color,
+          description = paste0(param_label, " (", group_label, ")"),
+          # The code, the name and the group. Not the group's whole parameter
+          # list, which is what made every parameter a hit for any of the
+          # others.
+          search = paste(code, param_label, group_label),
+          params = stats::setNames(param_label, code),
+          # Which card this came from, so a saved board naming the old group
+          # can be expanded into the parameters it used to show.
+          group_id = group_id,
+          group_label = group_label,
+          tables = tbl_name,
+          requires = stats::setNames(list(c("PARAMCD", "AVAL", "ADT")),
+                                     tbl_name),
+          optional = stats::setNames(
+            list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
+            tbl_name
+          ),
+          band = pp_band_series(tbl_name, code, param_label),
+          render = local({
+            .tbl_name <- tbl_name
+            .label <- group_label
+            .color <- meta$color
+            .code <- code
+            function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+              pp_render_findings(
+                dm_obj, time_range,
+                table_name = .tbl_name,
+                label = .label,
+                base_color = .color,
+                paramcds = .code,
+                ref_ms = ref_ms, mode = mode,
+                smooth = settings$smooth %||% "auto"
+              )
+            }
+          }),
+          exhibit = local({
+            .tbl_name <- tbl_name
+            .label <- group_label
+            .code <- code
+            function(dm_obj, time_range, settings = list(),
+                     ref_ms = NA_real_, mode = "date") {
+              pp_static_findings(
+                dm_obj, time_range,
+                table_name = .tbl_name,
+                label = .label,
+                paramcds = .code,
+                ref_ms = ref_ms, mode = mode,
+                smooth = settings$smooth %||% "auto"
+              )
+            }
+          })
+        )
+      }
     }
   }
 

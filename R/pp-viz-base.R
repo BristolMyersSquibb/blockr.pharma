@@ -55,6 +55,12 @@
 #'   gantts declare a full coding ladder (see [pp_lane_control()]) without
 #'   promising every study a switch. `"pill"` cycles its choices in place,
 #'   one per click, wrapping.
+#' @param sublabel Secondary text after the card's title, muted. A parameter
+#'   card titles itself "Chemistry · ALT" -- the form a reader scans a stack
+#'   by -- and carries the full parameter name here.
+#' @param group_id,group_label The findings card a parameter came from. Only
+#'   parameter cards set these; they are what let a board saved against the
+#'   old one-card-per-group model be expanded (see [pp_expand_groups()]).
 #' @param band How this viz draws in the sidebar's cohort strip, from
 #'   [pp_band_spans()] or [pp_band_series()], or `NULL` for a viz that has no
 #'   strip form. The cohort band draws the FIRST selected viz that declares
@@ -91,6 +97,9 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
                        optional = list(),
                        requires_any = list(),
                        uses = character(),
+                       sublabel = NULL,
+                       group_id = NULL,
+                       group_label = NULL,
                        band = NULL,
                        controls = NULL,
                        legend_ui = NULL,
@@ -111,6 +120,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     all(vapply(optional, is.character, logical(1L))),
     is.character(uses),
     is.null(band) || inherits(band, "pp_band"),
+    is.null(sublabel) || (is.character(sublabel) && length(sublabel) == 1L),
     is.null(legend_ui) || is.function(legend_ui),
     is.function(render),
     is.null(exhibit) || is.function(exhibit)
@@ -121,7 +131,9 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
       description = description, tables = tables,
       search = search, params = params,
       requires = requires, optional = optional, requires_any = requires_any,
-      uses = uses, band = band, controls = controls, legend_ui = legend_ui,
+      uses = uses, sublabel = sublabel, group_id = group_id,
+      group_label = group_label,
+      band = band, controls = controls, legend_ui = legend_ui,
       render = render, exhibit = exhibit, exhibit_kind = exhibit_kind
     ),
     class = c("pp_viz", "list")

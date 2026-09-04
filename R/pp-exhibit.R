@@ -204,6 +204,13 @@ pp_patient_exhibit <- function(data,
     } else {
       utils::head(avail_ids, 2L)
     }
+  } else {
+    # A board saved when a findings card was one viz per GROUP names ids this
+    # catalogue no longer has. The block expands them on restore; the export
+    # has to do the same, or a deck built from such a board comes out missing
+    # exactly the laboratory panels the board was saved with -- silently,
+    # because an id the catalogue does not know is simply skipped below.
+    selected <- pp_expand_groups(selected, catalog)
   }
 
   patients <- list()

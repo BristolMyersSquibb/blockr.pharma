@@ -28,7 +28,7 @@ pp_one_patient <- function(id, pcs = c("ALT", "AST")) {
 
 test_that("the card catalog object survives a patient switch upstream", {
   blk <- new_patient_profile_block(selected = c("patient_overview",
-                                                "adlbc_all"))
+                                                "adlbc_all__ALT"))
   srv <- blk[["expr_server"]]
 
   r_in <- shiny::reactiveVal(pp_one_patient("A", c("ALT", "AST")))
@@ -37,7 +37,7 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     cat_a <- r_available_val()
     expect_true(!is.null(cat_a))
-    expect_true("adlbc_all" %in% names(cat_a))
+    expect_true("adlbc_all__ALT" %in% names(cat_a))
 
     # another single patient, same tables, same params: the catalog object
     # must be the SAME (no sidebar invalidation)
@@ -52,7 +52,7 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     cat_e <- r_available_val()
     expect_false(identical(cat_a, cat_e))
-    expect_true("TSH" %in% names(cat_e$adlbc_all$params))
+    expect_true("adlbc_all__TSH" %in% names(cat_e))
 
     r_in(pp_one_patient("F", c("ALT", "AST")))   # F has no TSH
     session$flushReact()
@@ -85,6 +85,6 @@ test_that("the card catalog object survives a patient switch upstream", {
     session$flushReact()
     cat_c <- r_available_val()
     expect_false(identical(cat_a, cat_c))
-    expect_true("advs_all" %in% names(cat_c))
+    expect_true("advs_all__SYSBP" %in% names(cat_c))
   })
 })

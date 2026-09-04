@@ -166,25 +166,28 @@ pp_band_for_selection <- function(viz, items = NULL) {
 #' parameter is the part a reader cannot guess and the part that changes
 #' between studies, so it is never dropped.
 #'
-#' The CODE, not the name: the caption sits in a 232px sidebar where
-#' "Chemistry \u00b7 Alanine Aminotransferase" ellipsizes to "Chemistry
-#' \u00b7 Alanine Amino...", which is exactly the wrong half. The full name is
-#' the tooltip ([pp_band_title()]), the same split the row's id and the
-#' panel's chips already make.
+#' A parameter card already names it -- its label IS "Chemistry \u00b7 ALT" --
+#' so appending the code again read "Chemistry \u00b7 ALT \u00b7 ALT". The
+#' code is only appended when the label does not already end in it, which is
+#' the case for any viz that declares a series band without being a parameter
+#' card.
 #' @noRd
 pp_band_caption <- function(label, band) {
-  if (identical(band$kind, "series")) {
-    paste0(label, " \u00b7 ", band$paramcd)
-  } else {
-    label
-  }
+  if (!identical(band$kind, "series")) return(label)
+  tail <- paste0(" \u00b7 ", band$paramcd)
+  if (endsWith(label, tail)) return(label)
+  paste0(label, tail)
 }
 
 #' The caption's tooltip: what the band draws, spelled out
 #' @noRd
 pp_band_title <- function(label, band) {
   what <- if (identical(band$kind, "series")) {
-    paste0(label, ": ", band$param)
+    if (endsWith(label, paste0(" \u00b7 ", band$paramcd))) {
+      paste0(label, " (", band$param, ")")
+    } else {
+      paste0(label, ": ", band$param)
+    }
   } else {
     label
   }
@@ -313,41 +316,53 @@ pp_add_picker_ui <- function(avail, ns) {
     )
   }
 
-  # Panels, grouped by the domain the sidebar grouped them by.
-  by_dom <- split(avail, vapply(avail, function(v) v$domain %||% "", character(1L)))
+  # Two row styles, one kind of thing. A parameter card carries its code on
+  # the left and the findings card it came from on the right, so `ALB` reads
+  # as "Albumin, and it is in Chemistry"; anything else is a plain panel row
+  # with its domain. Both add exactly the same way, because since parameters
+  # became cards there is only one kind of thing on the profile.
+  is_param <- function(v) !is.null(v$group_label)
+
+  viz_row <- function(v, dom) {
+    if (is_param(v)) {
+      code <- names(v$params)[[1L]]
+      row(
+        shiny::span(class = "pp-add-code", code),
+        shiny::span(class = "pp-add-name", v$sublabel %||% v$label),
+        shiny::span(class = "pp-add-par", v$group_label),
+        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
+        search = paste(code, v$sublabel %||% "", v$group_label),
+        kind = "panel", viz_id = v$id, hidden = TRUE
+      )
+    } else {
+      row(
+        shiny::span(class = "pp-add-dot",
+                    style = paste0("background:", v$color %||% "#9ca3af")),
+        shiny::span(class = "pp-add-name", v$label),
+        shiny::span(class = "pp-add-par", dom),
+        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
+        search = paste(v$label, dom, v$search %||% ""),
+        kind = "panel", viz_id = v$id
+      )
+    }
+  }
+
+  by_dom <- split(avail, vapply(avail, function(v) v$domain %||% "",
+                                character(1L)))
   panel_rows <- unlist(lapply(names(by_dom), function(dom) {
     vizs <- by_dom[[dom]]
+    plain <- Filter(Negate(is_param), vizs)
+    if (!length(plain)) return(NULL)
     c(
       list(shiny::div(class = "pp-add-group", `data-group` = "panel", dom)),
-      lapply(vizs, function(v) {
-        row(
-          shiny::span(class = "pp-add-dot",
-                      style = paste0("background:", v$color %||% "#9ca3af")),
-          shiny::span(class = "pp-add-name", v$label),
-          shiny::span(class = "pp-add-par", dom),
-          shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
-          search = paste(v$label, dom, v$search %||% ""),
-          kind = "panel", viz_id = v$id
-        )
-      })
+      lapply(plain, viz_row, dom = dom)
     )
   }), recursive = FALSE)
 
-  # Parameters. Hidden until something is typed.
-  param_rows <- unlist(lapply(avail, function(v) {
-    if (!length(v$params)) return(NULL)
-    lapply(names(v$params), function(code) {
-      row(
-        shiny::span(class = "pp-add-code", code),
-        shiny::span(class = "pp-add-name", unname(v$params[[code]])),
-        shiny::span(class = "pp-add-par", v$label),
-        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
-        # The panel's LABEL, never its search text; see the note above.
-        search = paste(code, v$params[[code]], v$label),
-        kind = "param", viz_id = v$id, paramcd = code, hidden = TRUE
-      )
-    })
-  }), recursive = FALSE)
+  # Parameter cards, hidden until something is typed. A study's whole
+  # parameter set is sixty-odd rows and that is not a menu -- the panels are
+  # what an empty box offers, as the sidebar's AVAILABLE list did.
+  param_rows <- unname(lapply(Filter(is_param, avail), viz_row, dom = ""))
 
   n_param <- length(param_rows)
 
@@ -403,4 +418,45 @@ pp_grip_glyph <- function() {
            collapse = ""),
     "</svg>"
   )
+}
+
+#' A parameter card's viz id
+#'
+#' Derived from the group's, so the card a parameter came from is recoverable
+#' from its id alone -- which is what lets a saved board naming the old group
+#' be expanded into parameters ([pp_expand_groups()]).
+#' @noRd
+pp_param_viz_id <- function(group_id, code) {
+  paste0(group_id, "__", code)
+}
+
+#' Expand a saved board's group ids into parameter cards
+#'
+#' A findings card used to be one viz per group: a board saved with
+#' `"adlbc_all"` meant "the Chemistry card, showing its first three
+#' parameters". That viz no longer exists, so restoring such a board would
+#' silently drop its laboratory panels.
+#'
+#' Each group id is replaced, in place, by the parameter cards it would have
+#' drawn -- the first `n` of that group, which is what the card defaulted to.
+#' An id that is neither a known viz nor a known group is left alone: the
+#' selection guard elsewhere already ignores ids the data cannot offer, and
+#' inventing a meaning for one here would hide a real mismatch.
+#'
+#' @param ids Selected viz ids, possibly from an older board.
+#' @param avail Named list of available `pp_viz` definitions.
+#' @param n How many parameters a group card used to show.
+#' @return Ids, with any group expanded.
+#' @noRd
+pp_expand_groups <- function(ids, avail, n = pp_group_default_n) {
+  if (!length(ids)) return(ids)
+  groups <- vapply(avail, function(v) v$group_id %||% NA_character_,
+                   character(1L))
+  out <- lapply(ids, function(id) {
+    if (id %in% names(avail)) return(id)
+    members <- names(avail)[!is.na(groups) & groups == id]
+    if (!length(members)) return(id)
+    utils::head(sort(members), n)
+  })
+  unique(unlist(out, use.names = FALSE))
 }

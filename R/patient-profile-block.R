@@ -579,6 +579,15 @@ new_patient_profile_block <- function(selected = NULL,
             if (!init_done()) {
               avail <- r_available()
               cur <- r_selected()
+              # A board saved when a findings card was one viz per GROUP names
+              # ids that no longer exist. Expand them into the parameter cards
+              # that card would have drawn, before deciding the selection is
+              # unusable and replacing it with defaults.
+              grown <- pp_expand_groups(cur, avail)
+              if (!identical(grown, cur)) {
+                r_selected(grown)
+                cur <- grown
+              }
               if (is.null(cur) || !any(cur %in% names(avail))) {
                 default_ids <- names(avail)
                 # Ensure patient_overview is first if available
@@ -1752,6 +1761,12 @@ new_patient_profile_block <- function(selected = NULL,
                             title = "Drag to reorder",
                             shiny::HTML(pp_grip_glyph())),
                 shiny::div(class = "pp-chart-title", viz$label),
+                # The full parameter name, muted. The title is the form you
+                # scan a stack by ("Chemistry . ALT"); this is the one you
+                # read once you have found it.
+                if (!is.null(viz$sublabel)) {
+                  shiny::div(class = "pp-chart-sublabel", viz$sublabel)
+                },
                 # Which panel the cohort strip draws. Rendered on every
                 # panel and shown on one, so saying so costs a class rather
                 # than a re-render -- and the question "which one is first?"

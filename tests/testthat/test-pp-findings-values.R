@@ -15,13 +15,20 @@ plotted_values <- function(chart) {
 }
 
 # The fixture ships no category column, so the whole table is one card.
-render_findings_card <- function(adlb, id = "adlb_all", ref_ms = NA_real_) {
+# A findings card is one PARAMETER now, so these render the card for the
+# parameter under test rather than the group card that used to hold it. The
+# chart itself is unchanged: pp_render_findings() always drew one grid per
+# code and is handed one instead of three.
+render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_) {
   dm_obj <- dm::dm(
     adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
     adlb = adlb
   )
   dm_obj <- pp_scope_subject(pp_normalize_dm(dm_obj), "S1")
   vizs <- pp_findings_vizs(dm_obj)
+  if (is.null(id)) {
+    id <- names(vizs)[[1L]]
+  }
   expect_true(id %in% names(vizs))
   vizs[[id]]$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")),
                     ref_ms = ref_ms)
