@@ -2227,3 +2227,36 @@ body.pp-dragging * {
   z-index: 40;
   pointer-events: none;
 }
+
+/* Which panel the cohort strip draws.
+   
+   The sidebar's caption names it, but naming it is not the same as pointing
+   at it: with the strip following the first drawable panel, "which one is
+   first?" has to be answerable where the panels are. Rendered in every
+   header and shown in one, so moving the mark is a class rather than two
+   re-renders. */
+.pp-band-tag {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 4px; /* --blockr-radius-sm */
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  white-space: nowrap;
+}
+
+.pp-chart-panel.pp-is-band .pp-band-tag {
+  display: inline-flex;
+}
+
+.pp-band-tag .pp-band-glyph {
+  opacity: 0.75;
+}

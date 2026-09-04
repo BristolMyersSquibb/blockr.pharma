@@ -225,11 +225,25 @@ new_patient_profile_block <- function(selected = NULL,
           # strip form -- the patient overview, a table -- is stepped over
           # rather than drawn badly. NULL when nothing selected can be drawn:
           # the rows then keep an empty track.
-          r_band_source <- shiny::reactive({
-            # Reads the settings too: a findings card's chips decide which
-            # parameter its panel draws first, and the strip follows it.
-            pp_cohort_band_source(r_selected(), r_available(),
-                                  r_viz_settings())
+          # Which panel drives the cohort band -- and ONLY when it changes.
+          #
+          # A reactiveVal behind an observer, not a plain reactive. It depends
+          # on the selection AND on every viz's settings (a findings card's
+          # chips decide which parameter it leads with), and Shiny propagates
+          # invalidation whether or not the value moved. So reordering the
+          # last two panels, or ticking a chip on a card that is not first,
+          # re-derived all 254 bands: measured at 2 cohort redraws for a
+          # reorder that changed nothing about the strip.
+          #
+          # Guarded by identical(), which works because a source is plain
+          # data -- ids, labels and a band declaration, no closures.
+          r_band_source <- shiny::reactiveVal(NULL)
+          shiny::observe({
+            src <- pp_cohort_band_source(r_selected(), r_available(),
+                                         r_viz_settings())
+            if (!identical(shiny::isolate(r_band_source()), src)) {
+              r_band_source(src)
+            }
           })
 
           # The term the STRIP follows, a beat behind the panel's.
@@ -242,7 +256,7 @@ new_patient_profile_block <- function(selected = NULL,
           # in the browser so the panel keeps its own shorter delay: what the
           # user is looking at while typing answers first, and the list they
           # will read afterwards catches up.
-          r_band_search <- shiny::debounce(
+          r_band_search_raw <- shiny::debounce(
             shiny::reactive({
               src <- r_band_source()
               if (is.null(src) || !length(src$band$search %||% character())) {
@@ -252,6 +266,19 @@ new_patient_profile_block <- function(selected = NULL,
             }),
             350
           )
+
+          # Deduped, for the same reason the source above is. The debounce
+          # re-emits whenever ANY of its inputs invalidate, so changing the
+          # band source made the strip redraw twice for one change: once when
+          # the source moved, and again 350ms later when the debounce fired
+          # with a term that had not changed.
+          r_band_search <- shiny::reactiveVal("")
+          shiny::observe({
+            v <- r_band_search_raw()
+            if (!identical(shiny::isolate(r_band_search()), v)) {
+              r_band_search(v)
+            }
+          })
 
           # Event geometry for the row bands. Split from the frame so the
           # download never carries it and a richer band never widens the
@@ -846,6 +873,18 @@ new_patient_profile_block <- function(selected = NULL,
             pp_cohort_rows_html(frame, ord, disp, marks, color, arm_col,
                                 picked,
                                 smooth = !identical(r_smooth(), "off"))
+          })
+
+          # Which panel the strip is drawing, for the tag in its header.
+          # A message rather than a re-render: marking the panel is a class,
+          # and rebuilding two charts to move a five-word label would undo
+          # the point of the guard above.
+          shiny::observe({
+            src <- r_band_source()
+            session$sendCustomMessage(
+              session$ns("sync_band"),
+              list(viz_id = if (is.null(src)) "" else src$viz_id)
+            )
           })
 
           # Move the selected class when the pick changes from ANYWHERE: the
@@ -1713,6 +1752,15 @@ new_patient_profile_block <- function(selected = NULL,
                             title = "Drag to reorder",
                             shiny::HTML(pp_grip_glyph())),
                 shiny::div(class = "pp-chart-title", viz$label),
+                # Which panel the cohort strip draws. Rendered on every
+                # panel and shown on one, so saying so costs a class rather
+                # than a re-render -- and the question "which one is first?"
+                # is answered where you are looking rather than only in the
+                # sidebar's caption.
+                shiny::span(class = "pp-band-tag",
+                            title = "The cohort strip draws this panel",
+                            shiny::HTML(pp_band_glyph()),
+                            "cohort band"),
                 controls_ui,
                 legend_ui,
                 download_ui,
@@ -2249,6 +2297,7 @@ new_patient_profile_block <- function(selected = NULL,
             var cohortSortPillId = '", ns("cohort_sort_pill"), "';
             var cohortWellId = '", ns("pp_cohort_well"), "';
             var chartAreaId = '", ns("chart_area"), "';
+            var syncBandMsgId = '", ns("sync_band"), "';
             var syncSubjectMsgId = '", ns("sync_subject"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
@@ -2625,6 +2674,29 @@ new_patient_profile_block <- function(selected = NULL,
                 document.addEventListener('mouseup', up);
               });
 
+            // Which panel the cohort strip is drawing.
+            //
+            // REMEMBERED and re-applied, not painted once. The message fires
+            // when the source changes, and the one at boot arrives before
+            // the chart area has rendered a single panel -- so the mark went
+            // nowhere and no panel ever carried it. Exactly the bug the
+            // picker's ticks had.
+            var bandVizId = '';
+
+            function paintBandTag(){
+              var area = document.getElementById(chartAreaId);
+              if (!area) return;
+              area.querySelectorAll('[id*=viz_slot_]').forEach(function(el){
+                el.classList.toggle('pp-is-band',
+                  !!bandVizId && el.id.indexOf('viz_slot_' + bandVizId) >= 0);
+              });
+            }
+
+            Shiny.addCustomMessageHandler(syncBandMsgId, function(msg) {
+              bandVizId = (msg && msg.viz_id) || '';
+              paintBandTag();
+            });
+
             // The + button and its picker.
             //
             // Filtering is client-side over rows the server rendered once:
@@ -2939,7 +3011,12 @@ new_patient_profile_block <- function(selected = NULL,
               // The panel slot that owns the find box has just been
               // replaced; put the caret back in it.
               if (e.name && e.name.indexOf('viz_slot_') >= 0) {
-                setTimeout(restoreSearch, 0);
+                setTimeout(function(){ restoreSearch(); paintBandTag(); }, 0);
+              }
+              // The whole stack was rebuilt: a patient switch, or the first
+              // render of all.
+              if (e.name && e.name.indexOf('chart_area') >= 0) {
+                setTimeout(paintBandTag, 0);
               }
               // A fresh catalogue arrives with nothing ticked.
               if (e.name && e.name.indexOf('panel_picker') >= 0) {
