@@ -382,3 +382,78 @@ test_that("the band follows the chips, not the card's declaration", {
   expect_identical(stale$band$paramcd, "ALB")
 })
 
+
+# --- the add picker ----------------------------------------------------------
+#
+# Replaces test-pp-sidebar-draggable.R, which pinned a behaviour that has been
+# removed: cards in the sidebar's SELECTED list had to be draggable at boot,
+# because reordering happened over there. Reordering is now a drag of the card
+# itself, in the chart area, and the sidebar has no panel list at all. What is
+# worth pinning instead is the picker that replaced it -- and it is a pure
+# function of the catalogue, so it needs no session.
+
+picker_html <- function(vizs) {
+  as.character(htmltools::renderTags(
+    pp_add_picker_ui(vizs, identity)
+  )$html)
+}
+
+test_that("the picker lists panels with their domain, parameters with theirs", {
+  vizs <- list(
+    ae = viz_stub("ae", pp_band_ae(), "adae"),
+    chem = viz_stub("chem", pp_band_series("adlbc", "ALB", "Albumin"), "adlbc")
+  )
+  vizs$chem$params <- c(ALB = "Albumin", ALT = "Alanine Aminotransferase")
+  html <- picker_html(vizs)
+
+  # A panel row carries its viz id and no PARAMCD; a parameter row carries
+  # both, and starts hidden -- an empty box lists the panels, because a
+  # study's whole parameter set is not a menu.
+  expect_match(html, 'data-kind="panel"', fixed = TRUE)
+  expect_match(html, 'data-kind="param"', fixed = TRUE)
+  expect_match(html, 'data-paramcd="ALT"', fixed = TRUE)
+  expect_match(html, "pp-add-row is-param", fixed = TRUE)
+
+  # The parameter says where it lives. This is the whole answer to "ALB, but
+  # where is that?".
+  expect_match(html, "Alanine Aminotransferase", fixed = TRUE)
+})
+
+test_that("a parameter matches its own name, never its panel's keywords", {
+  # The trap: a findings card's `search` text carries every PARAMCD and PARAM
+  # it covers, so folding it into each parameter's haystack made every one of
+  # them a hit for any of the others. Typing one code returned the whole card.
+  vizs <- list(chem = viz_stub("chem",
+                               pp_band_series("adlbc", "ALB", "Albumin"),
+                               "adlbc"))
+  vizs$chem$params <- c(ALB = "Albumin", ALT = "Alanine Aminotransferase")
+  vizs$chem$search <- "CHEM ALB Albumin ALT Alanine Aminotransferase"
+
+  html <- picker_html(vizs)
+  rows <- regmatches(html, gregexpr("<div class=\"pp-add-row[^>]*>", html))[[1]]
+  hay <- function(kind, code) {
+    r <- grep(paste0('data-kind="', kind, '"'), rows, value = TRUE)
+    if (!is.null(code)) r <- grep(paste0('data-paramcd="', code, '"'), r,
+                                  value = TRUE)
+    sub('.*data-search-text="([^"]*)".*', "\\1", r)
+  }
+
+  # The panel's row keeps the full search text, so "alanine" still finds the
+  # CARD -- that is how a card called Chemistry is reachable by a parameter
+  # name, and it predates this picker.
+  expect_match(hay("panel", NULL), "alanine")
+
+  # The ALB row must not mention alanine, or typing "alanine" returns Albumin.
+  expect_false(grepl("alanine", hay("param", "ALB"), fixed = TRUE))
+  expect_match(hay("param", "ALB"), "albumin")
+  expect_match(hay("param", "ALB"), "chem")
+})
+
+test_that("a study with no parameters gets a panels-only picker", {
+  vizs <- list(ae = viz_stub("ae", pp_band_ae(), "adae"))
+  html <- picker_html(vizs)
+  expect_false(grepl('data-kind="param"', html, fixed = TRUE))
+  # And the box says so rather than promising a search it cannot answer.
+  expect_match(html, "Search panels", fixed = TRUE)
+  expect_false(grepl("Search panels and parameters", html, fixed = TRUE))
+})

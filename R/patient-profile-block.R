@@ -699,47 +699,17 @@ new_patient_profile_block <- function(selected = NULL,
             )
           })
 
-          # Ship the cohort to the client's Blockr.Select. `options` are
-          # {value = USUBJID, label = "Placebo · 63F"} pairs: the component
-          # renders the value, then the label as a muted
-          # `.blockr-select__opt-label`. Only sent when the cohort itself
-          # changes, so stepping through patients does not re-ship 2000 rows.
+          # The cohort's SIZE, for the tag in the header.
+          #
+          # This used to ship every patient as a {value, label} pair to feed a
+          # Blockr.Select in the header. The sidebar's cohort list is the
+          # picker now, so the message carries a count -- 2000 options no
+          # longer cross the wire on every cohort change, and the tag it
+          # fills is the sidebar's toggle.
           shiny::observe({
-            co <- r_cohort()
-            picked <- pp_resolve_subject(co$ids, shiny::isolate(r_subject()))
-            opts <- unname(Map(
-              function(v, l) list(value = v, label = l),
-              co$ids, co$meta
-            ))
             session$sendCustomMessage(
               session$ns("subject_picker"),
-              list(
-                id      = session$ns("pp_subject"),
-                options = opts,
-                selected = if (is.na(picked)) "" else picked,
-                locked  = length(co$ids) <= 1L,
-                count   = length(co$ids),
-                static  = if (length(co$ids) == 1L) {
-                  co$labels[[1L]]
-                } else {
-                  "No patients"
-                }
-              )
-            )
-          })
-
-          # Push a selection the server made (the prev/next steppers, or a
-          # cleared stale pick) back into the already-mounted select. Carries
-          # no options: the client reuses the ones it has.
-          shiny::observe({
-            co <- r_cohort()
-            picked <- pp_resolve_subject(co$ids, r_subject())
-            session$sendCustomMessage(
-              session$ns("subject_value"),
-              list(
-                id = session$ns("pp_subject"),
-                selected = if (is.na(picked)) "" else picked
-              )
+              list(count = length(r_cohort()$ids))
             )
           })
 
@@ -958,6 +928,45 @@ new_patient_profile_block <- function(selected = NULL,
             )
           })
 
+          # Who is on screen, and the facts about them the sidebar row has
+          # no room for. Reads the cohort FRAME, which already carries every
+          # one of them (SEX, AGE, TRTDURD, AE_N, AE_WORST) plus the arm --
+          # so the header costs a lookup, not a derivation.
+          output$subject_facts <- shiny::renderUI({
+            cur <- r_subject()
+            if (length(cur) != 1L || !nzchar(cur)) {
+              return(shiny::span(class = "pp-subject-none",
+                                 "No patient selected"))
+            }
+            frame <- r_cohort_frame()
+            at <- match(cur, frame$USUBJID)
+            disp <- pp_cohort_id_display(frame$USUBJID)
+            arm <- pp_subject_arm(r_norm_dm(), cur, r_roles()$arm)
+            pp_subject_facts_ui(frame, at, cur, disp, arm,
+                                pp_cohort_sev_color(
+                                  pp_sev_scale_colors(r_scale_map(),
+                                                      r_norm_dm(),
+                                                      r_roles()$severity)
+                                ))
+          })
+
+          # The picker behind the + button.
+          #
+          # Rendered ONCE per catalogue, not per selection: it re-renders only
+          # when the study's available vizs change, so opening it, typing in
+          # it and ticking things off never rebuilds it underneath the user.
+          # Which rows are ticked is kept in step by the sync_selected message
+          # the sidebar cards already use.
+          #
+          # Filtering is client-side. The catalogue is a few dozen rows and it
+          # is all here already; a round trip per keystroke would buy nothing
+          # and cost the caret (see the AE find box).
+          output$panel_picker <- shiny::renderUI({
+            avail <- r_available()
+            if (!length(avail)) return(NULL)
+            pp_add_picker_ui(avail, session$ns)
+          })
+
           output$cohort_count <- shiny::renderText({
             n <- nrow(r_cohort_frame())
             if (n == 1L) "1 patient" else paste(n, "patients")
@@ -970,165 +979,6 @@ new_patient_profile_block <- function(selected = NULL,
             if (!nzchar(pre)) return(NULL)
             shiny::span(class = "pp-cohort-prefix",
                         title = "Shared by every patient in the cohort", pre)
-          })
-
-          output$sidebar_cards <- shiny::renderUI({
-            avail <- r_available()
-            sel <- shiny::isolate(r_selected())
-            if (length(avail) == 0) {
-              return(shiny::div(class = "pp-empty-state",
-                shiny::p(class = "pp-empty-state-text",
-                  "No visualizations available"),
-                shiny::p(class = "pp-empty-state-hint",
-                  "Check that upstream data contains expected tables")
-              ))
-            }
-
-            # Helper to build a single card. One-line row: the description
-            # is a title tooltip, not a visible paragraph. `v$search` carries
-            # every PARAMCD and full PARAM the card covers, so a card named
-            # "Chemistry" is still reachable by typing "alanine" -- the
-            # description alone was a fixed prose blurb that named some
-            # parameters and not others.
-            # One <use> per row against the sprite in the static UI above.
-            check_svg <- paste0(
-              '<svg width="12" height="12" viewBox="0 0 16 16"><use href="#',
-              session$ns("check"), '"/></svg>'
-            )
-            check_mark <- function() {
-              shiny::div(class = "pp-card-check", shiny::HTML(check_svg))
-            }
-
-            build_card <- function(v, is_sel) {
-              shiny::div(
-                class = paste("pp-card", if (is_sel) "is-selected"),
-                # Selected cards live in the SELECTED list and are the ones
-                # you drag to reorder the panels. The `sync_selected` handler
-                # maintains this attribute as cards move between the two
-                # lists, but it cannot be the only place it is set: at boot
-                # that message races this renderUI and usually wins, finding
-                # no cards to mark. A board that opens with vizs already
-                # selected -- every CDEx board does -- then had a SELECTED
-                # list where nothing was draggable, and reordering simply did
-                # not work until you toggled some card and forced a resync.
-                # So the server states it for the cards it renders selected.
-                draggable = if (is_sel) "true",
-                `data-viz-id` = v$id,
-                `data-domain` = v$domain,
-                title = v$description,
-                # The card's OWN text only. Its parameters used to be pasted
-                # in here too, which put the whole lab vocabulary on every
-                # card; they live in the parameter index below, once.
-                `data-card-text` = tolower(paste(
-                  v$label, v$description, v$domain
-                )),
-                shiny::div(class = "pp-card-main",
-                  shiny::div(class = "pp-card-icon",
-                    shiny::HTML(pp_icon_html(v$icon, v$color))
-                  ),
-                  shiny::div(class = "pp-card-content",
-                    shiny::tags$p(class = "pp-card-title", v$label)
-                  ),
-                  check_mark()
-                )
-              )
-            }
-
-            # Active section: selected cards in order
-            active_ids <- intersect(sel, names(avail))
-            active_cards <- lapply(active_ids, function(vid) {
-              build_card(avail[[vid]], is_sel = TRUE)
-            })
-
-            # Available section: unselected cards grouped by domain
-            unsel_vizs <- avail[setdiff(names(avail), sel)]
-            domains <- unique(vapply(avail, `[[`, character(1L), "domain"))
-            domain_groups <- lapply(domains, function(domain) {
-              dvizs <- Filter(function(v) v$domain == domain, unsel_vizs)
-              if (length(dvizs) == 0) return(NULL)
-              shiny::div(
-                class = "pp-category-group",
-                `data-domain` = domain,
-                shiny::div(class = "pp-category-header",
-                  shiny::tags$span(toupper(domain))
-                ),
-                lapply(dvizs, function(v) build_card(v, is_sel = FALSE))
-              )
-            })
-            domain_groups <- Filter(Negate(is.null), domain_groups)
-
-            # Search results. Browsing the sidebar lists GROUPS (Chemistry,
-            # Hematology, Vital Signs); searching answers with the individual
-            # SERIES, because what you look for is "alanine", not the card
-            # that happens to hold it. Each result nests under its group so
-            # the context is visible, and BOTH levels carry a check mark: the
-            # group check adds the whole card, the parameter check adds just
-            # that series.
-            #
-            # Only the INDEX ships -- one [viz, code, short, full] tuple per
-            # parameter -- and the client builds rows for the handful a query
-            # actually matches. Pre-rendering every row instead cost 454 bytes
-            # apiece to carry about 40 bytes of fact, and put a byte-for-byte
-            # copy of all eleven browse cards underneath them: 30KB of markup
-            # for what is, as a payload, a list of lab and vital-sign names.
-            # Building client-side keeps typing free of server round-trips,
-            # which is the property that mattered.
-            param_index <- lapply(pp_param_index(avail), function(p) {
-              list(p$viz_id, p$code, p$short, p$label)
-            })
-
-            shiny::tagList(
-              shiny::tags$script(
-                type = "application/json",
-                id = session$ns("param_index"),
-                shiny::HTML(as.character(jsonlite::toJSON(
-                  param_index, auto_unbox = TRUE
-                )))
-              ),
-              # Matches, built by the client while a query is live
-              shiny::div(class = "pp-results-section is-hidden",
-                shiny::div(class = "pp-section-header", "RESULTS"),
-                shiny::div(class = "pp-results-list")
-              ),
-              shiny::div(class = "pp-no-results is-hidden",
-                "No visualization or parameter matches"),
-              # Active (selected) section
-              shiny::div(class = "pp-active-section",
-                shiny::div(class = "pp-section-header", "SELECTED"),
-                shiny::div(
-                  class = paste(
-                    "pp-active-hint",
-                    if (length(active_cards) < 2) "is-hidden"
-                  ),
-                  "Drag to reorder"
-                ),
-                shiny::div(class = "pp-active-list",
-                  # The drop caret: ONE element for the whole list, moved to
-                  # the target gap by the drag (see the drag states in
-                  # patient-profile.css). Rendered here rather than created
-                  # on demand in JS so it survives this output re-rendering.
-                  shiny::div(class = "pp-drop-caret is-hidden"),
-                  active_cards,
-                  shiny::div(
-                    class = paste(
-                      "pp-active-empty",
-                      if (length(active_cards) > 0) "is-hidden"
-                    ),
-                    "Click a card below to add it here"
-                  )
-                )
-              ),
-              # Available (unselected) section. The groups live in their own
-              # scroll box so the sidebar's height is driven by the SELECTED
-              # list, not by however many vizs the cohort happens to offer.
-              shiny::div(class = "pp-available-section",
-                shiny::div(
-                  class = "pp-section-header pp-section-header-available",
-                  "AVAILABLE"
-                ),
-                shiny::div(class = "pp-available-list", domain_groups)
-              )
-            )
           })
 
           # Build per-viz control toolbar HTML
@@ -1854,6 +1704,14 @@ new_patient_profile_block <- function(selected = NULL,
 
             shiny::tagList(
               shiny::div(class = "pp-chart-header",
+                # The handle. Reordering used to live in the sidebar's card
+                # list -- a remote control for a stack a few hundred pixels
+                # to the right. The card you are looking at is the card you
+                # drag now, and the whole header is the target so you can be
+                # imprecise; the controls inside it keep their own clicks.
+                shiny::span(class = "pp-chart-grip",
+                            title = "Drag to reorder",
+                            shiny::HTML(pp_grip_glyph())),
                 shiny::div(class = "pp-chart-title", viz$label),
                 controls_ui,
                 legend_ui,
@@ -2228,7 +2086,9 @@ new_patient_profile_block <- function(selected = NULL,
                   type = "text",
                   class = "pp-sidebar-search-input",
                   id = ns("search"),
-                  placeholder = "Search patients and panels..."
+                  # Patients only now: the panels this used to
+                  # find are in the picker's own box.
+                  placeholder = "Search patients..."
                 ),
                 # Clear: appears only while the box has text. Restores the
                 # full list, SELECTED section included.
@@ -2275,36 +2135,26 @@ new_patient_profile_block <- function(selected = NULL,
               ),
               # What the band draws, directly above the bands themselves.
               shiny::uiOutput(ns("cohort_band_caption")),
+              # tabindex, so the list can hold focus and the arrow keys
+              # reach it. -1 keeps it out of the tab order: it is reached by
+              # clicking a patient, not by tabbing past 254 of them.
               shiny::div(class = "pp-cohort-well", id = ns("pp_cohort_well"),
+                tabindex = "-1",
+                role = "listbox",
+                `aria-label` = "Cohort",
                 shiny::uiOutput(ns("sidebar_cohort"))
               )
             ),
 
-            # Card list
-            shiny::div(class = "pp-sidebar-section pp-sidebar-section--grow",
-              shiny::div(class = "pp-section-head",
-                shiny::span(class = "pp-section-title", "Panels")
-              ),
-              shiny::div(class = "pp-sidebar-content",
-                shiny::uiOutput(ns("sidebar_cards"),
-                                class = "pp-sidebar-cards")
-              )
-            )
-          ),
-
-          # Expand button (shown when sidebar collapsed)
-          shiny::tags$button(
-            class = "pp-expand-btn",
-            id = ns("expand_btn"),
-            title = "Show sidebar",
-            shiny::HTML(paste0(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-              'height="16" fill="currentColor" viewBox="0 0 16 16">',
-              '<path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11',
-              '.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 ',
-              '1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5',
-              '.5 0 0 1 1 8z"/></svg>'
-            ))
+            # No panel list. The sidebar answers WHO; the panels are a
+            # stack of cards a few hundred pixels to the right, and choosing
+            # and ordering them from over here meant doing the work in one
+            # place and watching the result in another. Adding is the +
+            # button in the toolbar, ordering is the grip in each card's own
+            # header, and removing is the x that was always there.
+            #
+            # The sidebar keeps its search, which now searches patients: the
+            # panels it used to find are in the picker's own box.
           ),
 
           # Chart area: a static subject picker, the dynamic header bar (gear
@@ -2315,41 +2165,36 @@ new_patient_profile_block <- function(selected = NULL,
           # chart_area and the gear popover stays open.
           shiny::div(class = "pp-chart-area",
             shiny::div(class = "pp-chart-toolbar",
-              # Required-empty: the control carries the amber cue and nothing
-              # else. No help line — the "Select a patient" placeholder is
-              # already the message, and no banner: this is attention, not
-              # error. Steppers flank the select and never move, because the
-              # control is a fixed width, so a long arm name ellipsizes rather
-              # than shunting the arrows sideways as you page through patients.
+              # WHO is on screen, not a second way to choose them.
+              #
+              # This was a Blockr.Select over all 254 patients with a stepper
+              # either side. The sidebar's cohort list is also a searchable
+              # list of all 254, with a band, a sort and hit counts the
+              # dropdown never had, so the two competed and the dropdown lost.
+              # What is NOT duplicated is saying who you are looking at --
+              # the line you want once you have scrolled and the selected row
+              # is off screen -- so the control became that instead, plus the
+              # facts the sidebar row has no room for. They all come from
+              # pp_cohort_frame(), which computed them already.
+              #
+              # Stepping moved to the keyboard: arrow keys in the cohort
+              # list, which is where a reader's hand already is.
               shiny::div(class = "pp-subject-picker", id = ns("pp_picker"),
+                shiny::uiOutput(ns("subject_facts"), inline = TRUE),
+                shiny::span(class = "pp-subject-gap"),
+                # The cohort tag, and the sidebar's toggle.
+                #
+                # It reads "254 patients" and it opens the list of them,
+                # which is the one place a reader is already looking when
+                # they want the cohort. Making it the toggle is also what
+                # lets the picker go: with the sidebar shut there would
+                # otherwise be no way to change patient at all, and this is
+                # the way back.
                 shiny::tags$button(
-                  class = "pp-subject-step",
-                  id = ns("pp_subject_prev"),
-                  type = "button",
-                  `data-dir` = "-1",
-                  title = "Previous patient",
-                  shiny::HTML("&lsaquo;")
-                ),
-                shiny::div(class = "pp-subject-select", id = ns("pp_subject")),
-                shiny::span(class = "pp-subject-static",
-                            id = ns("pp_subject_static")),
-                shiny::tags$button(
-                  class = "pp-subject-step",
-                  id = ns("pp_subject_next"),
-                  type = "button",
-                  `data-dir` = "1",
-                  title = "Next patient",
-                  shiny::HTML("&rsaquo;")
-                ),
-                # Cohort-size tag, two-tone like the dock's Package badge.
-                # Filled by the subject_picker message (cohort-scoped), so
-                # it updates when a drill narrows the cohort but never
-                # redraws on a patient switch. Hidden until the first
-                # cohort arrives.
-                shiny::span(
                   class = "pp-cohort-count is-hidden",
                   id = ns("pp_cohort_count"),
-                  title = "Patients in cohort",
+                  type = "button",
+                  title = "Show or hide the cohort",
                   shiny::HTML(paste0(
                     '<svg xmlns="http://www.w3.org/2000/svg" width="11" ',
                     'height="11" fill="currentColor" viewBox="0 0 16 16">',
@@ -2360,8 +2205,26 @@ new_patient_profile_block <- function(selected = NULL,
                     '.68-4.168 1.332-.678.678-.83 1.418-.832 ',
                     '1.664z"/></svg>'
                   )),
-                  shiny::span(class = "pp-cohort-count-n")
+                  shiny::span(class = "pp-cohort-count-n"),
+                  shiny::span(class = "pp-cohort-count-car",
+                              shiny::HTML("&lsaquo;"))
                 )
+              ),
+              # Adding a panel, from the toolbar rather than from a list in
+              # the sidebar. The button carries the count of what is on the
+              # profile, which is the number you want before you open it, and
+              # it sits here so it never scrolls away under a long stack.
+              shiny::div(
+                class = "pp-add-wrap", id = ns("pp_add_wrap"),
+                shiny::tags$button(
+                  class = "pp-add-btn",
+                  id = ns("pp_add_btn"),
+                  type = "button",
+                  title = "Add a panel or parameter",
+                  shiny::HTML("&plus; Add"),
+                  shiny::span(class = "pp-add-n")
+                ),
+                shiny::uiOutput(ns("panel_picker"))
               ),
               shiny::uiOutput(ns("header_bar"))
             ),
@@ -2377,7 +2240,6 @@ new_patient_profile_block <- function(selected = NULL,
             var sidebarId = '", ns("pp_sidebar"), "';
             var searchId = '", ns("search"), "';
             var pinBtnId = '", ns("pin_btn"), "';
-            var expandBtnId = '", ns("expand_btn"), "';
             var toggleInputId = '", ns("toggle_viz"), "';
             var clearBtnId = '", ns("search_clear"), "';
             var ctrlInputId = '", ns("viz_ctrl"), "';
@@ -2386,6 +2248,7 @@ new_patient_profile_block <- function(selected = NULL,
             var cohortSortInputId = '", ns("cohort_sort"), "';
             var cohortSortPillId = '", ns("cohort_sort_pill"), "';
             var cohortWellId = '", ns("pp_cohort_well"), "';
+            var chartAreaId = '", ns("chart_area"), "';
             var syncSubjectMsgId = '", ns("sync_subject"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
@@ -2400,90 +2263,28 @@ new_patient_profile_block <- function(selected = NULL,
             var gearPopoverId = '", ns("pp_gear_popover"), "';
 
             var pickerId = '", ns("pp_picker"), "';
-            var subjectContainerId = '", ns("pp_subject"), "';
-            var subjectStaticId = '", ns("pp_subject_static"), "';
             var cohortCountId = '", ns("pp_cohort_count"), "';
             var stepSubjectInputId = '", ns("step_subject"), "';
             var subjectPickerMsgId = '", ns("subject_picker"), "';
-            var subjectValueMsgId = '", ns("subject_value"), "';
             var dlMenuMsgId = '", ns("dl_menu_state"), "';
             var dlRootId = '", ns("pp_dl_root"), "';
             var dlLabelPatientId = '", ns("pp_dl_label_patient"), "';
             var dlLabelCohortId = '", ns("pp_dl_label_cohort"), "';
 
-            // Required-empty amber cue on the control itself.
-            // `.blockr-field--required-empty` is the canonical class from
-            // blockr-blocks.css; it paints the .blockr-select__control of the
-            // --bordered variant. A locked cohort is never 'empty'.
-            function syncRequiredEmpty(locked) {
-              var root = document.getElementById(subjectContainerId);
-              var empty = !locked && !!root && !!root._ppPicker &&
-                          root._ppPicker.getValue() === '';
-              $('#' + subjectContainerId)
-                .toggleClass('blockr-field--required-empty', empty);
-            }
-
-            // Mount Blockr.Select once, then setOptions() on later messages ", "\u2014", "
-            // the same lifecycle blockr.dm's table picker uses. `allowEmpty`
-            // is what keeps '' alive across setOptions(): without it the
-            // component slides the selection onto the first patient whenever
-            // the cohort changes, which is exactly the silent auto-pick this
-            // block exists to avoid.
+            // The cohort tag: its number, and whether it shows at all.
+            //
+            // What is left of the subject_picker message. It used to mount a
+            // Blockr.Select over every patient and keep its options in step;
+            // the sidebar's cohort list does that job, so the message now
+            // carries the count and nothing else. Cohort-scoped by
+            // construction: this handler only runs when the cohort changes,
+            // never on a patient switch.
             Shiny.addCustomMessageHandler(subjectPickerMsgId, function(msg) {
               if (!msg) return;
-              var root = document.getElementById(msg.id);
-              if (!root) return;
-              var opts = Array.isArray(msg.options) ? msg.options : [];
-
-              // Cache the option list: setOptions(null, ...) would clear it,
-              // so the value-only message below has to hand it back verbatim.
-              root._ppOptions = opts;
-
-              if (!root._ppPicker) {
-                root._ppPicker = Blockr.Select.single(root, {
-                  options: opts,
-                  selected: msg.selected || '',
-                  allowEmpty: true,
-                  placeholder: 'Select a patient',
-                  onChange: function(value) {
-                    Shiny.setInputValue(msg.id, value, {priority: 'event'});
-                    syncRequiredEmpty($('#' + pickerId).hasClass('is-locked'));
-                  }
-                });
-                // Standalone control, so the bordered 42px variant, as in
-                // blockr.dm's table picker. The amber cue paints this border.
-                root._ppPicker.el.classList.add('blockr-select--bordered');
-              } else {
-                root._ppPicker.setOptions(opts, msg.selected || '');
-              }
-
-              // Zero or one subject: nothing to choose. Show a plain label
-              // instead of a dropdown that affords a choice which does not
-              // exist, and hide the steppers with it.
-              var $picker = $('#' + pickerId);
-              $picker.toggleClass('is-locked', !!msg.locked);
-              $('#' + subjectStaticId).text(msg.locked ? (msg.static || '') : '');
-              syncRequiredEmpty(!!msg.locked);
-
-              // Cohort-size tag. Cohort-scoped by construction: this
-              // handler only runs when the cohort itself changes.
               var n = msg.count || 0;
               var $count = $('#' + cohortCountId);
               $count.find('.pp-cohort-count-n').text(n.toLocaleString());
-              $count.attr('title',
-                n === 1 ? '1 patient in cohort' : n + ' patients in cohort');
               $count.toggleClass('is-hidden', !n);
-            });
-
-            // A selection the server made (steppers, or a cleared stale pick).
-            // Carries no options; reuse the ones the component already holds.
-            Shiny.addCustomMessageHandler(subjectValueMsgId, function(msg) {
-              if (!msg) return;
-              var root = document.getElementById(msg.id);
-              if (!root || !root._ppPicker) return;
-              if (root._ppPicker.getValue() === (msg.selected || '')) return;
-              root._ppPicker.setOptions(root._ppOptions || [], msg.selected || '');
-              syncRequiredEmpty($('#' + pickerId).hasClass('is-locked'));
             });
 
             // Download-menu scope sync. The menu is rendered ONCE (see
@@ -2518,15 +2319,6 @@ new_patient_profile_block <- function(selected = NULL,
             Shiny.addCustomMessageHandler(dlMenuMsgId, function(msg) {
               if (msg) applyDlMenu(msg, 30);
             });
-
-            // Prev / next patient
-            $(document).on('click', '#' + pickerId + ' .pp-subject-step',
-              function(e) {
-                e.stopPropagation();
-                var dir = parseInt($(this).attr('data-dir'), 10);
-                if (!dir) return;
-                Shiny.setInputValue(stepSubjectInputId, dir, {priority: 'event'});
-              });
 
             // Toggle gear popover open/close
             $(document).on('click', '#' + gearBtnId, function(e) {
@@ -2597,6 +2389,10 @@ new_patient_profile_block <- function(selected = NULL,
             $(document).on('click', '#' + layoutId + ' .pp-pt', function() {
               var id = $(this).attr('data-usubjid');
               if (!id) return;
+              // Focus the list, so the next arrow key walks from here rather
+              // than doing nothing.
+              var well = document.getElementById(cohortWellId);
+              if (well) well.focus({preventScroll: true});
               $('#' + layoutId + ' .pp-pt').removeClass('is-selected');
               $(this).addClass('is-selected');
               Shiny.setInputValue(pickSubjectInputId, id, {priority: 'event'});
@@ -2701,6 +2497,263 @@ new_patient_profile_block <- function(selected = NULL,
               var g = document.querySelectorAll('.pp-chart-ghost');
               for (var i = 0; i < g.length; i++) dropGhost(g[i]);
             }, true);
+
+            // Dragging a panel by its own header.
+            //
+            // Pointer events, not HTML5 drag-and-drop: native DnD has no
+            // autoscroll of its own (a stack of 400px charts needs one), no
+            // control over the drag image, and cannot be driven by synthetic
+            // input, so it cannot be tested.
+            //
+            // Positions come from panelRect(), not from the slot elements
+            // themselves: Shiny styles its output wrappers display:contents
+            // (blockr.ui#41), so every panel div measures 0x0 and only its
+            // children have boxes. The ghost overlay learned this first.
+            var dragLine = null;
+
+            // Where a panel actually IS on screen.
+            //
+            // Not slot.getBoundingClientRect(): Shiny styles its output
+            // wrappers `div:where(.shiny-html-output):has(> *) { display:
+            // contents }` (blockr.ui#41), so a slot generates no box at all
+            // -- zero width, zero height. Its children are the real boxes, so
+            // the panel's rect is their union.
+            function panelRect(slot){
+              var box = null;
+              for (var i = 0; i < slot.children.length; i++) {
+                var r = slot.children[i].getBoundingClientRect();
+                if (!r.width || !r.height) continue;
+                box = box ? {
+                  top: Math.min(box.top, r.top),
+                  left: Math.min(box.left, r.left),
+                  right: Math.max(box.right, r.right),
+                  bottom: Math.max(box.bottom, r.bottom)
+                } : {top: r.top, left: r.left, right: r.right, bottom: r.bottom};
+              }
+              return box;
+            }
+
+            function slotPanels(){
+              var area = document.getElementById(chartAreaId);
+              if (!area) return [];
+              return [].slice.call(area.querySelectorAll('[id*=viz_slot_]'))
+                .map(function(el){
+                  var box = panelRect(el);
+                  return box ? {el: el, box: box,
+                                id: el.id.replace(/^.*viz_slot_/, '')} : null;
+                }).filter(Boolean);
+            }
+
+            function showLine(y, left, right){
+              if (!dragLine) {
+                dragLine = document.createElement('div');
+                dragLine.className = 'pp-drop-line';
+                document.body.appendChild(dragLine);
+              }
+              dragLine.style.top = (y - 1) + 'px';
+              dragLine.style.left = left + 'px';
+              dragLine.style.width = (right - left) + 'px';
+            }
+            function hideLine(){
+              if (dragLine && dragLine.parentNode) {
+                dragLine.parentNode.removeChild(dragLine);
+              }
+              dragLine = null;
+            }
+
+            $(document).on('mousedown', '#' + layoutId + ' .pp-chart-header',
+              function(e) {
+                // Everything clickable in the header keeps its click.
+                if (e.target.closest('button, a, input, select, details, ' +
+                                     '.pp-ctrl-chip, .pp-ctrl-pill, ' +
+                                     '.pp-ctrl-radio, .pp-ctrl-toggle')) return;
+                var panels = slotPanels();
+                if (panels.length < 2) return;
+                var slot = e.target.closest('[id*=viz_slot_]');
+                if (!slot) return;
+                var from = panels.findIndex(function(p){ return p.el === slot; });
+                if (from < 0) return;
+                e.preventDefault();
+
+                var area = document.getElementById(chartAreaId);
+                slot.classList.add('pp-is-dragging');
+                document.body.classList.add('pp-dragging');
+                var to = from;
+
+                function place(clientY){
+                  var live = slotPanels();
+                  to = live.length;
+                  for (var i = 0; i < live.length; i++) {
+                    var b = live[i].box;
+                    if (clientY < b.top + (b.bottom - b.top) / 2) { to = i; break; }
+                  }
+                  var edge = to < live.length
+                    ? {y: live[to].box.top - 4, b: live[to].box}
+                    : {y: live[live.length-1].box.bottom + 4,
+                       b: live[live.length-1].box};
+                  showLine(edge.y, edge.b.left, edge.b.right);
+                }
+                place(e.clientY);
+
+                function move(ev){
+                  place(ev.clientY);
+                  // Autoscroll: a panel can be taller than the viewport, so
+                  // without this the bottom half of a long stack is
+                  // unreachable while the button is held.
+                  if (!area) return;
+                  var r = area.getBoundingClientRect();
+                  if (ev.clientY < r.top + 40) area.scrollTop -= 12;
+                  else if (ev.clientY > r.bottom - 40) area.scrollTop += 12;
+                }
+                function up(){
+                  document.removeEventListener('mousemove', move);
+                  document.removeEventListener('mouseup', up);
+                  hideLine();
+                  slot.classList.remove('pp-is-dragging');
+                  document.body.classList.remove('pp-dragging');
+                  var ids = slotPanels().map(function(p){ return p.id; });
+                  var t = to;
+                  if (t !== from && t !== from + 1) {
+                    var moved = ids.splice(from, 1)[0];
+                    if (from < t) t -= 1;
+                    ids.splice(t, 0, moved);
+                    Shiny.setInputValue(reorderInputId, ids,
+                                        {priority: 'event'});
+                  }
+                }
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+              });
+
+            // The + button and its picker.
+            //
+            // Filtering is client-side over rows the server rendered once:
+            // the catalogue is a few dozen rows, it is all in the DOM
+            // already, and a round trip per keystroke would cost the caret
+            // for nothing (the AE find box learned that the hard way).
+            //
+            // Clicking a row sends the SAME inputs the sidebar's card list
+            // sent -- toggle_viz for a panel, pick_param for a parameter --
+            // so the server's selection logic is untouched. pick_param
+            // already does the right thing for a parameter: it adds it to a
+            // card that is on the profile, or opens that card showing only
+            // that parameter.
+            var addPopId = '", ns("pp_add_pop"), "';
+            var addBtnId = '", ns("pp_add_btn"), "';
+            var addInputId = '", ns("pp_add_input"), "';
+
+            function addRows(){
+              return document.querySelectorAll('#' + addPopId + ' .pp-add-row');
+            }
+            function filterAdd(){
+              var pop = document.getElementById(addPopId);
+              if (!pop) return;
+              var inp = document.getElementById(addInputId);
+              var q = (inp ? inp.value : '').trim().toLowerCase();
+              var shown = 0, total = 0;
+              addRows().forEach(function(r){
+                total++;
+                var hay = r.getAttribute('data-search-text') || '';
+                // No query: panels only. A study's whole parameter set is
+                // not a menu, and the panels ARE the old AVAILABLE list.
+                var ok = q ? hay.indexOf(q) >= 0
+                           : r.getAttribute('data-kind') === 'panel';
+                r.classList.toggle('is-hidden', !ok);
+                if (ok) shown++;
+              });
+              // A group heading with nothing under it is noise.
+              pop.querySelectorAll('.pp-add-group').forEach(function(g){
+                var any = false, n = g.nextElementSibling;
+                while (n && n.classList.contains('pp-add-row')) {
+                  if (!n.classList.contains('is-hidden')) { any = true; break; }
+                  n = n.nextElementSibling;
+                }
+                g.classList.toggle('is-hidden', !any || !!q);
+              });
+              var none = pop.querySelector('.pp-add-none');
+              if (none) none.classList.toggle('is-shown', shown === 0);
+              var cnt = pop.querySelector('.pp-add-count');
+              if (cnt) cnt.textContent = shown + ' of ' + total;
+            }
+
+            function openAdd(on){
+              var pop = document.getElementById(addPopId);
+              if (!pop) return;
+              pop.classList.toggle('is-open', on);
+              $('#' + addBtnId).toggleClass('is-open', on);
+              if (on) {
+                var inp = document.getElementById(addInputId);
+                if (inp) { inp.value = ''; filterAdd(); inp.focus(); }
+              }
+            }
+
+            $(document).on('click', '#' + addBtnId, function(e){
+              e.stopPropagation();
+              var pop = document.getElementById(addPopId);
+              openAdd(!(pop && pop.classList.contains('is-open')));
+            });
+            $(document).on('click', '#' + addPopId, function(e){
+              e.stopPropagation();
+            });
+            $(document).on('input', '#' + addInputId, filterAdd);
+            $(document).on('keydown', '#' + addInputId, function(e){
+              if (e.key === 'Escape') { e.preventDefault(); openAdd(false); }
+            });
+            // Clicking away closes it, like the gear popover.
+            $(document).on('click', function(){ openAdd(false); });
+
+            $(document).on('click', '#' + addPopId + ' .pp-add-row', function(e){
+              e.stopPropagation();
+              var kind = this.getAttribute('data-kind');
+              var vizId = this.getAttribute('data-viz-id');
+              // Optimistic, so the tick lands at click speed; the server
+              // confirms through sync_selected a flush later.
+              this.classList.toggle('is-on');
+              if (kind === 'param') {
+                Shiny.setInputValue(pickParamInputId, {
+                  viz_id: vizId, paramcd: this.getAttribute('data-paramcd')
+                }, {priority: 'event'});
+              } else {
+                Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
+              }
+            });
+
+            // Walking the cohort from the keyboard.
+            //
+            // This replaced the header's next/previous buttons. Scoped to
+            // the cohort list rather than bound to the document, for two
+            // reasons that are not style: the AE find box lives in the same
+            // block and its arrow keys have to move the caret, and a
+            // document-level handler would eat the page's own scrolling.
+            //
+            // The list takes focus on a click, so the ordinary flow -- click
+            // a patient, then walk -- needs no second gesture. Home and End
+            // jump to the ends, because a 254-row list makes them worth it.
+            //
+            // It sends the SAME step_subject input the buttons sent, so the
+            // wrap-around and the from-either-end behaviour are the server's
+            // one implementation rather than a second one written in JS.
+            $(document).on('keydown', '#' + cohortWellId, function(e) {
+              var dir = 0;
+              if (e.key === 'ArrowDown') dir = 1;
+              else if (e.key === 'ArrowUp') dir = -1;
+              else if (e.key === 'Home' || e.key === 'End') {
+                var rows = this.querySelectorAll('.pp-pt:not(.is-filtered-out)');
+                if (!rows.length) return;
+                e.preventDefault();
+                var row = rows[e.key === 'Home' ? 0 : rows.length - 1];
+                var id = row.getAttribute('data-usubjid');
+                if (id) {
+                  Shiny.setInputValue(pickSubjectInputId, id,
+                                      {priority: 'event'});
+                }
+                return;
+              } else {
+                return;
+              }
+              e.preventDefault();
+              Shiny.setInputValue(stepSubjectInputId, dir, {priority: 'event'});
+            });
 
             // The AE band, drawn when its row scrolls into view.
             //
@@ -2885,7 +2938,7 @@ new_patient_profile_block <- function(selected = NULL,
                 JSON.stringify(id) + ']');
               $row.addClass('is-selected');
               // Bring it back into view: on a long cohort the pick can be
-              // hundreds of rows away (the step arrows walk it there), and a
+              // hundreds of rows away (the arrow keys walk it there), and a
               // selected row nobody can see is the same as no selection.
               if ($row.length && $row[0].scrollIntoView) {
                 $row[0].scrollIntoView({block: 'nearest'});
@@ -3067,22 +3120,32 @@ new_patient_profile_block <- function(selected = NULL,
               }
             });
 
-            // Pin/unpin sidebar
-            $(document).on('click', '#' + pinBtnId, function() {
+            // The cohort tag is the sidebar's toggle.
+            //
+            // It reads \"254 patients\" and it opens the list of them, which
+            // is where a reader is already looking when they want the
+            // cohort. It is also what lets the header drop its own picker:
+            // with the sidebar shut this is the way back to one.
+            function toggleSidebar(force) {
               var sidebar = document.getElementById(sidebarId);
               var layout = document.getElementById(layoutId);
-              sidebar.classList.toggle('collapsed');
-              layout.classList.toggle('sidebar-collapsed');
-              $(this).toggleClass('is-unpinned');
+              if (!sidebar || !layout) return;
+              var shut = (force === undefined) ?
+                !sidebar.classList.contains('collapsed') : force;
+              sidebar.classList.toggle('collapsed', shut);
+              layout.classList.toggle('sidebar-collapsed', shut);
+              $('#' + pinBtnId).toggleClass('is-unpinned', shut);
+              $('#' + cohortCountId).toggleClass('is-shut', shut);
+            }
+
+            $(document).on('click', '#' + cohortCountId, function(e) {
+              e.stopPropagation();
+              toggleSidebar();
             });
 
-            // Expand button
-            $(document).on('click', '#' + expandBtnId, function() {
-              var sidebar = document.getElementById(sidebarId);
-              var layout = document.getElementById(layoutId);
-              sidebar.classList.remove('collapsed');
-              layout.classList.remove('sidebar-collapsed');
-              $('#' + pinBtnId).removeClass('is-unpinned');
+            // Pin/unpin sidebar
+            $(document).on('click', '#' + pinBtnId, function() {
+              toggleSidebar();
             });
 
             // A search result GROUP row is a card: same toggle input, so the
@@ -3319,6 +3382,15 @@ new_patient_profile_block <- function(selected = NULL,
             Shiny.addCustomMessageHandler(syncMsgId, function(selected) {
               if (!selected) selected = [];
               if (typeof selected === 'string') selected = [selected];
+
+              // The + button says how many cards are on the profile, and the
+              // picker ticks the ones that are.
+              $('#' + addBtnId + ' .pp-add-n').text(selected.length || '');
+              addRows().forEach(function(r){
+                if (r.getAttribute('data-kind') !== 'panel') return;
+                r.classList.toggle('is-on',
+                  selected.indexOf(r.getAttribute('data-viz-id')) >= 0);
+              });
 
               var $layout = $('#' + layoutId);
               var $activeList = $layout.find('.pp-active-list');

@@ -274,3 +274,123 @@ pp_search_icon <- function() {
     '6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>'
   )
 }
+
+#' The add-panel picker
+#'
+#' One list, two kinds of row. A panel is a row with its domain on the right;
+#' a parameter is a row with its PARAMCD on the left and the panel it lives in
+#' on the right, so typing `ALB` answers "Albumin, and it is in Chemistry"
+#' without a second column.
+#'
+#' @section What matches what:
+#' A panel matches its label, its domain and the `search` text it declares
+#' (which is how `liver` reaches Chemistry). A parameter matches its code, its
+#' name and its panel's LABEL only -- never the panel's search text. Including
+#' it made every one of a card's parameters a hit for any of the card's
+#' keywords: on the ECG card, `qt` returned all five intervals instead of the
+#' two with QT in the name.
+#'
+#' @section Panels first, parameters only on demand:
+#' With an empty box the list is the panels, grouped by domain -- the sidebar's
+#' old AVAILABLE list, on demand. Parameters appear once something is typed,
+#' because a study's full parameter set is sixty-odd rows and that is not a
+#' menu.
+#'
+#' @param avail Named list of available `pp_viz` definitions.
+#' @param ns The module's namespace function.
+#' @return A tag.
+#' @noRd
+pp_add_picker_ui <- function(avail, ns) {
+
+  row <- function(..., search, kind, viz_id, paramcd = NULL, hidden = FALSE) {
+    shiny::div(
+      class = paste("pp-add-row", if (hidden) "is-param"),
+      `data-kind` = kind,
+      `data-viz-id` = viz_id,
+      `data-paramcd` = paramcd,
+      `data-search-text` = tolower(search),
+      ...
+    )
+  }
+
+  # Panels, grouped by the domain the sidebar grouped them by.
+  by_dom <- split(avail, vapply(avail, function(v) v$domain %||% "", character(1L)))
+  panel_rows <- unlist(lapply(names(by_dom), function(dom) {
+    vizs <- by_dom[[dom]]
+    c(
+      list(shiny::div(class = "pp-add-group", `data-group` = "panel", dom)),
+      lapply(vizs, function(v) {
+        row(
+          shiny::span(class = "pp-add-dot",
+                      style = paste0("background:", v$color %||% "#9ca3af")),
+          shiny::span(class = "pp-add-name", v$label),
+          shiny::span(class = "pp-add-par", dom),
+          shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
+          search = paste(v$label, dom, v$search %||% ""),
+          kind = "panel", viz_id = v$id
+        )
+      })
+    )
+  }), recursive = FALSE)
+
+  # Parameters. Hidden until something is typed.
+  param_rows <- unlist(lapply(avail, function(v) {
+    if (!length(v$params)) return(NULL)
+    lapply(names(v$params), function(code) {
+      row(
+        shiny::span(class = "pp-add-code", code),
+        shiny::span(class = "pp-add-name", unname(v$params[[code]])),
+        shiny::span(class = "pp-add-par", v$label),
+        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
+        # The panel's LABEL, never its search text; see the note above.
+        search = paste(code, v$params[[code]], v$label),
+        kind = "param", viz_id = v$id, paramcd = code, hidden = TRUE
+      )
+    })
+  }), recursive = FALSE)
+
+  n_param <- length(param_rows)
+
+  shiny::div(
+    class = "pp-add-pop", id = ns("pp_add_pop"),
+    shiny::div(
+      class = "pp-add-find",
+      shiny::HTML(pp_search_icon()),
+      shiny::tags$input(
+        type = "text",
+        class = "pp-add-input",
+        id = ns("pp_add_input"),
+        placeholder = if (n_param) {
+          "Search panels and parameters"
+        } else {
+          "Search panels"
+        }
+      )
+    ),
+    shiny::div(class = "pp-add-results", panel_rows, param_rows),
+    shiny::div(class = "pp-add-none", "Nothing matches"),
+    shiny::div(
+      class = "pp-add-foot",
+      shiny::span(shiny::tags$kbd("↵"), " add or remove"),
+      shiny::span(shiny::tags$kbd("esc"), " done"),
+      shiny::span(class = "pp-add-count")
+    )
+  )
+}
+
+#' The six-dot drag handle
+#'
+#' The convention everywhere else, and the only handle a reader finds without
+#' hovering first. Quiet at rest (it repeats down a stack of eight panels) and
+#' it darkens on hover.
+#' @noRd
+pp_grip_glyph <- function() {
+  dots <- expand.grid(x = c(3, 7), y = c(4, 8, 12))
+  paste0(
+    '<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" ',
+    'aria-hidden="true">',
+    paste0(sprintf('<circle cx="%d" cy="%d" r="1.35"/>', dots$x, dots$y),
+           collapse = ""),
+    "</svg>"
+  )
+}

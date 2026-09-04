@@ -1470,3 +1470,98 @@ pp_cohort_id_display <- function(ids, min_prefix = 4L) {
   if (nchar(prefix) < min_prefix) return(none)
   list(prefix = prefix, short = short)
 }
+
+#' One patient's arm, for the header
+#'
+#' The row shows the arm CODE because 232px fits nothing longer; the header
+#' has room for the name, which is the form a clinician reads.
+#' @noRd
+pp_subject_arm <- function(dm_obj, id, arm_col = NULL) {
+  if (!inherits(dm_obj, "dm") || is.null(arm_col)) return(NA_character_)
+  tbls <- dm::dm_get_tables(dm_obj)
+  adsl <- as.data.frame(tbls[[pp_subject_tbl_name(names(tbls))]])
+  if (!all(c("USUBJID", arm_col) %in% colnames(adsl))) return(NA_character_)
+  at <- match(id, as.character(adsl$USUBJID))
+  if (is.na(at)) return(NA_character_)
+  as.character(adsl[[arm_col]][[at]])
+}
+
+#' The header's identity line
+#'
+#' The id, then the facts that are nowhere else on screen: the arm in full,
+#' sex and age, the day on treatment, and how many adverse events the patient
+#' has had with the worst grade among them.
+#'
+#' Every fact is dropped rather than printed empty when the study lacks the
+#' column. A header reading "DAY --" tells a reader the study has no
+#' treatment duration; a header that simply does not mention days tells them
+#' nothing false.
+#'
+#' @param frame A [pp_cohort_frame()] result.
+#' @param at The picked patient's row in `frame`, or `NA`.
+#' @param id The picked USUBJID.
+#' @param disp A [pp_cohort_id_display()] result, for the shared prefix.
+#' @param arm The arm name, or `NA`.
+#' @param color A resolver from [pp_cohort_sev_color()], for the worst grade.
+#' @return A tag list.
+#' @noRd
+pp_subject_facts_ui <- function(frame, at, id, disp, arm, color) {
+
+  val <- function(col) {
+    if (is.na(at) || !col %in% names(frame)) return(NULL)
+    v <- frame[[col]][[at]]
+    if (is.na(v) || !nzchar(as.character(v))) return(NULL)
+    v
+  }
+  dot <- function() shiny::span(class = "pp-fact-dot")
+  fact <- function(key, ...) {
+    shiny::span(class = "pp-fact",
+      if (!is.null(key)) shiny::span(class = "pp-fact-k", key),
+      ...
+    )
+  }
+
+  parts <- list()
+  add <- function(x) if (!is.null(x)) parts[[length(parts) + 1L]] <<- x
+
+  if (!is.na(arm) && nzchar(arm)) {
+    add(fact("arm", shiny::tags$b(arm)))
+  }
+  sex <- val("SEX")
+  age <- val("AGE")
+  if (!is.null(sex) || !is.null(age)) {
+    add(fact(NULL, trimws(paste(sex %||% "", age %||% ""))))
+  }
+  dur <- val("TRTDURD")
+  if (!is.null(dur)) {
+    add(fact("day", shiny::tags$b(as.character(dur))))
+  }
+  n_ae <- val("AE_N")
+  if (!is.null(n_ae)) {
+    worst <- val("AE_WORST")
+    add(fact("ae", shiny::tags$b(as.character(n_ae)),
+      if (!is.null(worst)) {
+        shiny::span(class = "pp-fact-sev",
+          shiny::span(class = "pp-fact-swatch",
+                      style = paste0("background:", color(worst))),
+          pp_sev_label(worst)
+        )
+      }
+    ))
+  }
+
+  # The prefix every id in this cohort shares is lifted out in the sidebar;
+  # here the id stands alone, so it is printed whole.
+  shiny::tagList(
+    shiny::span(class = "pp-subject-who", title = id, id),
+    if (length(parts)) {
+      shiny::span(class = "pp-subject-facts",
+        do.call(shiny::tagList, unlist(
+          lapply(seq_along(parts), function(i) {
+            if (i == 1L) list(parts[[i]]) else list(dot(), parts[[i]])
+          }), recursive = FALSE
+        ))
+      )
+    }
+  )
+}
