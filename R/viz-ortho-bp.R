@@ -165,7 +165,6 @@ ortho_bp_viz <- new_pp_viz(
         echarts4r::e_list(list(
           backgroundColor = "transparent",
           tooltip = pp_tooltip(),
-          toolbox = pp_toolbox(),
           legend = list(
             show = TRUE,
             bottom = 0, left = "center",

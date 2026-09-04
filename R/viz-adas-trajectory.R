@@ -143,7 +143,6 @@ adas_trajectory_viz <- new_pp_viz(
         echarts4r::e_list(list(
           backgroundColor = "transparent",
           tooltip = pp_tooltip(),
-          toolbox = pp_toolbox(),
           legend = list(
             show = length(params) > 1,
             bottom = 0, left = "center",

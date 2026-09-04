@@ -295,7 +295,6 @@ ae_gantt_viz <- new_pp_viz(
         echarts4r::e_list(list(
           backgroundColor = "transparent",
           tooltip = pp_tooltip(),
-          toolbox = pp_toolbox(),
           grid = list(
             left = PP_GRID_LEFT, right = 20,
             top = PP_GANTT_TOP, bottom = PP_GANTT_BOTTOM,

@@ -757,7 +757,6 @@ patient_overview_viz <- new_pp_viz(
         echarts4r::e_list(list(
           backgroundColor = "transparent",
           tooltip = pp_tooltip(),
-          toolbox = pp_toolbox(),
           grid = list(
             left = PP_GRID_LEFT, right = 20, top = PP_PLOT_TOP, bottom = 30,
             borderColor = "transparent"

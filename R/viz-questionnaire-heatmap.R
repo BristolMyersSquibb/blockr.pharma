@@ -148,7 +148,6 @@ questionnaire_heatmap_viz <- new_pp_viz(
       echarts4r::e_charts(height = chart_height) |>
         echarts4r::e_list(list(
           backgroundColor = "transparent",
-          toolbox = pp_toolbox(),
           tooltip = list(
             trigger = "item",
             confine = TRUE,

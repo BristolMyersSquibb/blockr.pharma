@@ -287,34 +287,23 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
   }
 }
 
-#' Where the toolbox sits, and how big its icons are. Read by PP_PLOT_TOP,
-#' which reserves the band they occupy.
-#' @noRd
-PP_TOOLBOX_TOP <- 4
-PP_TOOLBOX_SIZE <- 11
-
-#' Shared echarts toolbox: small, muted icons matching the canonical
-#' drill-down chart styling (blockr.viz/inst/js/drilldown-chart.js).
+#' Smallest grid `top` a panel uses.
 #'
+#' This used to be the band an echarts toolbox floated in: every chart carried
+#' `saveAsImage`, a small download icon over the top-right of the canvas, and
+#' the grid started below it so the icon did not land on the first lane's bars.
+#'
+#' The toolbox is gone. It was a second download button a few pixels from the
+#' panel header's own, and the two did not agree: the header re-derives the
+#' picture through the viz's `exhibit` twin -- the same rendering a deck slide
+#' gets -- while saveAsImage snapshotted the live canvas. One button offering
+#' two different images of the same panel is worse than one button.
+#'
+#' The band is kept, at half: charts still want a little air above the plot,
+#' and reclaiming all 20px would move every axis on every panel for no reason
+#' anyone asked for.
 #' @noRd
-pp_toolbox <- function() {
-  list(
-    show = TRUE,
-    right = 8,
-    top = PP_TOOLBOX_TOP,
-    itemSize = PP_TOOLBOX_SIZE,
-    feature = list(
-      saveAsImage = list(title = "Save", pixelRatio = 2)
-    ),
-    iconStyle = list(borderColor = "#bbb")
-  )
-}
-
-#' Smallest grid `top` that clears the toolbox band. The toolbox floats over
-#' the canvas rather than reserving space, so a grid starting above this drew
-#' the save icon on top of the first lane's bars.
-#' @noRd
-PP_PLOT_TOP <- PP_TOOLBOX_TOP + PP_TOOLBOX_SIZE + 5
+PP_PLOT_TOP <- 10
 
 #' The y-axis gutter, shared by every panel.
 #'
@@ -1246,7 +1235,6 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     echarts4r::e_list(list(
       backgroundColor = "transparent",
       tooltip = pp_tooltip(),
-      toolbox = pp_toolbox(),
       title = titles,
       legend = list(show = FALSE),
       grid = grids,
