@@ -219,17 +219,58 @@ new_patient_profile_block <- function(selected = NULL,
             pp_cohort_frame(nd, r_roles())
           })
 
+          # Which panel the cohort band draws. The FIRST selected viz that
+          # declares a band form (pp_cohort_band_source()), so reordering the
+          # panel list reorders what the strip shows and a panel with no
+          # strip form -- the patient overview, a table -- is stepped over
+          # rather than drawn badly. NULL when nothing selected can be drawn:
+          # the rows then keep an empty track.
+          r_band_source <- shiny::reactive({
+            # Reads the settings too: a findings card's chips decide which
+            # parameter its panel draws first, and the strip follows it.
+            pp_cohort_band_source(r_selected(), r_available(),
+                                  r_viz_settings())
+          })
+
+          # The term the STRIP follows, a beat behind the panel's.
+          #
+          # Both re-derive on the same keystroke and they do not cost the
+          # same: the panel redraws one patient's events, the strip redraws
+          # 254 patients' bands. Landing them together made typing a word
+          # feel nervous -- the sidebar flickering under the cursor while the
+          # chart above it was already settling. Debounced here rather than
+          # in the browser so the panel keeps its own shorter delay: what the
+          # user is looking at while typing answers first, and the list they
+          # will read afterwards catches up.
+          r_band_search <- shiny::debounce(
+            shiny::reactive({
+              src <- r_band_source()
+              if (is.null(src) || !length(src$band$search %||% character())) {
+                return("")
+              }
+              as.character(r_viz_settings()[[src$viz_id]]$search %||% "")
+            }),
+            350
+          )
+
           # Event geometry for the row bands. Split from the frame so the
           # download never carries it and a richer band never widens the
           # export.
           r_cohort_marks <- shiny::reactive({
             nd <- r_norm_dm()
-            if (is.null(nd)) return(pp_cohort_marks(NULL))
+            src <- r_band_source()
+            if (is.null(nd) || is.null(src)) return(pp_cohort_marks(NULL))
+            # The driving panel's own search filters the strip, so the two
+            # show one subset of the records. A band whose panel declares no
+            # search box is unfiltered whatever else is typed on the board.
+            search <- r_band_search()
             # Follows the profile's Pre-treatment toggle, so the band and the
             # panels floor their axis at the same place.
             pp_cohort_marks(
               nd, r_roles(),
-              prestudy_days = if (r_show_prestudy()) Inf else 30
+              prestudy_days = if (r_show_prestudy()) Inf else 30,
+              band = src$band,
+              search = search
             )
           })
 
@@ -449,6 +490,29 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Per-viz settings
           r_viz_settings <- shiny::reactiveVal(viz_settings)
+
+          # The same settings, split one key per viz, so a panel depends on
+          # ITS OWN settings and nothing else.
+          #
+          # r_viz_settings is a single reactiveVal holding every viz's
+          # settings, so reading it takes a dependency on all of them: one
+          # keystroke in the AE find box invalidated the chemistry panel, the
+          # overview and every other slot on screen, and the whole profile
+          # redrew per character. reactiveValues tracks per KEY, and the
+          # observer below only writes a key whose value actually changed --
+          # so typing in one panel now invalidates one panel.
+          r_slot_settings <- shiny::reactiveValues()
+          shiny::observe({
+            all_settings <- r_viz_settings()
+            shiny::isolate({
+              for (id in union(names(all_settings), names(r_slot_settings))) {
+                cur <- all_settings[[id]]
+                if (!identical(r_slot_settings[[id]], cur)) {
+                  r_slot_settings[[id]] <- cur
+                }
+              }
+            })
+          })
 
           # Board-level scale map (NULL when the board has no "scale_map"
           # option). Resolved per render; never stored in block state.
@@ -806,8 +870,12 @@ new_patient_profile_block <- function(selected = NULL,
 
             # The rows are built as HTML rather than as a tag tree, and the
             # escaping that costs is done there. See pp_cohort_rows_html().
+            # Straight or rounded, from the same gear toggle the panels
+            # read: a strip curving above a panel drawing straight segments
+            # would be two different claims about the same measurements.
             pp_cohort_rows_html(frame, ord, disp, marks, color, arm_col,
-                                picked)
+                                picked,
+                                smooth = !identical(r_smooth(), "off"))
           })
 
           # Move the selected class when the pick changes from ANYWHERE: the
@@ -855,6 +923,38 @@ new_patient_profile_block <- function(selected = NULL,
                 style = paste0("min-width:", max(nchar(labels)), "ch"),
                 labels[idx]
               )
+            )
+          })
+
+          # What the band is showing. A severity strip explains itself; a
+          # line of unlabelled numbers does not, and the parameter behind it
+          # is the part a reader cannot guess. Absent when nothing drawable
+          # is selected -- there is then nothing to name.
+          output$cohort_band_caption <- shiny::renderUI({
+            src <- r_band_source()
+            if (is.null(src)) return(NULL)
+            # The settled term, like the bands underneath it: a chip
+            # appearing a keystroke before the strip it explains is worse
+            # than one appearing a moment late.
+            search <- r_band_search()
+            shiny::div(
+              class = "pp-cohort-bandcap",
+              shiny::HTML(pp_band_glyph()),
+              shiny::span(class = "pp-cohort-bandcap-what",
+                          title = src$title, src$caption),
+              # The panel's search, echoed. Without it the bands go sparse
+              # for no visible reason, which is the sidebar quietly lying
+              # about the cohort.
+              if (nzchar(search %||% "")) {
+                shiny::span(
+                  class = "pp-cohort-bandcap-find",
+                  `data-viz-id` = src$viz_id,
+                  title = paste0("Showing only records matching \u201c",
+                                 search, "\u201d; click to clear"),
+                  shiny::span(paste0("\u201c", search, "\u201d")),
+                  shiny::HTML("&times;")
+                )
+              }
             )
           })
 
@@ -1157,6 +1257,46 @@ new_patient_profile_block <- function(selected = NULL,
                       "min-width:", max(nchar(choice_names)), "ch"
                     ),
                     choice_names[idx]
+                  )
+                )
+              } else if (ctrl$type == "search") {
+                # A find box for the panel's own records. It filters the
+                # chart AND the sidebar's cohort band (see r_cohort_marks),
+                # so the strip answers "who else had this" while the panel
+                # answers "when did this patient have it".
+                term <- as.character(cur_val %||% "")
+                hits <- pp_ctrl_search_hits(ctrl, dm_obj, viz$tables, term)
+                shiny::div(class = "pp-ctrl-group",
+                  shiny::div(
+                    class = paste("pp-ctrl-search",
+                                  if (nzchar(term)) "is-active"),
+                    shiny::HTML(pp_search_icon()),
+                    shiny::tags$input(
+                      type = "text",
+                      class = "pp-ctrl-search-input",
+                      `data-viz-id` = viz_id,
+                      `data-param` = param,
+                      placeholder = ctrl$placeholder %||% ctrl$label,
+                      value = term
+                    ),
+                    # The count is the honest feedback: it says how many of
+                    # this patient's records survived before the panel goes
+                    # blank, so an empty chart is never mistaken for a
+                    # patient with no records at all.
+                    if (!is.null(hits)) {
+                      shiny::span(class = "pp-ctrl-search-hits",
+                                  paste0(hits$n, "/", hits$total))
+                    },
+                    if (nzchar(term)) {
+                      shiny::tags$button(
+                        class = "pp-ctrl-search-clear",
+                        type = "button",
+                        `data-viz-id` = viz_id,
+                        `data-param` = param,
+                        title = "Clear",
+                        shiny::HTML("&times;")
+                      )
+                    }
                   )
                 )
               } else if (ctrl$type == "radio") {
@@ -1621,7 +1761,7 @@ new_patient_profile_block <- function(selected = NULL,
             # exhibit path (downloads, deck export), so the live panel and
             # its printed twin read identical settings.
             viz_settings <- pp_viz_exhibit_settings(
-              viz, r_viz_settings()[[viz_id]], r_roles(), dm_obj,
+              viz, r_slot_settings[[viz_id]], r_roles(), dm_obj,
               scale_map = r_scale_map(),
               cycle_anchors = if ("cycle" %in% (viz$uses %||% character())) {
                 r_cycle_anchors()
@@ -2135,6 +2275,8 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::span(class = "pp-cohort-sort-gap"),
                 shiny::uiOutput(ns("cohort_id_prefix"), inline = TRUE)
               ),
+              # What the band draws, directly above the bands themselves.
+              shiny::uiOutput(ns("cohort_band_caption")),
               shiny::div(class = "pp-cohort-well", id = ns("pp_cohort_well"),
                 shiny::uiOutput(ns("sidebar_cohort"))
               )
@@ -2462,6 +2604,106 @@ new_patient_profile_block <- function(selected = NULL,
               Shiny.setInputValue(pickSubjectInputId, id, {priority: 'event'});
             });
 
+            // Hold the last frame while a panel re-renders.
+            //
+            // The slot is a renderUI, so a settings change empties the panel
+            // and refills it, and for the ~40ms until echarts paints the new
+            // canvas the box is blank white. The redraw is cheap (4ms on the
+            // server) -- it is the blink that reads badly, not the wait.
+            //
+            // So the outgoing panel is photographed and the photograph is
+            // left in place until the replacement has painted, then faded
+            // out. Nothing about the data changes: this is one <canvas> of
+            // pixels sitting on top of the panel, which is why it needs no
+            // second data path and cannot disagree with the render.
+            function ghostPanel(panel) {
+              if (panel.__ghost) return;
+              // The CHART only, never the header. The header is plain DOM --
+              // it rebuilds within a frame and never flashes -- and it holds
+              // the find box: a photograph over it would show the OLD search
+              // text for 250ms, so the characters you just typed would
+              // appear to vanish. That is worse than the blink this is here
+              // to hide. Leaving the header live also keeps the box
+              // clickable throughout.
+              var body = panel.querySelector('.pp-chart-body');
+              if (!body) return;
+              // Not panel.getBoundingClientRect(): Shiny styles its output
+              // wrappers `div:where(.shiny-html-output):has(> *) { display:
+              // contents }` (the rule behind blockr.ui#41), so the slot div
+              // generates NO BOX -- zero width, zero height, no offsetParent,
+              // and `position: relative` on it or its parent does nothing.
+              // The body is a real box; measure that.
+              var box = body.getBoundingClientRect();
+              // Nothing painted yet -- a slot's first render has no frame to
+              // hold, and photographing it produced a 0x0 overlay.
+              if (!box.width || !box.height) return;
+
+              var ghost = document.createElement('div');
+              ghost.className = 'pp-chart-ghost';
+              // Fixed to the viewport and parented to <body>, because every
+              // ancestor between here and there is display:contents and
+              // cannot contain an absolutely positioned child.
+              ghost.style.top = box.top + 'px';
+              ghost.style.left = box.left + 'px';
+              ghost.style.width = box.width + 'px';
+              ghost.style.height = box.height + 'px';
+              ghost.innerHTML = body.innerHTML;
+              // innerHTML clones a canvas ELEMENT but none of its pixels, so
+              // an echarts chart would come back blank -- which is the very
+              // white box this exists to hide. Copy the bitmaps across.
+              var src = body.querySelectorAll('canvas');
+              var dst = ghost.querySelectorAll('canvas');
+              for (var i = 0; i < src.length && i < dst.length; i++) {
+                try {
+                  dst[i].width = src[i].width;
+                  dst[i].height = src[i].height;
+                  dst[i].getContext('2d').drawImage(src[i], 0, 0);
+                } catch (e) { /* tainted or zero-sized; the fade still helps */ }
+              }
+              document.body.appendChild(ghost);
+              panel.__ghost = ghost;
+            }
+
+            function dropGhost(ghost) {
+              if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+            }
+
+            function unghostPanel(panel) {
+              var ghost = panel.__ghost;
+              if (!ghost) return;
+              panel.__ghost = null;
+              // Two frames: one for the new DOM to be laid out, one for
+              // echarts to have painted into it. Fading on the first still
+              // uncovers the blank canvas.
+              requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                  ghost.classList.add('is-gone');
+                  setTimeout(function() { dropGhost(ghost); }, 200);
+                });
+              });
+            }
+
+            $(document).on('shiny:recalculating', function(e) {
+              var el = e.target;
+              if (el && el.id && el.id.indexOf('viz_slot_') >= 0) {
+                ghostPanel(el);
+              }
+            });
+            $(document).on('shiny:value shiny:error', function(e) {
+              var el = e.target;
+              if (el && el.id && el.id.indexOf('viz_slot_') >= 0) {
+                unghostPanel(el);
+              }
+            });
+            // A fixed overlay does not scroll with the page, so a scroll
+            // while one is up would leave it hanging over the wrong content.
+            // The panel underneath is live; dropping the photograph early
+            // costs at worst the blink it was hiding.
+            window.addEventListener('scroll', function() {
+              var g = document.querySelectorAll('.pp-chart-ghost');
+              for (var i = 0; i < g.length; i++) dropGhost(g[i]);
+            }, true);
+
             // The AE band, drawn when its row scrolls into view.
             //
             // The row arrives carrying its geometry (data-band, one
@@ -2477,6 +2719,77 @@ new_patient_profile_block <- function(selected = NULL,
             var SVGNS = 'http://www.w3.org/2000/svg';
             var bandObserver = null;
 
+            var BAND_H = ", pp_cohort_band_h, ";
+
+            function el(tag, attrs) {
+              var e = document.createElementNS(SVGNS, tag);
+              for (var k in attrs) e.setAttribute(k, attrs[k]);
+              return e;
+            }
+
+            // Spans: one rect per event, in the order the source table
+            // carries them, later over earlier.
+            function drawSpans(frag, spec) {
+              spec.split(' ').forEach(function(s) {
+                var f = s.split(',');
+                if (f.length < 3) return;
+                frag.appendChild(el('rect', {
+                  x: f[0], y: '0', width: f[1], height: BAND_H,
+                  fill: f[2], opacity: '0.9'
+                }));
+              });
+            }
+
+            // A value series: the reference limit as a hairline, the values
+            // as one polyline, and a tick where the shared scale had to clip
+            // one. Same geometry pp_cohort_series_geom() computed -- the
+            // client places nothing of its own.
+            function drawSeries(frag, spec, row) {
+              var limit = row.getAttribute('data-limit');
+              if (limit) {
+                frag.appendChild(el('line', {
+                  x1: 0, y1: limit, x2: 176, y2: limit,
+                  stroke: 'var(--pp-cohort-limit, #9ca3af)',
+                  'stroke-width': '0.75', 'stroke-dasharray': '2 2',
+                  opacity: '0.75'
+                }));
+              }
+              // One visit is a point, not a line. Drawing nothing would
+              // read as no data, which is a different fact.
+              var one = row.getAttribute('data-dot');
+              if (one) {
+                var xy = one.split(',');
+                frag.appendChild(el('circle', {
+                  cx: xy[0], cy: xy[1], r: '1.6',
+                  fill: 'var(--pp-cohort-line, #2563eb)'
+                }));
+              } else if (spec) {
+                // The `d` arrives interpolated (pp_monotone_path()), so the
+                // rounding is computed once on the server and this only
+                // draws it. Nothing here decides the shape of a curve.
+                frag.appendChild(el('path', {
+                  d: spec, fill: 'none',
+                  stroke: 'var(--pp-cohort-line, #2563eb)',
+                  'stroke-width': '1.1', 'stroke-linejoin': 'round',
+                  'stroke-linecap': 'round'
+                }));
+              }
+              // Clipped values, ticked at the edge each one ran off.
+              var tick = function(attr, y1, y2) {
+                var v = row.getAttribute(attr);
+                if (!v) return;
+                v.split(' ').forEach(function(cx) {
+                  frag.appendChild(el('line', {
+                    x1: cx, y1: y1, x2: cx, y2: y2,
+                    stroke: 'var(--pp-cohort-clip, #dc2626)',
+                    'stroke-width': '1.2'
+                  }));
+                });
+              };
+              tick('data-clip', 0, 2.5);
+              tick('data-clip-lo', BAND_H - 2.5, BAND_H);
+            }
+
             function drawBand(row) {
               if (row.getAttribute('data-band-drawn')) return;
               row.setAttribute('data-band-drawn', '1');
@@ -2484,32 +2797,23 @@ new_patient_profile_block <- function(selected = NULL,
               if (!svg) return;
               var frag = document.createDocumentFragment();
               var spec = row.getAttribute('data-band') || '';
-              if (spec) {
-                spec.split(' ').forEach(function(s) {
-                  var f = s.split(',');
-                  if (f.length < 3) return;
-                  var r = document.createElementNS(SVGNS, 'rect');
-                  r.setAttribute('x', f[0]);
-                  r.setAttribute('y', '0');
-                  r.setAttribute('width', f[1]);
-                  r.setAttribute('height', '7');
-                  r.setAttribute('fill', f[2]);
-                  r.setAttribute('opacity', '0.9');
-                  frag.appendChild(r);
-                });
+              if (row.getAttribute('data-band-kind') === 'series') {
+                drawSeries(frag, spec, row);
+              } else if (spec) {
+                drawSpans(frag, spec);
               }
               // End of treatment, the same diamond and the same radius the
-              // server drew (r = 3 at a 7px band).
+              // server drew.
               var eot = row.getAttribute('data-eot');
               if (eot) {
-                var cx = parseFloat(eot), cy = 3.5, rr = 3;
-                var p = document.createElementNS(SVGNS, 'path');
-                p.setAttribute('d',
-                  'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
-                  'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +
-                  'Z');
-                p.setAttribute('fill', 'var(--pp-cohort-eot, #6b7280)');
-                frag.appendChild(p);
+                var cx = parseFloat(eot), cy = BAND_H / 2,
+                    rr = Math.min(3, BAND_H / 2 + 1);
+                frag.appendChild(el('path', {
+                  d: 'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
+                     'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +
+                     'Z',
+                  fill: 'var(--pp-cohort-eot, #6b7280)'
+                }));
               }
               svg.appendChild(frag);
             }
@@ -2531,7 +2835,7 @@ new_patient_profile_block <- function(selected = NULL,
                   drawBand(e.target);
                   bandObserver.unobserve(e.target);
                 });
-              // A row is 38px, so 200px draws about five rows past either
+              // A row is 44px, so 200px draws about four rows past either
               // edge -- enough that a scroll never uncovers a bare track.
               }, {root: well, rootMargin: '200px 0px'});
               Array.prototype.forEach.call(rows, function(r) {
@@ -2545,6 +2849,11 @@ new_patient_profile_block <- function(selected = NULL,
             $(document).on('shiny:value', function(e) {
               if (e.name && e.name.indexOf('sidebar_cohort') >= 0) {
                 setTimeout(function() { observeBands(); applyFilter(); }, 0);
+              }
+              // The panel slot that owns the find box has just been
+              // replaced; put the caret back in it.
+              if (e.name && e.name.indexOf('viz_slot_') >= 0) {
+                setTimeout(restoreSearch, 0);
               }
             });
 
@@ -2859,6 +3168,116 @@ new_patient_profile_block <- function(selected = NULL,
                 value: values[idx]
               }, {priority: 'event'});
             });
+
+            // Find box. Debounced, because every keystroke re-renders the
+            // panel AND re-derives 254 cohort bands: sending on each one
+            // made typing 'pneumonia' nine round trips, of which eight were
+            // thrown away. 400ms is a pause between words rather than
+            // between characters -- at 250 the panel redrew mid-word and the
+            // whole thing read as nervous.
+            var searchTimer = null;
+            // What the user has typed but the server has not confirmed, and
+            // where their caret was. The panel slot is a renderUI, so the
+            // confirming render DESTROYS this input and builds a new one --
+            // which drops focus mid-word and leaves nothing to backspace
+            // into. Remembered here, restored below.
+            var searchState = null;
+
+            $(document).on('input',
+              '#' + layoutId + ' .pp-ctrl-search-input', function() {
+                var vizId = $(this).data('viz-id');
+                var param = $(this).data('param');
+                var value = $(this).val();
+                searchState = {
+                  vizId: vizId, param: param, value: value,
+                  caret: this.selectionStart, at: Date.now()
+                };
+                // The box owns its own text while the user is in it: the
+                // server's confirming re-render must not move the caret, so
+                // the wrapper is styled optimistically here and the value is
+                // never read back off the DOM (see the input-binding echo
+                // trap this package has hit before).
+                $(this).closest('.pp-ctrl-search')
+                  .toggleClass('is-active', value.length > 0);
+                if (searchTimer) clearTimeout(searchTimer);
+                searchTimer = setTimeout(function() {
+                  searchTimer = null;
+                  Shiny.setInputValue(ctrlInputId, {
+                    viz_id: vizId, param: param, value: value
+                  }, {priority: 'event'});
+                }, 400);
+              });
+
+            // Track the caret on every move, not just on input: a click or
+            // an arrow key between keystrokes moves it, and restoring a
+            // stale position would be its own kind of losing your place.
+            $(document).on('keyup click',
+              '#' + layoutId + ' .pp-ctrl-search-input', function() {
+                if (searchState && searchState.vizId === $(this).data('viz-id')) {
+                  searchState.caret = this.selectionStart;
+                }
+              });
+            // No blur handler, deliberately. The blur that fires when the
+            // re-render DESTROYS the input is indistinguishable from the one
+            // that fires when the user clicks away, so reading blur as
+            // they-left-on-purpose threw away exactly the state the restore
+            // needed -- and the typing carried on into the page body.
+            // Recency tells the two apart instead; see below.
+
+            // Give the box back after the panel rebuilds under it. The value
+            // is the user's in-flight text rather than the server's echo:
+            // the two differ by whatever was typed during the round trip,
+            // and taking the server's would silently delete those keys.
+            // Only just typed counts. A panel that re-renders for its own
+            // reasons a minute later -- a patient switch, an upstream filter
+            // -- must not yank the caret back into a box the user left long
+            // ago, and 2.5s is far longer than the round trip that follows a
+            // keystroke and far shorter than any of that.
+            var SEARCH_RESTORE_MS = 2500;
+
+            function restoreSearch() {
+              if (!searchState) return;
+              if (Date.now() - searchState.at > SEARCH_RESTORE_MS) return;
+              // JSON.stringify for the quoting, like the drag handler does:
+              // the whole script is an R string, so a literal double quote
+              // here would end it.
+              var sel = '#' + layoutId + ' .pp-ctrl-search-input' +
+                '[data-viz-id=' + JSON.stringify(searchState.vizId) + ']';
+              var el = document.querySelector(sel);
+              if (!el || el === document.activeElement) return;
+              if (el.value !== searchState.value) el.value = searchState.value;
+              el.focus();
+              var at = Math.min(searchState.caret, el.value.length);
+              try { el.setSelectionRange(at, at); } catch (e) { /* no-op */ }
+            }
+
+            // Clearing, from the box's own x or from the sidebar's echo of
+            // the term. Both send the empty string through the one channel
+            // the box uses, so there is a single path back to unfiltered.
+            $(document).on('click',
+              '#' + layoutId + ' .pp-ctrl-search-clear', function(e) {
+                e.stopPropagation();
+                if (searchTimer) clearTimeout(searchTimer);
+                searchTimer = null;
+                searchState = null;
+                Shiny.setInputValue(ctrlInputId, {
+                  viz_id: $(this).data('viz-id'),
+                  param: $(this).data('param'),
+                  value: ''
+                }, {priority: 'event'});
+              });
+            $(document).on('click',
+              '#' + layoutId + ' .pp-cohort-bandcap-find', function(e) {
+                e.stopPropagation();
+                if (searchTimer) clearTimeout(searchTimer);
+                searchTimer = null;
+                searchState = null;
+                Shiny.setInputValue(ctrlInputId, {
+                  viz_id: $(this).attr('data-viz-id'),
+                  param: 'search',
+                  value: ''
+                }, {priority: 'event'});
+              });
 
             // Radio click
             $(document).on('click', '#' + layoutId + ' .pp-ctrl-radio', function(e) {

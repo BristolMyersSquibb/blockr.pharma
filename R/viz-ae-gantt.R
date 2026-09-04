@@ -51,7 +51,18 @@ ae_gantt_viz <- new_pp_viz(
     "ASTDT", "AENDT", "ASTDY", "AENDY", "AETERM", "AEHLT", "AEBODSYS",
     "AESER", "AEOUT"
   )),
-  controls = pp_lane_control(PP_AE_LANES, default = "AEDECOD"),
+  controls = c(
+    pp_lane_control(PP_AE_LANES, default = "AEDECOD"),
+    list(search = list(
+      type = "search",
+      label = "Find",
+      placeholder = "Filter events",
+      # Every coding level the study carries, so "infections" reaches a
+      # body system whose preferred terms never contain the word.
+      columns = c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
+    ))
+  ),
+  band = pp_band_ae(),
   uses = "severity",
   legend_ui = function(dm_obj, settings) {
     pp_sev_legend_ui(dm_obj, settings$sev_colors, settings$roles$severity)
@@ -77,6 +88,24 @@ ae_gantt_viz <- new_pp_viz(
 
     tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No AE records"))
+
+    # The header's find box. Filtered here rather than in the lane builder so
+    # the lanes, the labels and the axis are all computed on the records that
+    # survived -- a filtered panel is the panel of the matching events, not
+    # the full panel with most of it hidden. The sidebar's cohort band reads
+    # the same setting through pp_cohort_marks(), so the two agree.
+    search <- as.character(settings$search %||% "")
+    if (nzchar(search)) {
+      tbl <- tbl[
+        pp_search_match(tbl, c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS"),
+                        search), , drop = FALSE
+      ]
+      if (nrow(tbl) == 0) {
+        return(pp_empty_chart(
+          paste0("No adverse event matches \u201c", search, "\u201d")
+        ))
+      }
+    }
 
       # Severity colors: the board scale map (injected as
       # settings$sev_colors by the block server when a severity binding

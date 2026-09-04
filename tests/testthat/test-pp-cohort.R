@@ -154,7 +154,7 @@ test_that("the band draws one span per event, in adae order", {
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   col <- pp_cohort_sev_color(NULL)
 
-  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col)
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m, col)
   expect_match(svg, "^<svg")
   fills <- regmatches(svg, gregexpr('fill="#[0-9A-Fa-f]{6}', svg))[[1]]
   # S-1 has two events, so two spans -- not a bin count
@@ -163,7 +163,7 @@ test_that("the band draws one span per event, in adae order", {
 
   # An eventless patient still draws: the track alone reads as "nothing
   # happened", which is a finding, where a missing band reads as broken.
-  empty <- pp_cohort_band_svg(m$subjects[["S-3"]], m$days, col)
+  empty <- pp_cohort_band_svg(m$subjects[["S-3"]], m, col)
   expect_match(empty, "^<svg")
   expect_identical(length(gregexpr("<rect", empty)[[1]]), 1L)
 })
@@ -183,7 +183,7 @@ test_that("a severe event does not repaint the mild ones underneath it", {
   )
   d <- cohort_dm(test_adsl(), adae)
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
-  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days,
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m,
                             pp_cohort_sev_color(NULL))
   fills <- regmatches(svg, gregexpr('fill="#[0-9A-Fa-f]{6}', svg))[[1]]
 
@@ -209,7 +209,7 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
                   collapse = " ")
     band <- pp_cohort_band_attr(
       marks$subjects[[id]] %||% list(events = NULL, trt_end = NA),
-      marks$days, color, day0 = marks$day0)
+      marks, color)
     tint <- unname(arm_col[[arm]] %||% "#9ca3af")
     badge <- if (nzchar(code)) {
       shiny::span(class = "pp-pt-code", title = arm,
@@ -228,10 +228,13 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
         shiny::span(class = "pp-pt-id", disp$short[[i]]),
         if (nzchar(demo)) shiny::span(class = "pp-pt-demo", demo),
         shiny::span(class = "pp-pt-gap"), badge),
-      shiny::tags$svg(class = "pp-pt-band", width = 176, height = 7,
-        viewBox = "0 0 176 7", preserveAspectRatio = "none",
+      shiny::tags$svg(class = "pp-pt-band", width = 176,
+        height = pp_cohort_band_h,
+        viewBox = paste("0 0 176", pp_cohort_band_h),
+        preserveAspectRatio = "none",
         `aria-hidden` = "true",
-        shiny::tags$rect(x = 0, y = 0, width = 176, height = 7, rx = 2,
+        shiny::tags$rect(x = 0, y = 0, width = 176,
+                         height = pp_cohort_band_h, rx = 2,
                          fill = "var(--pp-cohort-track, #f3f4f6)")))
   })
   as.character(htmltools::renderTags(shiny::tagList(rows))$html)
@@ -320,8 +323,8 @@ test_that("the row ships the band's geometry, and it matches the drawn one", {
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   col <- pp_cohort_sev_color(NULL)
 
-  attr <- pp_cohort_band_attr(m$subjects[["S-1"]], m$days, col)
-  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col)
+  attr <- pp_cohort_band_attr(m$subjects[["S-1"]], m, col)
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m, col)
 
   # x,w,fill per span, and the first <rect> of the svg is the track
   from_svg <- regmatches(
@@ -338,13 +341,12 @@ test_that("the row ships the band's geometry, and it matches the drawn one", {
 
   # S-2 stopped early, S-1 did not: the marker is its own attribute
   expect_null(attr$eot)
-  expect_false(is.null(pp_cohort_band_attr(m$subjects[["S-2"]], m$days,
-                                           col)$eot))
+  expect_false(is.null(pp_cohort_band_attr(m$subjects[["S-2"]], m, col)$eot))
 
   # A patient with no events ships an empty band, not a missing one: the row
   # still renders the track.
   expect_identical(
-    pp_cohort_band_attr(m$subjects[["S-3"]], m$days, col)$band, ""
+    pp_cohort_band_attr(m$subjects[["S-3"]], m, col)$band, ""
   )
 })
 
@@ -359,8 +361,7 @@ test_that("consecutive spans of one colour merge, and only those", {
   )
   d <- cohort_dm(test_adsl(), same)
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
-  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m$days,
-                           pp_cohort_sev_color(NULL))
+  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m, pp_cohort_sev_color(NULL))
   # three overlapping mild events are one span, day 2 to day 70
   expect_length(g$x, 1L)
 
@@ -369,8 +370,7 @@ test_that("consecutive spans of one colour merge, and only those", {
   split$AESEV <- c("MILD", "SEVERE", "MILD")
   d2 <- cohort_dm(test_adsl(), split)
   m2 <- pp_cohort_marks(d2, pp_resolve_roles(d2, list(arm = "ACTARM")))
-  g2 <- pp_cohort_band_geom(m2$subjects[["S-1"]], m2$days,
-                            pp_cohort_sev_color(NULL))
+  g2 <- pp_cohort_band_geom(m2$subjects[["S-1"]], m2, pp_cohort_sev_color(NULL))
   expect_length(g2$x, 3L)
 
   # a gap between two same-colour events is a gap, not a merge
@@ -379,8 +379,7 @@ test_that("consecutive spans of one colour merge, and only those", {
   apart$AENDY <- c(10, 110, 150)
   d3 <- cohort_dm(test_adsl(), apart)
   m3 <- pp_cohort_marks(d3, pp_resolve_roles(d3, list(arm = "ACTARM")))
-  g3 <- pp_cohort_band_geom(m3$subjects[["S-1"]], m3$days,
-                            pp_cohort_sev_color(NULL))
+  g3 <- pp_cohort_band_geom(m3$subjects[["S-1"]], m3, pp_cohort_sev_color(NULL))
   expect_length(g3$x, 3L)
 })
 
@@ -395,8 +394,7 @@ test_that("merging a span that starts LEFT of the one before keeps its left", {
   )
   d <- cohort_dm(test_adsl(), back)
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
-  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m$days,
-                           pp_cohort_sev_color(NULL), day0 = m$day0)
+  g <- pp_cohort_band_geom(m$subjects[["S-1"]], m, pp_cohort_sev_color(NULL))
 
   expect_length(g$x, 1L)
   # the merged span covers both events end to end: it starts where the
@@ -413,10 +411,9 @@ test_that("the end-of-treatment diamond is drawn only when it ended early", {
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   col <- pp_cohort_sev_color(NULL)
   # S-2 stopped at day 30 of a 180-day axis
-  expect_match(pp_cohort_band_svg(m$subjects[["S-2"]], m$days, col), "<path")
+  expect_match(pp_cohort_band_svg(m$subjects[["S-2"]], m, col), "<path")
   # S-1 ran to the end of the axis, so there is nothing to mark
-  expect_false(grepl("<path", pp_cohort_band_svg(m$subjects[["S-1"]], m$days,
-                                                 col)))
+  expect_false(grepl("<path", pp_cohort_band_svg(m$subjects[["S-1"]], m, col)))
 })
 
 test_that("sorting offers only keys the data supports, and signals descend", {
@@ -591,7 +588,7 @@ test_that("the band maps from day0, not from zero", {
 
   # S-1's only surviving event is at day -12, which is in the FIRST tenth of
   # a -30..180 axis. Anchored at zero it would have been dropped entirely.
-  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m$days, col, day0 = m$day0)
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m, col)
   xs <- as.numeric(regmatches(svg, gregexpr('(?<=x=")[0-9.]+', svg,
                                             perl = TRUE))[[1]])
   painted <- xs[-1]                       # drop the track

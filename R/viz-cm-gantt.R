@@ -50,6 +50,12 @@ cm_gantt_viz <- new_pp_viz(
     "CMROUTE", "CMCLAS"
   )),
   controls = pp_lane_control(PP_CM_LANES, default = "CMDECOD"),
+  band = pp_band_spans(
+    table = "adcm",
+    start = c("ASTDY", "ASTDT"),
+    end = c("AENDY", "AENDT"),
+    search = c("CMTRT", "CMDECOD", "CMCLAS")
+  ),
   uses = "indication",
   legend_ui = function(dm_obj, settings) {
     pp_indc_legend_ui(settings$indc_colors)

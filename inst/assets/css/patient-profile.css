@@ -1425,10 +1425,13 @@
    content when the cohort is shorter than the well, so a cohort of one does
    not sit in 230px of empty space.
 
-   Row geometry (38px, two lines) comes from the design round in
-   _blockr.design/open/cohort-in-profile-sidebar/mock/final.html. Type is at
+   Row geometry (44px, two lines) comes from the design rounds in
+   _scratch/cohort-viewer/final.html and _scratch/pp-band-source/. Type is at
    the design system's floor already (12px / 11px against a 12px smallest
    token), so the size came out of padding and the band, never the text.
+   The row went 38px -> 44px when the band stopped being only a severity
+   strip: colour reads at 7px, a value line needs amplitude to have a shape,
+   and the 13px band is where a trend is legible.
    ========================================================================= */
 
 .pp-sidebar-section {
@@ -1502,11 +1505,11 @@
 }
 
 .pp-cohort-well {
-  /* Exactly 5 rows: 5 x 38px (the row is border-box, so its 1px borders are
+  /* Exactly 5 rows: 5 x 44px (the row is border-box, so its 1px borders are
      inside that) plus the well's own 5px bottom padding. A half-visible row
      at the fold reads as a rendering fault rather than as "there is more",
      which is what the scrollbar is for. */
-  max-height: 195px;
+  max-height: 225px;
   overflow-y: auto;
   /* Never sideways. A row that cannot fit must shrink or ellipsize, and the
      rules below make sure it can -- a horizontal scrollbar in a 232px
@@ -1542,7 +1545,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  height: 38px;
+  height: 44px;
   padding: 3px 5px;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -1645,3 +1648,195 @@
   width: 100%;
 }
 
+
+/* --- What the band is drawing -----------------------------------------------
+   The strip follows the panels now (pp_cohort_band_source()), so it has to
+   say which one. A severity strip explains itself; a line of unlabelled
+   numbers does not, and the parameter behind it is the part a reader cannot
+   guess. Ten pixels of type, directly above the bands it explains.
+   ========================================================================= */
+.pp-cohort-bandcap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #9ca3af;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pp-cohort-bandcap .pp-band-glyph {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.pp-cohort-bandcap-what {
+  color: #6b7280;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The panel's search term, echoed. Without it the bands go sparse for no
+   visible reason, which is the sidebar quietly lying about the cohort. It
+   clears the search, so it is a control and looks like one. */
+.pp-cohort-bandcap-find {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px; /* --blockr-radius-sm */
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #1d4ed8;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.pp-cohort-bandcap-find:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.pp-cohort-bandcap-find > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* How many of this patient's records the search matched. Printed even when
+   it is zero (as an en dash), because an empty band with no number beside it
+   reads as "no data" rather than as "none of what you asked for". */
+.pp-pt-hits {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* --- The panel's find box ---------------------------------------------------
+   Sits in the chart header in the same 22px band as the LANES pill beside it,
+   so the toolbar keeps one baseline.
+   ========================================================================= */
+.pp-ctrl-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px; /* --blockr-radius-sm */
+  background: #f9fafb;
+  min-width: 0;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.pp-ctrl-search:focus-within {
+  border-color: #93c5fd;
+}
+
+.pp-ctrl-search.is-active {
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+
+.pp-ctrl-search .pp-search-icon {
+  flex: 0 0 auto;
+  color: #9ca3af;
+}
+
+.pp-ctrl-search-input {
+  border: none;
+  outline: none;
+  background: none;
+  /* Never a font-family of its own: see the design system's typography
+     rules, and css-font-shorthand-inherit-drops for why this is not `font:`. */
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #374151;
+  width: 104px;
+  min-width: 0;
+  padding: 0;
+}
+
+.pp-ctrl-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.pp-ctrl-search-hits {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.pp-ctrl-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.pp-ctrl-search-clear:hover {
+  color: #374151;
+}
+
+/* --- Holding the last frame -------------------------------------------------
+   A panel slot is a renderUI, so a settings change empties it and refills it,
+   and for ~27ms there is no canvas in the box at all. The redraw itself is
+   cheap (4ms on the server); it is the blink that reads badly.
+
+   ghostPanel() photographs the outgoing CHART BODY into this overlay --
+   canvas bitmaps copied across, since innerHTML clones a canvas element
+   without its pixels -- and it sits here until the replacement has painted,
+   then fades. The header is deliberately left live: it rebuilds within a
+   frame, and it holds the find box, so a photograph over it would show the
+   old search text and the characters just typed would appear to vanish.
+
+   FIXED, and parented to <body>. Shiny styles its output wrappers
+   `div:where(.shiny-html-output):has(> *) { display: contents }` (blockr.ui#41),
+   so the slot and everything between it and the body generate no box: there
+   is nothing here for an absolutely positioned overlay to be contained by,
+   and `position: relative` on any of them does nothing at all.
+   ========================================================================= */
+.pp-chart-ghost {
+  position: fixed;
+  z-index: 5;
+  /* Never intercepts a click: the panel underneath is live the whole time,
+     and a ghost that swallowed the remove button would be a bug that only
+     shows up under a slow render. */
+  pointer-events: none;
+  overflow: hidden;
+  background: #ffffff;
+  opacity: 1;
+  transition: opacity 0.16s ease;
+}
+
+.pp-chart-ghost.is-gone {
+  opacity: 0;
+}
+
+/* The panel underneath must not also dim, or the cross-fade shows through as
+   a flicker. Shiny's own busy treatment is the wrong one here: the ghost IS
+   the busy treatment. */
+.pp-chart-panel.recalculating {
+  opacity: 1 !important;
+}

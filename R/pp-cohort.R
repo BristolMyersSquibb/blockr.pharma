@@ -21,6 +21,11 @@
 # panels, per-measure reductions -- see the spec) without touching the
 # sidebar, and the band get richer without widening the export.
 
+# The band's height in px. A severity strip reads at 7px because it is
+# colour; a value line needs amplitude to have a shape at all, so the band is
+# 13px and the row 44px (the CSS says the same, once).
+pp_cohort_band_h <- 13L
+
 #' One row per patient in the cohort
 #'
 #' The cohort as a flat table: the ADSL facts a clinician scans and exports.
@@ -196,16 +201,28 @@ pp_sev_rank <- function(x) {
 #' @param prestudy_days How far before treatment start the axis may reach.
 #'   `Inf` for the full history (the block passes this when the user turns
 #'   the profile's Pre-treatment toggle on, so the two agree).
-#' @return `list(day0, days, subjects)` -- the axis bounds in study days and a
-#'   named list, one entry per USUBJID, each
-#'   `list(events = data.frame(start, end, sev), trt_end = <num or NA>)`.
+#' @param band What to draw, from [pp_band_spans()] / [pp_band_series()].
+#'   Defaults to the adverse-event band the sidebar drew before it followed
+#'   the panels. `NULL` explicitly means nothing is drawable and every row
+#'   gets an empty track.
+#' @param search A term the panel's search box is filtering by, or `NULL`.
+#'   Only a spans band declaring `search` columns reads it; the strip then
+#'   paints the same subset the panel is showing, and `hits` reports how many
+#'   of each patient's records matched.
+#' @return `list(kind, day0, days, subjects, hits, ...)` -- the axis bounds in
+#'   study days and a named list, one entry per USUBJID. A `"spans"` band
+#'   gives each subject `list(events = data.frame(start, end, sev), trt_end)`;
+#'   a `"series"` band gives `list(series = data.frame(day, value), trt_end)`
+#'   and the result carries the shared value scale (`vlo`, `vhi`) and the
+#'   reference limit the rows draw against.
 #' @noRd
-pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
+pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
+                            band = pp_band_ae(), search = NULL) {
 
   ids <- pp_subject_ids(dm_obj)
-  empty <- list(day0 = 0, days = 1,
+  empty <- list(kind = "none", day0 = 0, days = 1,
                 subjects = stats::setNames(list(), character()))
-  if (!length(ids)) return(empty)
+  if (!length(ids) || is.null(band)) return(empty)
 
   tbls <- dm::dm_get_tables(dm_obj)
   roles <- roles %||% list()
@@ -218,20 +235,33 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
     rep(NA_real_, length(ids))
   }
 
-  # The anchor each AE date is measured from, aligned to adae's rows. Same
-  # column the panels anchor on (the `timeline` role, TRTSDT by convention).
+  # The anchor each date is measured from, aligned to the SOURCE TABLE's
+  # rows. Same column the panels anchor on (the `timeline` role, TRTSDT by
+  # convention).
   ref_col <- roles$timeline %||% "TRTSDT"
-  ae_ref <- NULL
-  if ("adae" %in% names(tbls) && ref_col %in% colnames(adsl)) {
-    adae_sub <- as.character(as.data.frame(tbls[["adae"]])$USUBJID)
-    if (!is.null(adae_sub)) {
-      ae_ref <- pp_as_date(adsl[[ref_col]])[
-        match(adae_sub, as.character(adsl$USUBJID))
+  src_ref <- NULL
+  if (band$table %in% names(tbls) && ref_col %in% colnames(adsl)) {
+    src_sub <- as.character(as.data.frame(tbls[[band$table]])$USUBJID)
+    if (!is.null(src_sub)) {
+      src_ref <- pp_as_date(adsl[[ref_col]])[
+        match(src_sub, as.character(adsl$USUBJID))
       ]
     }
   }
 
-  ev <- pp_cohort_ae_events(tbls, roles$severity, ref = ae_ref)
+  if (identical(band$kind, "series")) {
+    return(pp_cohort_series_marks(tbls, band, ids, trt_end, ref = src_ref,
+                                  prestudy_days = prestudy_days))
+  }
+
+  ev <- pp_cohort_span_events(tbls, band, roles$severity, ref = src_ref,
+                              search = search)
+  # How many of this patient's records the search kept, before the axis
+  # clipping below drops any -- the count answers "who had this", which is a
+  # fact about the records and not about what fits on the strip.
+  hits <- if (nzchar(search %||% "")) {
+    as.integer(tabulate(match(ev$subject, ids), nbins = length(ids)))
+  }
 
   # The floor, in study days. Day 1 is treatment start and there is no day 0,
   # so 30 days before it is day -30.
@@ -282,7 +312,8 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
   })
   names(subjects) <- ids
 
-  list(day0 = day0, days = days, subjects = subjects)
+  list(kind = "spans", day0 = day0, days = days, subjects = subjects,
+       hits = if (!is.null(hits)) stats::setNames(hits, ids))
 }
 
 #' The last study day each patient has any data for
@@ -300,7 +331,7 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30) {
 #' @param tbls The dm's tables.
 #' @param ids Cohort USUBJIDs.
 #' @param trt_end Per-subject treatment end day (same order as `ids`).
-#' @param ev Event list from [pp_cohort_ae_events()], for the days it already
+#' @param ev Event list from [pp_cohort_span_events()], for the days it already
 #'   resolved.
 #' @return Numeric, one per id; `NA` where the patient has no usable day.
 #' @noRd
@@ -360,7 +391,7 @@ pp_date_to_day <- function(date, ref) {
   ifelse(is.na(delta), NA_real_, ifelse(delta >= 0, delta + 1, delta))
 }
 
-#' Adverse events as day intervals
+#' A band's records as day intervals
 #'
 #' A missing end is reported as `open`, not resolved here: it means ongoing,
 #' and an ongoing event runs to the end of the axis, which this function does
@@ -384,17 +415,34 @@ pp_date_to_day <- function(date, ref) {
 #' `pp_xval_pref_day()` gives: a study's own derived day is authoritative, and
 #' re-deriving it from dates is a lossy round trip past the same anchor.
 #'
+#' @param band The [pp_band_spans()] declaration naming the table, the day /
+#'   date column pairs and the columns a search matches.
+#' @param search A search term, or `NULL`. Filters the records before
+#'   anything is measured, so the strip and the panel show one subset.
 #' @param ref Per-row reference dates (the patient's treatment start), or
 #'   `NULL`. Only consulted when a day column is missing.
 #' @noRd
-pp_cohort_ae_events <- function(tbls, sev_col = NULL, ref = NULL) {
+pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
+                                  search = NULL) {
 
   none <- list(subject = character(), start = numeric(), end = numeric(),
                sev = character(), open = logical())
-  if (!"adae" %in% names(tbls)) return(none)
+  if (!band$table %in% names(tbls)) return(none)
 
-  adae <- as.data.frame(tbls[["adae"]])
+  adae <- as.data.frame(tbls[[band$table]])
   if (!"USUBJID" %in% colnames(adae)) return(none)
+
+  # The panel's search, applied to the same records the panel filters. Only
+  # the columns the band declares are matched, and only the ones the study
+  # actually carries -- a study without AEHLT is not a study whose search is
+  # broken. Dropping every row here is a legitimate answer: it means this
+  # patient had none of what was asked for, and the empty track says so.
+  if (nzchar(search %||% "") && length(band$search %||% character())) {
+    hit <- pp_search_match(adae, band$search, search)
+    adae <- adae[hit, , drop = FALSE]
+    ref <- if (!is.null(ref)) ref[hit]
+    if (!nrow(adae)) return(none)
+  }
 
   # The study's own day, else the date converted against this patient's
   # anchor. Coalesced PER ROW, not per column: a day column that exists but
@@ -416,8 +464,8 @@ pp_cohort_ae_events <- function(tbls, sev_col = NULL, ref = NULL) {
     ifelse(is.na(native), derived, native)
   }
 
-  start <- day_of("ASTDY", "ASTDT")
-  end <- day_of("AENDY", "AENDT")
+  start <- day_of(band$start[[1L]], band$start[[2L]])
+  end <- day_of(band$end[[1L]], band$end[[2L]])
   if (all(is.na(start))) return(none)
   # An end before the start is data we cannot draw; treat it as no end at
   # all rather than as a backwards bar.
@@ -433,6 +481,138 @@ pp_cohort_ae_events <- function(tbls, sev_col = NULL, ref = NULL) {
   keep <- !is.na(start)
   list(subject = as.character(adae$USUBJID)[keep], start = start[keep],
        end = end[keep], sev = sev[keep], open = open[keep])
+}
+
+#' Per-subject value series for the cohort band
+#'
+#' The series band's answer to [pp_cohort_span_events()]: one parameter's
+#' values per patient, on the same study-day axis every other band uses.
+#'
+#' @section One scale, clipped:
+#' The rows are only worth comparing if they share a y scale, and a shared
+#' scale is at the mercy of its tail: one patient whose ALT reaches ten times
+#' the upper limit sets the ceiling and flattens the 250 patients who stayed
+#' in range into the bottom of the strip. The scale is therefore an inner
+#' quantile range of the cohort, and a value outside it is drawn at the edge
+#' with a tick (see [pp_cohort_series_geom()]) rather than silently pulled
+#' inside. Per-row scaling was the alternative and is worse than either: it
+#' makes every patient look equally eventful, and it puts the reference limit
+#' at a different height in every row.
+#'
+#' The range is the 10th to 90th percentile, not the 5th to 95th, because
+#' amplitude is what the strip is FOR. Measured on safetyData's albumin
+#' (2058 values, 254 patients): at 5-95 the scale is 9 units wide and the
+#' median patient's line covers 56% of the band, which is 6px of movement in
+#' 13 and reads as a flat line. At 10-90 the scale is 7 units wide and the
+#' median patient covers 71%. The cost is the tick count -- 8% of values sit
+#' outside the wider range against 16% outside this one -- and a tick is a
+#' mark that says so, where a flat line says nothing at all. Tightening
+#' further does not pay: 25-75 puts the median patient at 167% of the band,
+#' clipping nearly half the values, which is a scale that has stopped
+#' describing the data.
+#'
+#' @param tbls The dm's tables.
+#' @param band A [pp_band_series()] declaration.
+#' @param ids Cohort USUBJIDs.
+#' @param trt_end Per-subject treatment end day (same order as `ids`).
+#' @param ref Per-row reference dates, for a study shipping dates and no day.
+#' @param prestudy_days How far before treatment start the axis may reach.
+#' @return The [pp_cohort_marks()] shape for a series band.
+#' @noRd
+pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
+                                   prestudy_days = 30) {
+
+  empty <- list(kind = "series", day0 = 0, days = 1, vlo = 0, vhi = 1,
+                limit = NA_real_, param = band$param,
+                subjects = stats::setNames(
+                  lapply(ids, function(i) list(series = NULL, trt_end = NA)),
+                  ids
+                ))
+  if (!band$table %in% names(tbls)) return(empty)
+
+  tbl <- as.data.frame(tbls[[band$table]])
+  need <- c("USUBJID", "PARAMCD", band$value)
+  if (!all(need %in% colnames(tbl))) return(empty)
+
+  keep <- as.character(tbl$PARAMCD) == band$paramcd
+  keep[is.na(keep)] <- FALSE
+  if (!any(keep)) return(empty)
+  tbl <- tbl[keep, , drop = FALSE]
+  ref <- if (!is.null(ref)) ref[keep]
+
+  # The study's own day, else the date against this patient's anchor. Same
+  # per-row coalesce pp_cohort_span_events() does, and for the same reason.
+  native <- if (band$day %in% colnames(tbl)) {
+    suppressWarnings(as.numeric(tbl[[band$day]]))
+  } else {
+    rep(NA_real_, nrow(tbl))
+  }
+  derived <- if (!is.null(ref) && band$date %in% colnames(tbl)) {
+    pp_date_to_day(tbl[[band$date]], ref)
+  } else {
+    rep(NA_real_, nrow(tbl))
+  }
+  day <- ifelse(is.na(native), derived, native)
+  value <- suppressWarnings(as.numeric(tbl[[band$value]]))
+
+  floor_day <- if (is.finite(prestudy_days)) -abs(prestudy_days) else -Inf
+  ok <- !is.na(day) & !is.na(value) & day >= floor_day
+  if (!any(ok)) return(empty)
+  subject <- as.character(tbl$USUBJID)[ok]
+  day <- day[ok]
+  value <- value[ok]
+
+  # The reference limit the rows draw against: ONE line for the whole strip,
+  # so a per-patient limit column is reduced to its median. Studies that ship
+  # a limit varying by patient (age- or sex-adjusted) still get a line in the
+  # right neighbourhood, and the tooltip on the panel remains the place where
+  # a patient's own limit is stated exactly.
+  limit <- if (band$hi %in% colnames(tbl)) {
+    stats::median(suppressWarnings(as.numeric(tbl[[band$hi]][ok])),
+                  na.rm = TRUE)
+  } else {
+    NA_real_
+  }
+  if (!is.finite(limit)) limit <- NA_real_
+
+  qs <- stats::quantile(value, c(0.10, 0.90), na.rm = TRUE, names = FALSE)
+  vlo <- qs[[1L]]
+  vhi <- qs[[2L]]
+  # A cohort whose middle 90% is one number is a real thing (a flag-like
+  # parameter, or a very small cohort); give it a scale rather than a
+  # division by zero.
+  if (!is.finite(vlo) || !is.finite(vhi) || vhi <= vlo) {
+    vlo <- min(value, na.rm = TRUE)
+    vhi <- max(value, na.rm = TRUE)
+    if (vhi <= vlo) vhi <- vlo + 1
+  }
+
+  day0 <- suppressWarnings(min(c(day, 1), na.rm = TRUE))
+  if (!is.finite(day0)) day0 <- 0
+  days <- suppressWarnings(max(c(trt_end, day, 1), na.rm = TRUE))
+  if (!is.finite(days) || days <= day0) days <- day0 + 1
+
+  at <- match(subject, ids)
+  # Sorted by day within patient, because a line is drawn in the order its
+  # points arrive and a findings table is in record order, not visit order.
+  o <- order(at, day)
+  at <- at[o]
+  day <- day[o]
+  value <- value[o]
+
+  subjects <- lapply(seq_along(ids), function(i) {
+    k <- which(at == i)
+    list(
+      series = if (length(k)) {
+        data.frame(day = day[k], value = value[k], stringsAsFactors = FALSE)
+      },
+      trt_end = trt_end[[i]]
+    )
+  })
+  names(subjects) <- ids
+
+  list(kind = "series", day0 = day0, days = days, vlo = vlo, vhi = vhi,
+       limit = limit, param = band$param, subjects = subjects)
 }
 
 # ---------------------------------------------------------------------------
@@ -473,29 +653,37 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
   }
 }
 
-#' The AE band for one patient
+#' One patient's band, drawn server-side
 #'
-#' One span per event, in adae order, later over earlier -- the patient
-#' overview's AE lane rule, so the strip and the panel agree.
+#' The reference the client-side painter is checked against, and what a
+#' caller outside the sidebar gets. Dispatches on the band's kind: spans are
+#' painted one rect per event, a series as one path.
+#'
+#' Spans are drawn in the order the source table carries them, later over
+#' earlier -- the patient overview's AE lane rule, so the strip and the panel
+#' agree.
 #'
 #' @param sub One entry of [pp_cohort_marks()]`$subjects`.
-#' @param days Axis maximum (shared across every row).
+#' @param marks The [pp_cohort_marks()] result `sub` came from: it carries
+#'   the shared axis (`day0`, `days`) and, for a series, the shared value
+#'   scale. The band is NOT anchored at day zero -- a cohort with
+#'   pre-treatment records has a negative `day0`, and assuming otherwise is
+#'   what put those records in the wrong place.
 #' @param color A resolver from [pp_cohort_sev_color()].
 #' @param width,height Band geometry in px.
-#' @param day0 Axis minimum. Negative when the cohort has pre-treatment
-#'   events (see [pp_cohort_marks()]); the band is NOT anchored at zero, and
-#'   assuming it was is what put those events in the wrong place.
 #' @param min_px Narrowest a span may draw. A same-day event is a fraction of
 #'   a pixel over a whole study and would vanish; the lane has the same floor
 #'   for the same reason.
+#' @param smooth Round a series band's corners, following the profile's
+#'   Straight / Smooth toggle. Ignored by a spans band.
 #' @return An HTML string (an `<svg>`).
 #' @noRd
-pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
-                               day0 = 0, min_px = 1.5) {
+pp_cohort_band_svg <- function(sub, marks, color, width = 176,
+                               height = pp_cohort_band_h, min_px = 1.5,
+                               smooth = TRUE) {
 
   esc <- function(x) gsub("\"", "&quot;", x, fixed = TRUE)
   h <- height
-  geom <- pp_cohort_band_geom(sub, days, color, width, day0, min_px)
 
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
@@ -503,17 +691,66 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
     width, h
   ))
 
-  if (length(geom$x)) {
-    parts <- c(parts, sprintf(
-      '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
-      geom$x, geom$w, h, esc(geom$fill)
-    ))
+  if (identical(marks$kind, "series")) {
+    geom <- pp_cohort_series_geom(sub, marks, width, h, smooth)
+    if (!is.na(geom$limit)) {
+      parts <- c(parts, sprintf(
+        paste0('<line x1="0" y1="%s" x2="%s" y2="%s" ',
+               'stroke="var(--pp-cohort-limit, #9ca3af)" stroke-width="0.75" ',
+               'stroke-dasharray="2 2" opacity="0.75"/>'),
+        geom$limit, width, geom$limit
+      ))
+    }
+    if (nzchar(geom$path)) {
+      parts <- c(parts, sprintf(
+        paste0('<path d="%s" fill="none" ',
+               'stroke="var(--pp-cohort-line, #2563eb)" stroke-width="1.1" ',
+               'stroke-linejoin="round" stroke-linecap="round"/>'),
+        geom$path
+      ))
+    }
+    # A single visit is a point, not a line: drawing nothing would be read as
+    # "no data", which is a different fact.
+    if (length(geom$dot)) {
+      parts <- c(parts, sprintf(
+        '<circle cx="%s" cy="%s" r="1.6" fill="var(--pp-cohort-line, #2563eb)"/>',
+        geom$dot[[1L]], geom$dot[[2L]]
+      ))
+    }
+    # A value the shared scale had to clip, ticked at the edge it ran off.
+    # Vertical, not horizontal: the reference limit is a horizontal rule and
+    # lands in the same neighbourhood whenever the cohort's tail is near it,
+    # and two horizontal marks a pixel apart read as one.
+    for (cx in geom$clip) {
+      parts <- c(parts, sprintf(
+        paste0('<line x1="%s" y1="0" x2="%s" y2="2.5" ',
+               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+        cx, cx
+      ))
+    }
+    for (cx in geom$clip_lo) {
+      parts <- c(parts, sprintf(
+        paste0('<line x1="%s" y1="%s" x2="%s" y2="%s" ',
+               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+        cx, h - 2.5, cx, h
+      ))
+    }
+    eot <- geom$eot
+  } else {
+    geom <- pp_cohort_band_geom(sub, marks, color, width, min_px)
+    if (length(geom$x)) {
+      parts <- c(parts, sprintf(
+        '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
+        geom$x, geom$w, h, esc(geom$fill)
+      ))
+    }
+    eot <- geom$eot
   }
 
   # End of treatment: the one treatment fact that carries information once
   # the study is complete. A patient still on treatment has no marker.
-  if (!is.na(geom$eot)) {
-    cx <- geom$eot
+  if (!is.na(eot)) {
+    cx <- eot
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(
@@ -530,7 +767,31 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
   )
 }
 
-#' The band's geometry, before it is drawn
+#' Where the axis puts a study day
+#'
+#' The one place the shared x axis is computed, so the SVG, the attribute and
+#' both band kinds can never disagree about where a day sits.
+#' @noRd
+pp_cohort_x_of <- function(marks, width) {
+  day0 <- marks$day0 %||% 0
+  span <- (marks$days %||% 1) - day0
+  if (!is.finite(span) || span <= 0) span <- 1
+  function(d) ((d - day0) / span) * width
+}
+
+#' The end-of-treatment marker's x, or `NA`
+#' @noRd
+pp_cohort_eot_x <- function(sub, marks, width) {
+  te <- sub$trt_end
+  day0 <- marks$day0 %||% 0
+  if (length(te) == 1L && is.finite(te) && te > day0 && te < marks$days) {
+    round(pp_cohort_x_of(marks, width)(te), 2)
+  } else {
+    NA_real_
+  }
+}
+
+#' The spans band's geometry, before it is drawn
 #'
 #' Split out of [pp_cohort_band_svg()] so the SVG and the compact attribute
 #' the client draws from ([pp_cohort_band_attr()]) can never disagree about
@@ -561,12 +822,10 @@ pp_cohort_band_svg <- function(sub, days, color, width = 176, height = 7,
 #' @return `list(x, w, fill, eot)` in px, the first three parallel and in
 #'   paint order; `eot` is `NA` when there is no marker to draw.
 #' @noRd
-pp_cohort_band_geom <- function(sub, days, color, width = 176, day0 = 0,
+pp_cohort_band_geom <- function(sub, marks, color, width = 176,
                                 min_px = 1.5) {
 
-  span <- days - day0
-  if (!is.finite(span) || span <= 0) span <- 1
-  x_of <- function(d) ((d - day0) / span) * width
+  x_of <- pp_cohort_x_of(marks, width)
 
   x <- numeric()
   w <- numeric()
@@ -622,21 +881,169 @@ pp_cohort_band_geom <- function(sub, days, color, width = 176, day0 = 0,
     fill <- kf[seq_len(k)]
   }
 
-  te <- sub$trt_end
-  eot <- if (length(te) == 1L && is.finite(te) && te > day0 && te < days) {
-    round(x_of(te), 2)
+  list(x = x, w = w, fill = fill,
+       eot = pp_cohort_eot_x(sub, marks, width))
+}
+
+#' A monotone cubic path through a series
+#'
+#' The curve the panel draws, in the strip. The findings charts are echarts
+#' lines with `smooth = TRUE, smoothMonotone = "x"` (see pp_render_findings),
+#' which is monotone cubic Hermite interpolation: it rounds the corners
+#' without ever overshooting a local extreme. A plain Catmull-Rom spline
+#' would be smoother and wrong -- it invents a dip below a patient's lowest
+#' recorded value, which on a lab strip is a reading nobody took.
+#'
+#' Tangents are the Fritsch-Carlson harmonic mean, clamped to zero at a
+#' turning point, which is what enforces the no-overshoot property.
+#'
+#' @section Duplicate days:
+#' Two records on the same study day give a zero-width interval and an
+#' infinite slope. The first is kept and the rest dropped, because the strip
+#' has one pixel there either way and a vertical segment inside a cubic is
+#' not a curve. The panel, which has room, still draws both.
+#'
+#' @param x,y Parallel px coordinates, `x` non-decreasing.
+#' @return An SVG path `d` string.
+#' @noRd
+pp_monotone_path <- function(x, y) {
+
+  keep <- c(TRUE, diff(x) > 0)
+  x <- x[keep]
+  y <- y[keep]
+  n <- length(x)
+
+  if (n == 0L) return("")
+  if (n == 1L) return(sprintf("M%s %s", x[[1L]], y[[1L]]))
+  if (n == 2L) {
+    return(sprintf("M%s %sL%s %s", x[[1L]], y[[1L]], x[[2L]], y[[2L]]))
+  }
+
+  h <- diff(x)
+  d <- diff(y) / h
+
+  m <- numeric(n)
+  m[[1L]] <- d[[1L]]
+  m[[n]] <- d[[n - 1L]]
+  for (i in seq_len(n - 2L) + 1L) {
+    if (d[[i - 1L]] * d[[i]] <= 0) {
+      # A turning point gets a flat tangent, so the curve cannot sail past
+      # the value that turned it.
+      m[[i]] <- 0
+    } else {
+      w1 <- 2 * h[[i]] + h[[i - 1L]]
+      w2 <- h[[i]] + 2 * h[[i - 1L]]
+      m[[i]] <- (w1 + w2) / (w1 / d[[i - 1L]] + w2 / d[[i]])
+    }
+  }
+
+  seg <- vapply(seq_len(n - 1L), function(i) {
+    dx <- h[[i]] / 3
+    sprintf("C%s %s %s %s %s %s",
+            round(x[[i]] + dx, 2), round(y[[i]] + dx * m[[i]], 2),
+            round(x[[i + 1L]] - dx, 2), round(y[[i + 1L]] - dx * m[[i + 1L]], 2),
+            x[[i + 1L]], y[[i + 1L]])
+  }, character(1L))
+
+  paste0(sprintf("M%s %s", x[[1L]], y[[1L]]), paste(seg, collapse = ""))
+}
+
+#' The series band's geometry, before it is drawn
+#'
+#' The line's points in px, the reference limit's y, and the x of every value
+#' the shared scale had to clip. Same split as [pp_cohort_band_geom()]: the
+#' server SVG and the client painter both format this and neither computes.
+#'
+#' A value outside the scale is drawn AT the edge and ticked, never dropped:
+#' a line that silently leaves out its highest point is the one reading a
+#' clinician must not get from a liver enzyme.
+#'
+#' @inheritParams pp_cohort_band_svg
+#' @param smooth Whether to round the corners ([pp_monotone_path()]) or join
+#'   the points with straight segments. Follows the profile's Straight /
+#'   Smooth toggle, the same setting the panels read.
+#' @return `list(path, dot, limit, clip, clip_lo, eot)`. `path` is an SVG
+#'   `d` string, so the server SVG and the client painter share one curve
+#'   rather than each interpolating the points. `eot` is always `NA` here:
+#'   the diamond belongs on a spans band, not over a line.
+#' @noRd
+pp_cohort_series_geom <- function(sub, marks, width = 176,
+                                  height = pp_cohort_band_h,
+                                  smooth = TRUE) {
+
+  # No end-of-treatment marker on a series band. The diamond earns its place
+  # on a spans band, where it sits on flat colour; over a line it lands ON
+  # the data, and the line already ends where the patient's records do.
+  none <- list(path = "", dot = numeric(), limit = NA_real_,
+               clip = numeric(), clip_lo = numeric(), eot = NA_real_)
+
+  ser <- sub$series
+  vlo <- marks$vlo
+  vhi <- marks$vhi
+  if (!is.finite(vlo %||% NA) || !is.finite(vhi %||% NA) || vhi <= vlo) {
+    return(none)
+  }
+
+  # Half a pixel of padding top and bottom -- enough that a value sitting on
+  # the scale's edge still draws its full 1.1px stroke inside the track, and
+  # no more. A full pixel each end cost 2 of the band's 13, which is 15% of
+  # the amplitude given away to whitespace.
+  y_of <- function(v) {
+    round(height - 0.5 - ((pmin(pmax(v, vlo), vhi) - vlo) / (vhi - vlo)) *
+            (height - 1), 2)
+  }
+  limit <- if (is.finite(marks$limit %||% NA) &&
+                 marks$limit > vlo && marks$limit < vhi) {
+    y_of(marks$limit)
   } else {
     NA_real_
   }
+  if (!is.data.frame(ser) || !nrow(ser)) {
+    none$limit <- limit
+    return(none)
+  }
 
-  list(x = x, w = w, fill = fill, eot = eot)
+  x_of <- pp_cohort_x_of(marks, width)
+  px <- round(pmin(pmax(x_of(ser$day), 0), width), 2)
+  py <- y_of(ser$value)
+
+  if (nrow(ser) == 1L) {
+    out <- none
+    out$limit <- limit
+    out$dot <- c(px[[1L]], py[[1L]])
+    return(out)
+  }
+
+  # The path, rounded or straight, chosen by the SAME setting the panels
+  # read: the gear's Straight / Smooth toggle. A strip curving above a panel
+  # drawing straight segments would be two different claims about the same
+  # eleven measurements.
+  path <- if (isTRUE(smooth)) {
+    pp_monotone_path(px, py)
+  } else {
+    paste0(sprintf("M%s %s", px[[1L]], py[[1L]]),
+           paste(sprintf("L%s %s", px[-1L], py[-1L]), collapse = ""))
+  }
+
+  # Ticked at BOTH ends. A value below the floor is as clipped as one above
+  # the ceiling, and marking only the ceiling made a patient whose albumin
+  # fell off the bottom look like one who simply flattened out.
+  list(
+    path = path,
+    dot = numeric(),
+    limit = limit,
+    clip = px[ser$value > vhi],
+    clip_lo = px[ser$value < vlo],
+    eot = NA_real_
+  )
 }
 
 #' The band as an attribute the client draws from
 #'
 #' The same geometry [pp_cohort_band_svg()] paints, as the shortest string
-#' that carries it: `x,w,fill` per span, space separated, and the
-#' end-of-treatment marker as its own attribute.
+#' that carries it: `x,w,fill` per span for a spans band, `x,y` per point for
+#' a series, and the extras (end of treatment, reference limit, clipped
+#' values) as their own attributes.
 #'
 #' @section Why the row does not ship its SVG:
 #' At 1251 patients the server-rendered bands were 32,232 `<rect>` elements,
@@ -653,17 +1060,44 @@ pp_cohort_band_geom <- function(sub, days, color, width = 176, day0 = 0,
 #' has to mean the size of the cohort.
 #'
 #' @inheritParams pp_cohort_band_svg
-#' @return `list(band, eot)` -- two attribute strings; `band` is `""` for a
-#'   patient with nothing to draw, which still renders the empty track.
+#' @return `list(band, eot, limit, clip, clip_lo)` -- attribute strings;
+#'   `band` is `""` for a patient with nothing to draw, which still renders
+#'   the empty track. `limit` and the clip marks are `NULL` for a spans
+#'   band, and `eot` is `NULL` for a series one.
 #' @noRd
-pp_cohort_band_attr <- function(sub, days, color, width = 176, day0 = 0,
-                                min_px = 1.5) {
-  geom <- pp_cohort_band_geom(sub, days, color, width, day0, min_px)
+pp_cohort_band_attr <- function(sub, marks, color, width = 176,
+                                height = pp_cohort_band_h, min_px = 1.5,
+                                smooth = TRUE) {
+  if (identical(marks$kind, "series")) {
+    geom <- pp_cohort_series_geom(sub, marks, width, height, smooth)
+    # The path, already interpolated. The curve is computed ONCE, here, and
+    # the client only sets it as a `d` -- so the server SVG and the row the
+    # browser paints cannot round the same points differently.
+    band <- geom$path
+    return(list(
+      band = band,
+      # A one-visit series is a dot, and a zero-length path is not a
+      # dependable way to say so across browsers.
+      dot = if (length(geom$dot)) paste(geom$dot, collapse = ","),
+      eot = if (is.na(geom$eot)) NULL else as.character(geom$eot),
+      limit = if (is.na(geom$limit)) NULL else as.character(geom$limit),
+      clip = if (length(geom$clip)) paste(geom$clip, collapse = " "),
+      clip_lo = if (length(geom$clip_lo)) {
+        paste(geom$clip_lo, collapse = " ")
+      }
+    ))
+  }
+  geom <- pp_cohort_band_geom(sub, marks, color, width, min_px)
   list(
     band = paste(geom$x, geom$w, geom$fill, sep = ",", collapse = " "),
-    eot = if (is.na(geom$eot)) NULL else as.character(geom$eot)
+    dot = NULL,
+    eot = if (is.na(geom$eot)) NULL else as.character(geom$eot),
+    limit = NULL,
+    clip = NULL,
+    clip_lo = NULL
   )
 }
+
 
 #' The cohort list's rows, as HTML
 #'
@@ -689,10 +1123,12 @@ pp_cohort_band_attr <- function(sub, days, color, width = 176, day0 = 0,
 #' @param color A resolver from [pp_cohort_sev_color()].
 #' @param arm_col Arm colours from [pp_cohort_arm_colors()].
 #' @param picked The selected USUBJID, or `NULL`/`character()`.
+#' @param smooth Round a series band's corners; follows the profile's
+#'   Straight / Smooth toggle.
 #' @return An `HTML` string.
 #' @noRd
 pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
-                                picked = NULL) {
+                                picked = NULL, smooth = TRUE) {
 
   has <- function(col) col %in% names(frame)
   chr <- function(col) {
@@ -712,12 +1148,32 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   # rects cost.
   bands <- lapply(id, function(x) {
     pp_cohort_band_attr(
-      marks$subjects[[x]] %||% list(events = NULL, trt_end = NA),
-      marks$days, color, day0 = marks$day0
+      marks$subjects[[x]] %||% list(events = NULL, series = NULL,
+                                    trt_end = NA),
+      marks, color, smooth = smooth
     )
   })
   band <- vapply(bands, function(b) b$band, character(1L))
+  dot <- vapply(bands, function(b) b$dot %||% "", character(1L))
   eot <- vapply(bands, function(b) b$eot %||% "", character(1L))
+  limit <- vapply(bands, function(b) b$limit %||% "", character(1L))
+  clip <- vapply(bands, function(b) b$clip %||% "", character(1L))
+  clip_lo <- vapply(bands, function(b) b$clip_lo %||% "", character(1L))
+
+  # How many of this patient's records the panel's search matched. Present
+  # only while a search is running, and printed even when it is zero: an
+  # empty band with no number beside it reads as "no data", and the whole
+  # point of the count is to tell that apart from "none of what you asked
+  # for".
+  hits <- marks$hits
+  hit_txt <- if (!is.null(hits)) {
+    n <- hits[id]
+    n[is.na(n)] <- 0L
+    sprintf('<span class="pp-pt-hits">%s</span>',
+            ifelse(n > 0L, as.character(n), "\u2013"))
+  } else {
+    rep("", length(id))
+  }
 
   # The chip when the study has a code, a colour swatch when it does not.
   # Same information either way; only one of them needs a legend, which is
@@ -744,6 +1200,9 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     )
   )
 
+  h <- pp_cohort_band_h
+  kind <- if (identical(marks$kind, "series")) " data-band-kind=\"series\"" else ""
+
   html <- sprintf(
     paste0(
       # The selected class is stamped once here and MOVED by the
@@ -751,29 +1210,35 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       '<div class="pp-pt%s" data-usubjid="%s"',
       # Search matches the same text a reader sees, plus the arm, which is
       # not printed in full anywhere in the row.
-      ' data-search-text="%s" data-band="%s"%s',
+      ' data-search-text="%s" data-band="%s"%s%s%s%s%s', kind,
       # The tooltip carries the id in full, always: the row shows the part
       # that varies, never the whole thing.
       ' title="%s">',
       '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
-      '<span class="pp-pt-gap"></span>%s</div>',
-      # The empty track, always: the row is 38px tall whether or not its band
-      # has been drawn, so filling one in later never moves the list under
-      # the cursor.
-      '<svg class="pp-pt-band" width="176" height="7" viewBox="0 0 176 7"',
+      '<span class="pp-pt-gap"></span>%s%s</div>',
+      # The empty track, always: the row keeps its height whether or not its
+      # band has been drawn, so filling one in later never moves the list
+      # under the cursor.
+      '<svg class="pp-pt-band" width="176" height="', h,
+      '" viewBox="0 0 176 ', h, '"',
       ' preserveAspectRatio="none" aria-hidden="true">',
-      '<rect x="0" y="0" width="176" height="7" rx="2"',
+      '<rect x="0" y="0" width="176" height="', h, '" rx="2"',
       ' fill="var(--pp-cohort-track, #f3f4f6)"/></svg></div>'
     ),
     ifelse(id %in% picked, " is-selected", ""),
     esca(id),
     esca(tolower(paste(id, demo, arm, code))),
     esca(band),
+    ifelse(nzchar(dot), sprintf(' data-dot="%s"', esca(dot)), ""),
     ifelse(nzchar(eot), sprintf(' data-eot="%s"', esca(eot)), ""),
+    ifelse(nzchar(limit), sprintf(' data-limit="%s"', esca(limit)), ""),
+    ifelse(nzchar(clip), sprintf(' data-clip="%s"', esca(clip)), ""),
+    ifelse(nzchar(clip_lo), sprintf(' data-clip-lo="%s"', esca(clip_lo)), ""),
     esca(ifelse(nzchar(arm), paste0(id, " · ", arm), id)),
     esc(shown),
     ifelse(nzchar(demo),
            sprintf('<span class="pp-pt-demo">%s</span>', esc(demo)), ""),
+    hit_txt,
     badge
   )
 

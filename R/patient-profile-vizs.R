@@ -1605,6 +1605,26 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
         # or column is called that.
         search = paste(c(label, codes, labels), collapse = " "),
         params = stats::setNames(labels, codes),
+        # The cohort strip draws the parameter this card draws FIRST, on the
+        # same shared axis as every other row.
+        #
+        # "First" is the panel's first CHART, not the card's first chip. The
+        # two differ: the chips are ordered by parameter name and the charts
+        # by PARAMCD (pp_render_findings() sorts them), so a Chemistry card
+        # leads with the Alanine Aminotransferase chip and the Albumin plot.
+        # Taking codes[[1]] captioned the strip "Chemistry . ALT" above a
+        # panel whose top chart was ALB -- the band and the panel naming
+        # different parameters for the same card.
+        #
+        # Fixed at declaration rather than read off the chip selection: the
+        # strip is a property of the cohort and 254 rows cannot re-derive on
+        # every chip click. So it follows the card's DEFAULT selection, which
+        # is what the panel shows when it opens.
+        band = local({
+          shown <- sort(utils::head(codes, pp_group_default_n))
+          first <- shown[[1L]]
+          pp_band_series(tbl_name, first, labels[[match(first, codes)]])
+        }),
         tables = tbl_name,
         requires = stats::setNames(list(c("PARAMCD", "AVAL", "ADT")),
                                    tbl_name),

@@ -55,6 +55,13 @@
 #'   gantts declare a full coding ladder (see [pp_lane_control()]) without
 #'   promising every study a switch. `"pill"` cycles its choices in place,
 #'   one per click, wrapping.
+#' @param band How this viz draws in the sidebar's cohort strip, from
+#'   [pp_band_spans()] or [pp_band_series()], or `NULL` for a viz that has no
+#'   strip form. The cohort band draws the FIRST selected viz that declares
+#'   one (see [pp_cohort_band_source()]), so a viz whose picture cannot be
+#'   reduced to 176px of one row -- the patient overview's several lanes, a
+#'   table, a heatmap with no single series -- declares nothing and is
+#'   skipped rather than drawn badly.
 #' @param legend_ui Optional `function(dm_obj, settings)` returning a tag (or
 #'   `NULL`) for the panel header, e.g. a severity legend. Declared here so
 #'   the block needs no per-viz special cases.
@@ -84,6 +91,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
                        optional = list(),
                        requires_any = list(),
                        uses = character(),
+                       band = NULL,
                        controls = NULL,
                        legend_ui = NULL,
                        render,
@@ -102,6 +110,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
     all(vapply(requires, is.character, logical(1L))),
     all(vapply(optional, is.character, logical(1L))),
     is.character(uses),
+    is.null(band) || inherits(band, "pp_band"),
     is.null(legend_ui) || is.function(legend_ui),
     is.function(render),
     is.null(exhibit) || is.function(exhibit)
@@ -112,7 +121,7 @@ new_pp_viz <- function(id, label, domain, icon, color, description,
       description = description, tables = tables,
       search = search, params = params,
       requires = requires, optional = optional, requires_any = requires_any,
-      uses = uses, controls = controls, legend_ui = legend_ui,
+      uses = uses, band = band, controls = controls, legend_ui = legend_ui,
       render = render, exhibit = exhibit, exhibit_kind = exhibit_kind
     ),
     class = c("pp_viz", "list")

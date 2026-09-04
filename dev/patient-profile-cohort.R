@@ -55,6 +55,11 @@ pp_port <- local({
 
 options(
   shiny.port = pp_port,
+  # 0.0.0.0, not the default loopback: the devcontainer's port forward cannot
+  # reach a container-loopback bind, so a 127.0.0.1 app is invisible from the
+  # host browser however free the port is. Same line every other dev script
+  # in the workspace carries.
+  shiny.host = "0.0.0.0",
   "g6R.preserve_elements_position" = TRUE
 )
 message("Patient profile cohort demo on http://127.0.0.1:", pp_port, "/")
