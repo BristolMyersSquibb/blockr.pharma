@@ -2298,6 +2298,8 @@ new_patient_profile_block <- function(selected = NULL,
             var cohortWellId = '", ns("pp_cohort_well"), "';
             var chartAreaId = '", ns("chart_area"), "';
             var syncBandMsgId = '", ns("sync_band"), "';
+            var addOnId = '", ns("pp_add_on"), "';
+            var GRIP_SVG = '", pp_grip_glyph(), "';
             var syncSubjectMsgId = '", ns("sync_subject"), "';
             var syncMsgId = '", ns("sync_selected"), "';
             var syncParamsMsgId = '", ns("sync_params"), "';
@@ -2731,6 +2733,128 @@ new_patient_profile_block <- function(selected = NULL,
             var lastSelected = [];
             var lastParamOn = [];
 
+            // The picker's own ordered list of what is on the profile.
+            //
+            // Built here rather than server-side because the order changes on
+            // every drag, and the catalogue below it is rendered once per
+            // study. Labels come from the catalogue's own rows, so there is
+            // one source for them.
+            function addLabels(){
+              var map = {};
+              addRows().forEach(function(r){
+                if (r.getAttribute('data-kind') !== 'panel') return;
+                var dot = r.querySelector('.pp-add-dot');
+                map[r.getAttribute('data-viz-id')] = {
+                  label: r.querySelector('.pp-add-name').textContent,
+                  colour: dot ? dot.style.background : ''
+                };
+              });
+              return map;
+            }
+
+            function renderAddOn(){
+              var host = document.getElementById(addOnId);
+              if (!host) return;
+              var map = addLabels();
+              host.innerHTML = '';
+              lastSelected.forEach(function(id){
+                var m = map[id];
+                if (!m) return;
+                var row = document.createElement('div');
+                row.className = 'pp-add-ord';
+                row.setAttribute('data-viz-id', id);
+                var grip = document.createElement('span');
+                grip.className = 'pp-add-ord-grip';
+                grip.innerHTML = GRIP_SVG;
+                var dot = document.createElement('span');
+                dot.className = 'pp-add-dot';
+                dot.style.background = m.colour;
+                var name = document.createElement('span');
+                name.className = 'pp-add-name';
+                name.textContent = m.label;
+                var x = document.createElement('button');
+                x.className = 'pp-add-ord-x';
+                x.type = 'button';
+                x.title = 'Remove';
+                x.innerHTML = '&times;';
+                row.appendChild(grip); row.appendChild(dot);
+                row.appendChild(name); row.appendChild(x);
+                host.appendChild(row);
+              });
+              var wrap = host.parentElement;
+              if (wrap) {
+                var inp = document.getElementById(addInputId);
+                var q = inp ? inp.value : '';
+                // While searching, the results answer the question and the
+                // ordered list is chrome in the way.
+                wrap.classList.toggle('is-hidden',
+                  !!q.trim() || !lastSelected.length);
+              }
+            }
+
+            // Reordering inside the picker. The same pointer drag the panels
+            // themselves use, over 28px rows instead of 400px charts -- which
+            // is the whole reason to offer it here as well.
+            $(document).on('mousedown', '#' + addOnId + ' .pp-add-ord',
+              function(e) {
+                if (e.target.closest('button')) return;
+                e.preventDefault();
+                var host = document.getElementById(addOnId);
+                var rows = [].slice.call(host.children);
+                var from = rows.indexOf(this);
+                if (from < 0 || rows.length < 2) return;
+                this.classList.add('is-dragging');
+                var to = from;
+
+                function mark(y){
+                  rows.forEach(function(r){
+                    r.classList.remove('is-over', 'is-over-last');
+                  });
+                  to = rows.length;
+                  for (var i = 0; i < rows.length; i++) {
+                    if (i === from) continue;
+                    var bx = rows[i].getBoundingClientRect();
+                    if (y < bx.top + bx.height / 2) {
+                      rows[i].classList.add('is-over'); to = i; return;
+                    }
+                  }
+                  rows[rows.length - 1].classList.add('is-over-last');
+                }
+                mark(e.clientY);
+
+                function move(ev){ mark(ev.clientY); }
+                function up(){
+                  document.removeEventListener('mousemove', move);
+                  document.removeEventListener('mouseup', up);
+                  rows.forEach(function(r){
+                    r.classList.remove('is-dragging', 'is-over',
+                                       'is-over-last');
+                  });
+                  if (to !== from && to !== from + 1) {
+                    var ids = rows.map(function(r){
+                      return r.getAttribute('data-viz-id'); });
+                    var t = to;
+                    var moved = ids.splice(from, 1)[0];
+                    if (from < t) t -= 1;
+                    ids.splice(t, 0, moved);
+                    lastSelected = ids;
+                    renderAddOn();
+                    Shiny.setInputValue(reorderInputId, ids,
+                                        {priority: 'event'});
+                  }
+                }
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+              });
+
+            $(document).on('click', '#' + addOnId + ' .pp-add-ord-x',
+              function(e) {
+                e.stopPropagation();
+                Shiny.setInputValue(toggleInputId,
+                  this.parentElement.getAttribute('data-viz-id'),
+                  {priority: 'event'});
+              });
+
             function paintAddTicks(){
               addRows().forEach(function(r){
                 var id = r.getAttribute('data-viz-id');
@@ -2740,8 +2864,10 @@ new_patient_profile_block <- function(selected = NULL,
                   : lastSelected.indexOf(id) >= 0;
                 r.classList.toggle('is-on', on);
               });
+              renderAddOn();
             }
             function filterAdd(){
+              renderAddOn();
               var pop = document.getElementById(addPopId);
               if (!pop) return;
               var inp = document.getElementById(addInputId);
@@ -2750,15 +2876,24 @@ new_patient_profile_block <- function(selected = NULL,
               addRows().forEach(function(r){
                 total++;
                 var hay = r.getAttribute('data-search-text') || '';
-                // No query: panels only. A study's whole parameter set is
-                // not a menu, and the panels ARE the old AVAILABLE list.
-                var ok = q ? hay.indexOf(q) >= 0
-                           : r.getAttribute('data-kind') === 'panel';
+                // No query: the panels you could ADD. Parameters stay out --
+                // a study's whole parameter set is not a menu -- and so do
+                // the panels already on the profile, because they are listed
+                // above in their own order. Searching shows everything that
+                // matches, ticked or not, so a hit is never missing.
+                var ok = q
+                  ? hay.indexOf(q) >= 0
+                  : (r.getAttribute('data-kind') === 'panel' &&
+                     lastSelected.indexOf(r.getAttribute('data-viz-id')) < 0);
                 r.classList.toggle('is-hidden', !ok);
                 if (ok) shown++;
               });
-              // A group heading with nothing under it is noise.
-              pop.querySelectorAll('.pp-add-group').forEach(function(g){
+              // A group heading with nothing under it is noise. Scoped to
+              // the catalogue: the ordered list's own heading is followed by
+              // a container rather than by rows, and this walk would always
+              // decide it was empty.
+              pop.querySelectorAll('.pp-add-results .pp-add-group')
+                .forEach(function(g){
                 var any = false, n = g.nextElementSibling;
                 while (n && n.classList.contains('pp-add-row')) {
                   if (!n.classList.contains('is-hidden')) { any = true; break; }

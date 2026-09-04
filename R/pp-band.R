@@ -367,6 +367,16 @@ pp_add_picker_ui <- function(avail, ns) {
         }
       )
     ),
+    # What is on the profile, in profile order, and draggable.
+    #
+    # Filled by the client rather than rendered here: the order changes on
+    # every drag and this catalogue is deliberately rendered once, so the
+    # section that has to follow the order cannot be part of it.
+    shiny::div(
+      class = "pp-add-on-wrap",
+      shiny::div(class = "pp-add-group", "On the profile"),
+      shiny::div(class = "pp-add-on", id = ns("pp_add_on"))
+    ),
     shiny::div(class = "pp-add-results", panel_rows, param_rows),
     shiny::div(class = "pp-add-none", "Nothing matches"),
     shiny::div(
