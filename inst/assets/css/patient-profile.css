@@ -1505,11 +1505,28 @@
 }
 
 .pp-cohort-well {
-  /* Exactly 5 rows: 5 x 44px (the row is border-box, so its 1px borders are
-     inside that) plus the well's own 5px bottom padding. A half-visible row
-     at the fold reads as a rendering fault rather than as "there is more",
-     which is what the scrollbar is for. */
-  max-height: 225px;
+  /* The well grows with the SCREEN rather than holding a fixed five rows.
+     
+     It was `max-height: 225px`, so a taller monitor bought the cohort
+     nothing: the panel list below kept its size and the spare pixels went
+     nowhere. Five rows of 254 patients is 2% of the study, on a strip that
+     now carries the band, the search and the hit counts.
+     
+     Viewport units rather than `flex: 1`, because there is nothing to flex
+     against: `.pp-layout` and every ancestor up to the card body are
+     content-height (the block sits in an accordion that grows), so a
+     flexible well simply expanded to all 254 rows -- 11,182px of sidebar.
+     The subtrahend is the rest of the page at this width: the block header
+     and the sidebar's own chrome above the well, plus the room the panel
+     list needs below it before it starts scrolling.
+     
+     The floor matters as much as the growth, and it is the height this
+     rule replaces: five rows. A first cut floored at three, which on a
+     laptop gave FEWER patients than the fixed height did -- an improvement
+     on big screens paid for on small ones. Floored here instead, the change
+     can only ever add rows. */
+  max-height: max(225px, calc(100vh - 660px));
+  min-height: 225px; /* 5 x 44px + the well's own 5px bottom padding */
   overflow-y: auto;
   /* Never sideways. A row that cannot fit must shrink or ellipsize, and the
      rules below make sure it can -- a horizontal scrollbar in a 232px
@@ -1519,7 +1536,6 @@
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
-
 .pp-cohort-well::-webkit-scrollbar {
   width: 7px;
 }
@@ -1840,3 +1856,4 @@
 .pp-chart-panel.recalculating {
   opacity: 1 !important;
 }
+

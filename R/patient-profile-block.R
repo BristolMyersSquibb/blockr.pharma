@@ -2250,9 +2250,7 @@ new_patient_profile_block <- function(selected = NULL,
             ),
 
             # The cohort. Above the panels because it is what you come back
-            # to: panels are set once, patients are stepped through. Fixed
-            # height so the panel list below never gets squeezed out by a
-            # 200-patient study; the well scrolls instead.
+            # to: panels are set once, patients are stepped through.
             shiny::div(class = "pp-sidebar-section",
               shiny::div(class = "pp-section-head",
                 shiny::span(class = "pp-section-title", "Cohort"),
