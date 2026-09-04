@@ -2645,6 +2645,30 @@ new_patient_profile_block <- function(selected = NULL,
             function addRows(){
               return document.querySelectorAll('#' + addPopId + ' .pp-add-row');
             }
+
+            // What is on the profile, REMEMBERED.
+            //
+            // The ticks used to be painted only when sync_selected arrived,
+            // which is on change -- and the one at boot lands before the
+            // picker's rows exist, so its marks went nowhere. Opening the
+            // picker then showed nothing ticked, and clicking a panel that
+            // WAS on the profile removed it -- the row offered to add and did
+            // the opposite. Same fix the parameter check marks already use:
+            // keep the last state and re-apply it whenever there is something
+            // to apply it to.
+            var lastSelected = [];
+            var lastParamOn = [];
+
+            function paintAddTicks(){
+              addRows().forEach(function(r){
+                var id = r.getAttribute('data-viz-id');
+                var on = r.getAttribute('data-kind') === 'param'
+                  ? lastParamOn.indexOf(
+                      id + '@@' + r.getAttribute('data-paramcd')) >= 0
+                  : lastSelected.indexOf(id) >= 0;
+                r.classList.toggle('is-on', on);
+              });
+            }
             function filterAdd(){
               var pop = document.getElementById(addPopId);
               if (!pop) return;
@@ -2682,6 +2706,7 @@ new_patient_profile_block <- function(selected = NULL,
               pop.classList.toggle('is-open', on);
               $('#' + addBtnId).toggleClass('is-open', on);
               if (on) {
+                paintAddTicks();
                 var inp = document.getElementById(addInputId);
                 if (inp) { inp.value = ''; filterAdd(); inp.focus(); }
               }
@@ -2707,8 +2732,18 @@ new_patient_profile_block <- function(selected = NULL,
               var kind = this.getAttribute('data-kind');
               var vizId = this.getAttribute('data-viz-id');
               // Optimistic, so the tick lands at click speed; the server
-              // confirms through sync_selected a flush later.
-              this.classList.toggle('is-on');
+              // confirms through sync_selected a flush later. The remembered
+              // state moves with it, or reopening the picker would repaint
+              // the row back to what it was.
+              var nowOn = !this.classList.contains('is-on');
+              this.classList.toggle('is-on', nowOn);
+              if (kind === 'panel') {
+                var at = lastSelected.indexOf(vizId);
+                if (nowOn && at < 0) lastSelected = lastSelected.concat([vizId]);
+                if (!nowOn && at >= 0) lastSelected = lastSelected.filter(
+                  function(x){ return x !== vizId; });
+                $('#' + addBtnId + ' .pp-add-n').text(lastSelected.length || '');
+              }
               if (kind === 'param') {
                 Shiny.setInputValue(pickParamInputId, {
                   viz_id: vizId, paramcd: this.getAttribute('data-paramcd')
@@ -2905,6 +2940,10 @@ new_patient_profile_block <- function(selected = NULL,
               // replaced; put the caret back in it.
               if (e.name && e.name.indexOf('viz_slot_') >= 0) {
                 setTimeout(restoreSearch, 0);
+              }
+              // A fresh catalogue arrives with nothing ticked.
+              if (e.name && e.name.indexOf('panel_picker') >= 0) {
+                setTimeout(function(){ paintAddTicks(); filterAdd(); }, 0);
               }
             });
 
@@ -3375,6 +3414,8 @@ new_patient_profile_block <- function(selected = NULL,
               if (!keys) keys = [];
               if (typeof keys === 'string') keys = [keys];
               lastParamKeys = keys;
+              lastParamOn = keys;
+              paintAddTicks();
               applyParamChecks();
             });
 
@@ -3385,12 +3426,9 @@ new_patient_profile_block <- function(selected = NULL,
 
               // The + button says how many cards are on the profile, and the
               // picker ticks the ones that are.
+              lastSelected = selected;
               $('#' + addBtnId + ' .pp-add-n').text(selected.length || '');
-              addRows().forEach(function(r){
-                if (r.getAttribute('data-kind') !== 'panel') return;
-                r.classList.toggle('is-on',
-                  selected.indexOf(r.getAttribute('data-viz-id')) >= 0);
-              });
+              paintAddTicks();
 
               var $layout = $('#' + layoutId);
               var $activeList = $layout.find('.pp-active-list');
