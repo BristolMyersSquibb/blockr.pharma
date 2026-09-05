@@ -611,8 +611,21 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
   })
   names(subjects) <- ids
 
+  # Each patient's highest and lowest, so the list can be ranked by the
+  # picture it is drawing. Cheap here -- the values are already in hand and
+  # grouped -- and impossible later: the cohort FRAME carries adverse-event
+  # facts and knows nothing about a lab parameter.
+  hi <- stats::setNames(rep(NA_real_, length(ids)), ids)
+  lo <- hi
+  ok <- !is.na(at)
+  if (any(ok)) {
+    hi[unique(at[ok])] <- tapply(value[ok], at[ok], max)
+    lo[unique(at[ok])] <- tapply(value[ok], at[ok], min)
+  }
+
   list(kind = "series", day0 = day0, days = days, vlo = vlo, vhi = vhi,
-       limit = limit, param = band$param, subjects = subjects)
+       limit = limit, param = band$param, subjects = subjects,
+       stat = list(high = hi, low = lo))
 }
 
 # ---------------------------------------------------------------------------
@@ -1125,10 +1138,13 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
 #' @param picked The selected USUBJID, or `NULL`/`character()`.
 #' @param smooth Round a series band's corners; follows the profile's
 #'   Straight / Smooth toggle.
+#' @param sort_by The current sort key, whose per-patient value the row
+#'   prints beside the band.
 #' @return An `HTML` string.
 #' @noRd
 pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
-                                picked = NULL, smooth = TRUE) {
+                                picked = NULL, smooth = TRUE,
+                                sort_by = "id") {
 
   has <- function(col) col %in% names(frame)
   chr <- function(col) {
@@ -1172,7 +1188,16 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     sprintf('<span class="pp-pt-hits">%s</span>',
             ifelse(n > 0L, as.character(n), "\u2013"))
   } else {
-    rep("", length(id))
+    # What the list was sorted by, in the same slot. Ordering 254 rows by a
+    # peak and printing no peak asks the reader to take the order on faith.
+    # The search count wins the slot when there is one: it is the transient
+    # thing, and it answers the question that was just asked.
+    val <- pp_cohort_sort_values(frame, ord, sort_by, marks)
+    if (is.null(val)) {
+      rep("", length(id))
+    } else {
+      sprintf('<span class="pp-pt-val">%s</span>', esc(val))
+    }
   }
 
   # The chip when the study has a code, a colour swatch when it does not.
@@ -1255,10 +1280,26 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
 #' @param by One of `"id"`, `"worst"`, `"ae"`, `"duration"`, `"arm"`.
 #' @return An integer index vector.
 #' @noRd
-pp_cohort_order <- function(frame, by = "id") {
+pp_cohort_order <- function(frame, by = "id", marks = NULL) {
   n <- nrow(frame)
   if (!n) return(integer())
   has <- function(col) col %in% names(frame)
+
+  # A series key ranks by what the STRIP is drawing, which the frame does not
+  # carry -- the frame is adverse-event facts and demography. The per-patient
+  # peak and trough come from the marks, computed where the values already
+  # were (see pp_cohort_series_marks).
+  stat <- marks$stat[[by]]
+  if (!is.null(stat)) {
+    v <- unname(stat[frame$USUBJID])
+    # Highest first, lowest first; a patient with no values for this
+    # parameter sorts last either way rather than winning by being empty.
+    return(if (identical(by, "low")) {
+      order(v, frame$USUBJID, na.last = TRUE)
+    } else {
+      order(-v, frame$USUBJID, na.last = TRUE)
+    })
+  }
   # Descending for every signal ordering: the point of sorting by AE burden
   # is to see the burdened patients, not the untouched ones.
   ord <- switch(
@@ -1275,27 +1316,110 @@ pp_cohort_order <- function(frame, by = "id") {
   ord %||% order(frame$USUBJID)
 }
 
-#' The sort keys the list offers, given what the data supports
+#' The sort keys the list offers, given what the strip is drawing
 #'
-#' THREE, at most, and that is a consequence of the control: the sort is a
-#' click-through pill, so every extra rung is another click to walk past on
-#' the way to the one you want. Id because it is the order a reader can
-#' predict, then the two that answer "who should I look at" -- how bad it got
-#' and how much of it there was.
+#' Sorting is not ordering for its own sake: it is what puts the patients
+#' worth looking at at the top of 254. Which ones those are depends entirely
+#' on the picture, so the ladder follows the band rather than being fixed.
 #'
-#' Days on treatment and arm were dropped rather than forgotten. The band
-#' already draws the end-of-treatment diamond, so early stops are findable by
-#' eye; and arm is a grouping, which is a different control from a sort.
+#' It was fixed, and written when the strip was always adverse events -- so a
+#' profile showing a liver enzyme still offered to sort by worst severity and
+#' event count, neither of which was on screen.
 #'
-#' A key whose column is missing is not offered, rather than offered and
-#' silently falling back to id.
+#' @section Peak and trough, not a direction:
+#' A series is worth ranking from both ends: a peak matters for a liver
+#' enzyme, a trough for haemoglobin or neutrophils. That could be one key and
+#' an ascending / descending switch, and should not be -- a direction control
+#' asks the reader to work out what is being ordered and which way round.
+#' Two rungs that say what you get need no explanation.
+#'
+#' They are named as values, "Peak value" and "Lowest value", because the
+#' rung beside them is "Patient id": a pill cycling id, Highest, Lowest reads
+#' as three unrelated words, where three noun phrases read as one ladder.
+#'
+#' THREE at most, still, and that is a consequence of the control: the sort is
+#' a click-through pill, so every extra rung is another click to walk past on
+#' the way to the one you want.
+#'
+#' @param frame A [pp_cohort_frame()] result.
+#' @param kind The band's kind (`"spans"`, `"series"`, or `"none"`).
 #' @noRd
-pp_cohort_sort_choices <- function(frame) {
+#' The sort key, in the form the caption row prints it
+#'
+#' The control reads "by peak", not "by Peak value": it is a clause in a
+#' sentence that already says what the strip draws, so the rung's full name
+#' would repeat the word value twice in eight words.
+#'
+#' @param key A key from [pp_cohort_sort_choices()].
+#' @return A lower-case fragment.
+#' @noRd
+pp_cohort_sort_short <- function(key) {
+  switch(key,
+    id = "patient id",
+    high = "peak",
+    low = "lowest",
+    worst = "severity",
+    ae = "event count",
+    duration = "exposure",
+    arm = "arm",
+    key
+  )
+}
+
+#' What one patient's row prints for the current sort key
+#'
+#' Sorting by peak ALT and not printing the peak asks the reader to take the
+#' order on faith. Every key here is already computed -- a series key from
+#' the marks, an adverse-event key from the frame -- so the row spends a
+#' lookup rather than a derivation.
+#'
+#' `NULL` when the key ranks by something the row already prints (the id) or
+#' by nothing the reader would read as a value.
+#'
+#' @param frame A [pp_cohort_frame()] result.
+#' @param ord Row order from [pp_cohort_order()].
+#' @param by The current sort key.
+#' @param marks A [pp_cohort_marks()] result.
+#' @return A character vector, one per row, or `NULL`.
+#' @noRd
+pp_cohort_sort_values <- function(frame, ord, by, marks = NULL) {
+  if (identical(by, "id")) return(NULL)
+  stat <- marks$stat[[by]]
+  if (!is.null(stat)) {
+    v <- unname(stat[frame$USUBJID[ord]])
+    # One at a time, because format() on a vector pads to a common width and
+    # printed a peak of 51.2 as 51.20 to line up with 4.99 -- three
+    # significant digits, and no more than the value has.
+    return(vapply(v, function(x) {
+      if (is.na(x)) "\u2013" else format(signif(x, 3L), trim = TRUE)
+    }, character(1L), USE.NAMES = FALSE))
+  }
+  if (identical(by, "worst") && "AE_WORST" %in% names(frame)) {
+    # One at a time: pp_sev_label() branches on its argument, so handing it
+    # 254 severities took the first one's branch for all of them -- and
+    # under R 4.2 threw, which blanked the whole list.
+    sev <- as.character(frame$AE_WORST)[ord]
+    return(vapply(sev, function(x) {
+      if (is.na(x) || !nzchar(x)) "\u2013" else pp_sev_label(x)
+    }, character(1L), USE.NAMES = FALSE))
+  }
+  if (identical(by, "ae") && "AE_N" %in% names(frame)) {
+    n <- frame$AE_N[ord]
+    return(ifelse(is.na(n), "\u2013", as.character(n)))
+  }
+  NULL
+}
+
+pp_cohort_sort_choices <- function(frame, kind = "spans") {
   out <- c(id = "Patient id")
+  if (identical(kind, "series")) {
+    return(c(out, high = "Peak value", low = "Lowest value"))
+  }
   if ("AE_WORST" %in% names(frame)) out <- c(out, worst = "Worst severity")
   if ("AE_N" %in% names(frame)) out <- c(out, ae = "Event count")
   out
 }
+
 
 #' Chip colours for an arm
 #'

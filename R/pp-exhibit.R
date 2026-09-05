@@ -299,7 +299,10 @@ pp_exhibit_one_patient <- function(scoped, subj, catalog, selected,
     )
     if (is.null(p)) next
     plots[[viz_id]] <- p
-    labels[[viz_id]] <- viz$label
+    # A slide has one line for a title, so a parameter card spends it on
+    # both halves of its name: ALB is what the profile calls the card, and
+    # a reviewer reading the deck cold needs the words after it.
+    labels[[viz_id]] <- pp_viz_full_label(viz)
   }
 
   if (!length(plots)) {

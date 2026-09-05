@@ -985,6 +985,12 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   # be read than it does stacked with others.
   grid_height <- 140
   grid_gap <- 50
+  # Room above each grid for the grid's own title, and none when there is
+  # one grid: since a parameter is a card, the card's header already prints
+  # ALB and Albumin (g/L) thirty pixels above, and the chart was saying it
+  # again. A stacked panel keeps its titles, where they are the only thing
+  # telling one series from the next.
+  title_lead <- if (n_params > 1L) 20 else 0
   top_pad <- 10
   bot_pad <- 30
   total_height <- top_pad + n_params * (grid_height + grid_gap) + bot_pad
@@ -1002,22 +1008,25 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     grid_idx <- p_idx - 1L
     color <- line_color
 
-    grid_top <- top_pad + 20 + grid_idx * (grid_height + grid_gap)
+    grid_top <- top_pad + title_lead + grid_idx * (grid_height + grid_gap)
 
-    # Subtitle: PARAMCD with short PARAM description
-    param_label <- if (has_param && nrow(p_data) > 0) {
-      full <- as.character(p_data$PARAM[1])
-      if (nchar(full) > 40) full <- paste0(substr(full, 1, 37), "...")
-      paste0(param, " \u2014 ", full)
-    } else {
-      param
+    # Subtitle: PARAMCD with short PARAM description. Only on a stack --
+    # see title_lead.
+    if (title_lead > 0) {
+      param_label <- if (has_param && nrow(p_data) > 0) {
+        full <- as.character(p_data$PARAM[1])
+        if (nchar(full) > 40) full <- paste0(substr(full, 1, 37), "...")
+        paste0(param, " \u2014 ", full)
+      } else {
+        param
+      }
+      titles[[length(titles) + 1L]] <- list(
+        text = param_label,
+        left = PP_GRID_LEFT,
+        top = grid_top - 18,
+        textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
+      )
     }
-    titles[[p_idx]] <- list(
-      text = param_label,
-      left = PP_GRID_LEFT,
-      top = grid_top - 18,
-      textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
-    )
 
     grids[[p_idx]] <- list(
       left = PP_GRID_LEFT, right = 20,
@@ -1604,15 +1613,21 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
 
         vizs[[viz_id]] <- new_pp_viz(
           id = viz_id,
-          # The card says which group it came from and which parameter it is;
-          # the full name rides behind as the sublabel, because "Chemistry ·
-          # ALT" is what a reader scans a stack of twelve cards by.
-          label = paste0(group_label, " \u00b7 ", code),
+          # The house form, the one blockr prints everywhere else: the code
+          # in normal type, the full name smaller and muted behind it.
+          #
+          # The group is not part of a parameter's name, it is where the
+          # parameter came from, and a PARAMCD is unique across a study's
+          # findings tables -- so ALB names one thing on its own. The group
+          # stays on the picker row, where you are choosing between things
+          # and the code alone would not be enough, and it stays in this
+          # card's tooltip, where provenance belongs. The header drops it.
+          label = code,
           sublabel = param_label,
           domain = meta$domain,
           icon = meta$icon,
           color = meta$color,
-          description = paste0(param_label, " (", group_label, ")"),
+          description = paste0(param_label, ", from ", group_label),
           # The code, the name and the group. Not the group's whole parameter
           # list, which is what made every parameter a hit for any of the
           # others.

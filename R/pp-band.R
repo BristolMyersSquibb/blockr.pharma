@@ -116,10 +116,12 @@ pp_cohort_band_source <- function(selected, available, settings = list()) {
     viz <- available[[viz_id]]
     if (is.null(viz) || is.null(viz$band)) next
     band <- pp_band_for_selection(viz, settings[[viz_id]]$items)
+    caption <- pp_band_caption(viz$label, band)
     return(list(
       viz_id = viz_id,
       label = viz$label,
-      caption = pp_band_caption(viz$label, band),
+      caption = caption,
+      sub = pp_band_sub(caption, band),
       title = pp_band_title(viz$label, band),
       band = band
     ))
@@ -174,16 +176,33 @@ pp_band_for_selection <- function(viz, items = NULL) {
 #' @noRd
 pp_band_caption <- function(label, band) {
   if (!identical(band$kind, "series")) return(label)
+  # A parameter card is already called ALB, and a panel card carrying a
+  # series band is not, so the code is appended only where it is missing.
+  if (identical(label, band$paramcd)) return(label)
   tail <- paste0(" \u00b7 ", band$paramcd)
   if (endsWith(label, tail)) return(label)
   paste0(label, tail)
+}
+
+#' The muted half of the band's caption
+#'
+#' The full parameter name, in the shape the cards use: `ALB`, then
+#' `Albumin (g/L)` behind it, smaller. `NULL` when the caption already says
+#' everything, which is every band that is not a series.
+#' @noRd
+pp_band_sub <- function(caption, band) {
+  if (!identical(band$kind, "series")) return(NULL)
+  param <- band$param %||% ""
+  if (!nzchar(param) || identical(param, caption)) return(NULL)
+  param
 }
 
 #' The caption's tooltip: what the band draws, spelled out
 #' @noRd
 pp_band_title <- function(label, band) {
   what <- if (identical(band$kind, "series")) {
-    if (endsWith(label, paste0(" \u00b7 ", band$paramcd))) {
+    tail <- paste0(" \u00b7 ", band$paramcd)
+    if (identical(label, band$paramcd) || endsWith(label, tail)) {
       paste0(label, " (", band$param, ")")
     } else {
       paste0(label, ": ", band$param)
@@ -191,26 +210,34 @@ pp_band_title <- function(label, band) {
   } else {
     label
   }
-  paste("The cohort band draws", what)
+  paste("Every patient below shows", what)
 }
 
-#' The strip glyph the caption and the panel card share
+#' The mark the caption and the panel card share
 #'
-#' A 12x7 shorthand for "this is what the cohort band draws", so the card
-#' driving the band and the caption naming it carry the same mark.
+#' A 9px ring, and no words beside it. The panel that drives the list used to
+#' carry the sentence IN THE COHORT LIST, which said where the tag was rather
+#' than what the mark meant; before that it was a miniature of an
+#' adverse-event strip, which stopped being true the moment the strip could
+#' draw a lab series instead.
+#'
+#' So the mark says nothing on its own, and the pairing teaches it: the same
+#' ring on the panel and in front of the caption above the patients, on the
+#' two things that belong together. The sentence lives in the tooltip, where
+#' being long costs nothing.
+#'
+#' A filled dot was the other candidate and collides -- a coloured dot is the
+#' arm swatch, one column to the right on every patient row.
 #' @noRd
 pp_band_glyph <- function() {
   paste0(
-    '<svg class="pp-band-glyph" width="12" height="7" viewBox="0 0 12 7" ',
+    '<svg class="pp-band-glyph" width="9" height="9" viewBox="0 0 9 9" ',
     'aria-hidden="true">',
-    '<rect x="0" y="1" width="12" height="5" rx="1.5" fill="currentColor" ',
-    'opacity="0.2"/>',
-    '<rect x="1" y="1" width="3" height="5" fill="currentColor" ',
-    'opacity="0.8"/>',
-    '<rect x="7" y="1" width="4" height="5" fill="currentColor" ',
-    'opacity="0.8"/></svg>'
+    '<circle cx="4.5" cy="4.5" r="3" fill="none" stroke="currentColor" ',
+    'stroke-width="2"/></svg>'
   )
 }
+
 
 #' Does a record match a panel search?
 #'

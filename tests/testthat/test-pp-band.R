@@ -296,10 +296,15 @@ test_that("a parameter card is one card, drawing one parameter", {
   expect_identical(vizs[["adlbc_all__ABC"]]$band$paramcd, "ABC")
   expect_identical(vizs[["adlbc_all__ZAL"]]$band$paramcd, "ZAL")
 
-  # It says which card it came from and what it is: the title is what you
-  # scan a stack by, the sublabel what you read once you have found it.
-  expect_identical(vizs[["adlbc_all__ABC"]]$label, "Chemistry \u00b7 ABC")
+  # The house form: the code in normal type, the full name muted behind it.
+  # The group is provenance, so it rides in the description and on the
+  # picker row rather than in the card's title.
+  expect_identical(vizs[["adlbc_all__ABC"]]$label, "ABC")
   expect_identical(vizs[["adlbc_all__ABC"]]$sublabel, "Zzz Last By Name")
+  expect_identical(vizs[["adlbc_all__ABC"]]$description,
+                   "Zzz Last By Name, from Chemistry")
+  expect_identical(pp_viz_full_label(vizs[["adlbc_all__ABC"]]),
+                   "ABC \u2014 Zzz Last By Name")
 
   # And no chips: there is no second level left to control.
   expect_null(vizs[["adlbc_all__ABC"]]$controls$items)
@@ -490,13 +495,21 @@ test_that("a study with no parameters gets a panels-only picker", {
 })
 
 test_that("a parameter card's caption does not name its parameter twice", {
-  # The card's own label IS "Chemistry . ALT", so appending the code again
-  # read "Chemistry . ALT . ALT" in the sidebar.
+  # The card's own label IS the code, so appending it again read "ALT . ALT"
+  # in the sidebar. The older doubled form, "Chemistry . ALT . ALT", is
+  # still guarded: a board saved before the house label carries it.
   band <- pp_band_series("adlbc", "ALT", "Alanine Aminotransferase (U/L)")
+  expect_identical(pp_band_caption("ALT", band), "ALT")
+  expect_match(pp_band_title("ALT", band),
+               "Alanine Aminotransferase", fixed = TRUE)
   expect_identical(pp_band_caption("Chemistry · ALT", band),
                    "Chemistry · ALT")
-  expect_match(pp_band_title("Chemistry · ALT", band),
-               "Alanine Aminotransferase", fixed = TRUE)
+
+  # The name rides behind the code, muted, exactly as the card prints it --
+  # and never twice.
+  expect_identical(pp_band_sub("ALT", band), "Alanine Aminotransferase (U/L)")
+  expect_null(pp_band_sub("Adverse Events", pp_band_ae()))
+  expect_null(pp_band_sub("Alanine Aminotransferase (U/L)", band))
 
   # A viz that declares a series band without being a parameter card still
   # gets the code appended, because its label does not carry one.
@@ -505,4 +518,95 @@ test_that("a parameter card's caption does not name its parameter twice", {
   # A spans band names the panel and nothing else.
   expect_identical(pp_band_caption("Adverse Events", pp_band_ae()),
                    "Adverse Events")
+})
+
+# --- sorting follows the strip -----------------------------------------------
+
+test_that("the sort ladder follows what the strip draws", {
+  d <- band_dm(adsl = band_adsl(), adae = band_adae())
+  frame <- pp_cohort_frame(d, pp_resolve_roles(d))
+
+  # A spans band ranks by what an AE band can be ranked by.
+  expect_identical(names(pp_cohort_sort_choices(frame, "spans")),
+                   c("id", "worst", "ae"))
+
+  # A series ranks from both ends. Two rungs that say what you get, not one
+  # key and a direction: "ascending" asks the reader to work out what is
+  # being ordered and which way round.
+  expect_identical(names(pp_cohort_sort_choices(frame, "series")),
+                   c("id", "high", "low"))
+
+  # And they are named as values, so the pill cycles three noun phrases
+  # rather than an id and two bare adjectives.
+  expect_identical(unname(pp_cohort_sort_choices(frame, "series")),
+                   c("Patient id", "Peak value", "Lowest value"))
+
+  # Nothing drawable, nothing to rank by.
+  expect_identical(names(pp_cohort_sort_choices(frame, "none")),
+                   c("id", "worst", "ae"))
+})
+
+test_that("the row prints the value the list was sorted by", {
+  frame <- data.frame(
+    USUBJID = c("S-1", "S-2", "S-3"),
+    AE_WORST = c("MODERATE", "SEVERE", NA),
+    AE_N = c(3L, 9L, NA),
+    stringsAsFactors = FALSE
+  )
+  marks <- list(stat = list(high = c(`S-1` = 51.2, `S-2` = 4.987,
+                                     `S-3` = NA_real_)))
+
+  # Three significant digits, and no more than the value has: format() on
+  # the vector padded 51.2 to 51.20 to line up with 4.99.
+  expect_identical(pp_cohort_sort_values(frame, 1:3, "high", marks),
+                   c("51.2", "4.99", "\u2013"))
+
+  # A severity is a word, and pp_sev_label() branches on its argument -- fed
+  # 254 of them it took the first one's branch for all, and threw.
+  expect_identical(pp_cohort_sort_values(frame, 1:3, "worst"),
+                   c("Moderate", "Severe", "\u2013"))
+  expect_identical(pp_cohort_sort_values(frame, 1:3, "ae"),
+                   c("3", "9", "\u2013"))
+
+  # Ordering by the id ranks by what the row already prints.
+  expect_null(pp_cohort_sort_values(frame, 1:3, "id"))
+
+  # The clause the caption row prints, not the rung's full name.
+  expect_identical(pp_cohort_sort_short("high"), "peak")
+  expect_identical(pp_cohort_sort_short("worst"), "severity")
+})
+
+test_that("a series sorts by each patient's peak and trough", {
+  d <- band_dm(adsl = band_adsl(), adlbc = band_adlbc())
+  m <- pp_cohort_marks(d, pp_resolve_roles(d),
+                       band = pp_band_series("adlbc", "ALT", "ALT"))
+  frame <- pp_cohort_frame(d, pp_resolve_roles(d))
+
+  # S-1 runs 20..40, S-2 25..300, S-3 has one value of 33.
+  expect_identical(unname(m$stat$high[["S-2"]]), 300)
+  expect_identical(unname(m$stat$low[["S-1"]]), 20)
+
+  hi <- frame$USUBJID[pp_cohort_order(frame, "high", m)]
+  lo <- frame$USUBJID[pp_cohort_order(frame, "low", m)]
+  expect_identical(hi[[1L]], "S-2")
+  expect_identical(lo[[1L]], "S-1")
+
+  # Without the marks there is nothing to rank by, so it falls back to the id
+  # rather than erroring: the key outlives the strip that offered it.
+  expect_identical(pp_cohort_order(frame, "high"),
+                   pp_cohort_order(frame, "id"))
+})
+
+test_that("a patient with no values for the parameter sorts last, either way", {
+  # Not first by being empty: an NA that sorted to the top would put the
+  # patients with nothing to show at the head of the list.
+  lb <- band_adlbc()
+  lb <- lb[lb$USUBJID != "S-3", ]
+  d <- band_dm(adsl = band_adsl(), adlbc = lb)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d),
+                       band = pp_band_series("adlbc", "ALT", "ALT"))
+  frame <- pp_cohort_frame(d, pp_resolve_roles(d))
+
+  expect_identical(frame$USUBJID[pp_cohort_order(frame, "high", m)][[3L]], "S-3")
+  expect_identical(frame$USUBJID[pp_cohort_order(frame, "low", m)][[3L]], "S-3")
 })

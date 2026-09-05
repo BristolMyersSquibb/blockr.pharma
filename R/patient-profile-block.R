@@ -311,6 +311,19 @@ new_patient_profile_block <- function(selected = NULL,
             if (length(key) == 1L && nzchar(key)) r_cohort_sort(key)
           })
 
+          # The ladder follows the strip, so a key can stop existing under a
+          # standing selection: sort by peak value, put the AE band back, and
+          # the list would still be ordered by a peak nothing on screen shows.
+          # Falls back to the id rather than to another signal -- the order a
+          # reader can predict is the right place to land.
+          shiny::observe({
+            keys <- names(pp_cohort_sort_choices(r_cohort_frame(),
+                                                 r_cohort_marks()$kind))
+            if (!shiny::isolate(r_cohort_sort()) %in% keys) {
+              r_cohort_sort("id")
+            }
+          })
+
           # Pick a patient from the cohort list. The whole point of the
           # merge: the click never leaves the block, so it needs no control
           # channel and cannot be gated off by the sender leaving the screen.
@@ -338,22 +351,6 @@ new_patient_profile_block <- function(selected = NULL,
             if (length(sel) == 1L && sel %in% r_cohort()$ids) {
               r_subject(sel)
             }
-          })
-
-          # Step to the previous / next patient in cohort order. Wraps, and
-          # steps in from either end when nothing is picked yet.
-          shiny::observeEvent(input$step_subject, {
-            dir <- suppressWarnings(as.integer(input$step_subject))
-            ids <- r_cohort()$ids
-            if (is.na(dir) || dir == 0L || length(ids) < 2L) return()
-            cur <- r_subject()
-            at <- if (length(cur) == 1L) match(cur, ids) else NA_integer_
-            nxt <- if (is.na(at)) {
-              if (dir > 0L) 1L else length(ids)
-            } else {
-              ((at - 1L + dir) %% length(ids)) + 1L
-            }
-            r_subject(ids[[nxt]])
           })
 
           # The profile is by definition a per-patient view. It renders when
@@ -865,7 +862,7 @@ new_patient_profile_block <- function(selected = NULL,
             arm_col <- pp_cohort_arm_colors(frame, r_scale_map(), r_norm_dm(),
                                             r_roles()$arm)
 
-            ord <- pp_cohort_order(frame, r_cohort_sort())
+            ord <- pp_cohort_order(frame, r_cohort_sort(), marks)
 
             # A prod USUBJID is ~20 characters and most of them are the study
             # id, which is the same on every row of the board. Lift the shared
@@ -881,7 +878,8 @@ new_patient_profile_block <- function(selected = NULL,
             # would be two different claims about the same measurements.
             pp_cohort_rows_html(frame, ord, disp, marks, color, arm_col,
                                 picked,
-                                smooth = !identical(r_smooth(), "off"))
+                                smooth = !identical(r_smooth(), "off"),
+                                sort_by = r_cohort_sort())
           })
 
           # Which panel the strip is drawing, for the tag in its header.
@@ -911,38 +909,40 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Sort keys follow the data: a study with no adae is not offered a
           # sort by event count.
-          # The house click-through pill, same component as the gantt's LANES
-          # control (pp_lane_control()): the pill names the current setting,
-          # a click walks to the next, and the group label names the
-          # dimension. A select was three too many rungs and read as a form
-          # field in a list that is not a form.
-          output$cohort_sort_ui <- shiny::renderUI({
-            choices <- pp_cohort_sort_choices(r_cohort_frame())
+          #
+          # It reads as a clause on the caption row -- "Chemistry . ALT ...
+          # by peak" -- rather than as a labelled control on a row of its
+          # own. The caption says what the strip draws and the sort says how
+          # those are ordered, which is one sentence, and putting it on one
+          # line gave the well back a row of the sidebar. A click walks to
+          # the next rung, as the pill did.
+          cohort_sort_ui <- function() {
+            choices <- pp_cohort_sort_choices(r_cohort_frame(),
+                                              r_cohort_marks()$kind)
             # Fewer than two rungs is not a choice; draw nothing (the rule
             # pp_lane_control() follows).
             if (length(choices) < 2L) return(NULL)
             cur <- shiny::isolate(r_cohort_sort())
             if (!cur %in% names(choices)) cur <- names(choices)[[1L]]
             idx <- match(cur, names(choices))
-            labels <- unname(choices)
-            shiny::div(class = "pp-ctrl-group pp-cohort-sort",
-              shiny::span(class = "pp-ctrl-label", "Sort"),
-              shiny::tags$button(
-                class = "pp-ctrl-pill",
-                id = session$ns("cohort_sort_pill"),
-                `data-values` = jsonlite::toJSON(names(choices)),
-                `data-labels` = jsonlite::toJSON(labels),
-                `data-index` = idx - 1L,
-                # The pill names the state, so the tooltip carries the action.
-                title = paste0("Sort by ",
-                               labels[idx %% length(labels) + 1L]),
-                # Reserve the widest rung so the target does not move out
-                # from under the cursor as the label cycles.
-                style = paste0("min-width:", max(nchar(labels)), "ch"),
-                labels[idx]
-              )
+            keys <- names(choices)
+            short <- vapply(keys, pp_cohort_sort_short, character(1L))
+            nxt <- unname(choices)[idx %% length(keys) + 1L]
+            shiny::tags$button(
+              class = "pp-cohort-sortby",
+              id = session$ns("cohort_sort_by"),
+              type = "button",
+              `data-values` = jsonlite::toJSON(keys),
+              `data-labels` = jsonlite::toJSON(unname(short)),
+              `data-index` = idx - 1L,
+              # The control names the state, so the tooltip carries the
+              # action.
+              title = paste0("Sort by ", tolower(nxt)),
+              "by ",
+              shiny::tags$b(unname(short)[idx]),
+              shiny::HTML("&#9662;")
             )
-          })
+          }
 
           # What the band is showing. A severity strip explains itself; a
           # line of unlabelled numbers does not, and the parameter behind it
@@ -950,20 +950,44 @@ new_patient_profile_block <- function(selected = NULL,
           # is selected -- there is then nothing to name.
           output$cohort_band_caption <- shiny::renderUI({
             src <- r_band_source()
-            if (is.null(src)) return(NULL)
+            sorter <- cohort_sort_ui()
+            # The prefix every id in this cohort shares, lifted off the rows
+            # and printed once. It rode on the sort row, which no longer
+            # exists.
+            pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
+            if (is.null(src) && is.null(sorter) && !nzchar(pre)) return(NULL)
             # The settled term, like the bands underneath it: a chip
             # appearing a keystroke before the strip it explains is worse
             # than one appearing a moment late.
             search <- r_band_search()
             shiny::div(
               class = "pp-cohort-bandcap",
-              shiny::HTML(pp_band_glyph()),
-              shiny::span(class = "pp-cohort-bandcap-what",
-                          title = src$title, src$caption),
+              if (!is.null(src)) shiny::HTML(pp_band_glyph()),
+              # A sentence, not a label. "Cohort band" was our word for the
+              # strip and taught nowhere; what a reader wants to know is what
+              # the little pictures beside each patient ARE.
+              # No lead sentence. "Each row shows Adverse Events" plus "by
+              # event count" measured 276px in a 231px row, and the half
+              # that got clipped was the control. The glyph is the same mark
+              # the panel header carries beside its name, the tooltip still
+              # reads "Every patient below shows ...", and the panel that
+              # drives it wears the same ring in its own header -- so the
+              # sentence is said in two other places.
+              if (!is.null(src)) {
+                shiny::span(class = "pp-cohort-bandcap-what",
+                            title = src$title, src$caption)
+              },
+              # The parameter's full name, muted, exactly as the card that
+              # drives the band prints it. The code alone is the thing you
+              # match against the cards; the name is what tells you what it
+              # measures.
+              if (!is.null(src) && !is.null(src$sub)) {
+                shiny::span(class = "pp-cohort-bandcap-sub", src$sub)
+              },
               # The panel's search, echoed. Without it the bands go sparse
               # for no visible reason, which is the sidebar quietly lying
               # about the cohort.
-              if (nzchar(search %||% "")) {
+              if (!is.null(src) && nzchar(search %||% "")) {
                 shiny::span(
                   class = "pp-cohort-bandcap-find",
                   `data-viz-id` = src$viz_id,
@@ -972,7 +996,15 @@ new_patient_profile_block <- function(selected = NULL,
                   shiny::span(paste0("\u201c", search, "\u201d")),
                   shiny::HTML("&times;")
                 )
-              }
+              },
+              # Everything after this sits at the right edge.
+              shiny::span(class = "pp-cohort-bandcap-gap"),
+              if (nzchar(pre)) {
+                shiny::span(class = "pp-cohort-prefix",
+                            title = "Shared by every patient in the cohort",
+                            pre)
+              },
+              sorter
             )
           })
 
@@ -1013,20 +1045,6 @@ new_patient_profile_block <- function(selected = NULL,
             avail <- r_available()
             if (!length(avail)) return(NULL)
             pp_add_picker_ui(avail, session$ns)
-          })
-
-          output$cohort_count <- shiny::renderText({
-            n <- nrow(r_cohort_frame())
-            if (n == 1L) "1 patient" else paste(n, "patients")
-          })
-
-          # What the rows no longer print. Nothing is hidden -- it is here,
-          # once, instead of 254 times.
-          output$cohort_id_prefix <- shiny::renderUI({
-            pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
-            if (!nzchar(pre)) return(NULL)
-            shiny::span(class = "pp-cohort-prefix",
-                        title = "Shared by every patient in the cohort", pre)
           })
 
           # Build per-viz control toolbar HTML
@@ -1760,10 +1778,17 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::span(class = "pp-chart-grip",
                             title = "Drag to reorder",
                             shiny::HTML(pp_grip_glyph())),
-                shiny::div(class = "pp-chart-title", viz$label),
-                # The full parameter name, muted. The title is the form you
-                # scan a stack by ("Chemistry . ALT"); this is the one you
-                # read once you have found it.
+                # The code, and the group it came from as the tooltip. A
+                # PARAMCD is unique across a study's findings tables, so the
+                # header does not have to spend width saying Chemistry --
+                # but hovering still answers it.
+                shiny::div(class = "pp-chart-title",
+                           title = viz$description %||% viz$label,
+                           viz$label),
+                # The full parameter name, muted, the house form: ALB, then
+                # Albumin (g/L) behind it. The code is what you scan a stack
+                # of twelve cards by; the name is what you read once you
+                # have found the one you want.
                 if (!is.null(viz$sublabel)) {
                   shiny::div(class = "pp-chart-sublabel", viz$sublabel)
                 },
@@ -1773,9 +1798,9 @@ new_patient_profile_block <- function(selected = NULL,
                 # is answered where you are looking rather than only in the
                 # sidebar's caption.
                 shiny::span(class = "pp-band-tag",
-                            title = "The cohort strip draws this panel",
-                            shiny::HTML(pp_band_glyph()),
-                            "cohort band"),
+                            title = paste("Shown for every patient in the",
+                                          "list of patients"),
+                            shiny::HTML(pp_band_glyph())),
                 controls_ui,
                 legend_ui,
                 download_ui,
@@ -1900,7 +1925,8 @@ new_patient_profile_block <- function(selected = NULL,
               # Export in the order on screen. A file sorted differently
               # from the list it came from is a small betrayal that costs
               # someone twenty minutes.
-              frame <- frame[pp_cohort_order(frame, r_cohort_sort()), ,
+              frame <- frame[pp_cohort_order(frame, r_cohort_sort(),
+                                             r_cohort_marks()), ,
                              drop = FALSE]
               blockr.viz::write_annotated_xlsx(frame, file)
             }
@@ -1985,7 +2011,7 @@ new_patient_profile_block <- function(selected = NULL,
                       build_slot_exhibit(vid), file,
                       title = paste(
                         c(if (!is.null(subj)) paste0("Patient ", subj, ":"),
-                          viz$label),
+                          pp_viz_full_label(viz)),
                         collapse = " "
                       )
                     )
@@ -2016,7 +2042,7 @@ new_patient_profile_block <- function(selected = NULL,
                       build_slot_exhibit(vid), file,
                       title = paste(
                         c(if (!is.null(subj)) paste0("Patient ", subj, ":"),
-                          viz$label),
+                          pp_viz_full_label(viz)),
                         collapse = " "
                       )
                     )
@@ -2108,29 +2134,10 @@ new_patient_profile_block <- function(selected = NULL,
           shiny::div(
             class = "pp-sidebar", id = ns("pp_sidebar"),
 
-            # Header
-            shiny::div(class = "pp-sidebar-header",
-              # Not "Visualizations" any more: the sidebar has two tenants,
-              # and each names itself in its own section header below.
-              shiny::tags$h3(class = "pp-sidebar-title", "Profile"),
-              shiny::tags$button(
-                class = "pp-pin-btn",
-                id = ns("pin_btn"),
-                title = "Toggle sidebar",
-                shiny::HTML(paste0(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-                  'height="16" fill="currentColor" viewBox="0 0 16 16">',
-                  '<path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 ',
-                  '.5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-',
-                  '.354.298v4.431l.078.048c.203.127.476.314.751.555',
-                  'C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5',
-                  'a.5.5 0 0 1-1 0V10h-4A.5.5 0 0 1 3 9.5c0-.973.64-',
-                  '1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 ',
-                  '1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 ',
-                  '.146-.354z"/></svg>'
-                ))
-              )
-            ),
+            # No title row. "Profile" named the block you are already inside,
+            # and the pin next to it toggled the sidebar -- which the cohort
+            # tag in the toolbar now does from a place you can see when this
+            # is shut.
 
             # Search
             shiny::div(class = "pp-sidebar-search",
@@ -2175,28 +2182,15 @@ new_patient_profile_block <- function(selected = NULL,
             # The cohort. Above the panels because it is what you come back
             # to: panels are set once, patients are stepped through.
             shiny::div(class = "pp-sidebar-section",
-              shiny::div(class = "pp-section-head",
-                shiny::span(class = "pp-section-title", "Cohort"),
-                shiny::span(class = "pp-section-count",
-                            shiny::textOutput(ns("cohort_count"), inline = TRUE))
-              ),
-              # The sort pill, and at the other end the id prefix the rows no
-              # longer print. The prefix belongs directly above the ids it
-              # explains; next to the patient count it read as part of the
-              # count ("CA2440001-01- 306 patients").
-              #
-              # The pill needs no label of its own: it arrives with the house
-              # group label ("Sort"), and "Sorted by" above it said the same
-              # thing twice.
-              # NOT `pp-cohort-sort`: that class is on the pill's own
-              # `pp-ctrl-group` inside this row, and reusing it here would
-              # nest the same padding twice.
-              shiny::div(class = "pp-cohort-sortrow",
-                shiny::uiOutput(ns("cohort_sort_ui"), inline = TRUE),
-                shiny::span(class = "pp-cohort-sort-gap"),
-                shiny::uiOutput(ns("cohort_id_prefix"), inline = TRUE)
-              ),
-              # What the band draws, directly above the bands themselves.
+              # No heading either. A column of patient ids under a box that
+              # says "Search patients", with "254 patients" against its edge,
+              # does not need a 10px grey word telling you it is a cohort --
+              # and "cohort" is not a term every reader shares.
+              # One row above the list: what the strip draws, the id prefix
+              # the rows no longer print, and how the list is ordered. They
+              # were three rows; a caption saying "Each row shows ALB" and a
+              # pill saying "Peak value" are two halves of one sentence, and
+              # the sidebar has a well underneath that wants every pixel.
               shiny::uiOutput(ns("cohort_band_caption")),
               # tabindex, so the list can hold focus and the arrow keys
               # reach it. -1 keeps it out of the tab order: it is reached by
@@ -2243,36 +2237,31 @@ new_patient_profile_block <- function(selected = NULL,
               # Stepping moved to the keyboard: arrow keys in the cohort
               # list, which is where a reader's hand already is.
               shiny::div(class = "pp-subject-picker", id = ns("pp_picker"),
-                shiny::uiOutput(ns("subject_facts"), inline = TRUE),
-                shiny::span(class = "pp-subject-gap"),
-                # The cohort tag, and the sidebar's toggle.
+                # The cohort, and the drawer it lives in.
                 #
-                # It reads "254 patients" and it opens the list of them,
-                # which is the one place a reader is already looking when
-                # they want the cohort. Making it the toggle is also what
-                # lets the picker go: with the sidebar shut there would
-                # otherwise be no way to change patient at all, and this is
-                # the way back.
+                # This sat at the far right with the download and the gear --
+                # the opposite end of the screen from the thing it opens. On
+                # the left it is against the edge the sidebar slides from, and
+                # the chevron points at it.
+              #
+                # It says "254 patients", not "254". Shut, that is a sentence
+                # about what is behind the edge; the bare number needed you to
+                # already know what it counted. It is also the only way back
+                # once the sidebar is closed, since the floating expand button
+                # is gone.
                 shiny::tags$button(
                   class = "pp-cohort-count is-hidden",
                   id = ns("pp_cohort_count"),
                   type = "button",
                   title = "Show or hide the cohort",
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="11" ',
-                    'height="11" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 ',
-                    '1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 ',
-                    '1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832',
-                    '-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516 ',
-                    '.68-4.168 1.332-.678.678-.83 1.418-.832 ',
-                    '1.664z"/></svg>'
-                  )),
-                  shiny::span(class = "pp-cohort-count-n"),
                   shiny::span(class = "pp-cohort-count-car",
-                              shiny::HTML("&lsaquo;"))
-                )
+                              shiny::HTML("&lsaquo;")),
+                  shiny::span(class = "pp-cohort-count-n")
+                ),
+                shiny::uiOutput(ns("subject_facts"), inline = TRUE),
+                shiny::span(class = "pp-subject-gap")
               ),
+
               # Adding a panel, from the toolbar rather than from a list in
               # the sidebar. The button carries the count of what is on the
               # profile, which is the number you want before you open it, and
@@ -2283,8 +2272,13 @@ new_patient_profile_block <- function(selected = NULL,
                   class = "pp-add-btn",
                   id = ns("pp_add_btn"),
                   type = "button",
+                  # "Panel" is the word the rest of this reads by: the
+                  # picker searches panels and parameters, the grip drags
+                  # panels, and a parameter has been a panel of its own
+                  # since the chips went. "Add" alone said nothing about
+                  # what would arrive.
                   title = "Add a panel or parameter",
-                  shiny::HTML("&plus; Add"),
+                  shiny::HTML("&plus; Add panel"),
                   shiny::span(class = "pp-add-n")
                 ),
                 shiny::uiOutput(ns("panel_picker"))
@@ -2302,14 +2296,13 @@ new_patient_profile_block <- function(selected = NULL,
             var layoutId = '", ns("pp_layout"), "';
             var sidebarId = '", ns("pp_sidebar"), "';
             var searchId = '", ns("search"), "';
-            var pinBtnId = '", ns("pin_btn"), "';
             var toggleInputId = '", ns("toggle_viz"), "';
             var clearBtnId = '", ns("search_clear"), "';
             var ctrlInputId = '", ns("viz_ctrl"), "';
             var pickParamInputId = '", ns("pick_param"), "';
             var pickSubjectInputId = '", ns("pick_subject"), "';
             var cohortSortInputId = '", ns("cohort_sort"), "';
-            var cohortSortPillId = '", ns("cohort_sort_pill"), "';
+            var cohortSortById = '", ns("cohort_sort_by"), "';
             var cohortWellId = '", ns("pp_cohort_well"), "';
             var chartAreaId = '", ns("chart_area"), "';
             var syncBandMsgId = '", ns("sync_band"), "';
@@ -2330,7 +2323,6 @@ new_patient_profile_block <- function(selected = NULL,
 
             var pickerId = '", ns("pp_picker"), "';
             var cohortCountId = '", ns("pp_cohort_count"), "';
-            var stepSubjectInputId = '", ns("step_subject"), "';
             var subjectPickerMsgId = '", ns("subject_picker"), "';
             var dlMenuMsgId = '", ns("dl_menu_state"), "';
             var dlRootId = '", ns("pp_dl_root"), "';
@@ -2349,7 +2341,8 @@ new_patient_profile_block <- function(selected = NULL,
               if (!msg) return;
               var n = msg.count || 0;
               var $count = $('#' + cohortCountId);
-              $count.find('.pp-cohort-count-n').text(n.toLocaleString());
+              $count.find('.pp-cohort-count-n').text(
+                n.toLocaleString() + (n === 1 ? ' patient' : ' patients'));
               $count.toggleClass('is-hidden', !n);
             });
 
@@ -2448,6 +2441,43 @@ new_patient_profile_block <- function(selected = NULL,
                 Shiny.setInputValue(smoothInputId, next, {priority: 'event'});
               });
 
+            // Picking a patient, and when the server hears about it.
+            //
+            // Walking the list with the arrow keys moves a class; loading
+            // the patient is a full profile render. Held down, the key
+            // repeats every ~30ms and the render takes longer than that, so
+            // every row on the way was requested, and each answer arrived
+            // late and dragged the selection back to a row already left --
+            // walking ten rows landed you somewhere in the middle of them.
+            //
+            // So the list is walked locally and only where you STOP is sent.
+            // A click sends at once: it is one deliberate landing, and
+            // waiting a quarter second to react to a click reads as lag.
+            var PICK_SETTLE_MS = 250;
+            var pickTimer = null;
+            var pickPending = null;
+
+            function sendPick(id, now) {
+              if (pickTimer) { clearTimeout(pickTimer); pickTimer = null; }
+              if (now) {
+                pickPending = null;
+                Shiny.setInputValue(pickSubjectInputId, id,
+                                    {priority: 'event'});
+                return;
+              }
+              // What the list is showing but the server has not been told
+              // about. It is also the guard on the echo below: a confirming
+              // message for the row you were on two presses ago must not
+              // move the class off the row you are on now.
+              pickPending = id;
+              pickTimer = setTimeout(function() {
+                pickTimer = null;
+                pickPending = null;
+                Shiny.setInputValue(pickSubjectInputId, id,
+                                    {priority: 'event'});
+              }, PICK_SETTLE_MS);
+            }
+
             // Patient row click: pick that patient. The selected class is
             // applied optimistically so the list responds at click speed --
             // the server re-renders it from r_subject() a flush later and
@@ -2461,7 +2491,7 @@ new_patient_profile_block <- function(selected = NULL,
               if (well) well.focus({preventScroll: true});
               $('#' + layoutId + ' .pp-pt').removeClass('is-selected');
               $(this).addClass('is-selected');
-              Shiny.setInputValue(pickSubjectInputId, id, {priority: 'event'});
+              sendPick(id, true);
             });
 
             // Hold the last frame while a panel re-renders.
@@ -2532,15 +2562,38 @@ new_patient_profile_block <- function(selected = NULL,
               var ghost = panel.__ghost;
               if (!ghost) return;
               panel.__ghost = null;
-              // Two frames: one for the new DOM to be laid out, one for
-              // echarts to have painted into it. Fading on the first still
-              // uncovers the blank canvas.
-              requestAnimationFrame(function() {
+
+              function fade() {
                 requestAnimationFrame(function() {
                   ghost.classList.add('is-gone');
                   setTimeout(function() { dropGhost(ghost); }, 200);
                 });
-              });
+              }
+
+              // Wait for the replacement to have PAINTED, not merely to
+              // exist.
+              //
+              // This used to fade two frames after the HTML arrived, on the
+              // theory that one frame lays the DOM out and the next paints
+              // it. Measured, echarts creates its canvas ~150ms after the
+              // value event, so the photograph was fading over an empty box
+              // and the new chart appeared into the gap: old chart, nothing,
+              // new chart. Holding until a canvas exists makes it one
+              // cross-fade.
+              //
+              // A panel that draws no widget (an empty-state message) never
+              // grows a canvas, so it fades at once, and the deadline stops
+              // a chart that fails to paint from leaving a stale photograph
+              // of the last patient over it.
+              if (!panel.querySelector('.html-widget')) { fade(); return; }
+              var until = Date.now() + 1500;
+              (function waitForPaint() {
+                if (panel.querySelector('canvas') || Date.now() > until) {
+                  fade();
+                  return;
+                }
+                requestAnimationFrame(waitForPaint);
+              })();
             }
 
             $(document).on('shiny:recalculating', function(e) {
@@ -2759,9 +2812,11 @@ new_patient_profile_block <- function(selected = NULL,
               addRows().forEach(function(r){
                 if (r.getAttribute('data-kind') !== 'panel') return;
                 var dot = r.querySelector('.pp-add-dot');
+                var code = r.querySelector('.pp-add-code');
                 map[r.getAttribute('data-viz-id')] = {
                   label: r.querySelector('.pp-add-name').textContent,
-                  colour: dot ? dot.style.background : ''
+                  colour: dot ? dot.style.background : '',
+                  code: code ? code.textContent : ''
                 };
               });
               return map;
@@ -2771,8 +2826,22 @@ new_patient_profile_block <- function(selected = NULL,
               var host = document.getElementById(addOnId);
               if (!host) return;
               var map = addLabels();
+              var want = lastSelected.filter(function(id){ return !!map[id]; });
+              // A repaint that would draw the same rows is skipped.
+              //
+              // A pick moves a row optimistically and animates it; the
+              // server's sync_selected lands a tenth of a second later
+              // saying the same thing, and rebuilding the list there tore
+              // the row out mid-travel -- the tint measured 30ms instead of
+              // 600. Comparing first costs one array walk over at most a
+              // dozen ids.
+              var have = [].slice.call(host.children).map(function(r){
+                return r.getAttribute('data-viz-id'); });
+              var same = have.length === want.length &&
+                have.every(function(v, i){ return v === want[i]; });
+              if (same) { addOnVisibility(host); return; }
               host.innerHTML = '';
-              lastSelected.forEach(function(id){
+              want.forEach(function(id){
                 var m = map[id];
                 if (!m) return;
                 var row = document.createElement('div');
@@ -2781,9 +2850,19 @@ new_patient_profile_block <- function(selected = NULL,
                 var grip = document.createElement('span');
                 grip.className = 'pp-add-ord-grip';
                 grip.innerHTML = GRIP_SVG;
-                var dot = document.createElement('span');
-                dot.className = 'pp-add-dot';
-                dot.style.background = m.colour;
+                // A panel is a colour, a parameter is its code -- the
+                // same two row styles the catalogue below uses, so a thing
+                // looks the same wherever it currently sits.
+                var mark;
+                if (m.code) {
+                  mark = document.createElement('span');
+                  mark.className = 'pp-add-ord-code';
+                  mark.textContent = m.code;
+                } else {
+                  mark = document.createElement('span');
+                  mark.className = 'pp-add-dot';
+                  mark.style.background = m.colour;
+                }
                 var name = document.createElement('span');
                 name.className = 'pp-add-name';
                 name.textContent = m.label;
@@ -2792,19 +2871,92 @@ new_patient_profile_block <- function(selected = NULL,
                 x.type = 'button';
                 x.title = 'Remove';
                 x.innerHTML = '&times;';
-                row.appendChild(grip); row.appendChild(dot);
+                row.appendChild(grip); row.appendChild(mark);
                 row.appendChild(name); row.appendChild(x);
                 host.appendChild(row);
               });
+              addOnVisibility(host);
+            }
+
+            // While searching, the results answer the question and the list
+            // above is chrome in the way. Split out because the repaint is
+            // skipped when nothing changed, and this still has to run.
+            function addOnVisibility(host){
               var wrap = host.parentElement;
-              if (wrap) {
-                var inp = document.getElementById(addInputId);
-                var q = inp ? inp.value : '';
-                // While searching, the results answer the question and the
-                // ordered list is chrome in the way.
-                wrap.classList.toggle('is-hidden',
-                  !!q.trim() || !lastSelected.length);
+              if (!wrap) return;
+              var inp = document.getElementById(addInputId);
+              var q = inp ? inp.value : '';
+              wrap.classList.toggle('is-hidden',
+                !!q.trim() || !lastSelected.length);
+            }
+
+            // Picking moves a thing, it does not tick it.
+            //
+            // A row you pick belongs in the list above; leaving it in the
+            // catalogue with a mark on it put the same parameter on screen
+            // twice, and the tick then said what the list above already
+            // said. So it travels, and the rows it left close the gap behind
+            // it. The motion is the whole explanation.
+            //
+            // FLIP: measure both lists before the DOM changes, redraw, then
+            // play the difference back to zero -- the browser animates a
+            // transform and never the layout. The repaint is optimistic, so
+            // the before-rects are taken in the same click and the server's
+            // sync_selected lands later to find everything already in place.
+            //
+            // The tick survives for one case: a SEARCH still lists what is
+            // already on the profile, and while searching the list above is
+            // hidden, so nothing else would say so.
+            var ADD_FLIP_MS = 190;
+            function addReduceMotion(){
+              return !!(window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            }
+            function addFlipRects(){
+              var m = {}, pop = document.getElementById(addPopId);
+              if (!pop) return m;
+              pop.querySelectorAll('.pp-add-ord, .pp-add-row')
+                .forEach(function(r){
+                  var b = r.getBoundingClientRect();
+                  if (b.height) m[r.getAttribute('data-viz-id')] = b;
+                });
+              return m;
+            }
+            function addFlipPlay(before, landed){
+              var pop = document.getElementById(addPopId);
+              if (!pop) return;
+              var reduce = addReduceMotion();
+              if (!reduce) {
+                pop.querySelectorAll('.pp-add-ord, .pp-add-row')
+                  .forEach(function(r){
+                    var b = before[r.getAttribute('data-viz-id')];
+                    if (!b) return;
+                    var a = r.getBoundingClientRect();
+                    if (!a.height) return;
+                    var dy = b.top - a.top, dx = b.left - a.left;
+                    if (!dy && !dx) return;
+                    r.style.transition = 'none';
+                    r.style.transform =
+                      'translate(' + dx + 'px,' + dy + 'px)';
+                    requestAnimationFrame(function(){
+                      r.style.transition =
+                        'transform ' + ADD_FLIP_MS + 'ms ' +
+                        'cubic-bezier(.2,.7,.3,1)';
+                      r.style.transform = '';
+                    });
+                  });
               }
+              // And a moment of tint where it landed. On a long profile the
+              // list above can be scrolled past its box, and the tint is the
+              // part that survives arriving off-screen.
+              if (!landed) return;
+              var t = pop.querySelector(
+                '.pp-add-ord[data-viz-id=' + JSON.stringify(landed) + ']');
+              if (!t) return;
+              t.classList.add('is-landed');
+              window.setTimeout(function(){
+                t.classList.remove('is-landed');
+              }, reduce ? 500 : ADD_FLIP_MS + 420);
             }
 
             // Reordering inside the picker. The same pointer drag the panels
@@ -2865,9 +3017,17 @@ new_patient_profile_block <- function(selected = NULL,
             $(document).on('click', '#' + addOnId + ' .pp-add-ord-x',
               function(e) {
                 e.stopPropagation();
-                Shiny.setInputValue(toggleInputId,
-                  this.parentElement.getAttribute('data-viz-id'),
-                  {priority: 'event'});
+                var id = this.parentElement.getAttribute('data-viz-id');
+                // The same move, downwards: it travels back to where the
+                // catalogue keeps it, which is where you would look for it
+                // if you wanted it again.
+                var before = addFlipRects();
+                lastSelected = lastSelected.filter(function(x){
+                  return x !== id; });
+                $('#' + addBtnId + ' .pp-add-n').text(lastSelected.length || '');
+                filterAdd();
+                addFlipPlay(before, null);
+                Shiny.setInputValue(toggleInputId, id, {priority: 'event'});
               });
 
             function paintAddTicks(){
@@ -2958,6 +3118,7 @@ new_patient_profile_block <- function(selected = NULL,
               // state moves with it, or reopening the picker would repaint
               // the row back to what it was.
               var nowOn = !this.classList.contains('is-on');
+              var before = addFlipRects();
               this.classList.toggle('is-on', nowOn);
               if (kind === 'panel') {
                 var at = lastSelected.indexOf(vizId);
@@ -2965,6 +3126,10 @@ new_patient_profile_block <- function(selected = NULL,
                 if (!nowOn && at >= 0) lastSelected = lastSelected.filter(
                   function(x){ return x !== vizId; });
                 $('#' + addBtnId + ' .pp-add-n').text(lastSelected.length || '');
+                // Both lists, now: the catalogue drops what it just handed
+                // upwards. filterAdd() repaints the list above as well.
+                filterAdd();
+                addFlipPlay(before, nowOn ? vizId : null);
               }
               if (kind === 'param') {
                 Shiny.setInputValue(pickParamInputId, {
@@ -2974,6 +3139,91 @@ new_patient_profile_block <- function(selected = NULL,
                 Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
               }
             });
+
+            // How tall the cohort list is allowed to be.
+            //
+            // The CSS falls back to the viewport, which is right only when
+            // the block runs to the bottom of the window. It does not: the
+            // block is a dock panel, and dockview gives that panel a
+            // definite height (an inline px height on the render overlay,
+            // and a pane inside it with overflow:auto). Split the view, or
+            // put the profile in a shorter panel, and a viewport-sized well
+            // overflowed its panel -- measured, 600px of list in a 420px
+            // panel, which the pane then scrolled. Two scrollbars, the outer
+            // one hiding the inner one.
+            //
+            // So the box the block was GIVEN decides: the first scrolling
+            // ancestor, or the window when there is none (the block on a
+            // plain page). Everything above the well inside that box --
+            // header, search, caption -- is measured rather than assumed,
+            // so a caption that wraps to two lines takes its room out of
+            // the list instead of pushing it through the bottom.
+            var WELL_GAP = 16;     // breathing room under the last row
+            var WELL_FLOOR = 132;  // 3 rows; below this nothing useful fits
+
+            function wellHost(el) {
+              var n = el.parentElement;
+              while (n && n !== document.body) {
+                var cs = window.getComputedStyle(n);
+                if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') {
+                  return n;
+                }
+                n = n.parentElement;
+              }
+              return null;
+            }
+
+            function sizeWell() {
+              var well = document.getElementById(cohortWellId);
+              if (!well || !well.offsetParent) return;
+              var host = wellHost(well);
+              var wellTop = well.getBoundingClientRect().top;
+              var avail;
+              if (host) {
+                var hostTop = host.getBoundingClientRect().top;
+                avail = host.clientHeight - (wellTop - hostTop + host.scrollTop);
+              } else {
+                avail = window.innerHeight - wellTop;
+              }
+              avail = Math.max(WELL_FLOOR, Math.round(avail - WELL_GAP));
+              // Only when it actually moves: this runs from a ResizeObserver
+              // that the assignment itself can wake.
+              if (Math.abs((parseFloat(well.style.maxHeight) || 0) - avail) < 2) {
+                return;
+              }
+              well.style.maxHeight = avail + 'px';
+            }
+
+            if (window.ResizeObserver) {
+              var wellRO = new ResizeObserver(function() {
+                window.requestAnimationFrame(sizeWell);
+              });
+              var wellWatch = function() {
+                var well = document.getElementById(cohortWellId);
+                if (!well) return;
+                wellRO.disconnect();
+                var host = wellHost(well);
+                if (host) wellRO.observe(host);
+                if (well.parentElement) wellRO.observe(well.parentElement);
+                sizeWell();
+              };
+              // Attached when the list appears, not when the script runs:
+              // the block renders after this, so the first attempt found no
+              // well, returned, and left nothing observing the panel. The
+              // window resize still worked, which is what made it look like
+              // it was wired up.
+              $(document).on('shiny:value', function(e) {
+                if (!e.name) return;
+                // The caption row is a renderUI above the well, so what is
+                // left for the list changes with the band it names.
+                if (e.name.indexOf('cohort_') >= 0 ||
+                    e.name.indexOf('result') >= 0) {
+                  window.setTimeout(wellWatch, 0);
+                }
+              });
+              $(window).on('resize', sizeWell);
+              setTimeout(wellWatch, 0);
+            }
 
             // Walking the cohort from the keyboard.
             //
@@ -2987,29 +3237,55 @@ new_patient_profile_block <- function(selected = NULL,
             // a patient, then walk -- needs no second gesture. Home and End
             // jump to the ends, because a 254-row list makes them worth it.
             //
-            // It sends the SAME step_subject input the buttons sent, so the
-            // wrap-around and the from-either-end behaviour are the server's
-            // one implementation rather than a second one written in JS.
+            // THE ROWS ARE THE ORDER. The arrows used to send a direction to
+            // the server, which stepped through the cohort in USUBJID order.
+            // That is the order the list is in exactly once -- sorted by
+            // peak, or with a patient search running, Down went to whoever
+            // was next alphabetically, which is a patient somewhere else in
+            // the list and sometimes not in it at all. It read as random,
+            // and it was: two orders, one of them invisible. The DOM carries
+            // both the sort and the filter, so it is walked directly.
+            function cohortStep(well, dir, absolute) {
+              var rows = [].slice.call(
+                well.querySelectorAll('.pp-pt:not(.is-filtered-out)'));
+              if (!rows.length) return;
+              var at = -1;
+              for (var i = 0; i < rows.length; i++) {
+                if (rows[i].classList.contains('is-selected')) { at = i; break; }
+              }
+              var to;
+              if (absolute) {
+                to = dir > 0 ? rows.length - 1 : 0;
+              } else if (at < 0) {
+                // Nothing picked yet: step in from the end you came from.
+                to = dir > 0 ? 0 : rows.length - 1;
+              } else {
+                to = (at + dir + rows.length) % rows.length;
+              }
+              var row = rows[to];
+              var id = row.getAttribute('data-usubjid');
+              if (!id) return;
+              // Moved here rather than waiting for the server to confirm:
+              // held down, the arrow repeats faster than the round trip, and
+              // every press in the burst would otherwise measure from the
+              // same stale anchor and land on the same row.
+              rows.forEach(function(r){ r.classList.remove('is-selected'); });
+              row.classList.add('is-selected');
+              if (row.scrollIntoView) row.scrollIntoView({block: 'nearest'});
+              // Home and End are one jump, so they load immediately; the
+              // arrows wait for you to stop.
+              sendPick(id, !!absolute);
+            }
+
             $(document).on('keydown', '#' + cohortWellId, function(e) {
-              var dir = 0;
+              var dir = 0, absolute = false;
               if (e.key === 'ArrowDown') dir = 1;
               else if (e.key === 'ArrowUp') dir = -1;
-              else if (e.key === 'Home' || e.key === 'End') {
-                var rows = this.querySelectorAll('.pp-pt:not(.is-filtered-out)');
-                if (!rows.length) return;
-                e.preventDefault();
-                var row = rows[e.key === 'Home' ? 0 : rows.length - 1];
-                var id = row.getAttribute('data-usubjid');
-                if (id) {
-                  Shiny.setInputValue(pickSubjectInputId, id,
-                                      {priority: 'event'});
-                }
-                return;
-              } else {
-                return;
-              }
+              else if (e.key === 'End') { dir = 1; absolute = true; }
+              else if (e.key === 'Home') { dir = -1; absolute = true; }
+              else return;
               e.preventDefault();
-              Shiny.setInputValue(stepSubjectInputId, dir, {priority: 'event'});
+              cohortStep(this, dir, absolute);
             });
 
             // The AE band, drawn when its row scrolls into view.
@@ -3177,17 +3453,19 @@ new_patient_profile_block <- function(selected = NULL,
             // Sort key: the house click-through pill. Its own handler
             // rather than the viz one, because that sends {viz_id, param,
             // value} to a viz-settings observer and this is neither.
-            $(document).on('click', '#' + cohortSortPillId, function(e) {
+            $(document).on('click', '#' + cohortSortById, function(e) {
               e.stopPropagation();
-              var $pill = $(this);
-              var values = $pill.data('values');
-              var labels = $pill.data('labels');
+              var $by = $(this);
+              var values = $by.data('values');
+              var labels = $by.data('labels');
               if (!values || !values.length) return;
-              var idx = (parseInt($pill.attr('data-index'), 10) + 1) %
+              var idx = (parseInt($by.attr('data-index'), 10) + 1) %
                 values.length;
-              $pill.attr('data-index', idx);
-              $pill.text(labels[idx]);
-              $pill.attr('title',
+              $by.attr('data-index', idx);
+              // Only the key, not the whole control: the word before it
+              // and the caret after it are markup, and .text() eats them.
+              $by.find('b').text(labels[idx]);
+              $by.attr('title',
                 'Sort by ' + labels[(idx + 1) % values.length]);
               Shiny.setInputValue(cohortSortInputId, values[idx],
                                   {priority: 'event'});
@@ -3197,6 +3475,11 @@ new_patient_profile_block <- function(selected = NULL,
             // never re-renders the rows.
             Shiny.addCustomMessageHandler(syncSubjectMsgId, function(msg) {
               var id = msg && msg.id ? msg.id : null;
+              // While the walk is settling the list is ahead of the server,
+              // and this message is the server agreeing with a row that has
+              // already been left. Ignore it; the send at the end of the
+              // walk brings one that agrees.
+              if (pickPending && id !== pickPending) return;
               var $rows = $('#' + layoutId + ' .pp-pt');
               $rows.removeClass('is-selected');
               if (!id) return;
@@ -3400,17 +3683,11 @@ new_patient_profile_block <- function(selected = NULL,
                 !sidebar.classList.contains('collapsed') : force;
               sidebar.classList.toggle('collapsed', shut);
               layout.classList.toggle('sidebar-collapsed', shut);
-              $('#' + pinBtnId).toggleClass('is-unpinned', shut);
               $('#' + cohortCountId).toggleClass('is-shut', shut);
             }
 
             $(document).on('click', '#' + cohortCountId, function(e) {
               e.stopPropagation();
-              toggleSidebar();
-            });
-
-            // Pin/unpin sidebar
-            $(document).on('click', '#' + pinBtnId, function() {
               toggleSidebar();
             });
 

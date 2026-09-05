@@ -9,6 +9,18 @@
 #                         pp_normalize_dm() (see pp-normalize.R), so nothing
 #                         is renamed or rebuilt here.
 
+#' A viz's label with its subtitle, for surfaces that have one line
+#'
+#' The card prints `ALB` and `Albumin (g/L)` on two lines. A slide title,
+#' a download name or a log message has one, so it gets both joined the way
+#' the chart joins them.
+#' @noRd
+pp_viz_full_label <- function(viz) {
+  sub <- viz$sublabel %||% ""
+  if (!nzchar(sub)) return(viz$label)
+  paste0(viz$label, " \u2014 ", sub)
+}
+
 #' Construct a patient-profile viz definition
 #'
 #' Validates and classes a viz definition for use with the patient profile

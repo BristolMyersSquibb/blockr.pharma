@@ -1301,31 +1301,34 @@
 
 /* Cohort tag, and the sidebar's toggle.
    
-   Quiet while the sidebar is OPEN and tinted once it is SHUT. With the list
-   on screen the tag has nothing to ask for -- it is reporting a number, and
-   the dock's two-tone badge is the right look for that. Shut, it is the only
-   way back to the cohort (the floating expand button is gone), so it takes
-   the house control tint, the same one the click-through pill in every panel
-   header wears. The colour is the invitation, and it only appears when there
-   is something to invite.
+   First thing in the toolbar, against the edge the drawer slides from -- it
+   used to sit at the far right with the download and the gear, the opposite
+   end of the screen from the thing it opens. The chevron points at the
+   sidebar and flips when it is shut, so the tag states the outcome of a
+   click rather than the current state, the rule the sort pill follows.
    
-   It is a button in both states: hover and cursor never depend on which
-   state it is in, because it is always pressable. */
+   Quiet while the sidebar is OPEN and tinted once it is SHUT. With the list
+   on screen the tag is reporting a number and the dock's two-tone badge is
+   the right look for that; shut, it is the only way back, so it takes the
+   house control tint. The colour is the invitation and it only appears when
+   there is something to invite.
+   ========================================================================= */
 .pp-cohort-count {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 6px 3px 8px;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
   font: inherit;
   font-size: 11px;
   font-weight: 500;
   line-height: 1.4;
-  border-radius: 4px; /* --blockr-radius-sm */
+  border-radius: 6px; /* --blockr-radius-md, one step up from the badge it was */
   background: var(--blockr-grey-100, #f3f4f6);
   color: var(--blockr-color-text-muted, #6b7280);
   border: 1px solid var(--blockr-color-border, #e5e7eb);
   white-space: nowrap;
   cursor: pointer;
+  flex: 0 0 auto;
   transition: background-color 0.15s ease, border-color 0.15s ease,
               color 0.15s ease;
 }
@@ -1358,14 +1361,6 @@
   display: none;
 }
 
-.pp-cohort-count svg {
-  flex-shrink: 0;
-  opacity: 0.8;
-}
-
-/* Which way the click goes. Points at the sidebar while it is open and away
-   once it is shut, so the tag states the outcome rather than the current
-   state -- the rule the sort pill already follows. */
 .pp-cohort-count-car {
   font-size: 12px;
   line-height: 1;
@@ -1390,11 +1385,12 @@
   min-width: 0;
   flex: 1 1 auto;
   height: 42px;
-  /* Line the id up with the panel titles underneath it. .pp-chart-area
-     insets 4px and each panel adds a 1px border and 12px of header padding,
-     so those titles start 13px into this box -- and the id, which used to
-     sit flush against the sidebar's edge, now starts with them. */
-  padding-left: 13px;
+  /* The cohort tag is the first thing in here and provides the inset the id
+     used to need, so this only makes up the difference to where the panel
+     titles below start: .pp-chart-area insets 4px, and each panel adds a 1px
+     border and 12px of header padding. */
+  padding-left: 5px;
+  gap: 10px;
 }
 
 .pp-subject-gap {
@@ -1483,17 +1479,6 @@
   display: block;
 }
 
-/* The list holds focus so the arrow keys can walk it; the ring would
-   otherwise draw around all 254 rows every time a patient is clicked. */
-.pp-cohort-well:focus {
-  outline: none;
-}
-
-.pp-cohort-well:focus-visible {
-  outline: 2px solid var(--blockr-color-primary, #3b82f6);
-  outline-offset: -2px;
-}
-
 /* === Cohort list ============================================================
    The sidebar has two tenants now: the cohort above, the panels below. The
    cohort well is a FIXED height that scrolls, deliberately -- a 200-patient
@@ -1546,28 +1531,6 @@
   font-weight: 600;
 }
 
-/* Sort. The house click-through pill (.pp-ctrl-group / .pp-ctrl-pill, shared
-   with the gantt's LANES control), so it needs no styling of its own beyond
-   sitting in the sidebar's margins rather than a panel header. */
-.pp-cohort-sortrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px 6px;
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-/* The pill's own group sits inside the row and brings no padding of its
-   own -- the row above owns the margins. */
-.pp-cohort-sortrow .pp-cohort-sort {
-  padding: 0;
-}
-
-.pp-cohort-sort-gap {
-  flex: 1 1 auto;
-}
-
 /* The lifted id prefix, named once so nothing is hidden. */
 .pp-cohort-prefix {
   font-size: 10px;
@@ -1579,6 +1542,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* No focus ring on the list itself.
+   
+   The well takes focus so the arrow keys reach it. Clicking a patient was
+   already exempt (:focus), but the first key press made it focus-VISIBLE and
+   drew a 2px blue outline around all 254 rows -- a ring around the
+   container, while the thing that actually moves is the selected row inside
+   it. The row is bordered and tinted when it is picked, which is the same
+   information in the place the eye is already looking. */
+.pp-cohort-well:focus,
+.pp-cohort-well:focus-visible {
+  outline: none;
 }
 
 .pp-cohort-well {
@@ -1593,17 +1569,31 @@
      against: `.pp-layout` and every ancestor up to the card body are
      content-height (the block sits in an accordion that grows), so a
      flexible well simply expanded to all 254 rows -- 11,182px of sidebar.
-     The subtrahend is the rest of the page at this width: the block header
-     and the sidebar's own chrome above the well, plus the room the panel
-     list needs below it before it starts scrolling.
+     The subtrahend is what is above the well plus a small margin under it:
+     measured, the well's top edge sits 262px down the viewport (the board
+     chrome, the block header, the search box and the caption row), and 300
+     leaves ~38px under it. It was 660, which was right when the panel list
+     lived below the well and needed room of its own -- that list moved into
+     the toolbar's + Add menu, and the 400px it reserved were left standing
+     as empty sidebar.
      
-     The floor matters as much as the growth, and it is the height this
-     rule replaces: five rows. A first cut floored at three, which on a
-     laptop gave FEWER patients than the fixed height did -- an improvement
-     on big screens paid for on small ones. Floored here instead, the change
+     The floor matters as much as the growth. A first cut floored at three
+     rows, which on a laptop gave FEWER patients than the old fixed height
+     did -- an improvement on big screens paid for on small ones. Floored at
+     six here, one more than the height this rule replaced, so the change
      can only ever add rows. */
-  max-height: max(225px, calc(100vh - 660px));
-  min-height: 225px; /* 5 x 44px + the well's own 5px bottom padding */
+  /* The FALLBACK, and only that: sizeWell() in the block's script measures
+     the box the block was actually given (a dock panel has a definite
+     height) and writes an inline max-height over this one. This is what
+     applies before that runs, and in any host where nothing above the well
+     scrolls.
+     
+     min-height is three rows, not six, because it beats max-height in the
+     cascade: floored at six, a short dock panel kept a 264px list inside a
+     235px space and pushed it through the bottom. Six is what the measured
+     rule gives on any panel with the room for it. */
+  max-height: max(264px, calc(100vh - 300px));
+  min-height: 132px; /* 3 x 44px */
   overflow-y: auto;
   /* Never sideways. A row that cannot fit must shrink or ellipsize, and the
      rules below make sure it can -- a horizontal scrollbar in a 232px
@@ -1752,7 +1742,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 10px 6px;
+  /* It sits directly under the search box, which has a border of its own,
+     and 0 on top put the caption against that line. */
+  padding: 9px 10px 7px;
   font-size: 10px;
   line-height: 1.4;
   color: #9ca3af;
@@ -1760,18 +1752,36 @@
   min-width: 0;
 }
 
+/* The same ring, in front of the caption. Tinted like the one on the panel
+   rather than muted like the words after it: the pairing is the only thing
+   that teaches either of them. */
 .pp-cohort-bandcap .pp-band-glyph {
   flex: 0 0 auto;
-  opacity: 0.7;
+  color: #2563eb;
 }
 
+/* The code, and it never shrinks. The row holds four things in 216px now
+   that the sort rides on it, and this is the one a reader matches against
+   the cards -- an ellipsis here (A..) makes the row point at nothing. The
+   full name beside it is what yields, because the card it names is on
+   screen and prints it whole. */
 .pp-cohort-bandcap-what {
   color: #6b7280;
   font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* The parameter's full name behind its code, in the caption. Same relation
+   the cards use -- ALB in the readable colour, Albumin (g/L) muted after it.
+   It yields its width first, because the code is the half that identifies. */
+.pp-cohort-bandcap-sub {
+  color: #9ca3af;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 /* The panel's search term, echoed. Without it the bands go sparse for no
@@ -1808,6 +1818,17 @@
 /* How many of this patient's records the search matched. Printed even when
    it is zero (as an en dash), because an empty band with no number beside it
    reads as "no data" rather than as "none of what you asked for". */
+/* What the list was sorted by, per row. Same slot, same type and colour as
+   the search hit count, because they are the same kind of thing: a small
+   number that explains the shape of the list you are looking at. */
+.pp-pt-val {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .pp-pt-hits {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -1929,9 +1950,21 @@
 
 /* The panel underneath must not also dim, or the cross-fade shows through as
    a flicker. Shiny's own busy treatment is the wrong one here: the ghost IS
-   the busy treatment. */
-.pp-chart-panel.recalculating {
-  opacity: 1 !important;
+   the busy treatment.
+   
+   It has to be the CHILDREN, and that is the whole bug. Shiny dims a busy
+   output with
+   
+     div:where(.shiny-html-output):has(> *).recalculating > * { opacity: .3 }
+   
+   -- the children, not the output -- because the output box itself is
+   display:contents in this app and has no box to fade (blockr.ui#41). The
+   rule that used to be here set the opacity of the output, which is the one
+   element the fade was never on, so it did nothing: every patient change
+   dimmed the whole stack to 30% for ~250ms, then drew the new charts. That
+   is the two refreshes it looked like, and it was two. */
+.pp-chart-panel.recalculating > * {
+  opacity: 1;
 }
 
 
@@ -2238,27 +2271,15 @@ body.pp-dragging * {
 .pp-band-tag {
   display: none;
   align-items: center;
-  gap: 4px;
   flex: 0 0 auto;
-  height: 16px;
-  padding: 0 6px;
-  border-radius: 4px; /* --blockr-radius-sm */
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
-  white-space: nowrap;
+  /* Bare: no chip, no border, no words. A tinted pill around a 9px mark
+     reads as an empty button, and this header already carries two real
+     ones. The colour is what says "marked" rather than "decoration". */
+  color: #2563eb;
 }
 
 .pp-chart-panel.pp-is-band .pp-band-tag {
   display: inline-flex;
-}
-
-.pp-band-tag .pp-band-glyph {
-  opacity: 0.75;
 }
 
 /* --- Ordering inside the picker --------------------------------------------
@@ -2322,6 +2343,22 @@ body.pp-dragging * {
   border-bottom-color: #3b82f6;
 }
 
+/* A parameter's code, in the list above. Same column and same width as the
+   catalogue's, so the two lists line up while a row travels between them. */
+.pp-add-ord-code {
+  flex: 0 0 46px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: #9ca3af;
+}
+
+/* Where it landed. The move itself says what happened; this is for the case
+   where the landing is scrolled out of the visible part of the list. */
+.pp-add-ord.is-landed {
+  background: #eff6ff;
+  transition: background 420ms ease;
+}
+
 .pp-add-ord-grip {
   display: inline-flex;
   align-items: center;
@@ -2367,4 +2404,37 @@ body.pp-dragging * {
   text-overflow: ellipsis;
   min-width: 0;
   flex: 0 1 auto;
+}
+
+/* How the list is ordered, as a clause at the end of the caption row rather
+   than a labelled control on a row of its own. Grey and 10px like the
+   caption it sits on: a once-a-session control that reads as part of the
+   sentence, not as a button parked above the list. */
+.pp-cohort-sortby {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  padding: 0 0 0 6px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #9ca3af;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pp-cohort-sortby b {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.pp-cohort-sortby:hover,
+.pp-cohort-sortby:hover b {
+  color: #111827;
+}
+
+/* Everything before this yields; the sort and the prefix sit at the edge. */
+.pp-cohort-bandcap-gap {
+  flex: 1 1 auto;
+  min-width: 4px;
 }
