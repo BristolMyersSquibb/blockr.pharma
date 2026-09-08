@@ -2158,7 +2158,9 @@ new_patient_profile_block <- function(selected = NULL,
                   id = ns("search"),
                   # Patients only now: the panels this used to
                   # find are in the picker's own box.
-                  placeholder = "Search patients..."
+                  # One box, two tenants: the panels above it and the
+                  # patients below it.
+                  placeholder = "Search panels and patients..."
                 ),
                 # Clear: appears only while the box has text. Restores the
                 # full list, SELECTED section included.
@@ -2181,6 +2183,22 @@ new_patient_profile_block <- function(selected = NULL,
 
             # The cohort. Above the panels because it is what you come back
             # to: panels are set once, patients are stepped through.
+            # The panels, above the patients.
+            #
+            # They were a list here, then a menu behind a toolbar button,
+            # and they are a list here again -- with the difference that
+            # this one shows what is ON the profile rather than a catalogue
+            # of everything. The catalogue only exists while the search box
+            # has something in it, so the column costs five rows instead of
+            # the whole study's parameter set.
+            #
+            # Above rather than below the patients for two reasons that only
+            # showed up on screen: the list reads top-down in the same order
+            # as the cards it controls, so a drag here is a drag next to the
+            # thing it moves; and a search puts its hits under the box
+            # rather than under 254 patient rows, where they would be off
+            # screen.
+            shiny::uiOutput(ns("panel_picker")),
             shiny::div(class = "pp-sidebar-section",
               # No heading either. A column of patient ids under a box that
               # says "Search patients", with "254 patients" against its edge,
@@ -2262,27 +2280,6 @@ new_patient_profile_block <- function(selected = NULL,
                 shiny::span(class = "pp-subject-gap")
               ),
 
-              # Adding a panel, from the toolbar rather than from a list in
-              # the sidebar. The button carries the count of what is on the
-              # profile, which is the number you want before you open it, and
-              # it sits here so it never scrolls away under a long stack.
-              shiny::div(
-                class = "pp-add-wrap", id = ns("pp_add_wrap"),
-                shiny::tags$button(
-                  class = "pp-add-btn",
-                  id = ns("pp_add_btn"),
-                  type = "button",
-                  # "Panel" is the word the rest of this reads by: the
-                  # picker searches panels and parameters, the grip drags
-                  # panels, and a parameter has been a panel of its own
-                  # since the chips went. "Add" alone said nothing about
-                  # what would arrive.
-                  title = "Add a panel or parameter",
-                  shiny::HTML("&plus; Add panel"),
-                  shiny::span(class = "pp-add-n")
-                ),
-                shiny::uiOutput(ns("panel_picker"))
-              ),
               shiny::uiOutput(ns("header_bar"))
             ),
             shiny::uiOutput(ns("chart_area"))
@@ -2780,9 +2777,9 @@ new_patient_profile_block <- function(selected = NULL,
             // already does the right thing for a parameter: it adds it to a
             // card that is on the profile, or opens that card showing only
             // that parameter.
-            var addPopId = '", ns("pp_add_pop"), "';
-            var addBtnId = '", ns("pp_add_btn"), "';
-            var addInputId = '", ns("pp_add_input"), "';
+            var addPopId = '", ns("pp_panels"), "';
+            // The sidebar's own box: there is no second search any more.
+            var addInputId = '", ns("search"), "';
 
             function addRows(){
               return document.querySelectorAll('#' + addPopId + ' .pp-add-row');
@@ -2839,6 +2836,11 @@ new_patient_profile_block <- function(selected = NULL,
                 return r.getAttribute('data-viz-id'); });
               var same = have.length === want.length &&
                 have.every(function(v, i){ return v === want[i]; });
+              // The count on the heading, set where the list is painted.
+              // It was set from sync_selected, which fires on CHANGE -- so
+              // at boot it landed before the heading existed and the profile
+              // said nothing until you touched something.
+              $('#' + layoutId + ' .pp-add-n').text(want.length || '');
               if (same) { addOnVisibility(host); return; }
               host.innerHTML = '';
               want.forEach(function(id){
@@ -2878,16 +2880,14 @@ new_patient_profile_block <- function(selected = NULL,
               addOnVisibility(host);
             }
 
-            // While searching, the results answer the question and the list
-            // above is chrome in the way. Split out because the repaint is
-            // skipped when nothing changed, and this still has to run.
+            // Hidden only when there is nothing on the profile. It used to
+            // hide while searching too, when it lived in a menu and the
+            // results were the whole answer; in the sidebar it is the
+            // profile itself and a search is a thing happening beneath it.
             function addOnVisibility(host){
               var wrap = host.parentElement;
               if (!wrap) return;
-              var inp = document.getElementById(addInputId);
-              var q = inp ? inp.value : '';
-              wrap.classList.toggle('is-hidden',
-                !!q.trim() || !lastSelected.length);
+              wrap.classList.toggle('is-hidden', !lastSelected.length);
             }
 
             // Picking moves a thing, it does not tick it.
@@ -3024,7 +3024,7 @@ new_patient_profile_block <- function(selected = NULL,
                 var before = addFlipRects();
                 lastSelected = lastSelected.filter(function(x){
                   return x !== id; });
-                $('#' + addBtnId + ' .pp-add-n').text(lastSelected.length || '');
+                $('#' + layoutId + ' .pp-add-n').text(lastSelected.length || '');
                 filterAdd();
                 addFlipPlay(before, null);
                 Shiny.setInputValue(toggleInputId, id, {priority: 'event'});
@@ -3051,15 +3051,13 @@ new_patient_profile_block <- function(selected = NULL,
               addRows().forEach(function(r){
                 total++;
                 var hay = r.getAttribute('data-search-text') || '';
-                // No query: the panels you could ADD. Parameters stay out --
-                // a study's whole parameter set is not a menu -- and so do
-                // the panels already on the profile, because they are listed
-                // above in their own order. Searching shows everything that
-                // matches, ticked or not, so a hit is never missing.
-                var ok = q
-                  ? hay.indexOf(q) >= 0
-                  : (r.getAttribute('data-kind') === 'panel' &&
-                     lastSelected.indexOf(r.getAttribute('data-viz-id')) < 0);
+                // No query, no catalogue. What the sidebar shows then is the
+                // profile you have, which is the list above this one; sixty
+                // rows of everything a study measures is not a menu, and it
+                // is the reason this list left the sidebar in the first
+                // place. Searching shows every match, on the profile or not,
+                // so a hit is never missing.
+                var ok = q ? hay.indexOf(q) >= 0 : false;
                 r.classList.toggle('is-hidden', !ok);
                 if (ok) shown++;
               });
@@ -3077,57 +3075,20 @@ new_patient_profile_block <- function(selected = NULL,
                 g.classList.toggle('is-hidden', !any || !!q);
               });
               var none = pop.querySelector('.pp-add-none');
-              if (none) none.classList.toggle('is-shown', shown === 0);
+              // Only when the query found nothing ANYWHERE. It counted panel
+              // hits alone, so searching for a patient id -- which no panel
+              // matches -- printed an empty-result line directly above the
+              // patient it had just found.
+              if (none) {
+                var pats = document.querySelectorAll(
+                  '#' + layoutId + ' .pp-pt:not(.is-filtered-out)').length;
+                none.classList.toggle('is-shown', !!q && shown === 0 && !pats);
+              }
               var cnt = pop.querySelector('.pp-add-count');
               if (cnt) cnt.textContent = shown + ' of ' + total;
             }
 
-            // How tall the menu may be: the room under the toolbar, inside
-            // the box that clips it. The width is CSS (both edges pinned to
-            // the toolbar); the height cannot be, because a percentage
-            // resolves against the toolbar, which is 42px tall. Same
-            // measurement the cohort well makes, for the same reason -- a
-            // short dock panel is a real size here, not a corner case.
-            function sizeAddPop(){
-              var pop = document.getElementById(addPopId);
-              if (!pop) return;
-              var host = wellHost(pop) || document.documentElement;
-              var room = host.getBoundingClientRect().bottom -
-                pop.getBoundingClientRect().top - 12;
-              // Never so short that it stops being a menu; below this the
-              // list scrolls and the popover keeps its own scrollbar.
-              pop.style.maxHeight = Math.max(160, Math.round(room)) + 'px';
-            }
-
-            function openAdd(on){
-              var pop = document.getElementById(addPopId);
-              if (!pop) return;
-              pop.classList.toggle('is-open', on);
-              $('#' + addBtnId).toggleClass('is-open', on);
-              if (on) {
-                sizeAddPop();
-                paintAddTicks();
-                var inp = document.getElementById(addInputId);
-                if (inp) { inp.value = ''; filterAdd(); inp.focus(); }
-              }
-            }
-
-            $(document).on('click', '#' + addBtnId, function(e){
-              e.stopPropagation();
-              var pop = document.getElementById(addPopId);
-              openAdd(!(pop && pop.classList.contains('is-open')));
-            });
-            $(document).on('click', '#' + addPopId, function(e){
-              e.stopPropagation();
-            });
-            $(document).on('input', '#' + addInputId, filterAdd);
-            $(document).on('keydown', '#' + addInputId, function(e){
-              if (e.key === 'Escape') { e.preventDefault(); openAdd(false); }
-            });
-            // Clicking away closes it, like the gear popover.
-            $(document).on('click', function(){ openAdd(false); });
-
-            $(document).on('click', '#' + addPopId + ' .pp-add-row', function(e){
+            $(document).on('click', '#' + layoutId + ' .pp-add-row', function(e){
               e.stopPropagation();
               var kind = this.getAttribute('data-kind');
               var vizId = this.getAttribute('data-viz-id');
@@ -3139,11 +3100,22 @@ new_patient_profile_block <- function(selected = NULL,
               var before = addFlipRects();
               this.classList.toggle('is-on', nowOn);
               if (kind === 'panel') {
+                // The query has done its job, and it is also hiding the
+                // cohort: one box filters both lists, so a query left
+                // standing after the pick leaves the patients filtered away
+                // by a search you have already acted on.
+                var box = document.getElementById(addInputId);
+                if (box && box.value) {
+                  box.value = '';
+                  window.setTimeout(function(){
+                    $(box).trigger('input');
+                  }, 0);
+                }
                 var at = lastSelected.indexOf(vizId);
                 if (nowOn && at < 0) lastSelected = lastSelected.concat([vizId]);
                 if (!nowOn && at >= 0) lastSelected = lastSelected.filter(
                   function(x){ return x !== vizId; });
-                $('#' + addBtnId + ' .pp-add-n').text(lastSelected.length || '');
+                $('#' + layoutId + ' .pp-add-n').text(lastSelected.length || '');
                 // Both lists, now: the catalogue drops what it just handed
                 // upwards. filterAdd() repaints the list above as well.
                 filterAdd();
@@ -3673,6 +3645,13 @@ new_patient_profile_block <- function(selected = NULL,
                   !!query && hay.indexOf(query) === -1);
               });
 
+              // One box, two tenants: the panels above and the patients
+              // below. AFTER the rows above, because the empty-result line
+              // has to count both lists -- run first, it counted the
+              // patients the PREVIOUS query had left standing.
+              filterAdd();
+              markFirstHit();
+
               // An emptied domain group keeps its header off screen (the
               // selection sync moves cards out but leaves the group in place).
               $sidebar.find('.pp-category-group').each(function() {
@@ -3691,12 +3670,41 @@ new_patient_profile_block <- function(selected = NULL,
             });
 
             // Escape clears too, while the box has focus
+            // What Enter would take.
+            //
+            // The first hit in reading order: a panel if the query found
+            // one, since panels are listed above, otherwise the first
+            // patient still standing. Marked as well as acted on -- a key
+            // that does something invisible is a key nobody presses.
+            function firstHit(){
+              var row = document.querySelector(
+                '#' + addPopId + ' .pp-add-row:not(.is-hidden)');
+              if (row) return row;
+              return document.querySelector(
+                '#' + layoutId + ' .pp-pt:not(.is-filtered-out)');
+            }
+
+            function markFirstHit(){
+              var q = ($('#' + searchId).val() || '').trim();
+              $('#' + layoutId + ' .is-enter').removeClass('is-enter');
+              if (!q) return;
+              var row = firstHit();
+              if (row) row.classList.add('is-enter');
+            }
+
             $(document).on('keydown', '#' + searchId, function(e) {
-              if (e.key !== 'Escape' && e.keyCode !== 27) return;
-              if (!$(this).val()) return;
-              e.stopPropagation();
-              $(this).val('');
-              applyFilter();
+              if (e.key === 'Escape' || e.keyCode === 27) {
+                if (!$(this).val()) return;
+                e.stopPropagation();
+                $(this).val('');
+                applyFilter();
+                return;
+              }
+              if (e.key !== 'Enter' && e.keyCode !== 13) return;
+              var row = firstHit();
+              if (!row) return;
+              e.preventDefault();
+              row.click();
             });
 
             // A live query and the parameter check marks must both survive a
@@ -3972,7 +3980,7 @@ new_patient_profile_block <- function(selected = NULL,
               // The + button says how many cards are on the profile, and the
               // picker ticks the ones that are.
               lastSelected = selected;
-              $('#' + addBtnId + ' .pp-add-n').text(selected.length || '');
+              $('#' + layoutId + ' .pp-add-n').text(selected.length || '');
               paintAddTicks();
 
               var $layout = $('#' + layoutId);

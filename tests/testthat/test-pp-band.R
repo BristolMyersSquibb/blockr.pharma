@@ -506,13 +506,15 @@ test_that("a parameter matches its own name, never its group's keywords", {
   expect_false(grepl("albumin", hay, fixed = TRUE))
 })
 
-test_that("a study with no parameters gets a panels-only picker", {
+test_that("a study with no parameters lists only panels", {
   vizs <- list(ae = viz_stub("ae", pp_band_ae(), "adae"))
   html <- picker_html(vizs)
   expect_false(grepl("is-param", html, fixed = TRUE))
-  # And the box says so rather than promising a search it cannot answer.
-  expect_match(html, "Search panels", fixed = TRUE)
-  expect_false(grepl("Search panels and parameters", html, fixed = TRUE))
+
+  # The section carries no search box of its own: the sidebar's one box
+  # searches the panels above it and the patients below it.
+  expect_false(grepl("pp-add-input", html, fixed = TRUE))
+  expect_match(html, "On the profile", fixed = TRUE)
 })
 
 test_that("a parameter card's caption does not name its parameter twice", {

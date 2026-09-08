@@ -320,11 +320,11 @@ pp_search_icon <- function() {
 #' keywords: on the ECG card, `qt` returned all five intervals instead of the
 #' two with QT in the name.
 #'
-#' @section Panels first, parameters only on demand:
-#' With an empty box the list is the panels, grouped by domain -- the sidebar's
-#' old AVAILABLE list, on demand. Parameters appear once something is typed,
-#' because a study's full parameter set is sixty-odd rows and that is not a
-#' menu.
+#' @section Nothing until you ask:
+#' With an empty box the catalogue is not shown at all: what the sidebar
+#' shows then is the profile you have, which is the list above it. Panels and
+#' parameters appear together once something is typed, because a study's full
+#' parameter set is sixty-odd rows and that is not a menu.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
 #' @param ns The module's namespace function.
@@ -391,24 +391,9 @@ pp_add_picker_ui <- function(avail, ns) {
   # what an empty box offers, as the sidebar's AVAILABLE list did.
   param_rows <- unname(lapply(Filter(is_param, avail), viz_row, dom = ""))
 
-  n_param <- length(param_rows)
 
   shiny::div(
-    class = "pp-add-pop", id = ns("pp_add_pop"),
-    shiny::div(
-      class = "pp-add-find",
-      shiny::HTML(pp_search_icon()),
-      shiny::tags$input(
-        type = "text",
-        class = "pp-add-input",
-        id = ns("pp_add_input"),
-        placeholder = if (n_param) {
-          "Search panels and parameters"
-        } else {
-          "Search panels"
-        }
-      )
-    ),
+    class = "pp-panels", id = ns("pp_panels"),
     # What is on the profile, in profile order, and draggable.
     #
     # Filled by the client rather than rendered here: the order changes on
@@ -416,17 +401,15 @@ pp_add_picker_ui <- function(avail, ns) {
     # section that has to follow the order cannot be part of it.
     shiny::div(
       class = "pp-add-on-wrap",
-      shiny::div(class = "pp-add-group", "On the profile"),
+      shiny::div(class = "pp-add-group", "On the profile",
+                 shiny::span(class = "pp-add-n")),
       shiny::div(class = "pp-add-on", id = ns("pp_add_on"))
     ),
+    # The catalogue. Present but silent until the sidebar's search box has
+    # something in it: a study's whole parameter set is not a menu, and the
+    # list above already says what you have.
     shiny::div(class = "pp-add-results", panel_rows, param_rows),
-    shiny::div(class = "pp-add-none", "Nothing matches"),
-    shiny::div(
-      class = "pp-add-foot",
-      shiny::span(shiny::tags$kbd("↵"), " add or remove"),
-      shiny::span(shiny::tags$kbd("esc"), " done"),
-      shiny::span(class = "pp-add-count")
-    )
+    shiny::div(class = "pp-add-none", "Nothing matches")
   )
 }
 

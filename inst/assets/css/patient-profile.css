@@ -1977,47 +1977,30 @@
 }
 
 
-/* --- Adding a panel --------------------------------------------------------
-   The + lives in the toolbar rather than at the end of the stack, so it never
-   scrolls away under a long profile. It wears the house control tint -- the
-   same one every click-through pill in a panel header wears -- because a
-   36px dashed rectangle across the full width was the heaviest thing on a
-   screen made of thin-bordered cards.
-   ========================================================================= */
-/* The button's own box, and NOT the menu's positioning context: the menu is
-   wider than the button, and anchoring it here is what made a narrow block
-   cut it off. See .pp-add-pop. */
-.pp-add-wrap {
-  flex: 0 0 auto;
+/* What Enter would take: the first hit, in either list.
+   
+   A ring rather than a fill, because in the cohort the fill already means
+   "this is the patient on screen" and the two would be indistinguishable
+   at a glance. It only ever appears while the box has something in it. */
+.pp-pt.is-enter,
+.pp-add-row.is-enter {
+  box-shadow: inset 0 0 0 1px #93c5fd;
+  border-radius: 5px;
 }
 
-.pp-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 6px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
-  color: #1d4ed8;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+/* What Enter would take: the first hit, in either list.
+   
+   A ring rather than a fill, because in the cohort the fill already means
+   "this is the patient on screen" and the two would be indistinguishable
+   at a glance. It only ever appears while the box has something in it. */
+.pp-pt.is-enter,
+.pp-add-row.is-enter {
+  box-shadow: inset 0 0 0 1px #93c5fd;
+  border-radius: 5px;
 }
 
-.pp-add-btn:hover,
-.pp-add-btn.is-open {
-  background: #dbeafe;
-  border-color: #bfdbfe;
-}
-
-/* How many cards are on the profile. Blank rather than "0": an empty profile
-   already says so in the chart area, and a zero on a button reads as broken. */
+/* How many panels are on the profile, on the section's own heading. Blank
+   rather than "0": an empty profile already says so in the chart area. */
 .pp-add-n {
   font-variant-numeric: tabular-nums;
   opacity: 0.6;
@@ -2030,44 +2013,29 @@
 /* The picker. Anchored to the button rather than portalled: it is inside the
    chart area, which does not clip it, and portalling is reserved for the
    dropdowns that have to escape a dock panel. */
-/* The menu fits the box it is in.
+/* The panels, in the sidebar, above the patients.
    
-   It was 340px anchored to the button, inside the scrolling chart column,
-   and four ancestors clip that column: .pp-chart-area, .pp-layout, the dock
-   panel and the view container. On a narrow block -- a split dock, a
-   400px-wide profile -- the right 76px of the menu were simply not drawn,
-   with no scrollbar and no cut edge to say so.
-   
-   position:fixed does not rescue it: dv-render-overlay carries a transform,
-   will-change and contain:layout paint, so it is the containing block for
-   fixed children and paints them clipped anyway.
-   
-   So the menu stops being wider than its box. Both edges are pinned to the
-   toolbar, max-width holds its usual size on a roomy screen, and the auto
-   left margin keeps it under the button it belongs to. Same shape as the
-   crossfilter popover in blockr.dm, which pins left and right for the same
-   reason. */
-.pp-add-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 8px;
-  right: 8px;
-  width: auto;
-  max-width: 340px;
-  margin-left: auto;
-  z-index: 30;
-  display: none;
-  flex-direction: column;
+   This was a 340px menu anchored to a toolbar button, and before that a
+   catalogue of everything under the cohort. It is the profile you have --
+   five rows, capped, scrolling past that -- with the catalogue appearing
+   under it only while the search box has something in it. The column costs
+   the cohort five rows instead of the whole study's parameter set.
+   ========================================================================= */
+.pp-panels {
+  flex: 0 0 auto;
   min-height: 0;
-  padding: 6px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px; /* --blockr-radius-lg */
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  padding: 0 5px 6px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.pp-add-pop.is-open {
-  display: flex;
+/* Five rows, then it scrolls. Uncapped, a profile of twelve panels is a
+   312px list and the cohort under it is down to two patients -- which is
+   the failure the old sidebar had, and the reason this list left it. */
+.pp-add-on {
+  max-height: 145px;
+  overflow-y: auto;
 }
 
 .pp-add-find {
@@ -2332,11 +2300,6 @@ body.pp-dragging * {
 
 .pp-add-on {
   margin-bottom: 2px;
-  /* Bounded, like the catalogue below it. Unbounded, a profile with a dozen
-     cards grew a popover taller than the window and its last rows could not
-     be reached at all -- which is exactly the list you most need to reorder. */
-  max-height: 196px; /* 7 x 28px */
-  overflow-y: auto;
 }
 
 .pp-add-on::-webkit-scrollbar {
