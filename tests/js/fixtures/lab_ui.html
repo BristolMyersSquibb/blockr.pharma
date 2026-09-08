@@ -1,0 +1,34 @@
+<div class="pp-layout" id="proxy1-pp_layout">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="proxy1-check" viewBox="0 0 16 16"><path fill="currentColor" d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></symbol></svg>
+  <div class="pp-sidebar" id="proxy1-pp_sidebar">
+    <div class="pp-sidebar-search">
+      <div class="pp-sidebar-search-wrapper">
+        <span class="pp-sidebar-search-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></span>
+        <input type="text" class="pp-sidebar-search-input" id="proxy1-search" placeholder="Search panels and patients..."/>
+        <button class="pp-sidebar-search-clear is-hidden" id="proxy1-search_clear" type="button" title="Clear search"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg></button>
+      </div>
+    </div>
+    <div id="proxy1-panel_picker" class="shiny-html-output"></div>
+    <div class="pp-sidebar-section">
+      <div id="proxy1-cohort_band_caption" class="shiny-html-output"></div>
+      <div class="pp-cohort-well" id="proxy1-pp_cohort_well" tabindex="-1" role="listbox" aria-label="Cohort">
+        <div id="proxy1-sidebar_cohort" class="shiny-html-output"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pp-chart-area">
+    <div class="pp-chart-toolbar">
+      <div class="pp-subject-picker" id="proxy1-pp_picker">
+        <button class="pp-cohort-count is-hidden" id="proxy1-pp_cohort_count" type="button" title="Show or hide the cohort">
+          <span class="pp-cohort-count-car">&lsaquo;</span>
+          <span class="pp-cohort-count-n"></span>
+        </button>
+        <span id="proxy1-subject_facts" class="shiny-html-output"></span>
+        <span class="pp-subject-gap"></span>
+      </div>
+      <div id="proxy1-header_bar" class="shiny-html-output"></div>
+    </div>
+    <div id="proxy1-chart_area" class="shiny-html-output"></div>
+  </div>
+</div>
+<script>$(function() { PatientProfile.mount({"id":"proxy1","grip":"<svg width=\"10\" height=\"16\" viewBox=\"0 0 10 16\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"3\" cy=\"4\" r=\"1.35\"/><circle cx=\"7\" cy=\"4\" r=\"1.35\"/><circle cx=\"3\" cy=\"8\" r=\"1.35\"/><circle cx=\"7\" cy=\"8\" r=\"1.35\"/><circle cx=\"3\" cy=\"12\" r=\"1.35\"/><circle cx=\"7\" cy=\"12\" r=\"1.35\"/><\/svg>","bandH":8}); });</script>

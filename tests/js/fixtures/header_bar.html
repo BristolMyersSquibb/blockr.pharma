@@ -1,0 +1,36 @@
+<div class="pp-cohort-hint d-flex justify-content-end align-items-center">
+  <details id="proxy1-pp_dl_root" class="pp-dl-menu is-hidden">
+    <summary class="pp-dl-btn" title="Download profile" aria-label="Download profile"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/><path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg></summary>
+    <div class="pp-dl-menu-list" role="menu">
+      <div class="pp-dl-scope pp-dl-scope-patient is-hidden">
+        <div class="pp-dl-menu-label" id="proxy1-pp_dl_label_patient">This patient</div>
+        <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_profile_pptx" tabindex="-1" target="_blank">PowerPoint (.pptx)</a>
+        <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_profile_html" tabindex="-1" target="_blank">Web page (.html)</a>
+      </div>
+      <div class="pp-dl-scope pp-dl-scope-cohort is-hidden">
+        <div class="pp-dl-menu-label" id="proxy1-pp_dl_label_cohort">Cohort</div>
+        <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_cohort_xlsx" tabindex="-1" target="_blank">Patient list (.xlsx)</a>
+        <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_cohort_pptx" tabindex="-1" target="_blank">PowerPoint (.pptx)</a>
+        <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_cohort_html" tabindex="-1" target="_blank">Web page (.html)</a>
+      </div>
+    </div>
+  </details>
+  <div class="pp-gear-wrap">
+    <button class="pp-gear-btn" id="proxy1-pp_gear_btn" type="button" title="Block settings"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.901-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.541l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.541-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.892-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/></svg></button>
+    <div class="pp-gear-popover" id="proxy1-pp_gear_popover">
+      <div class="pp-popover-row">
+        <span class="pp-popover-label">Timeline</span>
+        <button class="pp-popover-toggle " id="proxy1-pp_tl_toggle" data-tl-mode="rday" type="button" title="Click to switch">Relative day</button>
+      </div>
+      <div class="pp-popover-row">
+        <span class="pp-popover-label">Pre-treatment</span>
+        <button class="pp-popover-toggle" id="proxy1-pp_prestudy_toggle" data-prestudy="0" type="button" title="Show the full pre-treatment history, or only the 30-day screening window before treatment start">Screening only</button>
+      </div>
+      <div class="pp-popover-row">
+        <span class="pp-popover-label">Value lines</span>
+        <button class="pp-popover-toggle" id="proxy1-pp_smooth_toggle" data-smooth="auto" type="button" title="Monotone-smoothed value lines (the curve stays inside the measured range), or straight segments">Smooth</button>
+      </div>
+      <div id="proxy1-gear_coverage" class="shiny-html-output"></div>
+    </div>
+  </div>
+</div>

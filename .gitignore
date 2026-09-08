@@ -4,3 +4,4 @@
 .Ruserdata
 docs
 *.tar.gz
+node_modules/

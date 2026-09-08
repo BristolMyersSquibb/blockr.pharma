@@ -4,7 +4,9 @@ Status: Stage 0 done 2026-09-08 (`tests/testthat/test-shinytest2.R`, 12
 tests, 84 expectations, about 50s, green three times standalone and in the
 full suite). Stage 1 done the same day: `inst/js/patient-profile.js` (0.0.0.9051), the
 R file down to 2,356 lines, body byte for byte apart from the 35 header
-lines that now derive from the mount config. Stages 2 and 3 not started. Written against `3d152dd` (version
+lines that now derive from the mount config. Stage 2 done the same day: `tests/js/` (harness.js + 9 test files, 68
+tests, 2.6s, run from testthat by `test-js.R`), fixtures rendered by
+`tests/js/fixtures/render.R`. Stage 3 not started. Written against `3d152dd` (version
 0.0.0.9050).
 
 ## What we are dealing with
