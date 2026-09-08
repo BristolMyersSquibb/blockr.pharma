@@ -1,3 +1,4 @@
+// @ts-check
 /* The panels: the ghost held over a chart while it re-renders, dragging a
  * panel by its header, the band tag, the controls in a panel header, the
  * find box and its restore, and keeping every chart the width of its
@@ -67,7 +68,8 @@ PatientProfile.part(function(ctx) {
       try {
         dst[i].width = src[i].width;
         dst[i].height = src[i].height;
-        dst[i].getContext('2d').drawImage(src[i], 0, 0);
+        var ctx2d = dst[i].getContext('2d');
+        if (ctx2d) ctx2d.drawImage(src[i], 0, 0);
       } catch (e) { /* tainted or zero-sized; the fade still helps */ }
     }
     document.body.appendChild(ghost);
@@ -157,7 +159,10 @@ PatientProfile.part(function(ctx) {
   // contents }` (blockr.ui#41), so a slot generates no box at all
   // -- zero width, zero height. Its children are the real boxes, so
   // the panel's rect is their union.
+  /** @typedef {{top: number, left: number, right: number, bottom: number}} PpBox */
+  /** @returns {PpBox | null} */
   function panelRect(slot){
+    /** @type {PpBox | null} */
     var box = null;
     for (var i = 0; i < slot.children.length; i++) {
       var r = slot.children[i].getBoundingClientRect();
@@ -172,15 +177,17 @@ PatientProfile.part(function(ctx) {
     return box;
   }
 
+  /** @returns {Array<{el: Element, box: PpBox, id: string}>} */
   function slotPanels(){
     var area = document.getElementById(chartAreaId);
-    if (!area) return [];
-    return [].slice.call(area.querySelectorAll('[id*=viz_slot_]'))
-      .map(function(el){
-        var box = panelRect(el);
-        return box ? {el: el, box: box,
-                      id: el.id.replace(/^.*viz_slot_/, '')} : null;
-      }).filter(Boolean);
+    /** @type {Array<{el: Element, box: PpBox, id: string}>} */
+    var out = [];
+    if (!area) return out;
+    area.querySelectorAll('[id*=viz_slot_]').forEach(function(el){
+      var box = panelRect(el);
+      if (box) out.push({el: el, box: box, id: el.id.replace(/^.*viz_slot_/, '')});
+    });
+    return out;
   }
 
   function showLine(y, left, right){
@@ -353,7 +360,7 @@ PatientProfile.part(function(ctx) {
     var values = $pill.data('values');
     var labels = $pill.data('labels');
     if (!values || !values.length) return;
-    var idx = (parseInt($pill.attr('data-index'), 10) + 1) %
+    var idx = (parseInt($pill.attr('data-index') || '0', 10) + 1) %
       values.length;
     $pill.attr('data-index', idx);
     $pill.text(labels[idx]);
@@ -384,10 +391,10 @@ PatientProfile.part(function(ctx) {
     '#' + layoutId + ' .pp-ctrl-search-input', function() {
       var vizId = $(this).data('viz-id');
       var param = $(this).data('param');
-      var value = $(this).val();
+      var value = String($(this).val() || '');
       searchState = {
         vizId: vizId, param: param, value: value,
-        caret: this.selectionStart, at: Date.now()
+        caret: /** @type {HTMLInputElement} */ (this).selectionStart, at: Date.now()
       };
       // The box owns its own text while the user is in it: the
       // server's confirming re-render must not move the caret, so
@@ -411,7 +418,7 @@ PatientProfile.part(function(ctx) {
   $(document).on('keyup click',
     '#' + layoutId + ' .pp-ctrl-search-input', function() {
       if (searchState && searchState.vizId === $(this).data('viz-id')) {
-        searchState.caret = this.selectionStart;
+        searchState.caret = /** @type {HTMLInputElement} */ (this).selectionStart;
       }
     });
   // No blur handler, deliberately. The blur that fires when the
@@ -440,7 +447,7 @@ PatientProfile.part(function(ctx) {
     // here would end it.
     var sel = '#' + layoutId + ' .pp-ctrl-search-input' +
       '[data-viz-id=' + JSON.stringify(searchState.vizId) + ']';
-    var el = document.querySelector(sel);
+    var el = /** @type {HTMLInputElement | null} */ (document.querySelector(sel));
     if (!el || el === document.activeElement) return;
     if (el.value !== searchState.value) el.value = searchState.value;
     el.focus();
@@ -517,9 +524,10 @@ PatientProfile.part(function(ctx) {
   var chartResizeTimer = null;
 
   function resizeChartsIn(root) {
-    if (typeof echarts === 'undefined') return;
+    const ec = window.echarts;
+    if (!ec) return;
     $(root).find('.echarts4r').each(function() {
-      var inst = echarts.getInstanceByDom(this);
+      var inst = ec.getInstanceByDom(this);
       if (inst) inst.resize();
     });
   }

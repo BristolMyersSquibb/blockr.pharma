@@ -23,7 +23,13 @@ at the call site in the same order, so no new invalidations), the six
 custom messages go through `pp_send()` in `pp-messages.R` with the channel
 table; `patient-profile-block.R` is 1,472 lines. The fixtures regenerate
 byte-identical apart from the htmlwidget ids, now pinned by `render.R`.
-Stage 3d (drop jQuery) not started and optional. Left in on purpose: the
+Stage 3d (drop jQuery) not started and optional.
+
+Type check (2026-09-08, after Christoph asked): `tsconfig.json` as in
+blockr.dplyr, `// @ts-check` on all five files, the R/JS protocol in
+`inst/js/types.d.ts` (six messages, nine inputs, the mount config).
+Implicit-any is off on purpose; the value is the null checks and the
+shapes at the boundary. `npm run typecheck`, and a `typecheck-js` CI job. Left in on purpose: the
 `pick_param` / `sync_params` path (R still owns per-parameter items on a
 multi-parameter panel; no markup reaches it today, so it is a design
 question for the R side, not dead by accident). Written against `3d152dd` (version

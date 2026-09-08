@@ -1,3 +1,4 @@
+// @ts-check
 /* The block header: the cohort count that opens the sidebar, the download
  * menu, the gear and its three toggles.
  *

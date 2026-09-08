@@ -1,3 +1,4 @@
+// @ts-check
 /* The cohort list: picking a patient by click or keyboard, the well's
  * height, the band each row draws as it scrolls into view, the sort clause,
  * and the server's word on who is selected.
@@ -393,7 +394,7 @@ PatientProfile.part(function(ctx) {
     var values = $by.data('values');
     var labels = $by.data('labels');
     if (!values || !values.length) return;
-    var idx = (parseInt($by.attr('data-index'), 10) + 1) %
+    var idx = (parseInt($by.attr('data-index') || '0', 10) + 1) %
       values.length;
     $by.attr('data-index', idx);
     // Only the key, not the whole control: the word before it
@@ -423,7 +424,7 @@ PatientProfile.part(function(ctx) {
     // Bring it back into view: on a long cohort the pick can be
     // hundreds of rows away (the arrow keys walk it there), and a
     // selected row nobody can see is the same as no selection.
-    if ($row.length && $row[0].scrollIntoView) {
+    if ($row.length) {
       $row[0].scrollIntoView({block: 'nearest'});
     }
   });

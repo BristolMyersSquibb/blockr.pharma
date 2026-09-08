@@ -1,3 +1,4 @@
+// @ts-check
 /* The panel picker in the sidebar: the On list, the search over panels and
  * patients, the first hit, the move animation, the On-row drag, and what
  * the server says is on the profile.
@@ -61,10 +62,12 @@ PatientProfile.part(function(ctx) {
     var map = {};
     addRows().forEach(function(r){
       if (r.getAttribute('data-kind') !== 'panel') return;
+      /** @type {HTMLElement | null} */
       var dot = r.querySelector('.pp-add-dot');
       var code = r.querySelector('.pp-add-code');
-      map[r.getAttribute('data-viz-id')] = {
-        label: r.querySelector('.pp-add-name').textContent,
+      var name = r.querySelector('.pp-add-name');
+      map[r.getAttribute('data-viz-id') || ''] = {
+        label: (name && name.textContent) || '',
         colour: dot ? dot.style.background : '',
         code: code ? code.textContent : ''
       };
@@ -85,7 +88,7 @@ PatientProfile.part(function(ctx) {
     // the row out mid-travel -- the tint measured 30ms instead of
     // 600. Comparing first costs one array walk over at most a
     // dozen ids.
-    var have = [].slice.call(host.children).map(function(r){
+    var have = Array.prototype.slice.call(host.children).map(function(r){
       return r.getAttribute('data-viz-id'); });
     var same = have.length === want.length &&
       have.every(function(v, i){ return v === want[i]; });
@@ -96,6 +99,7 @@ PatientProfile.part(function(ctx) {
     $('#' + layoutId + ' .pp-add-n').text(want.length || '');
     if (same) { addOnVisibility(host); return; }
     host.innerHTML = '';
+    var list = host;
     want.forEach(function(id){
       var m = map[id];
       if (!m) return;
@@ -128,7 +132,7 @@ PatientProfile.part(function(ctx) {
       x.innerHTML = '&times;';
       row.appendChild(grip); row.appendChild(mark);
       row.appendChild(name); row.appendChild(x);
-      host.appendChild(row);
+      list.appendChild(row);
     });
     addOnVisibility(host);
   }
@@ -181,8 +185,9 @@ PatientProfile.part(function(ctx) {
     var reduce = addReduceMotion();
     if (!reduce) {
       pop.querySelectorAll('.pp-add-ord, .pp-add-row')
-        .forEach(function(r){
-          var b = before[r.getAttribute('data-viz-id')];
+        .forEach(function(el){
+          var r = /** @type {HTMLElement} */ (el);
+          var b = before[r.getAttribute('data-viz-id') || ''];
           if (!b) return;
           var a = r.getBoundingClientRect();
           if (!a.height) return;
@@ -207,8 +212,9 @@ PatientProfile.part(function(ctx) {
       '.pp-add-ord[data-viz-id=' + JSON.stringify(landed) + ']');
     if (!t) return;
     t.classList.add('is-landed');
+    var landedRow = t;
     window.setTimeout(function(){
-      t.classList.remove('is-landed');
+      landedRow.classList.remove('is-landed');
     }, reduce ? 500 : ADD_FLIP_MS + 420);
   }
 
@@ -220,7 +226,8 @@ PatientProfile.part(function(ctx) {
       if (e.target.closest('button')) return;
       e.preventDefault();
       var host = document.getElementById(addOnId);
-      var rows = [].slice.call(host.children);
+      if (!host) return;
+      var rows = Array.prototype.slice.call(host.children);
       var from = rows.indexOf(this);
       if (from < 0 || rows.length < 2) return;
       this.classList.add('is-dragging');
@@ -270,7 +277,8 @@ PatientProfile.part(function(ctx) {
   $(document).on('click', '#' + addOnId + ' .pp-add-ord-x',
     function(e) {
       e.stopPropagation();
-      var id = this.parentElement.getAttribute('data-viz-id');
+      var id = this.parentElement ?
+        this.parentElement.getAttribute('data-viz-id') : null;
       // The same move, downwards: it travels back to where the
       // catalogue keeps it, which is where you would look for it
       // if you wanted it again.
@@ -298,7 +306,8 @@ PatientProfile.part(function(ctx) {
     renderAddOn();
     var pop = document.getElementById(addPopId);
     if (!pop) return;
-    var inp = document.getElementById(addInputId);
+    var inp = /** @type {HTMLInputElement | null} */ (
+      document.getElementById(addInputId));
     var q = (inp ? inp.value : '').trim().toLowerCase();
     var shown = 0;
     addRows().forEach(function(r){
@@ -354,11 +363,13 @@ PatientProfile.part(function(ctx) {
       // cohort: one box filters both lists, so a query left
       // standing after the pick leaves the patients filtered away
       // by a search you have already acted on.
-      var box = document.getElementById(addInputId);
+      var box = /** @type {HTMLInputElement | null} */ (
+        document.getElementById(addInputId));
       if (box && box.value) {
         box.value = '';
+        var emptied = box;
         window.setTimeout(function(){
-          $(box).trigger('input');
+          $(emptied).trigger('input');
         }, 0);
       }
       var at = lastSelected.indexOf(vizId);
@@ -401,7 +412,7 @@ PatientProfile.part(function(ctx) {
   // on the next.
   function applyFilter() {
     var $sidebar = $('#' + sidebarId);
-    var query = ($('#' + searchId).val() || '').toLowerCase().trim();
+    var query = String($('#' + searchId).val() || '').toLowerCase().trim();
 
     $('#' + clearBtnId).toggleClass('is-hidden', !query);
     $sidebar.toggleClass('is-searching', !!query);
@@ -441,16 +452,18 @@ PatientProfile.part(function(ctx) {
   // one, since panels are listed above, otherwise the first
   // patient still standing. Marked as well as acted on -- a key
   // that does something invisible is a key nobody presses.
+  /** @returns {HTMLElement | null} */
   function firstHit(){
+    /** @type {HTMLElement | null} */
     var row = document.querySelector(
       '#' + addPopId + ' .pp-add-row:not(.is-hidden)');
     if (row) return row;
-    return document.querySelector(
-      '#' + layoutId + ' .pp-pt:not(.is-filtered-out)');
+    return /** @type {HTMLElement | null} */ (document.querySelector(
+      '#' + layoutId + ' .pp-pt:not(.is-filtered-out)'));
   }
 
   function markFirstHit(){
-    var q = ($('#' + searchId).val() || '').trim();
+    var q = String($('#' + searchId).val() || '').trim();
     $('#' + layoutId + ' .is-enter').removeClass('is-enter');
     if (!q) return;
     var row = firstHit();

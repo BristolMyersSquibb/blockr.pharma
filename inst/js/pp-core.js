@@ -1,3 +1,4 @@
+// @ts-check
 /* Patient profile block: the client half, in parts.
  *
  * Each pp-*.js file registers one part with PatientProfile.part(); the

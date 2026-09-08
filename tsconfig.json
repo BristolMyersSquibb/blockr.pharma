@@ -1,0 +1,19 @@
+{
+  // Type-checks the hand-written JS in inst/js — no build step, no emit.
+  // Checking is opt-in per file via a leading `// @ts-check` comment;
+  // the R/JS protocol types live in inst/js/types.d.ts.
+  // Run: npm run typecheck  (or npx -p typescript tsc)
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strictNullChecks": true,
+    // TypeScript 6 is strict by default; the value here is the null checks
+    // and the protocol shapes, not a type on every local parameter.
+    "noImplicitAny": false,
+    "target": "es2021",
+    "lib": ["es2021", "dom", "dom.iterable"],
+    "types": []
+  },
+  "include": ["inst/js/pp-*.js", "inst/js/types.d.ts"]
+}
