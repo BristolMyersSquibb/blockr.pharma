@@ -14,6 +14,17 @@ flag_df <- function() {
 
 ev <- function(e, d) eval(e, list(data = d, . = identity))
 
+# The filtering call inside the filter-trail wrapper. A block that selects
+# something wraps its expression in `blockr.dm::add_filter_trail()` so the
+# result records what was filtered; these tests are about the filtering, so
+# they look through the wrapper. See `blockr.dm::filter_trail()`.
+flag_inner <- function(e) {
+  if (is.call(e) && identical(e[[1L]], quote(blockr.dm::add_filter_trail))) {
+    return(e[[2L]])
+  }
+  e
+}
+
 test_that("no ticked flag passes everything through", {
   e <- make_flag_filter_expr(character(), flag_input_shape(flag_df()))
   expect_identical(e, quote(dplyr::filter(.(data), TRUE)))
@@ -27,7 +38,7 @@ test_that("unticking is never a negative", {
   e <- make_flag_filter_expr("PREFL", flag_input_shape(d))
   expect_equal(nrow(ev(e, d)), 1L)
   # TRTEMFL is simply absent from the expression, not negated.
-  expect_false(grepl("TRTEMFL", deparse(e), fixed = TRUE))
+  expect_false(grepl("TRTEMFL", deparse1(e), fixed = TRUE))
 })
 
 test_that("ticked flags union, and a row with two flags counts once", {
@@ -74,14 +85,15 @@ test_that("pointing it at a non-flag column yields no rows, not an error", {
   # is visible as a zero count plus the expression, not as a crash.
   d <- flag_df()
   e <- make_flag_filter_expr("TRT", flag_input_shape(d))
-  expect_equal(deparse(e), 'dplyr::filter(.(data), TRT %in% c("Y", "y"))')
+  expect_equal(deparse1(flag_inner(e)),
+               'dplyr::filter(.(data), TRT %in% c("Y", "y"))')
   expect_equal(nrow(ev(e, d)), 0L)
 })
 
 test_that("a flag no longer in the data is dropped from the expression", {
   d <- flag_df()
   e <- make_flag_filter_expr(c("PREFL", "GONE"), flag_input_shape(d))
-  expect_identical(e, quote(dplyr::filter(.(data), PREFL %in% TRUE)))
+  expect_identical(flag_inner(e), quote(dplyr::filter(.(data), PREFL %in% TRUE)))
 })
 
 test_that("column metadata carries the label and the would-keep count", {
@@ -209,7 +221,7 @@ test_that("frame mode is untouched by the new argument", {
     make_flag_filter_expr("TRTEMFL", shape, NULL),
     make_flag_filter_expr("TRTEMFL", shape)
   )
-  expect_match(deparse1(make_flag_filter_expr("TRTEMFL", shape)),
+  expect_match(deparse1(flag_inner(make_flag_filter_expr("TRTEMFL", shape))),
                "^dplyr::filter")
 })
 
@@ -277,4 +289,31 @@ test_that("dm mode previews as a dm, frame mode as a table", {
       )
     )
   }
+})
+
+test_that("the block records what it filtered, and nothing when it filters nothing", {
+  shape <- flag_df()[0L, , drop = FALSE]
+
+  # Frame mode with nothing ticked is left alone: no clause to add, and
+  # dplyr::filter() carries an incoming trail through on its own.
+  expect_identical(
+    make_flag_filter_expr(character(), shape),
+    quote(dplyr::filter(.(data), TRUE))
+  )
+
+  e <- make_flag_filter_expr(c("TRTEMFL", "FUPFL"), shape, NULL, "ae_flags")
+  out <- ev(e, flag_df())
+  expect_identical(
+    blockr.dm::filter_trail(out),
+    c(ae_flags = "TRTEMFL or FUPFL")
+  )
+
+  # An incoming trail is preserved, and this block's own clause is keyed by
+  # block id, so re-evaluating replaces it rather than appending a second copy.
+  d <- blockr.dm::add_filter_trail(flag_df(), NULL, "global_filter", "SEX = F")
+  out <- ev(e, d)
+  expect_identical(
+    blockr.dm::filter_trail(out),
+    c(global_filter = "SEX = F", ae_flags = "TRTEMFL or FUPFL")
+  )
 })

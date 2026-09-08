@@ -207,7 +207,8 @@ new_flag_filter_block <- function(columns = character(),
             derived <- shape_rv()
             shiny::req(derived)
             if (!isTRUE(derived$ok)) stop(derived$cond)
-            make_flag_filter_expr(r_sel(), derived$shape, table)
+            make_flag_filter_expr(r_sel(), derived$shape, table,
+                                  blockr.dm::trail_key(session))
           }),
           # `table` is configuration, not a control: nothing in the UI edits
           # it, but it must round-trip or a saved board comes back filtering
@@ -383,7 +384,11 @@ input_slot <- function(name) {
 #' every other table passes through untouched. See [flag_zoom_expr()] for why
 #' that is not `dm::dm_filter()`.
 #' @noRd
-make_flag_filter_expr <- function(selected, shape, table = NULL) {
+# `key` is the filter-trail key, NOT the `id` the block server is handed:
+# blockr.core calls every block's server with `id = "expr"`, so keying on it
+# would have each filter overwrite the one upstream of it. See
+# `blockr.dm::trail_key()`.
+make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL) {
   d <- data_slot()
   selected <- as.character(selected %||% character())
   if (!is.null(shape)) selected <- selected[selected %in% names(shape)]
@@ -395,10 +400,41 @@ make_flag_filter_expr <- function(selected, shape, table = NULL) {
     Reduce(function(a, b) bquote(.(a) | .(b)), conds)
   }
 
-  if (is.null(table)) {
-    return(as.call(list(quote(dplyr::filter), d, cond)))
+  clause <- flag_filter_clause(selected)
+
+  inner <- if (is.null(table)) {
+    as.call(list(quote(dplyr::filter), d, cond))
+  } else {
+    flag_zoom_expr(d, table, cond)
   }
-  flag_zoom_expr(d, table, cond)
+
+  # This block's entry in the filter trail (see `blockr.dm::filter_trail()`).
+  # The flags are OR-ed, so the clause reads that way.
+  #
+  # One case needs no wrapper: frame mode with nothing selected. There the
+  # block adds no clause AND has nothing to rescue, because `dplyr::filter()`
+  # carries data-frame attributes through on its own. dm mode always wraps,
+  # selected or not: `dm_zoom_to()` / `dm_update_zoomed()` rebuild the dm and
+  # an incoming trail would be lost.
+  #
+  # `data = d` and not the default: this block is `expr_type = "bquoted"`, so
+  # its input is the `.()` slot, not a bare `data` symbol -- see the note on
+  # `data_slot()` below.
+  if (is.null(clause) && is.null(table)) {
+    return(inner)
+  }
+
+  blockr.dm::trail_expr(inner, key, clause, data = d)
+}
+
+# Selected flags as one clause. The flag NAME is the useful thing to print --
+# a reader of a CDEx table knows what TRTEMFL means -- and the affirmative
+# value it is tested against is implied, so it is not repeated per flag.
+flag_filter_clause <- function(selected) {
+  if (!length(selected)) {
+    return(NULL)
+  }
+  paste(selected, collapse = " or ")
 }
 
 #' Filter one table of a dm, and only that table
