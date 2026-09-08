@@ -139,28 +139,49 @@ test_that("a series band draws one parameter per patient on the shared axis", {
   expect_identical(nrow(m$subjects[["S-3"]]$series), 1L)
 })
 
-test_that("the value scale is shared and clipped, and the outlier is ticked", {
+test_that("the value scale is shared and covers the cohort", {
   d <- band_dm(adsl = band_adsl(), adlbc = band_adlbc())
   m <- pp_cohort_marks(d, pp_resolve_roles(d),
                        band = pp_band_series("adlbc", "ALT", "ALT"))
 
-  # The ceiling is the cohort's 95th percentile, NOT its maximum: one patient
-  # at 300 would otherwise flatten the six values between 20 and 40 into the
-  # bottom pixel of every other row.
-  expect_lt(m$vhi, 300)
+  # Min to max, so the patient at 300 is IN the band. The inner-quantile
+  # scale this replaced clipped 131 of 254 patients on the study it was
+  # measured against, and drew eight of them as flat lines along the top --
+  # a picture that says a patient did not move when they did.
+  expect_identical(unname(m$vhi), 300)
+  expect_identical(unname(m$vlo), 20)
   expect_identical(unname(m$limit), 56)
 
-  # The clipped value is drawn at the edge and ticked, never dropped: a line
-  # that silently leaves out its highest point is the one reading a clinician
-  # must not get from a liver enzyme.
+  # Nothing to tick: a value outside the scale is now impossible, and the
+  # tick stays only for the degenerate cohort the guard above invents a
+  # scale for.
   g <- pp_cohort_series_geom(m$subjects[["S-2"]], m)
-  expect_length(g$clip, 1L)
+  expect_length(g$clip, 0L)
   expect_match(g$path, "^M[0-9.]+ [0-9.]+")
 
-  # Every row measures the limit against the same scale, so the hairline sits
+  # Every row measures the range against the same scale, so the green sits
   # at one height across the list.
   g1 <- pp_cohort_series_geom(m$subjects[["S-1"]], m)
   expect_identical(g1$limit, g$limit)
+  expect_identical(g1$limit_lo, g$limit_lo)
+
+  # An edge outside the scale is not drawn: this fixture's floor is 7 and
+  # the scale starts at 20, so no patient comes near it and it would be a
+  # rule along the bottom edge saying nothing.
+  expect_true(is.na(g$limit_lo))
+
+  # Both edges when both are in scale, the lower one lower on screen. The
+  # ceiling alone put the hairline a fifth of the way down an albumin strip
+  # with every patient underneath it, which is why the range is drawn now
+  # rather than the limit.
+  lb <- band_adlbc()
+  lb$A1LO <- 25
+  d2 <- band_dm(adsl = band_adsl(), adlbc = lb)
+  m2 <- pp_cohort_marks(d2, pp_resolve_roles(d2),
+                        band = pp_band_series("adlbc", "ALT", "ALT"))
+  g2 <- pp_cohort_series_geom(m2$subjects[["S-2"]], m2)
+  expect_true(is.finite(g2$limit) && is.finite(g2$limit_lo))
+  expect_gt(g2$limit_lo, g2$limit)
 })
 
 test_that("a one-visit series ships as a point, not as an empty band", {

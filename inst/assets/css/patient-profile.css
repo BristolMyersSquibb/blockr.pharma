@@ -1483,20 +1483,18 @@
 }
 
 /* === Cohort list ============================================================
-   The sidebar has two tenants now: the cohort above, the panels below. The
-   cohort well is a FIXED height that scrolls, deliberately -- a 200-patient
-   study would otherwise push the panel list off the bottom of the sidebar,
-   and the panel list is the thing that was there first. It collapses to its
-   content when the cohort is shorter than the well, so a cohort of one does
-   not sit in 230px of empty space.
+   The sidebar has one tenant: the cohort. The panel list that used to sit
+   under it moved into the toolbar's + Add panel menu, and the well now takes
+   the height of whatever box the block was given (see sizeWell()). It
+   collapses to its content when the cohort is shorter than the well, so a
+   cohort of one does not sit in 230px of empty space.
 
-   Row geometry (44px, two lines) comes from the design rounds in
-   _scratch/cohort-viewer/final.html and _scratch/pp-band-source/. Type is at
-   the design system's floor already (12px / 11px against a 12px smallest
-   token), so the size came out of padding and the band, never the text.
-   The row went 38px -> 44px when the band stopped being only a severity
-   strip: colour reads at 7px, a value line needs amplitude to have a shape,
-   and the 13px band is where a trend is legible.
+   Row geometry (46px, two lines) comes from the design rounds in
+   _scratch/cohort-viewer/final.html, _scratch/pp-band-source/ and
+   _scratch/pp-band-kinds/. The row went 38px -> 44px when the band stopped
+   being only a severity strip, and 44px -> 46px when the value line lost the
+   box behind it and took the height instead: 30px of strip and 13px of id
+   line, with the id at 11px and the demographics at 10px.
    ========================================================================= */
 
 .pp-sidebar-section {
@@ -1596,7 +1594,7 @@
      235px space and pushed it through the bottom. Six is what the measured
      rule gives on any panel with the room for it. */
   max-height: max(264px, calc(100vh - 300px));
-  min-height: 132px; /* 3 x 44px */
+  min-height: 138px; /* 3 x 46px */
   overflow-y: auto;
   /* Never sideways. A row that cannot fit must shrink or ellipsize, and the
      rules below make sure it can -- a horizontal scrollbar in a 232px
@@ -1630,9 +1628,13 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  height: 44px;
-  padding: 3px 5px;
+  /* 46px, and every pixel of it is spoken for: 13 for the id line, 30 for
+     the strip, the rest padding. The strip grew from 13 to 30 when the box
+     behind it went (see pp_cohort_band_h_series) and the row grew by two to
+     hold it -- a 700px well shows 15 patients either way. */
+  gap: 1px;
+  height: 46px;
+  padding: 1px 5px;
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
@@ -1659,6 +1661,10 @@
   gap: 5px;
   min-width: 0;
   overflow: hidden;
+  /* Tight, and stated rather than inherited: the row's budget is exact now,
+     and a 1.5 line-height on 11px type would spend two pixels the strip
+     needs. */
+  line-height: 1.2;
 }
 
 /* Shrink ORDER, longest-lived first. The id never gives way (it is already
@@ -1667,7 +1673,7 @@
    child refuses to shrink below its intrinsic width and the row overflows
    instead -- which is exactly what a 20-character prod id did. */
 .pp-pt-id {
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: #111827;
   white-space: nowrap;
@@ -1675,7 +1681,7 @@
 }
 
 .pp-pt-demo {
-  font-size: 11px;
+  font-size: 10px;
   color: #9ca3af;
   white-space: nowrap;
   flex: 0 1 auto;

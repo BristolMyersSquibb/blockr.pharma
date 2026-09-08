@@ -3321,7 +3321,9 @@ new_patient_profile_block <- function(selected = NULL,
             var SVGNS = 'http://www.w3.org/2000/svg';
             var bandObserver = null;
 
-            var BAND_H = ", pp_cohort_band_h, ";
+            // Spans only: a series row's height comes from its own svg,
+            // and a series draws no full-height rect of any kind.
+            var BAND_H = ", pp_cohort_band_h_spans, ";
 
             function el(tag, attrs) {
               var e = document.createElementNS(SVGNS, tag);
@@ -3331,12 +3333,12 @@ new_patient_profile_block <- function(selected = NULL,
 
             // Spans: one rect per event, in the order the source table
             // carries them, later over earlier.
-            function drawSpans(frag, spec) {
+            function drawSpans(frag, spec, h) {
               spec.split(' ').forEach(function(s) {
                 var f = s.split(',');
                 if (f.length < 3) return;
                 frag.appendChild(el('rect', {
-                  x: f[0], y: '0', width: f[1], height: BAND_H,
+                  x: f[0], y: '0', width: f[1], height: h,
                   fill: f[2], opacity: '0.9'
                 }));
               });
@@ -3346,11 +3348,27 @@ new_patient_profile_block <- function(selected = NULL,
             // as one polyline, and a tick where the shared scale had to clip
             // one. Same geometry pp_cohort_series_geom() computed -- the
             // client places nothing of its own.
-            function drawSeries(frag, spec, row) {
-              var limit = row.getAttribute('data-limit');
-              if (limit) {
+            function drawSeries(frag, spec, row, h) {
+              // The reference RANGE, not the ceiling alone.
+              //
+              // One hairline used to be drawn at the upper limit, which for
+              // albumin sits a fifth of the way down the strip with every
+              // patient underneath it -- ten values in 2058 reach it. Both
+              // edges make the useful claim, which is whether this patient
+              // is inside the range, and it is shaded the same green the
+              // panel chart shades it with.
+              var hi = row.getAttribute('data-limit');
+              var lo = row.getAttribute('data-limit-lo');
+              if (hi && lo) {
+                frag.appendChild(el('rect', {
+                  x: 0, y: hi, width: 176,
+                  height: Math.max(0, parseFloat(lo) - parseFloat(hi)),
+                  fill: 'var(--pp-cohort-ref, rgba(5, 150, 105, 0.10))'
+                }));
+              } else if (hi || lo) {
+                var one = hi || lo;
                 frag.appendChild(el('line', {
-                  x1: 0, y1: limit, x2: 176, y2: limit,
+                  x1: 0, y1: one, x2: 176, y2: one,
                   stroke: 'var(--pp-cohort-limit, #9ca3af)',
                   'stroke-width': '0.75', 'stroke-dasharray': '2 2',
                   opacity: '0.75'
@@ -3389,7 +3407,7 @@ new_patient_profile_block <- function(selected = NULL,
                 });
               };
               tick('data-clip', 0, 2.5);
-              tick('data-clip-lo', BAND_H - 2.5, BAND_H);
+              tick('data-clip-lo', h - 2.5, h);
             }
 
             function drawBand(row) {
@@ -3399,17 +3417,22 @@ new_patient_profile_block <- function(selected = NULL,
               if (!svg) return;
               var frag = document.createDocumentFragment();
               var spec = row.getAttribute('data-band') || '';
+              // The row's own height, not a constant: the two kinds of strip
+              // are different heights now (8px of colour, 30px of line), and
+              // reading it off the svg is what keeps the ticks and the
+              // diamond on the edge they belong to.
+              var h = parseFloat(svg.getAttribute('height')) || BAND_H;
               if (row.getAttribute('data-band-kind') === 'series') {
-                drawSeries(frag, spec, row);
+                drawSeries(frag, spec, row, h);
               } else if (spec) {
-                drawSpans(frag, spec);
+                drawSpans(frag, spec, h);
               }
               // End of treatment, the same diamond and the same radius the
               // server drew.
               var eot = row.getAttribute('data-eot');
               if (eot) {
-                var cx = parseFloat(eot), cy = BAND_H / 2,
-                    rr = Math.min(3, BAND_H / 2 + 1);
+                var cx = parseFloat(eot), cy = h / 2,
+                    rr = Math.min(3, h / 2 + 1);
                 frag.appendChild(el('path', {
                   d: 'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
                      'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +

@@ -21,10 +21,35 @@
 # panels, per-measure reductions -- see the spec) without touching the
 # sidebar, and the band get richer without widening the export.
 
-# The band's height in px. A severity strip reads at 7px because it is
-# colour; a value line needs amplitude to have a shape at all, so the band is
-# 13px and the row 44px (the CSS says the same, once).
-pp_cohort_band_h <- 13L
+# The strip's height in px, and it is not one number.
+#
+# A severity strip is COLOUR: it reads at 8px, and the grey behind it is the
+# treatment window -- the stretch with no colour on it is the time this
+# patient had no event, which is most of the picture and the reason the
+# coloured spans mean anything.
+#
+# A value line is AMPLITUDE: the height IS the reading. Its grey box says
+# nothing the row does not already say, since every row starts and ends at
+# the same day and the scale the line is drawn against is not the box. So the
+# box goes, the line takes the row's free height instead of a rectangle
+# inside it, and the reference limit stays as a hairline -- the one
+# horizontal a reader actually wants.
+#
+# Measured on the running app: the median line used 6.9px of the old band's
+# 12. At 30px it uses 16.6, and the row grew by two pixels to hold it.
+pp_cohort_band_h_spans <- 8L
+pp_cohort_band_h_series <- 30L
+
+# Kept for the callers that predate the split; a strip of unknown kind is a
+# spans one, which is what every non-findings panel declares.
+pp_cohort_band_h <- pp_cohort_band_h_spans
+
+#' The strip height a band of this kind is drawn at
+#' @param kind `"series"`, `"spans"` or `"none"`.
+#' @noRd
+pp_cohort_band_h_for <- function(kind) {
+  if (identical(kind, "series")) pp_cohort_band_h_series else pp_cohort_band_h_spans
+}
 
 #' One row per patient in the cohort
 #'
@@ -492,24 +517,25 @@ pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
 #' The rows are only worth comparing if they share a y scale, and a shared
 #' scale is at the mercy of its tail: one patient whose ALT reaches ten times
 #' the upper limit sets the ceiling and flattens the 250 patients who stayed
-#' in range into the bottom of the strip. The scale is therefore an inner
-#' quantile range of the cohort, and a value outside it is drawn at the edge
-#' with a tick (see [pp_cohort_series_geom()]) rather than silently pulled
-#' inside. Per-row scaling was the alternative and is worse than either: it
-#' makes every patient look equally eventful, and it puts the reference limit
-#' at a different height in every row.
+#' in range into the bottom of the strip. Per-row scaling is the other
+#' extreme and has its own cost: it makes every patient look equally
+#' eventful, and it puts the reference limit at a different height in every
+#' row.
 #'
-#' The range is the 10th to 90th percentile, not the 5th to 95th, because
-#' amplitude is what the strip is FOR. Measured on safetyData's albumin
-#' (2058 values, 254 patients): at 5-95 the scale is 9 units wide and the
-#' median patient's line covers 56% of the band, which is 6px of movement in
-#' 13 and reads as a flat line. At 10-90 the scale is 7 units wide and the
-#' median patient covers 71%. The cost is the tick count -- 8% of values sit
-#' outside the wider range against 16% outside this one -- and a tick is a
-#' mark that says so, where a flat line says nothing at all. Tightening
-#' further does not pay: 25-75 puts the median patient at 167% of the band,
-#' clipping nearly half the values, which is a scale that has stopped
-#' describing the data.
+#' The range is the cohort's MIN TO MAX, and that is a change of mind. It was
+#' the 10th to 90th percentile, on the argument that amplitude is what the
+#' strip is for and a tick at the edge says so where a flat line says
+#' nothing. Measured against the study, the argument did not hold: 131 of
+#' 254 patients had a value clipped to an edge, and eight sat entirely
+#' outside the scale and drew a flat line along the top -- a picture that
+#' says "this patient did not move" about a patient whose albumin ran 44 to
+#' 49. Half a list of ticks is not a scale describing the data.
+#'
+#' Min to max cannot draw anything false, and the amplitude it costs was
+#' bought back elsewhere: the strip went from 13px to 30px when the grey box
+#' behind it went (see `pp_cohort_band_h_series`). What a reader gives up is
+#' resolution in the middle, where the two patients at the ends of the study
+#' own the band; what they get is a picture that is true for all 254 of them.
 #'
 #' @param tbls The dm's tables.
 #' @param band A [pp_band_series()] declaration.
@@ -523,7 +549,7 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
                                    prestudy_days = 30) {
 
   empty <- list(kind = "series", day0 = 0, days = 1, vlo = 0, vhi = 1,
-                limit = NA_real_, param = band$param,
+                limit = NA_real_, limit_lo = NA_real_, param = band$param,
                 subjects = stats::setNames(
                   lapply(ids, function(i) list(series = NULL, trt_end = NA)),
                   ids
@@ -562,29 +588,51 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
   day <- day[ok]
   value <- value[ok]
 
-  # The reference limit the rows draw against: ONE line for the whole strip,
-  # so a per-patient limit column is reduced to its median. Studies that ship
-  # a limit varying by patient (age- or sex-adjusted) still get a line in the
-  # right neighbourhood, and the tooltip on the panel remains the place where
-  # a patient's own limit is stated exactly.
-  limit <- if (band$hi %in% colnames(tbl)) {
-    stats::median(suppressWarnings(as.numeric(tbl[[band$hi]][ok])),
-                  na.rm = TRUE)
-  } else {
-    NA_real_
+  # The reference RANGE the rows draw against, both ends of it.
+  #
+  # It was the upper limit alone, and for half the parameters a clinician
+  # cares about that is the wrong end: albumin's ceiling is 46 and ten values
+  # in 2058 reach it, so the hairline sat a fifth of the way down the strip
+  # with every patient underneath. What a reader wants to know is whether
+  # this patient is INSIDE the range, which takes both edges -- and it is
+  # the same claim the panel chart makes with the same green band.
+  #
+  # One range for the whole strip, so a per-patient limit column is reduced
+  # to its median. Studies that ship a limit varying by patient (age- or
+  # sex-adjusted) still get a band in the right neighbourhood, and the panel
+  # remains the place where a patient's own limit is stated exactly.
+  med_col <- function(nm) {
+    if (!nm %in% colnames(tbl)) return(NA_real_)
+    v <- stats::median(suppressWarnings(as.numeric(tbl[[nm]][ok])),
+                       na.rm = TRUE)
+    if (is.finite(v)) v else NA_real_
   }
-  if (!is.finite(limit)) limit <- NA_real_
+  limit <- med_col(band$hi)
+  limit_lo <- med_col(band$lo)
 
-  qs <- stats::quantile(value, c(0.10, 0.90), na.rm = TRUE, names = FALSE)
-  vlo <- qs[[1L]]
-  vhi <- qs[[2L]]
-  # A cohort whose middle 90% is one number is a real thing (a flag-like
-  # parameter, or a very small cohort); give it a scale rather than a
-  # division by zero.
+  # The scale every row shares: the cohort's full range.
+  #
+  # It was the 10th to 90th percentile, which bought amplitude by throwing
+  # the ends away -- and on the study this was measured against that meant
+  # 131 of 254 patients had a value clipped to an edge, and EIGHT sat
+  # entirely outside the scale and drew a flat line along the top. A flat
+  # line is a statement: it says this patient did not move, and for those
+  # eight it was false.
+  #
+  # Min to max cannot say anything false. Every value has a place in the
+  # band, no tick has to explain an edge, and a reader who compares two rows
+  # is comparing them on one scale that covers the study. It costs
+  # amplitude: the two patients at the ends own the band and everyone else
+  # draws in the middle of it. That trade was made deliberately -- the
+  # 30px strip and the box that went with it bought the room back.
+  vlo <- min(value, na.rm = TRUE)
+  vhi <- max(value, na.rm = TRUE)
+  # A cohort whose values are all one number is a real thing (a flag-like
+  # parameter, or a cohort of one); give it a scale rather than a division
+  # by zero.
   if (!is.finite(vlo) || !is.finite(vhi) || vhi <= vlo) {
-    vlo <- min(value, na.rm = TRUE)
-    vhi <- max(value, na.rm = TRUE)
-    if (vhi <= vlo) vhi <- vlo + 1
+    vlo <- if (is.finite(vlo)) vlo else 0
+    vhi <- vlo + 1
   }
 
   day0 <- suppressWarnings(min(c(day, 1), na.rm = TRUE))
@@ -624,7 +672,8 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
   }
 
   list(kind = "series", day0 = day0, days = days, vlo = vlo, vhi = vhi,
-       limit = limit, param = band$param, subjects = subjects,
+       limit = limit, limit_lo = limit_lo, param = band$param,
+       subjects = subjects,
        stat = list(high = hi, low = lo))
 }
 
@@ -706,12 +755,22 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
 
   if (identical(marks$kind, "series")) {
     geom <- pp_cohort_series_geom(sub, marks, width, h, smooth)
-    if (!is.na(geom$limit)) {
+    # The reference range as a band where both edges are in scale, and as a
+    # single rule where only one of them is. Same green the panel chart
+    # shades with, because it is the same claim.
+    if (!is.na(geom$limit) && !is.na(geom$limit_lo)) {
+      parts <- c(parts, sprintf(
+        paste0('<rect x="0" y="%s" width="%s" height="%s" ',
+               'fill="var(--pp-cohort-ref, rgba(5, 150, 105, 0.10))"/>'),
+        geom$limit, width, max(0, geom$limit_lo - geom$limit)
+      ))
+    } else if (!is.na(geom$limit) || !is.na(geom$limit_lo)) {
+      one <- if (is.na(geom$limit)) geom$limit_lo else geom$limit
       parts <- c(parts, sprintf(
         paste0('<line x1="0" y1="%s" x2="%s" y2="%s" ',
                'stroke="var(--pp-cohort-limit, #9ca3af)" stroke-width="0.75" ',
                'stroke-dasharray="2 2" opacity="0.75"/>'),
-        geom$limit, width, geom$limit
+        one, width, one
       ))
     }
     if (nzchar(geom$path)) {
@@ -981,13 +1040,14 @@ pp_monotone_path <- function(x, y) {
 #'   the diamond belongs on a spans band, not over a line.
 #' @noRd
 pp_cohort_series_geom <- function(sub, marks, width = 176,
-                                  height = pp_cohort_band_h,
+                                  height = pp_cohort_band_h_series,
                                   smooth = TRUE) {
 
   # No end-of-treatment marker on a series band. The diamond earns its place
   # on a spans band, where it sits on flat colour; over a line it lands ON
   # the data, and the line already ends where the patient's records do.
   none <- list(path = "", dot = numeric(), limit = NA_real_,
+               limit_lo = NA_real_,
                clip = numeric(), clip_lo = numeric(), eot = NA_real_)
 
   ser <- sub$series
@@ -1005,14 +1065,17 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
     round(height - 0.5 - ((pmin(pmax(v, vlo), vhi) - vlo) / (vhi - vlo)) *
             (height - 1), 2)
   }
-  limit <- if (is.finite(marks$limit %||% NA) &&
-                 marks$limit > vlo && marks$limit < vhi) {
-    y_of(marks$limit)
-  } else {
-    NA_real_
+  # Each edge is drawn only where it lands inside the scale. An edge outside
+  # it is not a fact about this cohort worth a pixel: the scale is the
+  # cohort's whole range, so a limit beyond it is one no patient approaches.
+  edge <- function(v) {
+    if (is.finite(v %||% NA) && v > vlo && v < vhi) y_of(v) else NA_real_
   }
+  limit <- edge(marks$limit)
+  limit_lo <- edge(marks$limit_lo)
   if (!is.data.frame(ser) || !nrow(ser)) {
     none$limit <- limit
+    none$limit_lo <- limit_lo
     return(none)
   }
 
@@ -1023,6 +1086,7 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
   if (nrow(ser) == 1L) {
     out <- none
     out$limit <- limit
+    out$limit_lo <- limit_lo
     out$dot <- c(px[[1L]], py[[1L]])
     return(out)
   }
@@ -1045,6 +1109,7 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
     path = path,
     dot = numeric(),
     limit = limit,
+    limit_lo = limit_lo,
     clip = px[ser$value > vhi],
     clip_lo = px[ser$value < vlo],
     eot = NA_real_
@@ -1079,8 +1144,9 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
 #'   band, and `eot` is `NULL` for a series one.
 #' @noRd
 pp_cohort_band_attr <- function(sub, marks, color, width = 176,
-                                height = pp_cohort_band_h, min_px = 1.5,
+                                height = NULL, min_px = 1.5,
                                 smooth = TRUE) {
+  height <- height %||% pp_cohort_band_h_for(marks$kind)
   if (identical(marks$kind, "series")) {
     geom <- pp_cohort_series_geom(sub, marks, width, height, smooth)
     # The path, already interpolated. The curve is computed ONCE, here, and
@@ -1094,6 +1160,11 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
       dot = if (length(geom$dot)) paste(geom$dot, collapse = ","),
       eot = if (is.na(geom$eot)) NULL else as.character(geom$eot),
       limit = if (is.na(geom$limit)) NULL else as.character(geom$limit),
+      limit_lo = if (is.na(geom$limit_lo)) {
+        NULL
+      } else {
+        as.character(geom$limit_lo)
+      },
       clip = if (length(geom$clip)) paste(geom$clip, collapse = " "),
       clip_lo = if (length(geom$clip_lo)) {
         paste(geom$clip_lo, collapse = " ")
@@ -1173,6 +1244,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   dot <- vapply(bands, function(b) b$dot %||% "", character(1L))
   eot <- vapply(bands, function(b) b$eot %||% "", character(1L))
   limit <- vapply(bands, function(b) b$limit %||% "", character(1L))
+  limit_lo <- vapply(bands, function(b) b$limit_lo %||% "", character(1L))
   clip <- vapply(bands, function(b) b$clip %||% "", character(1L))
   clip_lo <- vapply(bands, function(b) b$clip_lo %||% "", character(1L))
 
@@ -1225,8 +1297,21 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     )
   )
 
-  h <- pp_cohort_band_h
-  kind <- if (identical(marks$kind, "series")) " data-band-kind=\"series\"" else ""
+  is_series <- identical(marks$kind, "series")
+  h <- pp_cohort_band_h_for(marks$kind)
+  kind <- if (is_series) " data-band-kind=\"series\"" else ""
+
+  # The empty track, on a spans band only. There it is the treatment window
+  # and the row keeps its height whether or not the band has been drawn yet.
+  # Behind a line it was a box around a thing that needs no box, and it cost
+  # the amplitude that is the whole reading -- see pp_cohort_band_h_spans.
+  # The SVG still holds the row open, filled or not.
+  track <- if (is_series) {
+    ""
+  } else {
+    paste0('<rect x="0" y="0" width="176" height="', h, '" rx="2"',
+           ' fill="var(--pp-cohort-track, #f3f4f6)"/>')
+  }
 
   html <- sprintf(
     paste0(
@@ -1235,7 +1320,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       '<div class="pp-pt%s" data-usubjid="%s"',
       # Search matches the same text a reader sees, plus the arm, which is
       # not printed in full anywhere in the row.
-      ' data-search-text="%s" data-band="%s"%s%s%s%s%s', kind,
+      ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s', kind,
       # The tooltip carries the id in full, always: the row shows the part
       # that varies, never the whole thing.
       ' title="%s">',
@@ -1247,8 +1332,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       '<svg class="pp-pt-band" width="176" height="', h,
       '" viewBox="0 0 176 ', h, '"',
       ' preserveAspectRatio="none" aria-hidden="true">',
-      '<rect x="0" y="0" width="176" height="', h, '" rx="2"',
-      ' fill="var(--pp-cohort-track, #f3f4f6)"/></svg></div>'
+      track, '</svg></div>'
     ),
     ifelse(id %in% picked, " is-selected", ""),
     esca(id),
@@ -1257,6 +1341,8 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     ifelse(nzchar(dot), sprintf(' data-dot="%s"', esca(dot)), ""),
     ifelse(nzchar(eot), sprintf(' data-eot="%s"', esca(eot)), ""),
     ifelse(nzchar(limit), sprintf(' data-limit="%s"', esca(limit)), ""),
+    ifelse(nzchar(limit_lo),
+           sprintf(' data-limit-lo="%s"', esca(limit_lo)), ""),
     ifelse(nzchar(clip), sprintf(' data-clip="%s"', esca(clip)), ""),
     ifelse(nzchar(clip_lo), sprintf(' data-clip-lo="%s"', esca(clip_lo)), ""),
     esca(ifelse(nzchar(arm), paste0(id, " · ", arm), id)),
