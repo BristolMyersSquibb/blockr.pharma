@@ -31,6 +31,7 @@ Suggests:
     blockr.ai,
     blockr.assistant,
     blockr.outline,
+    chromote,
     flextable,
     ggplot2,
     officer,
@@ -38,6 +39,7 @@ Suggests:
     pharmaverseadam,
     pharmaversesdtm,
     safetyData,
+    shinytest2,
     testthat (>= 3.0.0),
     withr
 Remotes:
