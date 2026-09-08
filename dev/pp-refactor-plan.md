@@ -16,7 +16,14 @@ same-rows check and the find box uses recency, so there is nothing to unify.
 Stage 3f (tokens) done the same day: 157 token references with fallbacks,
 one pre-existing drifted fallback caught by the new
 `test-pp-css-tokens.R`; the literals left are white, two blue tints with
-no token, one green data colour. Stages 3d and 3e not started. Left in on purpose: the
+no token, one green data colour. Stage 3e done the same day: the pure UI builders left the server module
+for `pp-ui.R`, `pp-controls-ui.R`, `pp-header-ui.R`, `pp-chart-area-ui.R`,
+`pp-slot-ui.R`, `pp-cohort-ui.R` (bodies verbatim, reactive reads passed in
+at the call site in the same order, so no new invalidations), the six
+custom messages go through `pp_send()` in `pp-messages.R` with the channel
+table; `patient-profile-block.R` is 1,472 lines. The fixtures regenerate
+byte-identical apart from the htmlwidget ids, now pinned by `render.R`.
+Stage 3d (drop jQuery) not started and optional. Left in on purpose: the
 `pick_param` / `sync_params` path (R still owns per-parameter items on a
 multi-parameter panel; no markup reaches it today, so it is a design
 question for the R side, not dead by accident). Written against `3d152dd` (version

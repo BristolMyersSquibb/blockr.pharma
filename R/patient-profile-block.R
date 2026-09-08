@@ -674,8 +674,7 @@ new_patient_profile_block <- function(selected = NULL,
               if (length(items) == 0L) return(NULL)
               paste0(vid, "@@", as.character(items))
             }))
-            session$sendCustomMessage(
-              session$ns("sync_params"), as.list(keys %||% character())
+            pp_send(session, "sync_params", as.list(keys %||% character())
             )
           })
 
@@ -727,8 +726,7 @@ new_patient_profile_block <- function(selected = NULL,
             # Touch r_available so sync fires after sidebar re-renders on
             # data change (not just on selection change)
             r_available()
-            session$sendCustomMessage(
-              session$ns("sync_selected"), sel
+            pp_send(session, "sync_selected", sel
             )
           })
 
@@ -740,9 +738,7 @@ new_patient_profile_block <- function(selected = NULL,
           # longer cross the wire on every cohort change, and the tag it
           # fills is the sidebar's toggle.
           shiny::observe({
-            session$sendCustomMessage(
-              session$ns("subject_picker"),
-              list(count = length(r_cohort()$ids))
+            pp_send(session, "subject_picker", list(count = length(r_cohort()$ids))
             )
           })
 
@@ -888,9 +884,7 @@ new_patient_profile_block <- function(selected = NULL,
           # the point of the guard above.
           shiny::observe({
             src <- r_band_source()
-            session$sendCustomMessage(
-              session$ns("sync_band"),
-              list(viz_id = if (is.null(src)) "" else src$viz_id)
+            pp_send(session, "sync_band", list(viz_id = if (is.null(src)) "" else src$viz_id)
             )
           })
 
@@ -901,9 +895,7 @@ new_patient_profile_block <- function(selected = NULL,
           # paths in step without touching the list's markup.
           shiny::observeEvent(r_subject(), {
             cur <- r_subject()
-            session$sendCustomMessage(
-              session$ns("sync_subject"),
-              list(id = if (length(cur) == 1L) cur else "")
+            pp_send(session, "sync_subject", list(id = if (length(cur) == 1L) cur else "")
             )
           }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
@@ -917,30 +909,10 @@ new_patient_profile_block <- function(selected = NULL,
           # line gave the well back a row of the sidebar. A click walks to
           # the next rung, as the pill did.
           cohort_sort_ui <- function() {
-            choices <- pp_cohort_sort_choices(r_cohort_frame(),
-                                              r_cohort_marks()$kind)
-            # Fewer than two rungs is not a choice; draw nothing (the rule
-            # pp_lane_control() follows).
-            if (length(choices) < 2L) return(NULL)
-            cur <- shiny::isolate(r_cohort_sort())
-            if (!cur %in% names(choices)) cur <- names(choices)[[1L]]
-            idx <- match(cur, names(choices))
-            keys <- names(choices)
-            short <- vapply(keys, pp_cohort_sort_short, character(1L))
-            nxt <- unname(choices)[idx %% length(keys) + 1L]
-            shiny::tags$button(
-              class = "pp-cohort-sortby",
-              id = session$ns("cohort_sort_by"),
-              type = "button",
-              `data-values` = jsonlite::toJSON(keys),
-              `data-labels` = jsonlite::toJSON(unname(short)),
-              `data-index` = idx - 1L,
-              # The control names the state, so the tooltip carries the
-              # action.
-              title = paste0("Sort by ", tolower(nxt)),
-              "by ",
-              shiny::tags$b(unname(short)[idx]),
-              shiny::HTML("&#9662;")
+            pp_cohort_sort_ui(
+              pp_cohort_sort_choices(r_cohort_frame(), r_cohort_marks()$kind),
+              shiny::isolate(r_cohort_sort()),
+              session$ns
             )
           }
 
@@ -951,61 +923,9 @@ new_patient_profile_block <- function(selected = NULL,
           output$cohort_band_caption <- shiny::renderUI({
             src <- r_band_source()
             sorter <- cohort_sort_ui()
-            # The prefix every id in this cohort shares, lifted off the rows
-            # and printed once. It rode on the sort row, which no longer
-            # exists.
             pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
             if (is.null(src) && is.null(sorter) && !nzchar(pre)) return(NULL)
-            # The settled term, like the bands underneath it: a chip
-            # appearing a keystroke before the strip it explains is worse
-            # than one appearing a moment late.
-            search <- r_band_search()
-            shiny::div(
-              class = "pp-cohort-bandcap",
-              if (!is.null(src)) shiny::HTML(pp_band_glyph()),
-              # A sentence, not a label. "Cohort band" was our word for the
-              # strip and taught nowhere; what a reader wants to know is what
-              # the little pictures beside each patient ARE.
-              # No lead sentence. "Each row shows Adverse Events" plus "by
-              # event count" measured 276px in a 231px row, and the half
-              # that got clipped was the control. The glyph is the same mark
-              # the panel header carries beside its name, the tooltip still
-              # reads "Every patient below shows ...", and the panel that
-              # drives it wears the same ring in its own header -- so the
-              # sentence is said in two other places.
-              if (!is.null(src)) {
-                shiny::span(class = "pp-cohort-bandcap-what",
-                            title = src$title, src$caption)
-              },
-              # The parameter's full name, muted, exactly as the card that
-              # drives the band prints it. The code alone is the thing you
-              # match against the cards; the name is what tells you what it
-              # measures.
-              if (!is.null(src) && !is.null(src$sub)) {
-                shiny::span(class = "pp-cohort-bandcap-sub", src$sub)
-              },
-              # The panel's search, echoed. Without it the bands go sparse
-              # for no visible reason, which is the sidebar quietly lying
-              # about the cohort.
-              if (!is.null(src) && nzchar(search %||% "")) {
-                shiny::span(
-                  class = "pp-cohort-bandcap-find",
-                  `data-viz-id` = src$viz_id,
-                  title = paste0("Showing only records matching \u201c",
-                                 search, "\u201d; click to clear"),
-                  shiny::span(paste0("\u201c", search, "\u201d")),
-                  shiny::HTML("&times;")
-                )
-              },
-              # Everything after this sits at the right edge.
-              shiny::span(class = "pp-cohort-bandcap-gap"),
-              if (nzchar(pre)) {
-                shiny::span(class = "pp-cohort-prefix",
-                            title = "Shared by every patient in the cohort",
-                            pre)
-              },
-              sorter
-            )
+            pp_band_caption_ui(src, sorter, pre, r_band_search())
           })
 
           # Who is on screen, and the facts about them the sidebar row has
@@ -1048,213 +968,6 @@ new_patient_profile_block <- function(selected = NULL,
           })
 
           # Build per-viz control toolbar HTML
-          pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
-            controls <- viz$controls
-            if (is.null(controls) || length(controls) == 0) return(NULL)
-            ns <- session$ns
-            ctrl_id <- paste0("ctrl_", viz_id)
-
-            tags <- lapply(names(controls), function(param) {
-              ctrl <- controls[[param]]
-              input_id <- paste0(viz_id, "__", param)
-              cur_val <- settings[[param]] %||% ctrl$default
-
-              if (ctrl$type == "checkbox") {
-                # Get choices from data
-                choices <- ctrl$choices
-                if (is.null(choices) && !is.null(ctrl$choices_from)) {
-                  tbls <- dm::dm_get_tables(dm_obj)
-                  for (tbl_name in viz$tables) {
-                    if (tbl_name %in% names(tbls)) {
-                      tbl <- as.data.frame(tbls[[tbl_name]])
-                      col <- ctrl$choices_from
-                      if (col %in% colnames(tbl)) {
-                        # Visits come in visit order (AVISITN when present):
-                        # lexical order puts "Week 10" before "Week 2".
-                        choices <- if (identical(col, "AVISIT")) {
-                          pp_visit_levels(tbl)
-                        } else {
-                          sort(unique(as.character(tbl[[col]])))
-                        }
-                        # Restrict to the viz's declared subset (a findings
-                        # group's PARAMCDs), in the subset's clinical order.
-                        if (!is.null(ctrl$choices_subset)) {
-                          choices <- intersect(ctrl$choices_subset, choices)
-                        }
-                        break
-                      }
-                    }
-                  }
-                }
-                if (is.null(choices)) choices <- character(0)
-                if (is.null(cur_val)) cur_val <- choices
-
-                # Build compact multi-select chips. A findings control ships
-                # `choice_labels` (PARAMCD -> PARAM), so the chip reads
-                # "Alanine Aminotransferase" rather than "ALT"; the code
-                # stays the wire value and the untruncated name is the
-                # tooltip. Controls with no label map (visits, questionnaire
-                # domains) caption themselves, as before.
-                labs <- ctrl$choice_labels
-                chips <- lapply(choices, function(ch) {
-                  is_active <- ch %in% cur_val
-                  full <- if (!is.null(labs) && ch %in% names(labs)) {
-                    unname(labs[[ch]])
-                  } else {
-                    ch
-                  }
-                  shiny::tags$button(
-                    class = paste(
-                      "pp-ctrl-chip",
-                      if (is_active) "is-active"
-                    ),
-                    `data-viz-id` = viz_id,
-                    `data-param` = param,
-                    `data-value` = ch,
-                    title = if (!identical(full, ch)) paste0(full, " (", ch, ")"),
-                    pp_param_short(full)
-                  )
-                })
-                shiny::div(class = "pp-ctrl-group",
-                  shiny::span(class = "pp-ctrl-label", ctrl$label),
-                  shiny::div(class = "pp-ctrl-chips", chips)
-                )
-              } else if (ctrl$type == "toggle") {
-                is_on <- isTRUE(cur_val)
-                shiny::div(class = "pp-ctrl-group",
-                  shiny::span(class = "pp-ctrl-label", ctrl$label),
-                  shiny::tags$button(
-                    class = paste(
-                      "pp-ctrl-toggle",
-                      if (is_on) "is-on"
-                    ),
-                    `data-viz-id` = viz_id,
-                    `data-param` = param,
-                    shiny::span(class = "pp-ctrl-toggle-track",
-                      shiny::span(class = "pp-ctrl-toggle-thumb")
-                    )
-                  )
-                )
-              } else if (ctrl$type == "pill") {
-                # The house click-through pill: one button carrying the
-                # current value, cycling in place (blockr.docs
-                # design-system/components/blockr-row.md). Used here for an
-                # ordered ladder, so the cycle wraps coarse back to granular
-                # rather than dead-ending. See pp_lane_control().
-                choices <- ctrl$choices
-                if (is.null(choices)) choices <- character(0)
-                choices <- pp_ctrl_present_choices(
-                  choices, ctrl, dm_obj, viz$tables
-                )
-                # Fewer than two rungs is not a choice; draw nothing.
-                if (length(choices) < 2L) return(NULL)
-                if (is.null(cur_val) || !cur_val %in% choices) {
-                  cur_val <- choices[1]
-                }
-                choice_names <- unname(names(choices) %||% choices)
-                idx <- match(cur_val, choices)
-                nxt <- choice_names[idx %% length(choices) + 1L]
-
-                shiny::div(class = "pp-ctrl-group",
-                  shiny::span(class = "pp-ctrl-label", ctrl$label),
-                  shiny::tags$button(
-                    class = "pp-ctrl-pill",
-                    `data-viz-id` = viz_id,
-                    `data-param` = param,
-                    `data-values` = jsonlite::toJSON(unname(choices)),
-                    `data-labels` = jsonlite::toJSON(choice_names),
-                    `data-index` = idx - 1L,
-                    # The pill names the state, so the tooltip is where the
-                    # action goes: what one click will make it.
-                    title = paste0("Switch to ", nxt),
-                    # Reserve the widest rung: the click target must not
-                    # move out from under the cursor as the label cycles.
-                    style = paste0(
-                      "min-width:", max(nchar(choice_names)), "ch"
-                    ),
-                    choice_names[idx]
-                  )
-                )
-              } else if (ctrl$type == "search") {
-                # A find box for the panel's own records. It filters the
-                # chart AND the sidebar's cohort band (see r_cohort_marks),
-                # so the strip answers "who else had this" while the panel
-                # answers "when did this patient have it".
-                term <- as.character(cur_val %||% "")
-                hits <- pp_ctrl_search_hits(ctrl, dm_obj, viz$tables, term)
-                shiny::div(class = "pp-ctrl-group",
-                  shiny::div(
-                    class = paste("pp-ctrl-search",
-                                  if (nzchar(term)) "is-active"),
-                    shiny::HTML(pp_search_icon()),
-                    shiny::tags$input(
-                      type = "text",
-                      class = "pp-ctrl-search-input",
-                      `data-viz-id` = viz_id,
-                      `data-param` = param,
-                      placeholder = ctrl$placeholder %||% ctrl$label,
-                      value = term
-                    ),
-                    # The count is the honest feedback: it says how many of
-                    # this patient's records survived before the panel goes
-                    # blank, so an empty chart is never mistaken for a
-                    # patient with no records at all.
-                    if (!is.null(hits)) {
-                      shiny::span(class = "pp-ctrl-search-hits",
-                                  paste0(hits$n, "/", hits$total))
-                    },
-                    if (nzchar(term)) {
-                      shiny::tags$button(
-                        class = "pp-ctrl-search-clear",
-                        type = "button",
-                        `data-viz-id` = viz_id,
-                        `data-param` = param,
-                        title = "Clear",
-                        shiny::HTML("&times;")
-                      )
-                    }
-                  )
-                )
-              } else if (ctrl$type == "radio") {
-                choices <- ctrl$choices
-                if (is.null(choices)) choices <- character(0)
-                choices <- pp_ctrl_present_choices(
-                  choices, ctrl, dm_obj, viz$tables
-                )
-                if (isTRUE(ctrl$choices_present)) {
-                  if (length(choices) < 2L) return(NULL)
-                  if (is.null(cur_val) || !cur_val %in% choices) {
-                    cur_val <- choices[1]
-                  }
-                }
-                if (is.null(cur_val)) cur_val <- choices[1]
-                choice_names <- names(choices) %||% choices
-
-                btns <- lapply(seq_along(choices), function(ci) {
-                  is_active <- choices[ci] == cur_val
-                  shiny::tags$button(
-                    class = paste(
-                      "pp-ctrl-radio",
-                      if (is_active) "is-active"
-                    ),
-                    `data-viz-id` = viz_id,
-                    `data-param` = param,
-                    `data-value` = choices[ci],
-                    choice_names[ci]
-                  )
-                })
-                shiny::div(class = "pp-ctrl-group",
-                  shiny::span(class = "pp-ctrl-label", ctrl$label),
-                  shiny::div(class = "pp-ctrl-radios", btns)
-                )
-              } else {
-                NULL
-              }
-            })
-            tags <- Filter(Negate(is.null), tags)
-            if (length(tags) == 0) return(NULL)
-            shiny::div(class = "pp-chart-controls", tags)
-          }
 
           # Header bar (subject picker + gear popover) — depends on the
           # cohort, NOT on r_timeline_mode or r_subject. This keeps either
@@ -1283,203 +996,11 @@ new_patient_profile_block <- function(selected = NULL,
           output$header_bar <- shiny::renderUI({
             gear_disabled <- r_gear_disabled()
             shiny::req(!is.null(gear_disabled))
-            ns <- session$ns
-            init_mode <- shiny::isolate(r_timeline_mode())
-            init_prestudy <- shiny::isolate(r_show_prestudy())
-            init_smooth <- shiny::isolate(r_smooth())
-
-            gear_tag <- shiny::div(
-              class = "pp-gear-wrap",
-              shiny::tags$button(
-                class = "pp-gear-btn",
-                id = ns("pp_gear_btn"),
-                type = "button",
-                title = "Block settings",
-                shiny::HTML(paste0(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-                  'height="16" fill="currentColor" viewBox="0 0 16 16">',
-                  '<path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 ',
-                  '3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 ',
-                  '0 2.246 2.246 0 0 1-4.492 0"/>',
-                  '<path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 ',
-                  '0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-',
-                  '.892-3.433.901-2.54 2.541l.159.292a.873.873 0 0 1-.52 ',
-                  '1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a',
-                  '.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 ',
-                  '2.541 2.541l.292-.159a.873.873 0 0 1 1.255.52l.094.319c',
-                  '.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 ',
-                  '1.255-.52l.292.16c1.64.893 3.434-.902 2.541-2.541l-.159',
-                  '-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 ',
-                  '1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255',
-                  'l.16-.292c.892-1.64-.902-3.433-2.541-2.54l-.292.159a',
-                  '.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-',
-                  '.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l',
-                  '.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 ',
-                  '1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 ',
-                  '1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c',
-                  '.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 ',
-                  '0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 ',
-                  '0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-',
-                  '.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 ',
-                  '0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-',
-                  '1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-',
-                  '.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 ',
-                  '1.873 0 0 0 2.692-1.115z"/></svg>'
-                ))
-              ),
-              shiny::div(
-                class = "pp-gear-popover",
-                id = ns("pp_gear_popover"),
-                shiny::div(class = "pp-popover-row",
-                  shiny::span(class = "pp-popover-label", "Timeline"),
-                  shiny::tags$button(
-                    class = paste(
-                      "pp-popover-toggle",
-                      if (gear_disabled) "is-disabled"
-                    ),
-                    id = ns("pp_tl_toggle"),
-                    `data-tl-mode` = init_mode,
-                    `data-disabled` = if (gear_disabled) "1" else NULL,
-                    type = "button",
-                    title = if (gear_disabled) {
-                      "TRTSDT not available \u2014 relative day disabled"
-                    } else {
-                      "Click to switch"
-                    },
-                    if (identical(init_mode, "rday")) {
-                      "Relative day"
-                    } else {
-                      "Date"
-                    }
-                  )
-                ),
-                shiny::div(class = "pp-popover-row",
-                  shiny::span(class = "pp-popover-label", "Pre-treatment"),
-                  shiny::tags$button(
-                    class = "pp-popover-toggle",
-                    id = ns("pp_prestudy_toggle"),
-                    `data-prestudy` = if (init_prestudy) "1" else "0",
-                    type = "button",
-                    title = paste0(
-                      "Show the full pre-treatment history, or only the ",
-                      "30-day screening window before treatment start"
-                    ),
-                    if (init_prestudy) "Full history" else "Screening only"
-                  )
-                ),
-                shiny::div(class = "pp-popover-row",
-                  shiny::span(class = "pp-popover-label", "Value lines"),
-                  shiny::tags$button(
-                    class = "pp-popover-toggle",
-                    id = ns("pp_smooth_toggle"),
-                    `data-smooth` = init_smooth,
-                    type = "button",
-                    title = paste0(
-                      "Monotone-smoothed value lines (the curve stays ",
-                      "inside the measured range), or straight segments"
-                    ),
-                    if (identical(init_smooth, "off")) "Straight" else "Smooth"
-                  )
-                ),
-                # Data coverage: visuals that can't render for this data,
-                # with the reason (missing table or required column). Lets
-                # users see what's collected without each one having to be
-                # selected first. Hidden behind the gear, not permanent.
-                #
-                # Its own output, because it is the one part of the header
-                # that reads the data. Inlined here, every upstream emission
-                # rebuilt the whole header -- including the gear button, which
-                # made the gear flash and shut an open popover. Nested, the
-                # button and the popover shell stay mounted and only the
-                # coverage list re-renders.
-                shiny::uiOutput(ns("gear_coverage"))
-              )
-            )
-
-            # Block-level download menu: the WHOLE profile as one artifact,
-            # in the scope the reviewer means. Two sections -- the picked
-            # patient (interactive convenience) and the cohort (the
-            # profile's true view, one slide group per patient) -- each
-            # offering the formats whose writers are installed. Same
-            # <details> pattern as the blockr.viz blocks' download control.
-            #
-            # RENDERED ONCE, like the gear beside it. An output re-rendered
-            # per patient switch made the button visibly blink no matter how
-            # the recalculating fade was styled -- the DOM swap itself reads
-            # as a flicker next to a control that never moves. So the
-            # structure is static (both scope sections in the DOM) and a
-            # custom message updates the two labels and toggles section
-            # visibility; see the dl_menu_state handler in the UI script.
-            # The gate is per ENTRY, not per menu: the exhibit formats need
-            # ggplot2 and blockr.viz, but the cohort list is a plain xlsx and
-            # must stay reachable on a deployment without them.
-            dl_tag <- local({
-              has_exhibit <- pp_exhibit_ready()
-              has_pptx <- has_exhibit &&
-                requireNamespace("officer", quietly = TRUE)
-              entry <- function(id, label) {
-                shiny::downloadLink(ns(id), label)
-              }
-              shiny::tags$details(
-                id = ns("pp_dl_root"),
-                class = "pp-dl-menu is-hidden",
-                shiny::tags$summary(
-                  class = "pp-dl-btn",
-                  title = "Download profile",
-                  `aria-label` = "Download profile",
-                  shiny::HTML(paste0(
-                    '<svg width="14" height="14" viewBox="0 0 16 16" ',
-                    'fill="none" stroke="currentColor" stroke-width="1.6" ',
-                    'stroke-linecap="round" stroke-linejoin="round">',
-                    '<path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/>',
-                    '<path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 ',
-                    'A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg>'
-                  ))
-                ),
-                shiny::div(
-                  class = "pp-dl-menu-list", role = "menu",
-                  shiny::div(
-                    class = "pp-dl-scope pp-dl-scope-patient is-hidden",
-                    shiny::div(class = "pp-dl-menu-label",
-                               id = ns("pp_dl_label_patient"),
-                               "This patient"),
-                    if (has_pptx) {
-                      entry("dl_profile_pptx", "PowerPoint (.pptx)")
-                    },
-                    if (has_exhibit) {
-                      entry("dl_profile_html", "Web page (.html)")
-                    }
-                  ),
-                  shiny::div(
-                    class = "pp-dl-scope pp-dl-scope-cohort is-hidden",
-                    shiny::div(class = "pp-dl-menu-label",
-                               id = ns("pp_dl_label_cohort"),
-                               "Cohort"),
-                    # First, because it is the one people asked for: the
-                    # cohort as a LIST, not as N rendered profiles.
-                    entry("dl_cohort_xlsx", "Patient list (.xlsx)"),
-                    if (has_pptx) {
-                      entry("dl_cohort_pptx", "PowerPoint (.pptx)")
-                    },
-                    if (has_exhibit) {
-                      entry("dl_cohort_html", "Web page (.html)")
-                    }
-                  )
-                )
-              )
-            })
-
-            # The header row carries the download menu and the gear. The
-            # subject picker lives in the static UI (see `ui=` below) so its
-            # Blockr.Select container is present before the mount message
-            # arrives.
-            shiny::div(
-              class = paste(
-                "pp-cohort-hint d-flex justify-content-end",
-                "align-items-center"
-              ),
-              dl_tag,
-              gear_tag
+            pp_header_bar_ui(
+              session$ns, gear_disabled,
+              mode = shiny::isolate(r_timeline_mode()),
+              prestudy = shiny::isolate(r_show_prestudy()),
+              smooth = shiny::isolate(r_smooth())
             )
           })
 
@@ -1493,9 +1014,7 @@ new_patient_profile_block <- function(selected = NULL,
           # one file people asked for.
           shiny::observe({
             scoped <- r_scoped_dm()
-            session$sendCustomMessage(
-              session$ns("dl_menu_state"),
-              list(
+            pp_send(session, "dl_menu_state", list(
                 single = isTRUE(scoped$single),
                 picked = if (isTRUE(scoped$single)) scoped$picked else "",
                 n = length(pp_subject_ids(r_norm_dm()))
@@ -1509,41 +1028,8 @@ new_patient_profile_block <- function(selected = NULL,
           # with it.
           output$gear_coverage <- shiny::renderUI({
             vizs <- r_cohort_vizs()  # req()s until a dm has arrived
-            cov <- pp_coverage_report(r_norm_dm(), vizs)
-            roles <- r_roles()
-            shiny::tagList(
-              shiny::div(class = "pp-popover-divider"),
-              shiny::div(class = "pp-popover-section-label",
-                "Study variables"),
-              shiny::div(class = "pp-coverage-item",
-                shiny::span(class = "pp-coverage-label", "Arm"),
-                shiny::span(class = "pp-coverage-reason",
-                  roles$arm %||% "unresolved \u2014 see block error")
-              ),
-              shiny::div(class = "pp-coverage-item",
-                shiny::span(class = "pp-coverage-label", "Severity"),
-                shiny::span(class = "pp-coverage-reason",
-                  roles$severity %||% "none in adae (bars uncolored)")
-              ),
-              shiny::div(class = "pp-coverage-item",
-                shiny::span(class = "pp-coverage-label", "Timeline"),
-                shiny::span(class = "pp-coverage-reason",
-                  roles$timeline %||% "none (relative day off)")
-              ),
-              shiny::div(class = "pp-popover-divider"),
-              shiny::div(class = "pp-popover-section-label",
-                "Data coverage"),
-              if (length(cov) == 0L) {
-                shiny::div(class = "pp-coverage-ok", "All visuals available")
-              } else {
-                lapply(cov, function(c) {
-                  shiny::div(class = "pp-coverage-item",
-                    shiny::span(class = "pp-coverage-label", c$label),
-                    shiny::span(class = "pp-coverage-reason", c$reason)
-                  )
-                })
-              }
-            )
+            pp_gear_coverage_ui(pp_coverage_report(r_norm_dm(), vizs),
+                                r_roles())
           })
           # The popover is display:none until the gear is clicked, so Shiny
           # would suspend this output and leave the coverage list blank on the
@@ -1574,76 +1060,11 @@ new_patient_profile_block <- function(selected = NULL,
           output$chart_area <- shiny::renderUI({
             st <- r_pick_state()
             shiny::req(!is.null(st))
-            # The profile needs exactly one patient. Until the header picker
-            # or an upstream drill-down commits to one, show an info
-            # placeholder rather than auto-picking the first subject.
             if (!isTRUE(st$single)) {
-              return(shiny::div(class = "pp-empty-state",
-                shiny::div(class = "pp-empty-state-icon",
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="40" ',
-                    'height="40" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 ',
-                    '1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 ',
-                    '1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832',
-                    '-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516 ',
-                    '.68-4.168 1.332-.678.678-.83 1.418-.832 ',
-                    '1.664z"/></svg>'
-                  ))
-                ),
-                shiny::p(class = "pp-empty-state-text",
-                  "No patient selected"),
-                # The count lives in its own output: reading it here would
-                # put the cohort size back into this output's dependencies
-                # and flash the whole placeholder on every upstream filter.
-                shiny::p(class = "pp-empty-state-hint",
-                  shiny::uiOutput(session$ns("pp_empty_hint"), inline = TRUE))
-              ))
+              return(pp_chart_area_ui(session$ns, FALSE, character()))
             }
-            sel <- r_selected()
-            avail <- r_available()
-
-            # Keep only selected vizs that are available
-            active_ids <- intersect(sel, names(avail))
-            if (length(active_ids) == 0) {
-              return(shiny::div(class = "pp-empty-state",
-                shiny::div(class = "pp-empty-state-icon",
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="40" ',
-                    'height="40" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 ',
-                    '1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 ',
-                    '2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 ',
-                    '0-2-2z"/>',
-                    '<path d="M6.854 4.646a.5.5 0 0 1 0 .708L4.207 ',
-                    '8l2.647 2.646a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 ',
-                    '1 0-.708l3-3a.5.5 0 0 1 .708 0zm2.292 0a.5.5 0 0 ',
-                    '0 0 .708L11.793 8l-2.647 2.646a.5.5 0 0 0 .708',
-                    '.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708 ',
-                    '0z"/></svg>'
-                  ))
-                ),
-                shiny::p(class = "pp-empty-state-text",
-                  "No visualizations selected"),
-                shiny::p(class = "pp-empty-state-hint",
-                  "Click cards in the sidebar to add charts")
-              ))
-            }
-
-            # Panel shells only: the uiOutput itself is the .pp-chart-panel
-            # div, so the DOM shape (panel > header + body) is unchanged
-            # once the slot renders into it.
-            ns <- session$ns
-            shiny::tagList(lapply(active_ids, function(viz_id) {
-              shiny::uiOutput(
-                ns(paste0("viz_slot_", viz_id)),
-                class = if (identical(viz_id, "patient_overview")) {
-                  "pp-chart-panel pp-treatment-strip"
-                } else {
-                  "pp-chart-panel"
-                }
-              )
-            }))
+            pp_chart_area_ui(session$ns, TRUE,
+                             intersect(r_selected(), names(r_available())))
           })
 
           # Render one viz's panel content (header + controls + chart).
@@ -1722,107 +1143,9 @@ new_patient_profile_block <- function(selected = NULL,
             # Formats follow the twin's kind: a plot downloads as a
             # picture, a table as a sheet / page / native slide table. A
             # format whose writer is missing is left out, not disabled.
-            download_ui <- if (is.function(viz$exhibit) &&
-                                 pp_exhibit_ready()) {
-              ns <- session$ns
-              entries <- if (identical(viz$exhibit_kind, "table")) {
-                list(
-                  if (requireNamespace("openxlsx", quietly = TRUE)) {
-                    list(id = "dl_xlsx_", label = "Excel (.xlsx)")
-                  },
-                  list(id = "dl_html_", label = "Web page (.html)"),
-                  if (requireNamespace("officer", quietly = TRUE)) {
-                    list(id = "dl_pptx_", label = "PowerPoint (.pptx)")
-                  }
-                )
-              } else {
-                list(
-                  list(id = "dl_png_", label = "PNG"),
-                  if (requireNamespace("officer", quietly = TRUE)) {
-                    list(id = "dl_pptx_", label = "PowerPoint")
-                  }
-                )
-              }
-              entries <- Filter(Negate(is.null), entries)
-              shiny::tags$details(
-                class = "pp-chart-download",
-                shiny::tags$summary(
-                  title = paste("Download", viz$label),
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="12" ',
-                    'height="12" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12',
-                    'a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 ',
-                    '2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>',
-                    '<path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 ',
-                    '0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L',
-                    '5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>'
-                  ))
-                ),
-                shiny::div(
-                  class = "pp-chart-download-menu",
-                  lapply(entries, function(e) {
-                    shiny::downloadLink(ns(paste0(e$id, viz_id)), e$label)
-                  })
-                )
-              )
-            }
+            download_ui <- pp_slot_download_ui(viz, viz_id, session$ns)
 
-            shiny::tagList(
-              shiny::div(class = "pp-chart-header",
-                # The handle. Reordering used to live in the sidebar's card
-                # list -- a remote control for a stack a few hundred pixels
-                # to the right. The card you are looking at is the card you
-                # drag now, and the whole header is the target so you can be
-                # imprecise; the controls inside it keep their own clicks.
-                shiny::span(class = "pp-chart-grip",
-                            title = "Drag to reorder",
-                            shiny::HTML(pp_grip_glyph())),
-                # The code, and the group it came from as the tooltip. A
-                # PARAMCD is unique across a study's findings tables, so the
-                # header does not have to spend width saying Chemistry --
-                # but hovering still answers it.
-                shiny::div(class = "pp-chart-title",
-                           title = viz$description %||% viz$label,
-                           viz$label),
-                # The full parameter name, muted, the house form: ALB, then
-                # Albumin (g/L) behind it. The code is what you scan a stack
-                # of twelve cards by; the name is what you read once you
-                # have found the one you want.
-                if (!is.null(viz$sublabel)) {
-                  shiny::div(class = "pp-chart-sublabel", viz$sublabel)
-                },
-                # Which panel the cohort strip draws. Rendered on every
-                # panel and shown on one, so saying so costs a class rather
-                # than a re-render -- and the question "which one is first?"
-                # is answered where you are looking rather than only in the
-                # sidebar's caption.
-                shiny::span(class = "pp-band-tag",
-                            title = paste("Shown for every patient in the",
-                                          "list of patients"),
-                            shiny::HTML(pp_band_glyph())),
-                controls_ui,
-                legend_ui,
-                download_ui,
-                # Same toggle the sidebar card fires: removing a viz here
-                # deselects it, so the sidebar card slides back to AVAILABLE.
-                shiny::tags$button(
-                  class = "pp-chart-remove",
-                  type = "button",
-                  `data-viz-id` = viz_id,
-                  title = paste0("Remove ", viz$label),
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="12" ',
-                    'height="12" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646',
-                    '-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 ',
-                    '0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708',
-                    'L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>'
-                  ))
-                )
-              ),
-              shiny::div(class = "pp-chart-body", chart)
-            )
+            pp_slot_ui(viz, viz_id, chart, controls_ui, legend_ui, download_ui)
           }
 
           # The static exhibit behind one viz's download buttons: the same
@@ -2093,222 +1416,7 @@ new_patient_profile_block <- function(selected = NULL,
         }
       )
     },
-    ui = function(id) {
-      ns <- shiny::NS(id)
-      shiny::tagList(
-        # As an htmlDependency, NOT a raw tags$link to the resource path: the
-        # dependency's served URL embeds the package version, so a Version
-        # bump busts browser caches. A bare link URL never changes, and the
-        # browser happily keeps a stale stylesheet across reloads (and
-        # load_all()s) -- the inst/js convention, applied to CSS.
-        htmltools::htmlDependency(
-          "blockr-pharma-pp",
-          as.character(utils::packageVersion("blockr.pharma")),
-          src = system.file("assets", package = "blockr.pharma"),
-          stylesheet = "css/patient-profile.css"
-        ),
-        # The client half, in parts: pp-core.js first (it owns the registry
-        # the others register with), then one file per region of the block.
-        htmltools::htmlDependency(
-          "blockr-pharma-pp-js",
-          as.character(utils::packageVersion("blockr.pharma")),
-          src = system.file("js", package = "blockr.pharma"),
-          script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
-                     "pp-picker.js", "pp-panels.js")
-        ),
-        # Blockr.Select: the shared single-select primitive. Its dropdown is
-        # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
-        # `overflow-y: auto` — a hand-rolled absolute popover gets clipped and
-        # scrolls away with the chart list. blockr_blocks_css_dep() carries the
-        # canonical `.blockr-field--required-empty` amber cue.
-        blockr.dplyr::blockr_blocks_css_dep(),
-        blockr.dplyr::blockr_select_dep(),
-        shiny::div(
-          class = "pp-layout", id = ns("pp_layout"),
-
-          # The check-mark glyph, defined ONCE and referenced by every card,
-          # group row and parameter row. Inlined, it was 286 bytes per row
-          # and the search results put one on all ~75 of them -- 31KB of
-          # identical markup in a sidebar payload of 72KB.
-          shiny::HTML(paste0(
-            '<svg xmlns="http://www.w3.org/2000/svg" style="display:none" ',
-            'aria-hidden="true"><symbol id="', ns("check"), '" ',
-            'viewBox="0 0 16 16"><path fill="currentColor" ',
-            'd="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5',
-            '-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 ',
-            '.708 0z"/></symbol></svg>'
-          )),
-
-          # Left sidebar
-          shiny::div(
-            class = "pp-sidebar", id = ns("pp_sidebar"),
-
-            # No title row. "Profile" named the block you are already inside,
-            # and the pin next to it toggled the sidebar -- which the cohort
-            # tag in the toolbar now does from a place you can see when this
-            # is shut.
-
-            # Search
-            shiny::div(class = "pp-sidebar-search",
-              shiny::div(class = "pp-sidebar-search-wrapper",
-                shiny::span(class = "pp-sidebar-search-icon",
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-                    'height="16" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h',
-                    '-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-',
-                    '1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 ',
-                    '5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>'
-                  ))
-                ),
-                shiny::tags$input(
-                  type = "text",
-                  class = "pp-sidebar-search-input",
-                  id = ns("search"),
-                  # Patients only now: the panels this used to
-                  # find are in the picker's own box.
-                  # One box, two tenants: the panels above it and the
-                  # patients below it.
-                  placeholder = "Search panels and patients..."
-                ),
-                # Clear: appears only while the box has text. Restores the
-                # full list, SELECTED section included.
-                shiny::tags$button(
-                  class = "pp-sidebar-search-clear is-hidden",
-                  id = ns("search_clear"),
-                  type = "button",
-                  title = "Clear search",
-                  shiny::HTML(paste0(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" ',
-                    'height="14" fill="currentColor" viewBox="0 0 16 16">',
-                    '<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646',
-                    '-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 ',
-                    '0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708',
-                    'L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>'
-                  ))
-                )
-              )
-            ),
-
-            # The cohort. Above the panels because it is what you come back
-            # to: panels are set once, patients are stepped through.
-            # The panels, above the patients.
-            #
-            # They were a list here, then a menu behind a toolbar button,
-            # and they are a list here again -- with the difference that
-            # this one shows what is ON the profile rather than a catalogue
-            # of everything. The catalogue only exists while the search box
-            # has something in it, so the column costs five rows instead of
-            # the whole study's parameter set.
-            #
-            # Above rather than below the patients for two reasons that only
-            # showed up on screen: the list reads top-down in the same order
-            # as the cards it controls, so a drag here is a drag next to the
-            # thing it moves; and a search puts its hits under the box
-            # rather than under 254 patient rows, where they would be off
-            # screen.
-            shiny::uiOutput(ns("panel_picker")),
-            shiny::div(class = "pp-sidebar-section",
-              # No heading either. A column of patient ids under a box that
-              # says "Search patients", with "254 patients" against its edge,
-              # does not need a 10px grey word telling you it is a cohort --
-              # and "cohort" is not a term every reader shares.
-              # One row above the list: what the strip draws, the id prefix
-              # the rows no longer print, and how the list is ordered. They
-              # were three rows; a caption saying "Each row shows ALB" and a
-              # pill saying "Peak value" are two halves of one sentence, and
-              # the sidebar has a well underneath that wants every pixel.
-              shiny::uiOutput(ns("cohort_band_caption")),
-              # tabindex, so the list can hold focus and the arrow keys
-              # reach it. -1 keeps it out of the tab order: it is reached by
-              # clicking a patient, not by tabbing past 254 of them.
-              shiny::div(class = "pp-cohort-well", id = ns("pp_cohort_well"),
-                tabindex = "-1",
-                role = "listbox",
-                `aria-label` = "Cohort",
-                shiny::uiOutput(ns("sidebar_cohort"))
-              )
-            ),
-
-            # No panel list. The sidebar answers WHO; the panels are a
-            # stack of cards a few hundred pixels to the right, and choosing
-            # and ordering them from over here meant doing the work in one
-            # place and watching the result in another. Adding is the +
-            # button in the toolbar, ordering is the grip in each card's own
-            # header, and removing is the x that was always there.
-            #
-            # The sidebar keeps its search, which now searches patients: the
-            # panels it used to find are in the picker's own box.
-          ),
-
-          # Chart area: a static subject picker, the dynamic header bar (gear
-          # popover) and the dynamic chart list. The picker is static so its
-          # Blockr.Select container exists before the mount message lands, and
-          # so that stepping through patients never rebuilds it. The header bar
-          # is split off so flipping r_timeline_mode only invalidates
-          # chart_area and the gear popover stays open.
-          shiny::div(class = "pp-chart-area",
-            shiny::div(class = "pp-chart-toolbar",
-              # WHO is on screen, not a second way to choose them.
-              #
-              # This was a Blockr.Select over all 254 patients with a stepper
-              # either side. The sidebar's cohort list is also a searchable
-              # list of all 254, with a band, a sort and hit counts the
-              # dropdown never had, so the two competed and the dropdown lost.
-              # What is NOT duplicated is saying who you are looking at --
-              # the line you want once you have scrolled and the selected row
-              # is off screen -- so the control became that instead, plus the
-              # facts the sidebar row has no room for. They all come from
-              # pp_cohort_frame(), which computed them already.
-              #
-              # Stepping moved to the keyboard: arrow keys in the cohort
-              # list, which is where a reader's hand already is.
-              shiny::div(class = "pp-subject-picker", id = ns("pp_picker"),
-                # The cohort, and the drawer it lives in.
-                #
-                # This sat at the far right with the download and the gear --
-                # the opposite end of the screen from the thing it opens. On
-                # the left it is against the edge the sidebar slides from, and
-                # the chevron points at it.
-              #
-                # It says "254 patients", not "254". Shut, that is a sentence
-                # about what is behind the edge; the bare number needed you to
-                # already know what it counted. It is also the only way back
-                # once the sidebar is closed, since the floating expand button
-                # is gone.
-                shiny::tags$button(
-                  class = "pp-cohort-count is-hidden",
-                  id = ns("pp_cohort_count"),
-                  type = "button",
-                  title = "Show or hide the cohort",
-                  shiny::span(class = "pp-cohort-count-car",
-                              shiny::HTML("&lsaquo;")),
-                  shiny::span(class = "pp-cohort-count-n")
-                ),
-                shiny::uiOutput(ns("subject_facts"), inline = TRUE),
-                shiny::span(class = "pp-subject-gap")
-              ),
-
-              shiny::uiOutput(ns("header_bar"))
-            ),
-            shiny::uiOutput(ns("chart_area"))
-          )
-        ),
-
-        # The client half lives in inst/js/pp-*.js and is mounted here with
-        # the three things it needs from R: the namespace every id
-        # derives from, the grip glyph the sidebar rows reuse, and the spans
-        # band height. A jQuery-ready wrapper, because in a dock panel this
-        # fragment can land before the layout it mounts on.
-        shiny::tags$script(shiny::HTML(sprintf(
-          "$(function() { PatientProfile.mount(%s); });",
-          jsonlite::toJSON(
-            list(id = id, grip = pp_grip_glyph(), bandH = pp_cohort_band_h_spans),
-            auto_unbox = TRUE
-          )
-        )))
-      )
-    },
+    ui = pp_block_ui,
     dat_valid = function(data) {
       if (!inherits(data, "dm")) {
         stop("Input must be a dm object")

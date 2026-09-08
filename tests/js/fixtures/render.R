@@ -28,7 +28,16 @@ dm_obj <- dm::dm(adsl = adsl, adae = adae, adlbc = adlbc, advs = advs)
 
 dir <- file.path("tests", "js", "fixtures")
 put <- function(name, html) {
-  writeLines(as.character(html), file.path(dir, paste0(name, ".html")))
+  html <- as.character(html)
+  # htmlwidgets mints a random element id per render; pin it to the panel
+  # so a regenerated fixture only differs where the markup did. Without the
+  # `viz_slot_` prefix, which the block's own slot selector matches on.
+  ids <- unique(unlist(regmatches(html, gregexpr("htmlwidget-[0-9a-f]{20}", html))))
+  for (i in seq_along(ids)) {
+    stem <- sub("^(lab_)?viz_slot_", "", name)
+    html <- gsub(ids[[i]], sprintf("htmlwidget-%s-%d", stem, i), html, fixed = TRUE)
+  }
+  writeLines(html, file.path(dir, paste0(name, ".html")))
 }
 
 grab <- function(output, name) {
