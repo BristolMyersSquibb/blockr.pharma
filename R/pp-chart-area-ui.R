@@ -25,7 +25,7 @@ pp_chart_area_ui <- function(ns, single, active_ids) {
       # put the cohort size back into this output's dependencies
       # and flash the whole placeholder on every upstream filter.
       shiny::p(class = "pp-empty-state-hint",
-        shiny::uiOutput(session$ns("pp_empty_hint"), inline = TRUE))
+        shiny::uiOutput(ns("pp_empty_hint"), inline = TRUE))
     ))
   }
   if (length(active_ids) == 0) {

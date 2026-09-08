@@ -214,11 +214,17 @@ test_that("the cohort lists every subject and a click picks one", {
   expect_length(ids, 254)
   expect_null(selected_id())
   expect_equal(js("document.querySelectorAll('[id*=viz_slot_] canvas').length"), 0)
+  # Before any pick the chart area explains itself, and nothing in the
+  # block has errored.
+  expect_true(js("!!document.querySelector('.pp-chart-area .pp-empty-state')"))
+  expect_match(js("document.querySelector('.pp-empty-state-hint').innerText"), "Pick one of 254")
+  expect_equal(js("document.querySelectorAll('.pp-layout .shiny-output-error').length"), 0)
 
   pick_patient(ids[1])
   expect_identical(selected_id(), ids[1])
   expect_identical(header_who(), ids[1])
   expect_length(slot_ids(), 5)
+  expect_equal(js("document.querySelectorAll('.pp-layout .shiny-output-error').length"), 0)
 
   # The + Add button is gone: panels are picked in the sidebar.
   expect_true(js("document.querySelector('.pp-add-btn') === null"))
