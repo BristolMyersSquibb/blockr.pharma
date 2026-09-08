@@ -491,9 +491,11 @@ test_that("switching patients ghosts every panel until its canvas exists", {
     var mark = function(w, dt) { window.__ghost.push({t: performance.now() - t0, w: w, dt: dt || 0}); };
     var slots = function() { return [...document.querySelectorAll('[id*=viz_slot_]')]; };
     // The block drops every ghost on any scroll (a fixed overlay would hang
-    // over the wrong content), so a scroll is a legitimate early exit.
-    var lastScroll = -1;
-    window.addEventListener('scroll', function() { lastScroll = performance.now(); }, true);
+    // over the wrong content), so a scroll is a legitimate early exit. The
+    // times are kept for R to match up: the observer's callback runs as a
+    // microtask right after the block's own scroll listener, before this one.
+    window.__scrolls = [];
+    window.addEventListener('scroll', function() { window.__scrolls.push(performance.now() - t0); }, true);
     new MutationObserver(function(ms) { ms.forEach(function(m) {
       m.addedNodes.forEach(function(n) {
         if (n.classList && n.classList.contains('pp-chart-ghost')) {
@@ -509,8 +511,7 @@ test_that("switching patients ghosts every panel until its canvas exists", {
           var o = owner.get(n);
           var painted = !!(o && o.slot.querySelector('canvas'));
           var why = painted ? 'ghost-' :
-            (o && !o.slot.querySelector('.html-widget')) ? 'ghost-nowidget' :
-            (o && lastScroll >= o.t) ? 'ghost-scroll' : 'ghost-early';
+            (o && !o.slot.querySelector('.html-widget')) ? 'ghost-nowidget' : 'ghost-early';
           mark(why, o ? performance.now() - o.t : -1);
         }
       });
@@ -523,14 +524,19 @@ test_that("switching patients ghosts every panel until its canvas exists", {
   when <- vapply(log, `[[`, 0, "t")
   held <- vapply(log, `[[`, 0, "dt")
 
-  trace <- paste(sprintf("%s@%.0f(+%.0f)", what, when, held), collapse = " ")
+  scrolls <- unlist(js("window.__scrolls"))
+  trace <- paste(c(sprintf("%s@%.0f(+%.0f)", what, when, held),
+                   sprintf("scroll@%.0f", scrolls)), collapse = " ")
   expect_equal(sum(what == "ghost+"), 5)
   expect_equal(sum(startsWith(what, "ghost-")), 5, info = trace)
   # A ghost lifts when its panel has painted, or on one of the block's own
-  # early exits: no widget to wait for, a scroll, or the 1500ms deadline.
-  # Never before that without a canvas.
-  expect_true(all(held[what == "ghost-early"] >= 1400), info = trace)
-  expect_true(sum(what == "ghost-") >= 1, info = trace)
+  # early exits: no widget to wait for, a scroll while it was up, or the
+  # 1500ms deadline. Never before that without a canvas.
+  early <- which(what == "ghost-early")
+  scrolled <- vapply(early, function(i) {
+    any(scrolls >= when[i] - held[i] - 1 & scrolls <= when[i] + 5)
+  }, logical(1))
+  expect_true(all(scrolled | held[early] >= 1400), info = trace)
   expect_gte(sum(what == "canvas"), 5)
   # And the lifts came after the first paint, not with the render.
   expect_true(all(when[what == "ghost-"] >= min(when[what == "canvas"])))
