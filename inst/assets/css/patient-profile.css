@@ -43,49 +43,6 @@
 }
 
 /* --- Sidebar Header ------------------------ */
-.pp-sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e5e7eb;
-  flex-shrink: 0;
-  background: #ffffff;
-}
-
-.pp-sidebar-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.pp-pin-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-
-.pp-pin-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.pp-pin-btn.is-unpinned {
-  color: #3b82f6;
-}
 
 /* --- Search -------------------------------- */
 .pp-sidebar-search {
@@ -160,451 +117,26 @@
 }
 
 /* --- Sidebar Content ----------------------- */
-/* Column, not a single scroll box: SELECTED keeps its natural height at the
-   top and AVAILABLE takes what is left and scrolls inside it. That is what
-   keeps the sidebar's height tied to the vizs in use rather than to however
-   many the cohort offers. */
-.pp-sidebar-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 6px 8px 10px;
-}
-
-.pp-sidebar-cards {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* No busy fade on the card list. Shiny drops a recomputing output to 30%
-   opacity, which on the white sidebar reads as a white flash whenever the
-   card catalog genuinely re-renders (a drilled patient with different
-   ungrouped parameters). The swap itself is atomic; the fade is the only
-   visible part, so suppress it here — the charts keep theirs, where
-   "recomputing" is real information. */
-.pp-sidebar-cards.recalculating,
-.pp-sidebar-cards .recalculating {
-  opacity: 1 !important;
-}
 
 /* --- Search filter states ------------------ */
-.pp-card.is-filtered-out,
-.pp-result-group.is-filtered-out,
-.pp-result-param.is-filtered-out,
-.pp-results-section.is-hidden,
-.pp-no-results.is-hidden,
-.pp-category-group.is-hidden,
-.pp-category-group.is-empty,
-.pp-active-section.is-hidden,
-.pp-available-section.is-hidden,
-.pp-active-section.is-searching-away,
-.pp-available-section.is-searching-away {
-  display: none;
-}
-
-.pp-no-results {
-  padding: 12px 6px;
-  font-size: 12px;
-  color: #9ca3af;
-}
 
 /* --- Search results ------------------------ */
-/* Browsing lists GROUPS, searching answers with the individual SERIES: you
-   look for "alanine", not for the card that happens to hold it. Each match
-   sits under its group so the context is visible, and both levels are
-   selectable — the group check adds the whole card, the parameter check adds
-   that one series. The tree replaces the browse lists while a query is live,
-   so the sidebar gives ONE answer to the query. */
-.pp-results-section {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.pp-results-list {
-  overflow-y: auto;
-  min-height: 0;
-}
-
-/* ONE border around the group and its matches. Boxing each row separately
-   made three competing outlines argue about what belongs to what; the
-   enclosing border says "these are Chemistry's" on its own, which leaves the
-   check marks as the only thing carrying selection state. */
-.pp-result-group {
-  margin-bottom: 6px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color 150ms ease;
-}
-
-.pp-result-group.is-selected {
-  border-color: #3b82f6;
-}
-
-/* The group row: a card's contents without a card's box */
-.pp-result-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  user-select: none;
-  transition: background 150ms ease;
-}
-
-.pp-result-card:hover {
-  background: rgba(249, 250, 251, 0.8);
-}
-
-.pp-result-card.is-selected {
-  background: rgba(59, 130, 246, 0.05);
-}
-
-/* Matches sit inside the same border, set in from the group's icon */
-.pp-result-params {
-  padding: 2px 0 2px 34px;
-  border-top: 1px solid #f3f4f6;
-}
-
-.pp-result-param {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 26px 4px 0;
-  cursor: pointer;
-  user-select: none;
-  transition: background 150ms ease;
-}
-
-.pp-result-param:hover {
-  background: rgba(249, 250, 251, 0.8);
-}
-
-.pp-result-param-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 12.5px;
-  color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color 150ms ease;
-}
-
-/* A checked parameter is stated by its check mark and by the label stepping
-   up to the group row's weight -- no second box inside the box. */
-.pp-result-param.is-selected .pp-result-param-label {
-  color: #374151;
-  font-weight: 500;
-}
-
-/* The hints describe the full list, so they step aside during a search */
-.pp-sidebar.is-searching .pp-active-hint,
-.pp-sidebar.is-searching .pp-active-empty {
-  display: none;
-}
 
 /* --- Section Headers (SELECTED / AVAILABLE) -- */
-.pp-section-header {
-  font-size: 10px;
-  font-weight: 600;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  padding: 8px 4px 6px;
-}
-
-.pp-section-header-available {
-  border-top: 1px solid #e5e7eb;
-  margin-top: 8px;
-  padding-top: 12px;
-}
 
 /* --- Sections ------------------------------ */
-/* SELECTED: natural height, pinned at the top, never scrolls away */
-.pp-active-section {
-  flex: 0 0 auto;
-}
-
-/* AVAILABLE: soaks up the rest and scrolls inside itself */
-.pp-available-section {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.pp-available-list {
-  flex: 1 1 auto;
-  min-height: 120px;
-  /* The cap is what keeps the sidebar from being the thing that stretches the
-     block: without it, a cohort offering twenty vizs makes the whole layout as
-     tall as the card list. Below the cap the list grows to fill whatever the
-     chart column gives it; above it, it scrolls. */
-  max-height: 60vh;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.pp-available-list::-webkit-scrollbar {
-  width: 6px;
-}
 
 /* --- Active List (drop target) ------------- */
-.pp-active-list {
-  min-height: 32px;
-}
-
-.pp-active-hint {
-  font-size: 10px;
-  color: #d1d5db;
-  padding: 2px 4px 6px;
-  letter-spacing: 0.3px;
-}
-
-.pp-active-hint.is-hidden {
-  display: none;
-}
-
-.pp-active-empty {
-  font-size: 12px;
-  font-style: italic;
-  color: #d1d5db;
-  padding: 8px 4px;
-}
-
-.pp-active-empty.is-hidden {
-  display: none;
-}
-
-/* Drag handle for active cards */
-.pp-active-list .pp-card-main::before {
-  content: '\2261';
-  font-size: 14px;
-  color: #d1d5db;
-  cursor: grab;
-  flex-shrink: 0;
-  width: 12px;
-  text-align: center;
-  line-height: 1;
-  transition: color 0.15s;
-}
-
-.pp-active-list .pp-card:hover .pp-card-main::before {
-  color: #9ca3af;
-}
-
-/* Drag states.
-
-   The drop indicator takes the REPORT BUILDER'S LOOK -- a straight 2px
-   accent line where the card will land, with an open notch on its leading
-   edge so it reads as an insertion caret rather than a border -- but not
-   its implementation.
-
-   The report builder hangs the line off the row's own ::after, which is
-   right for it: its rows are borderless and flush, so a row's bottom edge
-   IS the next row's top edge, and `bottom: -1px` on one row and
-   `top: -1px` on the next land on the same pixel. Cards are not flush --
-   they have a 1px border and a 2px gap -- and a pseudo-element is laid out
-   against the PADDING box, which the border insets. Marking the same gap
-   from the card above and from the card below therefore drew it 2px apart,
-   and the caret visibly jumped between clinging to one card and the other
-   as the pointer crossed a midpoint.
-
-   That is a defect of anchoring a gap's indicator to a card at all. So
-   there is ONE caret element, it lives in the list, and the drag moves it
-   to the target gap. One gap, one position, by construction rather than by
-   arithmetic -- and it stays correct if the card's border, radius, gap or
-   height ever change. */
-.pp-card.is-dragging {
-  opacity: 0.4;
-  cursor: grabbing;
-}
-
-.pp-active-list {
-  position: relative;
-}
-
-.pp-drop-caret {
-  position: absolute;
-  left: 5px;
-  right: 0;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--blockr-blue-700, #1d4ed8);
-  /* `top` is the gap's centre, written by the drag; the line straddles it. */
-  transform: translateY(-50%);
-  z-index: 5;
-  /* The caret sits under the pointer during a drag and must never become a
-     drop target itself -- that would swallow the dragover it exists to
-     visualise. */
-  pointer-events: none;
-}
-
-/* The notch hangs off the LEFT of the line, half of it outside the card
-   edge, so the caret is findable without reading the line it belongs to. */
-.pp-drop-caret::before {
-  content: "";
-  position: absolute;
-  left: -10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 2px solid var(--blockr-blue-700, #1d4ed8);
-  background: #fff;
-  box-sizing: border-box;
-}
-
-.pp-drop-caret.is-hidden {
-  display: none;
-}
-
-/* While a reorder drag is live the cards drop their blue border to grey.
-   This is the whole fix, and it is not decoration: every card in SELECTED
-   carries a blue border, and the caret is blue, so the one thing that has
-   to be findable was the same colour as the entire field it had to be found
-   against. It was never that the line was too thin -- widening the gap to
-   give it room was tried and did not help, which is why the gap is
-   untouched here.
-
-   No selection state is lost meanwhile: everything in this list is selected
-   by definition, so the borders say nothing the section header does not
-   already say. */
-.pp-active-list.is-reordering .pp-card {
-  border-color: var(--blockr-grey-200, #e5e7eb);
-  background: #ffffff;
-}
-
-.pp-active-list.is-reordering .pp-card .pp-card-check {
-  background: var(--blockr-grey-300, #d1d5db);
-}
 
 /* --- Category Headers ---------------------- */
-.pp-category-group {
-  margin-bottom: 4px;
-}
-
-.pp-category-header {
-  padding: 8px 4px 6px;
-  margin-top: 4px;
-}
-
-.pp-category-group:first-child .pp-category-header {
-  margin-top: 0;
-}
-
-.pp-category-header span {
-  font-size: 11px;
-  font-weight: 500;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
 
 /* --- Cards --------------------------------- */
-/* One-line rows: 22px icon chip + title, description demoted to a title
-   tooltip. Twice the vertical density of the old 40px-icon cards, which is
-   what lets the sidebar sit at 232px instead of 300. */
-.pp-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 2px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  transition: all 150ms ease;
-  cursor: pointer;
-  user-select: none;
-}
-
-.pp-card:hover {
-  border-color: #e5e7eb;
-  background: rgba(249, 250, 251, 0.6);
-}
-
-.pp-card.is-selected {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.04);
-}
-
-.pp-card-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 26px 5px 6px;
-  min-width: 0;
-}
 
 /* --- Card Icon ----------------------------- */
-.pp-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
 
 /* --- Card Content -------------------------- */
-.pp-card-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.pp-card-title {
-  font-weight: 500;
-  font-size: 12.5px;
-  color: #111827;
-  margin: 0;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* --- Card Check Circle --------------------- */
-.pp-card-check {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.pp-card-check svg {
-  width: 9px;
-  height: 9px;
-  color: transparent;
-  transition: color 0.15s ease;
-}
-
-.pp-card.is-selected .pp-card-check,
-.pp-result-card.is-selected .pp-card-check,
-.pp-result-param.is-selected .pp-card-check {
-  background: #3b82f6;
-}
-
-.pp-card.is-selected .pp-card-check svg,
-.pp-result-card.is-selected .pp-card-check svg,
-.pp-result-param.is-selected .pp-card-check svg {
-  color: #ffffff;
-}
 
 /* --- Chart Area ---------------------------- */
 .pp-chart-area {
@@ -1037,23 +569,19 @@
 }
 
 /* --- Scrollbar styling --------------------- */
-.pp-sidebar-content::-webkit-scrollbar,
 .pp-chart-area::-webkit-scrollbar {
   width: 6px;
 }
 
-.pp-sidebar-content::-webkit-scrollbar-track,
 .pp-chart-area::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.pp-sidebar-content::-webkit-scrollbar-thumb,
 .pp-chart-area::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 3px;
 }
 
-.pp-sidebar-content::-webkit-scrollbar-thumb:hover,
 .pp-chart-area::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
@@ -1301,7 +829,6 @@
   height: 42px;
 }
 
-
 /* Cohort tag, and the sidebar's toggle.
    
    First thing in the toolbar, against the edge the drawer slides from -- it
@@ -1501,35 +1028,6 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.pp-sidebar-section--grow {
-  flex: 1;
-  min-height: 0;
-}
-
-.pp-section-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px 3px;
-  font-size: 10.5px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #9ca3af;
-  flex-shrink: 0;
-}
-
-.pp-section-title {
-  flex: 1 1 auto;
-}
-
-.pp-section-count {
-  font-size: 11px;
-  color: #6b7280;
-  letter-spacing: 0;
-  text-transform: none;
-  font-weight: 600;
 }
 
 /* The lifted id prefix, named once so nothing is hidden. */
@@ -1739,7 +1237,6 @@
   display: block;
   width: 100%;
 }
-
 
 /* --- What the band is drawing -----------------------------------------------
    The strip follows the panels now (pp_cohort_band_source()), so it has to
@@ -1976,7 +1473,6 @@
   opacity: 1;
 }
 
-
 /* What Enter would take: the first hit, in either list.
    
    A ring rather than a fill, because in the cohort the fill already means
@@ -2036,42 +1532,6 @@
 .pp-add-on {
   max-height: 145px;
   overflow-y: auto;
-}
-
-.pp-add-find {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 2px 6px;
-  padding: 0 8px;
-  height: 32px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  background: #f9fafb;
-}
-
-.pp-add-find:focus-within {
-  border-color: #dbeafe;
-  background: #eff6ff;
-}
-
-.pp-add-find .pp-search-icon {
-  flex: 0 0 auto;
-  color: #9ca3af;
-}
-
-.pp-add-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: none;
-  /* Never its own font-family; see the design system's typography rules. */
-  font: inherit;
-  font-size: 12.5px;
-  color: #111827;
-  padding: 0;
 }
 
 /* The list is what gives way when the menu is capped to the room below the
@@ -2173,32 +1633,6 @@
 
 .pp-add-none.is-shown {
   display: block;
-}
-
-.pp-add-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  padding: 6px 7px 2px;
-  border-top: 1px solid #e5e7eb;
-  font-size: 10.5px;
-  color: #9ca3af;
-}
-
-.pp-add-foot kbd {
-  font: inherit;
-  font-size: 10px;
-  color: #6b7280;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 3px; /* --blockr-radius-sm, one step down */
-  padding: 0 4px;
-}
-
-.pp-add-count {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- Dragging a panel ------------------------------------------------------

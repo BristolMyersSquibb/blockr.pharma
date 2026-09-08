@@ -42,10 +42,7 @@
       var syncSubjectMsgId = ns('sync_subject');
       var syncMsgId = ns('sync_selected');
       var syncParamsMsgId = ns('sync_params');
-      var paramIndexId = ns('param_index');
       var reorderInputId = ns('reorder_viz');
-
-      var dragActive = false;
       var tlModeInputId = ns('timeline_mode');
       var prestudyInputId = ns('show_prestudy');
       var smoothInputId = ns('smooth_mode');
@@ -781,9 +778,8 @@
         if (!pop) return;
         var inp = document.getElementById(addInputId);
         var q = (inp ? inp.value : '').trim().toLowerCase();
-        var shown = 0, total = 0;
+        var shown = 0;
         addRows().forEach(function(r){
-          total++;
           var hay = r.getAttribute('data-search-text') || '';
           // No query, no catalogue. What the sidebar shows then is the
           // profile you have, which is the list above this one; sixty
@@ -818,8 +814,6 @@
             '#' + layoutId + ' .pp-pt:not(.is-filtered-out)').length;
           none.classList.toggle('is-shown', !!q && shown === 0 && !pats);
         }
-        var cnt = pop.querySelector('.pp-add-count');
-        if (cnt) cnt.textContent = shown + ' of ' + total;
       }
 
       $(document).on('click', '#' + layoutId + ' .pp-add-row', function(e){
@@ -1241,14 +1235,6 @@
         }
       });
 
-      // Card click: toggle selection (server-driven, no optimistic toggle)
-      $(document).on('click', '#' + layoutId + ' .pp-card', function(e) {
-        if (dragActive) return;
-        var vizId = $(this).data('viz-id');
-        if (!vizId) return;
-        Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
-      });
-
       // Panel x: remove the viz. Same input as the card, so the server
       // deselects it and the sidebar card slides back to AVAILABLE.
       $(document).on('click', '#' + layoutId + ' .pp-chart-remove',
@@ -1258,88 +1244,6 @@
           if (!vizId) return;
           Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
         });
-
-      // The parameter index: one [viz, code, short, full] tuple per
-      // series, shipped as data and parsed once per sidebar render.
-      // Cached on the node itself, so a re-render invalidates it for
-      // free.
-      function paramIndex() {
-        var el = document.getElementById(paramIndexId);
-        if (!el) return [];
-        if (!el.ppParsed) {
-          try { el.ppParsed = JSON.parse(el.textContent || '[]'); }
-          catch (err) { el.ppParsed = []; }
-        }
-        return el.ppParsed;
-      }
-
-      // PARAM text is study data, so it reaches the DOM escaped.
-      function ppEsc(s) {
-        return String(s === null || s === undefined ? '' : s)
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;').replace(/'/g, '&#39;')
-          .replace(/"/g, '&quot;');
-      }
-
-      // Build the results tree for a query. A group shows when the
-      // group itself matches or any of its parameters does, and only
-      // the matching parameters come with it. A group matched by NAME
-      // alone lists nothing: typing the word chemistry asks for the
-      // card, not for all eighteen series under it.
-      //
-      // The group row is cloned from the browse card that already
-      // describes it, so the icon and label have exactly one source.
-      function buildResults($sidebar, query) {
-        var $list = $sidebar.find('.pp-results-list');
-        if (!query) { $list.empty(); return 0; }
-
-        var checkHtml = '';
-        var $anyCheck = $sidebar.find('.pp-card-check').first();
-        if ($anyCheck.length) checkHtml = $anyCheck[0].outerHTML;
-
-        var byViz = {}, order = [];
-        paramIndex().forEach(function(e) {
-          var vid = e[0], code = e[1], short = e[2], full = e[3];
-          if ((code + ' ' + full).toLowerCase().indexOf(query) < 0) return;
-          if (!byViz[vid]) { byViz[vid] = []; order.push(vid); }
-          byViz[vid].push([code, short, full]);
-        });
-
-        // Cards whose own name matches, listed even with no parameter hit
-        $sidebar.find('.pp-available-list .pp-card, .pp-active-list .pp-card')
-          .each(function() {
-            var vid = $(this).attr('data-viz-id');
-            var own = ($(this).attr('data-card-text') || '');
-            if (own.indexOf(query) < 0) return;
-            if (!byViz[vid]) { byViz[vid] = []; order.push(vid); }
-          });
-
-        var html = order.map(function(vid) {
-          var $src = $sidebar.find('.pp-card[data-viz-id=' +
-            JSON.stringify(vid) + ']').first();
-          if (!$src.length) return '';
-          var on = $src.hasClass('is-selected') ? ' is-selected' : '';
-          var rows = byViz[vid].map(function(p) {
-            return '<div class="pp-result-param" data-viz-id=' +
-              JSON.stringify(vid) + ' data-paramcd=' +
-              JSON.stringify(p[0]) + ' title="' +
-              ppEsc(p[2] + ' (' + p[0] + ')') + '">' +
-              '<span class="pp-result-param-label">' + ppEsc(p[1]) +
-              '</span>' + checkHtml + '</div>';
-          }).join('');
-          return '<div class="pp-result-group' + on + '" data-viz-id=' +
-            JSON.stringify(vid) + '>' +
-            '<div class="pp-result-card' + on + '" data-viz-id=' +
-            JSON.stringify(vid) + '><div class="pp-card-main">' +
-            $src.find('.pp-card-main').html() + '</div></div>' +
-            (rows ? '<div class="pp-result-params">' + rows + '</div>' : '') +
-            '</div>';
-        }).join('');
-
-        $list.html(html);
-        applyParamChecks();
-        return order.length;
-      }
 
       // Search: client-side filtering across both sections.
       //
@@ -1358,16 +1262,6 @@
         $('#' + clearBtnId).toggleClass('is-hidden', !query);
         $sidebar.toggleClass('is-searching', !!query);
 
-        var groupHits = buildResults($sidebar, query);
-        $sidebar.find('.pp-results-section')
-          .toggleClass('is-hidden', !query || groupHits === 0);
-        // The results tree REPLACES the browse lists while typing --
-        // one answer to the query, not the same cards in two shapes.
-        $sidebar.find('.pp-active-section, .pp-available-section')
-          .toggleClass('is-searching-away', !!query);
-        $sidebar.find('.pp-no-results')
-          .toggleClass('is-hidden', !query || groupHits > 0);
-
         // One search box, two tenants. A query hides non-matching
         // PATIENTS in place rather than switching the cohort to a
         // results tree: the list is already flat, so there is nothing
@@ -1385,13 +1279,6 @@
         // patients the PREVIOUS query had left standing.
         filterAdd();
         markFirstHit();
-
-        // An emptied domain group keeps its header off screen (the
-        // selection sync moves cards out but leaves the group in place).
-        $sidebar.find('.pp-category-group').each(function() {
-          $(this).toggleClass('is-hidden',
-            $(this).find('.pp-card').length === 0);
-        });
       }
 
       $(document).on('input', '#' + searchId, applyFilter);
@@ -1441,17 +1328,6 @@
         row.click();
       });
 
-      // A live query and the parameter check marks must both survive a
-      // sidebar re-render (cohort change, or the first render of all)
-      $(document).on('shiny:value', function(e) {
-        if (e.name && e.name.indexOf('sidebar_cards') >= 0) {
-          setTimeout(function() {
-            applyFilter();
-            applyParamChecks();
-          }, 0);
-        }
-      });
-
       // The cohort tag is the sidebar's toggle.
       //
       // It reads "254 patients" and it opens the list of them, which
@@ -1473,32 +1349,6 @@
         e.stopPropagation();
         toggleSidebar();
       });
-
-      // A search result GROUP row is a card: same toggle input, so the
-      // whole card goes on or off the panel.
-      $(document).on('click', '#' + sidebarId + ' .pp-result-card',
-        function(e) {
-          e.stopPropagation();
-          var vizId = $(this).attr('data-viz-id');
-          if (!vizId) return;
-          Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
-        });
-
-      // A search result PARAMETER row toggles that one series. The
-      // server decides what that means against the card's current
-      // state -- add to a card already open, open a card on this
-      // parameter alone, or drop it again. (No double quotes anywhere
-      // in this script -- it is assembled as an R string.)
-      $(document).on('click', '#' + sidebarId + ' .pp-result-param',
-        function(e) {
-          e.stopPropagation();
-          var vizId = $(this).attr('data-viz-id');
-          var code = $(this).attr('data-paramcd');
-          if (!vizId || !code) return;
-          Shiny.setInputValue(pickParamInputId, {
-            viz_id: vizId, paramcd: code
-          }, {priority: 'event'});
-        });
 
       // Chip click (checkbox controls)
       $(document).on('click', '#' + layoutId + ' .pp-ctrl-chip', function(e) {
@@ -1678,32 +1528,11 @@
           viz_id: vizId, param: param, value: value
         }, {priority: 'event'});
       });
-
-      // Which parameters are on screen right now, as viz@@PARAMCD
-      // keys. The result rows are checkboxes, so they have to answer
-      // for the panel's actual state -- including changes made from
-      // the chips in the chart header, not just from this list.
-      //
-      // The keys are REMEMBERED and re-applied after every sidebar
-      // render: the server sends them as soon as the selection
-      // settles, which is before the rows exist on a cold start, and a
-      // fire-and-forget handler left every check mark grey.
-      var lastParamKeys = [];
-      function applyParamChecks() {
-        $('#' + layoutId).find('.pp-result-param').each(function() {
-          var key = $(this).attr('data-viz-id') + '@@' +
-            $(this).attr('data-paramcd');
-          $(this).toggleClass('is-selected',
-            lastParamKeys.indexOf(key) >= 0);
-        });
-      }
       Shiny.addCustomMessageHandler(syncParamsMsgId, function(keys) {
         if (!keys) keys = [];
         if (typeof keys === 'string') keys = [keys];
-        lastParamKeys = keys;
         lastParamOn = keys;
         paintAddTicks();
-        applyParamChecks();
       });
 
       // Sync sidebar state from server
@@ -1717,200 +1546,12 @@
         $('#' + layoutId + ' .pp-add-n').text(selected.length || '');
         paintAddTicks();
 
-        var $layout = $('#' + layoutId);
-        var $activeList = $layout.find('.pp-active-list');
-        var $availList = $layout.find('.pp-available-list');
-
-        // Build index of all cards
-        var cardMap = {};
-        $layout.find('.pp-card').each(function() {
-          var vid = $(this).data('viz-id');
-          if (vid) cardMap[vid] = $(this);
-        });
-
-        // Move selected cards to active list in order
-        var $hint = $activeList.find('.pp-active-empty');
-        for (var i = 0; i < selected.length; i++) {
-          var $card = cardMap[selected[i]];
-          if ($card && $card.length) {
-            $card.addClass('is-selected').attr('draggable', 'true');
-            $hint.before($card);
-          }
-        }
-
-        // Move unselected cards back to their domain group
-        Object.keys(cardMap).forEach(function(vid) {
-          if (selected.indexOf(vid) >= 0) return;
-          var $card = cardMap[vid];
-          $card.removeClass('is-selected').removeAttr('draggable');
-          var domain = $card.data('domain');
-          var $group = $availList
-            .find('.pp-category-group[data-domain=' + JSON.stringify(domain) + ']');
-          if (!$group.length) {
-            $group = $('<div class=pp-category-group data-domain=' +
-              JSON.stringify(domain) + '>' +
-              '<div class=pp-category-header><span>' +
-              domain.toUpperCase() + '</span></div></div>');
-            $availList.append($group);
-          }
-          $group.append($card);
-        });
-
-        // The results tree carries its own copy of every card, and it
-        // must never be MOVED (it lives in query order, not in the
-        // browse lists) -- only its check mark follows the selection.
-        // The enclosing group border follows it too, so the whole
-        // result block reads as on or off the panel.
-        $layout.find('.pp-result-card').each(function() {
-          var on = selected.indexOf($(this).attr('data-viz-id')) >= 0;
-          $(this).toggleClass('is-selected', on);
-          $(this).closest('.pp-result-group').toggleClass('is-selected', on);
-        });
-
-        // Toggle empty hint and drag-to-reorder hint
-        if (selected.length > 0) {
-          $hint.addClass('is-hidden');
-        } else {
-          $hint.removeClass('is-hidden');
-        }
-        var $dragHint = $layout.find('.pp-active-hint');
-        if (selected.length >= 2) {
-          $dragHint.removeClass('is-hidden');
-        } else {
-          $dragHint.addClass('is-hidden');
-        }
-
-        // Hide empty domain groups, show non-empty ones. Class, not
-        // .toggle(): an inline display would outrank the search filter.
-        $availList.find('.pp-category-group').each(function() {
-          var hasCards = $(this).find('.pp-card').length > 0;
-          $(this).toggleClass('is-empty', !hasCards);
-        });
-
         // Cards moved between the sections keep the live query honest
         applyFilter();
       });
 
       // --- HTML5 Drag and Drop on active list ---
       var $doc = $(document);
-
-      $doc.on('dragstart', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
-        dragActive = true;
-        $(this).addClass('is-dragging');
-        // Mute the field for the duration of the drag, so the caret is
-        // the only accent-coloured thing in the list (see the drag
-        // states in patient-profile.css for why that is the fix).
-        $(this).closest('.pp-active-list').addClass('is-reordering');
-        e.originalEvent.dataTransfer.effectAllowed = 'move';
-        e.originalEvent.dataTransfer.setData('text/plain', $(this).data('viz-id'));
-      });
-
-      // Which gap the drop targets: the pointer's half of the hovered
-      // card decides -- lower half means the gap BELOW it, upper half
-      // the gap above. ONE predicate, two callers (the caret and the
-      // drop), so the line can never promise a position the drop will
-      // not use.
-      function dropAfter(ev, card) {
-        var box = card.getBoundingClientRect();
-        return (ev.clientY - box.top) > box.height / 2;
-      }
-
-      // Put the caret in the targeted gap. The gap's centre is the
-      // midpoint between the two cards that bound it, measured from
-      // what is actually on screen -- so it needs to know nothing
-      // about the card's border, radius or margin, and cannot drift
-      // if any of them change. At the ends of the list there is no
-      // second card, so the caret sits half a margin clear of the
-      // only edge there is.
-      function moveCaret(card, after) {
-        var list = card.closest('.pp-active-list');
-        if (!list) return;
-        var caret = list.querySelector('.pp-drop-caret');
-        if (!caret) return;
-        var box = card.getBoundingClientRect();
-        var sib = after ? card.nextElementSibling
-                        : card.previousElementSibling;
-        while (sib && !sib.classList.contains('pp-card')) {
-          sib = after ? sib.nextElementSibling
-                      : sib.previousElementSibling;
-        }
-        var y;
-        if (sib) {
-          var sb = sib.getBoundingClientRect();
-          y = after ? (box.bottom + sb.top) / 2
-                    : (sb.bottom + box.top) / 2;
-        } else {
-          var edge = parseFloat(getComputedStyle(card).marginBottom) || 2;
-          y = after ? box.bottom + edge / 2 : box.top - edge / 2;
-        }
-        var lb = list.getBoundingClientRect();
-        caret.style.top = (y - lb.top - list.clientTop) + 'px';
-        caret.classList.remove('is-hidden');
-      }
-
-      function hideCaret(el) {
-        var list = el && el.closest ? el.closest('.pp-active-list') : null;
-        var carets = list ? [list.querySelector('.pp-drop-caret')]
-          : document.querySelectorAll(
-              '#' + layoutId + ' .pp-drop-caret');
-        Array.prototype.forEach.call(carets, function(c) {
-          if (c) c.classList.add('is-hidden');
-        });
-      }
-
-      // No dragleave handler on purpose. `dragleave` fires when the
-      // pointer crosses between a card's own CHILDREN (.pp-card-main,
-      // .pp-card-title), so hiding the caret there makes it flicker as
-      // you move down a card. dragover simply moves the one caret to
-      // wherever the pointer now points.
-      $doc.on('dragover', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
-        if (!dragActive) return;
-        e.preventDefault();
-        e.originalEvent.dataTransfer.dropEffect = 'move';
-        moveCaret(this, dropAfter(e.originalEvent, this));
-      });
-
-      $doc.on('drop', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
-        e.preventDefault();
-        var draggedId = e.originalEvent.dataTransfer.getData('text/plain');
-        var $target = $(this);
-        var targetId = $target.data('viz-id');
-        var $list = $target.closest('.pp-active-list');
-        hideCaret(this);
-
-        if (draggedId === targetId) return;
-
-        var $dragged = $list
-          .find('.pp-card[data-viz-id=' + JSON.stringify(draggedId) + ']');
-        if (!$dragged.length) return;
-
-        // Same predicate the indicator drew with, so the card lands in
-        // the gap the line was pointing at.
-        if (dropAfter(e.originalEvent, this)) {
-          $dragged.insertAfter($target);
-        } else {
-          $dragged.insertBefore($target);
-        }
-
-        // Read new order and send to server
-        var newOrder = [];
-        $dragged.closest('.pp-active-list').find('.pp-card').each(function() {
-          newOrder.push($(this).data('viz-id'));
-        });
-        Shiny.setInputValue(reorderInputId, newOrder, {priority: 'event'});
-      });
-
-      $doc.on('dragend', '#' + layoutId + ' .pp-active-list .pp-card', function(e) {
-        $(this).removeClass('is-dragging');
-        $(this).closest('.pp-active-list').removeClass('is-reordering');
-        hideCaret(this);
-        setTimeout(function() { dragActive = false; }, 0);
-      });
-
-      $doc.on('dragover', '#' + layoutId + ' .pp-active-list', function(e) {
-        if (!dragActive) return;
-        e.preventDefault();
-      });
 
       // --- Keep every chart the width of its container --------------
       // echarts sizes its canvas once, when the widget renders, and
