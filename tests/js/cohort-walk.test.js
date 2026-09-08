@@ -119,8 +119,11 @@ test('a stale confirmation during the walk is ignored, a matching one applied', 
   h.send('sync_subject', { id: ids[2] });
   assert.equal(h.selectedId(), ids[2]);
 
-  // Once settled, any confirmation is the truth.
+  // Once settled, any confirmation is the truth, starting with the one R
+  // sent for the fixture's pick.
   h.tick(250);
+  h.sendRecorded('sync_subject');
+  assert.equal(h.selectedId(), '01-701-1015');
   h.send('sync_subject', { id: ids[7] });
   assert.equal(h.selectedId(), ids[7]);
   h.send('sync_subject', { id: '' });

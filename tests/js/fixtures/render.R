@@ -48,11 +48,35 @@ grab <- function(output, name) {
 # One module run per profile: the block's outputs after a cohort and a pick,
 # plus the static UI rendered under the same namespace the mock session
 # hands the module, so every id in every file agrees.
+# Every custom message the module sends while a fixture renders, as the
+# client receives it (Shiny serialises with auto_unbox). The JS tests send
+# these back to the handlers, so what R really emits is what they run on.
+messages <- list()
+record_messages <- function(expr) {
+  messages <<- list()
+  real <- blockr.pharma:::pp_send
+  testthat::local_mocked_bindings(
+    pp_send = function(session, channel, payload) {
+      if (channel %in% c("sync_selected", "sync_params")) {
+        payload <- as.list(payload %||% character())
+      }
+      wire <- jsonlite::fromJSON(
+        jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"),
+        simplifyVector = FALSE
+      )
+      messages[[length(messages) + 1L]] <<- list(channel = channel, payload = wire)
+      real(session, channel, payload)
+    },
+    .package = "blockr.pharma"
+  )
+  force(expr)
+}
+
 render_profile <- function(prefix, selected) {
   blk <- new_patient_profile_block(selected = selected)
   ui <- blockr.core:::block_expr_ui(blk)
   srv <- blk[["expr_server"]]
-  shiny::testServer(srv, args = list(data = function() dm_obj), {
+  record_messages(shiny::testServer(srv, args = list(data = function() dm_obj), {
     session$flushReact()
     id <- sub("-x$", "", session$ns("x"))
     put(paste0(prefix, "ui"), htmltools::renderTags(ui(id))$html)
@@ -68,7 +92,11 @@ render_profile <- function(prefix, selected) {
     slots <- unique(regmatches(area, gregexpr("viz_slot_[A-Za-z0-9_]+", area))[[1]])
     for (nm in slots) put(paste0(prefix, nm), grab(output, nm))
     cat(prefix, "namespace", id, "slots", length(slots), "\n")
-  })
+  }))
+  jsonlite::write_json(
+    messages, file.path(dir, paste0(prefix, "messages.json")),
+    auto_unbox = TRUE, null = "null", pretty = TRUE
+  )
 }
 
 # The default profile: an events band in the sidebar, a lab panel that

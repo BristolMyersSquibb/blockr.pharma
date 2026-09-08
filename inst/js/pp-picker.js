@@ -487,7 +487,6 @@ PatientProfile.part(function(ctx) {
 
   Shiny.addCustomMessageHandler(syncParamsMsgId, function(keys) {
     if (!keys) keys = [];
-    if (typeof keys === 'string') keys = [keys];
     lastParamOn = keys;
     paintAddTicks();
   });
@@ -495,7 +494,6 @@ PatientProfile.part(function(ctx) {
   // Sync sidebar state from server
   Shiny.addCustomMessageHandler(syncMsgId, function(selected) {
     if (!selected) selected = [];
-    if (typeof selected === 'string') selected = [selected];
 
     // The heading says how many panels are on the profile, and the
     // catalogue ticks the ones that are.

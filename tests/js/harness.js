@@ -127,6 +127,8 @@ function mount(opts = {}) {
   const slotNames = Array.from(doc.querySelectorAll('[id*=viz_slot_]'))
     .map((el) => el.id.replace(`${NS}-`, ''));
   slotNames.forEach(fill);
+  // What R sent while these fixtures rendered, in order (render.R).
+  const messages = JSON.parse(read(path.join(FIXTURES, prefix + 'messages.json')));
 
   // The clock before anything that could schedule.
   ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
@@ -229,6 +231,22 @@ function mount(opts = {}) {
       return api;
     },
     handlers: () => Object.keys(win.__handlers).map((k) => k.replace(`${NS}-`, '')),
+
+    /** The payloads R sent on `channel` during the fixture render, in order. */
+    recorded(channel) {
+      return messages.filter((m) => m.channel === channel).map((m) => json(m.payload));
+    },
+    /** Send the last thing R sent on `channel`, or the nth (0-based). */
+    sendRecorded(channel, n) {
+      const xs = api.recorded(channel);
+      if (!xs.length) throw new Error(`R sent nothing on "${channel}"`);
+      return api.send(channel, xs[n === undefined ? xs.length - 1 : n]);
+    },
+    /** Send every recorded message in the order R sent them, as a page load does. */
+    replay() {
+      messages.forEach((m) => api.send(m.channel, m.payload));
+      return api;
+    },
 
     rendered,
     /** Announce every output as rendered, the way a full page render does. */

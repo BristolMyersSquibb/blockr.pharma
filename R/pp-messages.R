@@ -18,5 +18,13 @@
 #' @param payload What the handler receives.
 #' @noRd
 pp_send <- function(session, channel, payload) {
+  # sendCustomMessage serialises with auto_unbox: a length-one vector
+  # becomes a JSON scalar and the client iterating it would get characters.
+  # The array channels are wrapped here, once, so the client never has to
+  # tolerate a bare string (blockr.docs, js-driven-blocks: the auto-unbox
+  # rule).
+  if (channel %in% c("sync_selected", "sync_params")) {
+    payload <- as.list(payload %||% character())
+  }
   session$sendCustomMessage(session$ns(channel), payload)
 }

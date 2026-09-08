@@ -10,15 +10,15 @@
 
 /* --- What R sends: session$sendCustomMessage(session$ns(channel), payload) --- */
 
-/** `sync_selected`: the panel ids on the profile, in order. jsonlite sends a
- *  length-one vector as a bare string. */
-type PpSyncSelected = string[] | string | null;
+/** `sync_selected`: the panel ids on the profile, in order. Always an
+ *  array: pp_send() wraps it, so one panel is `["x"]`, none is `[]`. */
+type PpSyncSelected = string[];
 
 /** `sync_subject`: the picked patient, `""` for none. */
 interface PpSyncSubject { id: string }
 
 /** `sync_params`: `viz@@PARAMCD` keys of the parameters on screen. */
-type PpSyncParams = string[] | string | null;
+type PpSyncParams = string[];
 
 /** `sync_band`: which panel the cohort strip draws, `""` for none. */
 interface PpSyncBand { viz_id: string }

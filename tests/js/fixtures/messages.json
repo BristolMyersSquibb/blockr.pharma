@@ -1,0 +1,56 @@
+[
+  {
+    "channel": "sync_params",
+    "payload": []
+  },
+  {
+    "channel": "sync_selected",
+    "payload": [
+      "patient_overview",
+      "ae_gantt",
+      "adlbc_all__ALB",
+      "adlbc_all__ALP",
+      "adlbc_all__ALT"
+    ]
+  },
+  {
+    "channel": "subject_picker",
+    "payload": {
+      "count": 12
+    }
+  },
+  {
+    "channel": "sync_band",
+    "payload": {
+      "viz_id": ""
+    }
+  },
+  {
+    "channel": "dl_menu_state",
+    "payload": {
+      "single": false,
+      "picked": "",
+      "n": 12
+    }
+  },
+  {
+    "channel": "sync_band",
+    "payload": {
+      "viz_id": "ae_gantt"
+    }
+  },
+  {
+    "channel": "sync_subject",
+    "payload": {
+      "id": "01-701-1015"
+    }
+  },
+  {
+    "channel": "dl_menu_state",
+    "payload": {
+      "single": true,
+      "picked": "01-701-1015",
+      "n": 12
+    }
+  }
+]

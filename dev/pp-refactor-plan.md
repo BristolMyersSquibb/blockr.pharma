@@ -29,7 +29,16 @@ Type check (2026-09-08, after Christoph asked): `tsconfig.json` as in
 blockr.dplyr, `// @ts-check` on all five files, the R/JS protocol in
 `inst/js/types.d.ts` (six messages, nine inputs, the mount config).
 Implicit-any is off on purpose; the value is the null checks and the
-shapes at the boundary. `npm run typecheck`, and a `typecheck-js` CI job. Left in on purpose: the
+shapes at the boundary. `npm run typecheck`, and a `typecheck-js` CI job.
+
+R to JS protocol (same day): R sends no typed JSON, as nowhere in the
+ecosystem does. Instead, per blockr.docs/patterns/js-driven-blocks.md:
+`pp_send()` wraps the array channels with `as.list()` so one panel reaches
+the client as `["x"]` (the JS string branches are gone), pinned by
+`test-pp-messages.R`; and `render.R` records every message the module
+sends while the fixtures render into `tests/js/fixtures/*messages.json`,
+which the JS tests replay through `h.sendRecorded()` / `h.replay()`, so
+what R really emits is what the handlers run on. Left in on purpose: the
 `pick_param` / `sync_params` path (R still owns per-parameter items on a
 multi-parameter panel; no markup reaches it today, so it is a design
 question for the R side, not dead by accident). Written against `3d152dd` (version

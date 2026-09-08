@@ -9,11 +9,13 @@ const { mount } = require('./harness.js');
 const ON = ['patient_overview', 'ae_gantt', 'adlbc_all__ALB', 'adlbc_all__ALP', 'adlbc_all__ALT'];
 const search = (h) => h.el('search');
 
-const boot = (selected = ON) => {
+// The On list as R sent it for this fixture: five rows for three panels.
+const boot = (selected) => {
   const h = mount();
   h.renderAll();
   h.tick(0);
-  h.send('sync_selected', selected);
+  if (selected) h.send('sync_selected', selected); else h.sendRecorded('sync_selected');
+  assert.deepEqual(h.recorded('sync_selected').pop(), ON);
   return h;
 };
 
@@ -39,8 +41,8 @@ test('sync_selected paints the On list in order, ticks the catalogue, counts', (
   assert.deepEqual(h.onProfile(), []);
   assert.equal(h.text('.pp-add-n'), '');
   assert.equal(h.q('.pp-add-on-wrap').classList.contains('is-hidden'), true);
-  // A single string is one panel, not five characters.
-  h.send('sync_selected', 'ae_gantt');
+  // One panel arrives as a one-element array (pp_send wraps it).
+  h.send('sync_selected', ['ae_gantt']);
   assert.deepEqual(h.onProfile(), ['ae_gantt']);
   h.close();
 });

@@ -674,7 +674,7 @@ new_patient_profile_block <- function(selected = NULL,
               if (length(items) == 0L) return(NULL)
               paste0(vid, "@@", as.character(items))
             }))
-            pp_send(session, "sync_params", as.list(keys %||% character())
+            pp_send(session, "sync_params", keys
             )
           })
 

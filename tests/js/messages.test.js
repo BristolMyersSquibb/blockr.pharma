@@ -14,9 +14,11 @@ const boot = () => {
 test('subject_picker fills the cohort count and hides it at zero', () => {
   const h = boot();
   const count = h.el('pp_cohort_count');
+  h.sendRecorded('subject_picker');
+  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '12 patients');
+  assert.equal(count.classList.contains('is-hidden'), false);
   h.send('subject_picker', { count: 254 });
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '254 patients');
-  assert.equal(count.classList.contains('is-hidden'), false);
   h.send('subject_picker', { count: 1 });
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '1 patient');
   h.send('subject_picker', { count: 0 });
@@ -29,13 +31,18 @@ test('subject_picker fills the cohort count and hides it at zero', () => {
 test('dl_menu_state labels the two download scopes and hides what does not apply', () => {
   const h = boot();
   const root = h.el('pp_dl_root');
-  h.send('dl_menu_state', { single: true, picked: '01-701-1015', n: 254 });
+  // What R sent once a patient was picked: single, with the id and the size.
+  h.sendRecorded('dl_menu_state');
   assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient: 01-701-1015');
-  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort (254 patients)');
+  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort (12 patients)');
   assert.equal(root.classList.contains('is-hidden'), false);
   assert.equal(root.querySelector('.pp-dl-scope-patient').classList.contains('is-hidden'), false);
   assert.equal(root.querySelector('.pp-dl-scope-cohort').classList.contains('is-hidden'), false);
 
+  // Before the pick R said: nothing single, twelve in the cohort.
+  h.sendRecorded('dl_menu_state', 0);
+  assert.equal(root.classList.contains('is-hidden'), false, 'the cohort scope still applies');
+  assert.equal(root.querySelector('.pp-dl-scope-patient').classList.contains('is-hidden'), true);
   // One patient upstream and none picked: nothing to download.
   h.send('dl_menu_state', { single: false, picked: '', n: 1 });
   assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient');
@@ -68,7 +75,7 @@ test('dl_menu_state waits for the header to exist, up to three seconds', () => {
 
 test('sync_band tags the panel the cohort strip draws, and re-tags after a render', () => {
   const h = boot();
-  h.send('sync_band', { viz_id: 'ae_gantt' });
+  h.sendRecorded('sync_band');
   assert.deepEqual(h.qa('.pp-is-band').map((e) => e.id), [`${h.NS}-viz_slot_ae_gantt`]);
   h.send('sync_band', { viz_id: 'adlbc_all__ALB' });
   assert.deepEqual(h.qa('.pp-is-band').map((e) => e.id), [`${h.NS}-viz_slot_adlbc_all__ALB`]);
@@ -89,10 +96,10 @@ test('sync_band tags the panel the cohort strip draws, and re-tags after a rende
   h.close();
 });
 
-test('sync_params accepts a list, a string or nothing', () => {
+test('sync_params accepts what R sends, a list, and nothing', () => {
   const h = boot();
+  assert.doesNotThrow(() => h.sendRecorded('sync_params'));
   assert.doesNotThrow(() => h.send('sync_params', ['adlbc_all@@ALB', 'adlbc_all@@ALT']));
-  assert.doesNotThrow(() => h.send('sync_params', 'adlbc_all@@ALB'));
   assert.doesNotThrow(() => h.send('sync_params', null));
   h.close();
 });
