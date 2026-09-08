@@ -10,8 +10,13 @@ tests, 2.6s, run from testthat by `test-js.R`), fixtures rendered by
 the JS (1,980 to 1,622 lines) and 38 dead classes with 566 lines from the
 CSS (2,441 to 1,875). Stage 3b done the same day: five files, `pp-core.js` (registry + mount)
 and one part each for header, cohort, picker, panels, registered with
-`PatientProfile.part()`; parts share nothing but the document. Stage 3c
-onwards not started. Left in on purpose: the
+`PatientProfile.part()`; parts share nothing but the document. Stage 3c dropped after reading the code: only the patient pick is a
+timed guard; the panel pick and the reorder share `renderAddOn()`'s
+same-rows check and the find box uses recency, so there is nothing to unify.
+Stage 3f (tokens) done the same day: 157 token references with fallbacks,
+one pre-existing drifted fallback caught by the new
+`test-pp-css-tokens.R`; the literals left are white, two blue tints with
+no token, one green data colour. Stages 3d and 3e not started. Left in on purpose: the
 `pick_param` / `sync_params` path (R still owns per-parameter items on a
 multi-parameter panel; no markup reaches it today, so it is a design
 question for the R side, not dead by accident). Written against `3d152dd` (version
