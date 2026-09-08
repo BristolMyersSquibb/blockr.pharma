@@ -3082,12 +3082,30 @@ new_patient_profile_block <- function(selected = NULL,
               if (cnt) cnt.textContent = shown + ' of ' + total;
             }
 
+            // How tall the menu may be: the room under the toolbar, inside
+            // the box that clips it. The width is CSS (both edges pinned to
+            // the toolbar); the height cannot be, because a percentage
+            // resolves against the toolbar, which is 42px tall. Same
+            // measurement the cohort well makes, for the same reason -- a
+            // short dock panel is a real size here, not a corner case.
+            function sizeAddPop(){
+              var pop = document.getElementById(addPopId);
+              if (!pop) return;
+              var host = wellHost(pop) || document.documentElement;
+              var room = host.getBoundingClientRect().bottom -
+                pop.getBoundingClientRect().top - 12;
+              // Never so short that it stops being a menu; below this the
+              // list scrolls and the popover keeps its own scrollbar.
+              pop.style.maxHeight = Math.max(160, Math.round(room)) + 'px';
+            }
+
             function openAdd(on){
               var pop = document.getElementById(addPopId);
               if (!pop) return;
               pop.classList.toggle('is-open', on);
               $('#' + addBtnId).toggleClass('is-open', on);
               if (on) {
+                sizeAddPop();
                 paintAddTicks();
                 var inp = document.getElementById(addInputId);
                 if (inp) { inp.value = ''; filterAdd(); inp.focus(); }

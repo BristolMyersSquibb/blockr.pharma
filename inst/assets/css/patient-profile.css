@@ -1291,6 +1291,9 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
+  /* The add menu hangs off this, not off the button, so it has the whole
+     column's width to fit into. */
+  position: relative;
 }
 
 /* Gear row: match the identity line's height so the two sit on one baseline. */
@@ -1975,8 +1978,10 @@
    36px dashed rectangle across the full width was the heaviest thing on a
    screen made of thin-bordered cards.
    ========================================================================= */
+/* The button's own box, and NOT the menu's positioning context: the menu is
+   wider than the button, and anchoring it here is what made a narrow block
+   cut it off. See .pp-add-pop. */
 .pp-add-wrap {
-  position: relative;
   flex: 0 0 auto;
 }
 
@@ -2019,13 +2024,35 @@
 /* The picker. Anchored to the button rather than portalled: it is inside the
    chart area, which does not clip it, and portalling is reserved for the
    dropdowns that have to escape a dock panel. */
+/* The menu fits the box it is in.
+   
+   It was 340px anchored to the button, inside the scrolling chart column,
+   and four ancestors clip that column: .pp-chart-area, .pp-layout, the dock
+   panel and the view container. On a narrow block -- a split dock, a
+   400px-wide profile -- the right 76px of the menu were simply not drawn,
+   with no scrollbar and no cut edge to say so.
+   
+   position:fixed does not rescue it: dv-render-overlay carries a transform,
+   will-change and contain:layout paint, so it is the containing block for
+   fixed children and paints them clipped anyway.
+   
+   So the menu stops being wider than its box. Both edges are pinned to the
+   toolbar, max-width holds its usual size on a roomy screen, and the auto
+   left margin keeps it under the button it belongs to. Same shape as the
+   crossfilter popover in blockr.dm, which pins left and right for the same
+   reason. */
 .pp-add-pop {
   position: absolute;
-  top: 32px;
-  right: 0;
-  width: 340px;
+  top: calc(100% + 6px);
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-width: 340px;
+  margin-left: auto;
   z-index: 30;
   display: none;
+  flex-direction: column;
+  min-height: 0;
   padding: 6px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -2034,7 +2061,7 @@
 }
 
 .pp-add-pop.is-open {
-  display: block;
+  display: flex;
 }
 
 .pp-add-find {
@@ -2073,9 +2100,14 @@
   padding: 0;
 }
 
+/* The list is what gives way when the menu is capped to the room below the
+   toolbar: the search box and the footer keep their height, this takes what
+   is left. The max-height is the ceiling on a tall screen. */
 .pp-add-results {
   max-height: 290px;
   overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .pp-add-group {
