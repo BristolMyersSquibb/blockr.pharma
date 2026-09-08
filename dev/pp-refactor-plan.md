@@ -8,7 +8,10 @@ lines that now derive from the mount config. Stage 2 done the same day: `tests/j
 tests, 2.6s, run from testthat by `test-js.R`), fixtures rendered by
 `tests/js/fixtures/render.R`. Stage 3a done the same day: 358 lines of the old card sidebar cut from
 the JS (1,980 to 1,622 lines) and 38 dead classes with 566 lines from the
-CSS (2,441 to 1,875). Stage 3b onwards not started. Left in on purpose: the
+CSS (2,441 to 1,875). Stage 3b done the same day: five files, `pp-core.js` (registry + mount)
+and one part each for header, cohort, picker, panels, registered with
+`PatientProfile.part()`; parts share nothing but the document. Stage 3c
+onwards not started. Left in on purpose: the
 `pick_param` / `sync_params` path (R still owns per-parameter items on a
 multi-parameter panel; no markup reaches it today, so it is a design
 question for the R side, not dead by accident). Written against `3d152dd` (version

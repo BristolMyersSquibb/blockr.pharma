@@ -1,7 +1,7 @@
 /* Mount the patient profile's JavaScript in a headless DOM and drive it the
  * way R and the browser do.
  *
- * inst/js/patient-profile.js is the half of the block that R tests cannot
+ * inst/js/pp-*.js is the half of the block that R tests cannot
  * reach: `testServer()` sees the custom messages R sends, never what the
  * client does with them. The pick debounce, the keyboard walk, the picker's
  * remember-and-reapply, the ghost's wait for a canvas, the well's sizing:
@@ -52,7 +52,8 @@ function jqueryPath() {
   ).trim();
 }
 const JQUERY = read(jqueryPath());
-const BLOCK_JS = read(path.join(ROOT, 'inst', 'js', 'patient-profile.js'));
+const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js', 'pp-panels.js'];
+const BLOCK_JS = PARTS.map((f) => read(path.join(ROOT, 'inst', 'js', f))).join('\n');
 
 /* Objects built inside the window's realm have that realm's prototypes;
  * JSON is the honest comparison and also what Shiny puts on the wire. */

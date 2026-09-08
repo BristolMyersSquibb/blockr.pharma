@@ -2107,11 +2107,14 @@ new_patient_profile_block <- function(selected = NULL,
           src = system.file("assets", package = "blockr.pharma"),
           stylesheet = "css/patient-profile.css"
         ),
+        # The client half, in parts: pp-core.js first (it owns the registry
+        # the others register with), then one file per region of the block.
         htmltools::htmlDependency(
           "blockr-pharma-pp-js",
           as.character(utils::packageVersion("blockr.pharma")),
           src = system.file("js", package = "blockr.pharma"),
-          script = "patient-profile.js"
+          script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
+                     "pp-picker.js", "pp-panels.js")
         ),
         # Blockr.Select: the shared single-select primitive. Its dropdown is
         # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
@@ -2292,8 +2295,8 @@ new_patient_profile_block <- function(selected = NULL,
           )
         ),
 
-        # The client half lives in inst/js/patient-profile.js and is mounted
-        # here with the three things it needs from R: the namespace every id
+        # The client half lives in inst/js/pp-*.js and is mounted here with
+        # the three things it needs from R: the namespace every id
         # derives from, the grip glyph the sidebar rows reuse, and the spans
         # band height. A jQuery-ready wrapper, because in a dock panel this
         # fragment can land before the layout it mounts on.
