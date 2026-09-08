@@ -26,8 +26,10 @@ PatientProfile.part(function(ctx) {
   //
   // So the list is walked locally and only where you STOP is sent.
   // A click sends at once: it is one deliberate landing, and
-  // waiting a quarter second to react to a click reads as lag.
-  var PICK_SETTLE_MS = 250;
+  // waiting to react to a click reads as lag. The wait is just
+  // longer than a key repeat (~30ms), so a held key coalesces and a
+  // single press costs 90ms rather than the 250 it used to.
+  var PICK_SETTLE_MS = 90;
   var pickTimer = null;
   var pickPending = null;
 

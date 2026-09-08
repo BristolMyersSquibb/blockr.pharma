@@ -256,3 +256,30 @@ f. CSS. Replace the 173 literal colours (22 distinct, `#9ca3af` 37 times)
 Branch `refactor/pp-js`, one commit series per stage, `Version` bumped at each
 stage that touches `inst/js`. Push after Stage 1 so prod gets the extraction
 early and any cache or dependency problem surfaces before the refactor starts.
+
+## Speed (2026-09-08, after the refactor)
+
+Measured budget of one arrow step before: 250ms settle + ~200ms server +
+~45ms DOM swap + ~115ms canvas creation + 200ms ghost fade. Done:
+
+- **Panels update in place.** A slot output renders only when the stack
+  changes or the panel changes kind (echarts vs plain HTML). A patient
+  switch or a settings change sends a `slot` message (`pp_slot_update()`:
+  header HTML, the option serialised by htmlwidgets' encoder, the `JS()`
+  paths, the height) and pp-panels.js applies it with `setOption()` on the
+  live instance. No canvas is torn down, no ghost is raised, echarts
+  animates the change. Off-screen panels are not rendered (the observer
+  is gated on `vid %in% r_selected()`; ungated it cost 31 of 56ms).
+- **Settle 250ms to 90ms**, just above a key repeat.
+
+After: click switch, all five charts updated at ~420ms; one arrow step at
+~390ms from keydown (90 of it the settle); a held key coalesces as before.
+No new canvases on a switch. The server side is now the whole cost.
+
+Profiling (sub-agent, `_scratch/pp-profile/`): in-process a pick is ~56ms
+in the module (echarts option build ~25ms for five panels) plus ~33ms for
+the board's `dm::dm_filter` in the block's expr; cohort-level reactives do
+not recompute. The browser sees ~200ms more than the process does, so
+transport and the board's downstream evaluation are the next thing to
+measure. Next candidate: replace `dm_filter` in the subject expr with a
+plain per-table USUBJID subset (~30ms), if the keys can be kept.

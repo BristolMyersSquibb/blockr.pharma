@@ -14,6 +14,7 @@ PatientProfile.part(function(ctx) {
   var chartAreaId = ns('chart_area');
   var syncBandMsgId = ns('sync_band');
   var reorderInputId = ns('reorder_viz');
+  var slotMsgId = ns('slot');
 
   // Hold the last frame while a panel re-renders.
   //
@@ -292,6 +293,78 @@ PatientProfile.part(function(ctx) {
   Shiny.addCustomMessageHandler(syncBandMsgId, function(msg) {
     bandVizId = (msg && msg.viz_id) || '';
     paintBandTag();
+  });
+
+  // Bringing a panel to the current patient WITHOUT rebuilding it.
+  //
+  // The slot output only re-renders when the stack changes. For a
+  // patient switch or a settings change R sends this message: the new
+  // header as HTML, swapped in as plain DOM (download links re-bound,
+  // the find box's caret put back), and the chart's option, applied to
+  // the existing echarts instance with setOption(). The canvas stays,
+  // echarts animates the change, nothing blinks.
+  //
+  // The instance can lag the DOM: right after a full render the widget
+  // div exists for ~150ms before echarts has created its instance, and
+  // a message that arrives in that window waits a frame at a time, up
+  // to two seconds, then gives up (the full render already shows the
+  // same patient).
+  // The functions in an option (formatters, renderItem) travel as text.
+  // R lists their paths the way htmlwidgets does ("series.0.renderItem"),
+  // and each is turned back into code here, which is what
+  // HTMLWidgets.evaluateStringMember does for a fresh widget.
+  function reviveFunctions(opts, evals) {
+    (evals || []).forEach(function(path) {
+      var keys = String(path).split('.');
+      var node = opts;
+      for (var i = 0; i < keys.length - 1 && node; i++) node = node[keys[i]];
+      var last = keys[keys.length - 1];
+      if (node && typeof node[last] === 'string') {
+        try {
+          node[last] = eval('(' + node[last] + ')');
+        } catch (e) { /* left as text; echarts ignores what it cannot call */ }
+      }
+    });
+    return opts;
+  }
+
+  // The header HTML last applied per panel: an identical one is not
+  // swapped again, which is what keeps the find box's focus while you
+  // type in it (each keystroke comes back as a slot message).
+  /** @type {Object<string, string>} */
+  var lastHeader = {};
+
+  function applySlot(msg, tries) {
+    var slot = document.getElementById(ns('viz_slot_' + msg.viz_id));
+    if (!slot) return;
+    var header = slot.querySelector('.pp-chart-header');
+    if (header && typeof msg.header === 'string' &&
+        lastHeader[msg.viz_id] !== msg.header) {
+      if (Shiny.unbindAll) Shiny.unbindAll(header);
+      header.innerHTML = msg.header;
+      lastHeader[msg.viz_id] = msg.header;
+      if (Shiny.bindAll) Shiny.bindAll(header);
+      restoreSearch();
+    }
+    /** @type {HTMLElement | null} */
+    var widget = slot.querySelector('.pp-chart-body .echarts4r');
+    var ec = window.echarts;
+    var inst = widget && ec ? ec.getInstanceByDom(widget) : null;
+    if (!widget || !inst) {
+      if (tries > 0) {
+        requestAnimationFrame(function() { applySlot(msg, tries - 1); });
+      }
+      return;
+    }
+    if (msg.height) widget.style.height = msg.height + 'px';
+    inst.setOption(reviveFunctions(JSON.parse(msg.opts_json), msg.evals),
+                   {notMerge: true});
+    inst.resize();
+  }
+
+  Shiny.addCustomMessageHandler(slotMsgId, function(msg) {
+    if (!msg || !msg.viz_id) return;
+    applySlot(msg, 120);
   });
 
   $(document).on('shiny:value', function(e) {

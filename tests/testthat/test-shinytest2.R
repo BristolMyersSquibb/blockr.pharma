@@ -234,20 +234,25 @@ test_that("the cohort lists every subject and a click picks one", {
 # 2. One patient click renders each panel exactly once.
 # ---------------------------------------------------------------------------
 
-test_that("a patient pick renders each output once and never the chart area", {
+test_that("a second pick updates the panels in place: no slot render, same canvases", {
   skip_if_no_app()
 
   ids <- shown_ids()
+  # Mark every canvas, so a rebuilt one would show up unmarked.
+  run_js("document.querySelectorAll('[id*=viz_slot_] canvas').forEach(c => { c.__kept = 1; });")
   spy_reset()
   pick_patient(ids[5])
   Sys.sleep(1)
 
   values <- spy_values()
-  slots <- values[grepl("viz_slot_", names(values))]
-  expect_length(slots, 5)
-  expect_true(all(unlist(slots) == 1L))
+  expect_false(any(grepl("viz_slot_", names(values))), "the slots were not re-rendered")
   expect_equal(values[[grep("subject_facts$", names(values))]], 1L)
   expect_false(any(grepl("chart_area$", names(values))))
+  expect_true(js("[...document.querySelectorAll('[id*=viz_slot_] canvas')].every(c => c.__kept === 1)"))
+  expect_gte(js("document.querySelectorAll('[id*=viz_slot_] canvas').length"), 5)
+  # And the charts show the new patient: the treatment strip names its arm
+  # from this patient's data, and the header reads the id.
+  expect_identical(header_who(), ids[5])
 
   pick_patient(ids[1])
 })
@@ -486,7 +491,7 @@ test_that("the panel picker stays inside the sidebar in a narrow block", {
 # 8. The ghost stays until the new charts have painted.
 # ---------------------------------------------------------------------------
 
-test_that("switching patients ghosts every panel until its canvas exists", {
+test_that("switching patients raises no ghost: nothing is torn down", {
   skip_if_no_app()
 
   ids <- shown_ids()
@@ -530,22 +535,11 @@ test_that("switching patients ghosts every panel until its canvas exists", {
   when <- vapply(log, `[[`, 0, "t")
   held <- vapply(log, `[[`, 0, "dt")
 
-  scrolls <- unlist(js("window.__scrolls"))
-  trace <- paste(c(sprintf("%s@%.0f(+%.0f)", what, when, held),
-                   sprintf("scroll@%.0f", scrolls)), collapse = " ")
-  expect_equal(sum(what == "ghost+"), 5)
-  expect_equal(sum(startsWith(what, "ghost-")), 5, info = trace)
-  # A ghost lifts when its panel has painted, or on one of the block's own
-  # early exits: no widget to wait for, a scroll while it was up, or the
-  # 1500ms deadline. Never before that without a canvas.
-  early <- which(what == "ghost-early")
-  scrolled <- vapply(early, function(i) {
-    any(scrolls >= when[i] - held[i] - 1 & scrolls <= when[i] + 5)
-  }, logical(1))
-  expect_true(all(scrolled | held[early] >= 1400), info = trace)
-  expect_gte(sum(what == "canvas"), 5)
-  # And the lifts came after the first paint, not with the render.
-  expect_true(all(when[what == "ghost-"] >= min(when[what == "canvas"])))
+  trace <- paste(sprintf("%s@%.0f(+%.0f)", what, when, held), collapse = " ")
+  # The panels are updated in place: no recalculating slot, no ghost, no
+  # new canvas.
+  expect_equal(sum(what == "ghost+"), 0, info = trace)
+  expect_equal(sum(what == "canvas"), 0, info = trace)
 
   pick_patient(ids[1])
 })

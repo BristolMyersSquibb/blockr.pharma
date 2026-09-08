@@ -32,7 +32,7 @@ test('a click selects the row at once and sends the pick without waiting', () =>
   h.close();
 });
 
-test('arrow keys walk the rows in DOM order and send one pick after 250ms', () => {
+test('arrow keys walk the rows in DOM order and send one pick 90ms after the last', () => {
   const h = boot();
   const ids = h.shownIds();
   const well = h.el('pp_cohort_well');
@@ -47,15 +47,15 @@ test('arrow keys walk the rows in DOM order and send one pick after 250ms', () =
   assert.equal(h.selectedId(), ids[4]);
   assert.equal(h.inputs('pick_subject').length, 0);
 
-  // 249ms after the last press: still nothing. At 250: one pick, the last row.
-  h.tick(249);
+  // 89ms after the last press: still nothing. At 90: one pick, the last row.
+  h.tick(89);
   assert.equal(h.inputs('pick_subject').length, 0);
   h.tick(1);
   assert.deepEqual(h.inputs('pick_subject').map((i) => i.value), [ids[4]]);
 
   // Up walks back, one pick per settled press.
   h.key(well, 'ArrowUp');
-  h.tick(250);
+  h.tick(90);
   assert.equal(h.selectedId(), ids[3]);
   assert.deepEqual(h.inputs('pick_subject').map((i) => i.value), [ids[4], ids[3]]);
   h.close();
@@ -121,7 +121,7 @@ test('a stale confirmation during the walk is ignored, a matching one applied', 
 
   // Once settled, any confirmation is the truth, starting with the one R
   // sent for the fixture's pick.
-  h.tick(250);
+  h.tick(90);
   h.sendRecorded('sync_subject');
   assert.equal(h.selectedId(), '01-701-1015');
   h.send('sync_subject', { id: ids[7] });

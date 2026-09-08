@@ -143,9 +143,12 @@ function mount(opts = {}) {
     window.__inputs = [];
     window.__resize = [];
     window.__intersect = [];
+    window.__bound = [];
     window.Shiny = {
       addCustomMessageHandler: function (n, f) { window.__handlers[n] = f; },
-      setInputValue: function (n, v, o) { window.__inputs.push({name: n, value: v, opts: o || null}); }
+      setInputValue: function (n, v, o) { window.__inputs.push({name: n, value: v, opts: o || null}); },
+      bindAll: function (el) { window.__bound.push(['bind', el]); },
+      unbindAll: function (el) { window.__bound.push(['unbind', el]); }
     };
     window.ResizeObserver = function (cb) {
       this.cb = cb; this.targets = [];
@@ -170,8 +173,12 @@ function mount(opts = {}) {
     };
     window.echarts = {
       __resized: [],
+      __options: [],
       getInstanceByDom: function (el) {
-        var inst = {resize: function () { window.echarts.__resized.push(el); }};
+        var inst = {
+          resize: function () { window.echarts.__resized.push(el); },
+          setOption: function (opts, o) { window.echarts.__options.push({el: el, opts: opts, how: o || null}); }
+        };
         return el && el.__echarts ? inst : null;
       }
     };

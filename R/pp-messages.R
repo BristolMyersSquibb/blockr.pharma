@@ -12,6 +12,12 @@
 #' | `sync_band`      | `list(viz_id = )`, `""` for none     | tags the band's panel |
 #' | `subject_picker` | `list(count = )`                     | the cohort count tag |
 #' | `dl_menu_state`  | `list(single, picked, n)`            | download menu scopes |
+#' | `slot`           | `pp_slot_update()`: viz_id, header HTML, opts_json, height | updates one panel in place |
+#'
+#' A test can watch the traffic: with the option
+#' `blockr.pharma.pp_message_sink` set to a function of `(channel, payload)`,
+#' every message is handed to it as well. `tests/js/fixtures/render.R`
+#' records the fixtures' messages that way.
 #'
 #' @param session The module's session.
 #' @param channel One of the channels above.
@@ -26,5 +32,7 @@ pp_send <- function(session, channel, payload) {
   if (channel %in% c("sync_selected", "sync_params")) {
     payload <- as.list(payload %||% character())
   }
+  sink <- getOption("blockr.pharma.pp_message_sink")
+  if (is.function(sink)) sink(channel, payload)
   session$sendCustomMessage(session$ns(channel), payload)
 }

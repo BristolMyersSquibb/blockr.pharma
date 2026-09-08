@@ -36,6 +36,20 @@ interface PpDlMenuState {
   n: number;
 }
 
+/** `slot`: bring one panel to the current patient without rebuilding it
+ *  (R: pp_slot_update()). */
+interface PpSlotUpdate {
+  viz_id: string;
+  /** the panel header as HTML */
+  header: string;
+  /** the echarts option, serialised by htmlwidgets' encoder */
+  opts_json: string;
+  /** paths of the JS() strings in it, htmlwidgets style: "series.0.renderItem" */
+  evals: string[];
+  /** the widget's height in px, or null */
+  height: number | null;
+}
+
 /* --- What the client sends: Shiny.setInputValue(ns(name), value) --- */
 
 /** `pick_param`: a parameter row, for a multi-parameter panel. */
@@ -91,10 +105,17 @@ interface PatientProfileNamespace {
 interface ShinyStatic {
   setInputValue(name: string, value: unknown, opts?: { priority?: 'event' | 'immediate' | 'deferred' }): void;
   addCustomMessageHandler(name: string, handler: (msg: any) => void): void;
+  bindAll?(scope: Element): void;
+  unbindAll?(scope: Element): void;
+}
+
+interface EchartsInstance {
+  resize(): void;
+  setOption(opts: object, opts2?: { notMerge?: boolean }): void;
 }
 
 interface EchartsStatic {
-  getInstanceByDom(el: Element): { resize(): void } | null;
+  getInstanceByDom(el: Element): EchartsInstance | null;
 }
 
 declare var Shiny: ShinyStatic;

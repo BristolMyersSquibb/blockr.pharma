@@ -1145,7 +1145,11 @@ new_patient_profile_block <- function(selected = NULL,
             # format whose writer is missing is left out, not disabled.
             download_ui <- pp_slot_download_ui(viz, viz_id, session$ns)
 
-            pp_slot_ui(viz, viz_id, chart, controls_ui, legend_ui, download_ui)
+            list(
+              chart = chart,
+              header = pp_slot_header_ui(viz, viz_id, controls_ui, legend_ui,
+                                         download_ui)
+            )
           }
 
           # The static exhibit behind one viz's download buttons: the same
@@ -1309,9 +1313,51 @@ new_patient_profile_block <- function(selected = NULL,
               slot_registered[[viz_id]] <- TRUE
               local({
                 vid <- viz_id
-                output[[paste0("viz_slot_", vid)]] <- shiny::renderUI(
-                  render_viz_slot(vid)
-                )
+                # A panel is BUILT once and then UPDATED in place.
+                #
+                # The slot output re-renders when the stack changes (a
+                # panel added, removed or reordered), which is when its
+                # placeholder is new and a widget has to be created, and
+                # when the panel changes KIND: an echarts chart giving way
+                # to a plain-HTML panel or back. Otherwise a patient switch
+                # or a settings change leaves the widget where it is and
+                # sends a `slot` message instead: the new header as HTML
+                # and the new chart option, which the client applies with
+                # setOption(). No canvas is torn down, so nothing blinks
+                # and there is nothing to photograph.
+                slot_r <- shiny::reactive(render_viz_slot(vid))
+                slot_key <- shiny::reactiveVal(0L)
+                slot_kind <- NULL
+                kind_of <- function(chart) {
+                  if (inherits(chart, "echarts4r")) "echarts" else "html"
+                }
+                output[[paste0("viz_slot_", vid)]] <- shiny::renderUI({
+                  slot_key()
+                  r_selected()
+                  r_available()
+                  s <- shiny::isolate(slot_r())
+                  slot_kind <<- kind_of(s$chart)
+                  shiny::tagList(s$header,
+                                 shiny::div(class = "pp-chart-body", s$chart))
+                })
+                # Only for a panel that is on the profile: the observer
+                # would otherwise render every registered panel on every
+                # pick, on screen or not (measured: four off-screen
+                # panels cost 31 of 56ms per pick).
+                shiny::observeEvent({
+                  if (vid %in% r_selected()) slot_r() else NULL
+                }, {
+                  s <- slot_r()
+                  if (identical(slot_kind, "echarts") &&
+                        identical(kind_of(s$chart), "echarts")) {
+                    pp_send(session, "slot",
+                            pp_slot_update(vid, s$header, s$chart))
+                  } else {
+                    # Not live as a chart yet, or no longer one: draw it
+                    # in full.
+                    slot_key(slot_key() + 1L)
+                  }
+                })
                 output[[paste0("dl_png_", vid)]] <- shiny::downloadHandler(
                   filename = function() {
                     paste0(slot_file_stem(vid), ".png")

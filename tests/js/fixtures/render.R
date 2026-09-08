@@ -54,21 +54,13 @@ grab <- function(output, name) {
 messages <- list()
 record_messages <- function(expr) {
   messages <<- list()
-  real <- blockr.pharma:::pp_send
-  testthat::local_mocked_bindings(
-    pp_send = function(session, channel, payload) {
-      if (channel %in% c("sync_selected", "sync_params")) {
-        payload <- as.list(payload %||% character())
-      }
-      wire <- jsonlite::fromJSON(
-        jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"),
-        simplifyVector = FALSE
-      )
-      messages[[length(messages) + 1L]] <<- list(channel = channel, payload = wire)
-      real(session, channel, payload)
-    },
-    .package = "blockr.pharma"
-  )
+  withr::local_options(list(blockr.pharma.pp_message_sink = function(channel, payload) {
+    wire <- jsonlite::fromJSON(
+      jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"),
+      simplifyVector = FALSE
+    )
+    messages[[length(messages) + 1L]] <<- list(channel = channel, payload = wire)
+  }))
   force(expr)
 }
 

@@ -123,6 +123,15 @@ test_that("chart area renders slot shells; empty-for-patient viz says so", {
     dm::dm_add_fk(advs, USUBJID, adsl)
 
   blk <- new_patient_profile_block()
+  # Every message the module sends, so the patient switch below can be
+  # checked against the `slot` message that carries it.
+  log <- new.env(parent = emptyenv())
+  log$sent <- list()
+  withr::local_options(list(
+    blockr.pharma.pp_message_sink = function(channel, payload) {
+      log$sent[[length(log$sent) + 1L]] <- list(channel = channel, payload = payload)
+    }
+  ))
   shiny::testServer(
     blk[["expr_server"]],
     args = list(data = function() co),
@@ -147,13 +156,44 @@ test_that("chart area renders slot shells; empty-for-patient viz says so", {
       slot_a <- output[[paste0("viz_slot_", vitals_id)]]
       expect_no_match(slot_a$html, "No data for this patient", fixed = TRUE)
 
+      # A patient switch does not re-render the slot: the panel is
+      # updated in place through a `slot` message that carries the new
+      # header and chart option (pp_slot_update()).
+      log$sent <- list()
       session$setInputs(pp_subject = "b")
       session$flushReact()
 
-      # skeleton unchanged, slot now carries the no-data notice
+      # skeleton unchanged, the slot output too
       expect_identical(output$chart_area$html, skel_a$html)
-      slot_b <- output[[paste0("viz_slot_", vitals_id)]]
-      expect_match(slot_b$html, "No data for this patient", fixed = TRUE)
+      expect_identical(output[[paste0("viz_slot_", vitals_id)]]$html, slot_a$html)
+      # the message is what carries the no-data notice
+      slots <- Filter(function(m) identical(m$channel, "slot"), log$sent)
+      ids <- vapply(slots, function(m) m$payload$viz_id, character(1L))
+      expect_true(vitals_id %in% ids)
+      msg <- slots[[match(vitals_id, ids)]]$payload
+      expect_match(msg$opts_json, "No data for this patient", fixed = TRUE)
+      expect_match(msg$header, "pp-chart-header", fixed = TRUE)
+      expect_true(is.numeric(msg$height))
+      expect_true(is.list(msg$evals))
+
+      # A panel that is not an echarts chart (patient_info is plain HTML)
+      # has no instance to update: its slot re-renders in full instead,
+      # and no `slot` message is sent for it.
+      r_selected(unique(c(r_selected(), "patient_info")))
+      session$flushReact()
+      info_b <- output[["viz_slot_patient_info"]]$html
+      expect_match(info_b, "pp-chart-body", fixed = TRUE)
+      log$sent <- list()
+      session$setInputs(pp_subject = "a")
+      session$flushReact()
+      info_a <- output[["viz_slot_patient_info"]]$html
+      expect_false(identical(info_a, info_b))
+      slots <- Filter(function(m) identical(m$channel, "slot"), log$sent)
+      ids <- vapply(slots, function(m) m$payload$viz_id, character(1L))
+      expect_false("patient_info" %in% ids)
+      expect_true(vitals_id %in% ids)
+      # and nothing is rendered for a panel that is not on the profile
+      expect_true(all(ids %in% r_selected()))
     }
   )
 })
