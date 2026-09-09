@@ -308,7 +308,12 @@ cm_gantt_viz <- new_pp_viz(
         xAxis = pp_time_axis(time_range, ref_ms, mode),
         yAxis = list(
           type = "category",
-          data = meds,
+          # As a list: a single lane must still go out as an array. htmlwidgets
+          # unboxes a length-one vector to a bare string, and ECharts
+          # reads a string's characters as the categories, so a chart
+          # filtered down to one term drew it on the first of eighteen
+          # hair-thin lanes, label cut off at the top.
+          data = as.list(meds),
           inverse = TRUE,
           axisLine = list(show = FALSE),
           axisTick = list(show = FALSE),

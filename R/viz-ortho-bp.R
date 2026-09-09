@@ -177,7 +177,9 @@ ortho_bp_viz <- new_pp_viz(
           ),
           xAxis = list(
             type = "category",
-            data = positions,
+            # As a list, so one position still goes out as an array (a bare
+            # string is read by ECharts as one category per character).
+            data = as.list(positions),
             axisLine = list(show = FALSE),
             axisTick = list(show = FALSE),
             axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11)

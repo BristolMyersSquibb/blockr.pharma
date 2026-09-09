@@ -172,3 +172,15 @@ test_that("the panel and the cohort band filter the same records", {
   expect_identical(band_n, panel_n)
   expect_identical(band_n, 1L)
 })
+
+test_that("a chart of one lane still sends its axis as an array", {
+  # htmlwidgets unboxes a length-one vector to a bare string, and ECharts
+  # reads a string's characters as the categories: eighteen hair-thin lanes
+  # for "LOSARTAN POTASSIUM", the bar on the first and its label cut off.
+  tr <- as.Date(c("2020-01-01", "2020-06-01"))
+  one <- cm_gantt_viz$render(cm_dm(), tr, settings = list(search = "aspirin"))
+  expect_identical(
+    as.character(htmlwidgets:::toJSON(one$x$opts$yAxis$data)),
+    "[\"ASPIRIN\"]"
+  )
+})
