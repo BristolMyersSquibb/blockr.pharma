@@ -95,7 +95,8 @@ pp_band_ae <- function() {
 #' Which panel drives the cohort band
 #'
 #' Walks the selected vizs in the order the sidebar lists them and returns
-#' the first that is both available and declares a band form. A selected viz
+#' the first that is both available and declares a band form, after any
+#' whose find box has a term in it (see below). A selected viz
 #' the data cannot offer is passed over for the same reason the chart area
 #' passes over it: it is not on screen.
 #'
@@ -112,7 +113,18 @@ pp_band_ae <- function() {
 #' @return `list(viz_id, label, caption, title, band)` or `NULL`.
 #' @noRd
 pp_cohort_band_source <- function(selected, available, settings = list()) {
-  for (viz_id in selected) {
+  # A panel being searched drives the strip, ahead of the first. The find
+  # box filters the strip as well as the panel (the block's r_band_search
+  # reads the SOURCE's term), so a medication typed into a panel that is
+  # second in the list would otherwise narrow nothing the sidebar shows.
+  # Only a panel whose band declares search columns qualifies; sidebar
+  # order breaks a tie between two live terms, and rules again once the
+  # boxes are blank.
+  searched <- selected[vapply(selected, function(id) {
+    length(available[[id]]$band$search %||% character()) > 0 &&
+      nzchar(as.character(settings[[id]]$search %||% ""))
+  }, logical(1))]
+  for (viz_id in unique(c(searched, selected))) {
     viz <- available[[viz_id]]
     if (is.null(viz) || is.null(viz$band)) next
     band <- pp_band_for_selection(viz, settings[[viz_id]]$items,

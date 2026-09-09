@@ -357,6 +357,14 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
 
+  # The panel's find box, on the printed twin as well (as for the AE
+  # panel): the download is the picture that was on screen.
+  if (nzchar(as.character(settings$search %||% ""))) {
+    tbl <- tbl[pp_search_match(tbl, PP_CM_SEARCH, settings$search), ,
+               drop = FALSE]
+    if (nrow(tbl) == 0) return(NULL)
+  }
+
   has_end <- if (use_day) "AENDY" %in% colnames(tbl) else
     "AENDT" %in% colnames(tbl)
   day_unit <- if (identical(mode, "rday")) 1 else 86400000

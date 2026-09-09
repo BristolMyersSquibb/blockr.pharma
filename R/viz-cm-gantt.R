@@ -35,6 +35,12 @@
 
 #' Concomitant medications visualization definition
 #' @noRd
+# What the panel's find box reads: the verbatim name, the coded name and the
+# class, so "antibiotic" reaches a class whose drug names never say so. The
+# header control, the chart, the printed twin and the cohort strip all
+# filter on this one vector, so a term means the same thing in each.
+PP_CM_SEARCH <- c("CMTRT", "CMDECOD", "CMCLAS")
+
 cm_gantt_viz <- new_pp_viz(
   id = "cm_gantt",
   label = "Concomitant Medications",
@@ -49,12 +55,23 @@ cm_gantt_viz <- new_pp_viz(
     "CMDECOD", "AENDT", "AENDY", "CMDOSE", "CMDOSU", "CMDOSFRQ",
     "CMROUTE", "CMCLAS"
   )),
-  controls = pp_lane_control(PP_CM_LANES, default = "CMDECOD"),
+  # The find box first, as on the AE panel: it is the control the panel is
+  # used through, and the one that must stay in view when the header is
+  # short of room.
+  controls = c(
+    list(search = list(
+      type = "search",
+      label = "Find",
+      placeholder = "Filter medications",
+      columns = PP_CM_SEARCH
+    )),
+    pp_lane_control(PP_CM_LANES, default = "CMDECOD")
+  ),
   band = pp_band_spans(
     table = "adcm",
     start = c("ASTDY", "ASTDT"),
     end = c("AENDY", "AENDT"),
-    search = c("CMTRT", "CMDECOD", "CMCLAS")
+    search = PP_CM_SEARCH
   ),
   uses = "indication",
   legend_ui = function(dm_obj, settings) {
@@ -82,6 +99,19 @@ cm_gantt_viz <- new_pp_viz(
 
     tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
     if (nrow(tbl) == 0) return(pp_empty_chart("No medication records"))
+
+    # The header's find box, applied before the lanes are built so the
+    # panel is the panel of the matching medications (see the AE panel).
+    # The cohort strip reads the same setting through pp_cohort_marks().
+    search <- as.character(settings$search %||% "")
+    if (nzchar(search)) {
+      tbl <- tbl[pp_search_match(tbl, PP_CM_SEARCH, search), , drop = FALSE]
+      if (nrow(tbl) == 0) {
+        return(pp_empty_chart(
+          paste0("No medication matches \u201c", search, "\u201d")
+        ))
+      }
+    }
 
     # The medication's name for the tooltip: the coded name reads cleaner
     # than the verbatim report, falling back per row (a partially coded

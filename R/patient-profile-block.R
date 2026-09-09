@@ -232,7 +232,8 @@ new_patient_profile_block <- function(selected = NULL,
           })
 
           # Which panel the cohort band draws. The FIRST selected viz that
-          # declares a band form (pp_cohort_band_source()), so reordering the
+          # declares a band form (pp_cohort_band_source()), or the one being
+          # searched if there is one, so reordering the
           # panel list reorders what the strip shows and a panel with no
           # strip form -- the patient overview, a table -- is stepped over
           # rather than drawn badly. NULL when nothing selected can be drawn:

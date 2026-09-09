@@ -127,3 +127,48 @@ test_that("date mode without dates asks for relative day", {
                    function(d) as.numeric(d$value[[1]]), numeric(1))
   expect_equal(starts, 10)
 })
+
+test_that("the find box narrows the panel to the matching medications", {
+  tr <- as.Date(c("2020-01-01", "2020-06-01"))
+  dm_obj <- cm_dm(list(CMCLAS = c("ANALGESICS", "ANALGESICS")))
+
+  lanes <- function(chart) unlist(chart$x$opts$yAxis$data)
+  # By name, coded or verbatim.
+  expect_identical(
+    lanes(cm_gantt_viz$render(dm_obj, tr, settings = list(search = "aspirin"))),
+    "ASPIRIN"
+  )
+  # By class: both rows are analgesics, and neither name says so.
+  expect_setequal(
+    lanes(cm_gantt_viz$render(dm_obj, tr, settings = list(search = "analg"))),
+    c("ASPIRIN", "PARACETAMOL")
+  )
+  # Nothing matching says so, rather than drawing an empty axis.
+  none <- cm_gantt_viz$render(dm_obj, tr, settings = list(search = "insulin"))
+  expect_match(paste(unlist(none$x$opts), collapse = " "),
+               "No medication matches", fixed = TRUE)
+  # Blank is everything.
+  expect_length(lanes(cm_gantt_viz$render(dm_obj, tr, settings = list(search = ""))), 2L)
+})
+
+test_that("the printed twin is filtered like the panel", {
+  skip_if_not_installed("ggplot2")
+  tr <- as.Date(c("2020-01-01", "2020-06-01"))
+  expect_null(cm_gantt_viz$exhibit(cm_dm(), tr, settings = list(search = "insulin")))
+  expect_s3_class(
+    cm_gantt_viz$exhibit(cm_dm(), tr, settings = list(search = "aspirin")),
+    "ggplot"
+  )
+})
+
+test_that("the panel and the cohort band filter the same records", {
+  dm_obj <- cm_dm()
+  adcm <- as.data.frame(dm::dm_get_tables(dm_obj)$adcm)
+  panel_n <- sum(pp_search_match(adcm, PP_CM_SEARCH, "aspirin"))
+  band_n <- nrow(
+    pp_cohort_marks(dm_obj, pp_resolve_roles(dm_obj), band = cm_gantt_viz$band,
+                    search = "aspirin")$subjects[["x"]]$events
+  )
+  expect_identical(band_n, panel_n)
+  expect_identical(band_n, 1L)
+})

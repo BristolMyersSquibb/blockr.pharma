@@ -78,6 +78,36 @@ test_that("the band skips panels that have no strip form", {
   expect_identical(src$caption, "AE_GANTT")
 })
 
+test_that("a panel being searched drives the band, ahead of the first", {
+  avail <- list(
+    ae_gantt = viz_stub("ae_gantt", pp_band_ae(), "adae"),
+    cm_gantt = viz_stub("cm_gantt", cm_gantt_viz$band, "adcm")
+  )
+  sel <- c("ae_gantt", "cm_gantt")
+  src <- function(settings = list()) {
+    pp_cohort_band_source(sel, avail, settings)$viz_id
+  }
+  expect_identical(src(), "ae_gantt")
+  # A medication typed into the second panel: the strip follows it.
+  expect_identical(src(list(cm_gantt = list(search = "aspirin"))), "cm_gantt")
+  # Blank again, and the order rules again.
+  expect_identical(src(list(cm_gantt = list(search = ""))), "ae_gantt")
+  # Two live terms: the first in sidebar order.
+  expect_identical(
+    src(list(ae_gantt = list(search = "x"), cm_gantt = list(search = "y"))),
+    "ae_gantt"
+  )
+  # A band that no search reaches does not take the strip over.
+  avail$chem <- viz_stub(
+    "chem", pp_band_series("adlbc", "ALT", "Alanine Aminotransferase"), "adlbc"
+  )
+  expect_identical(
+    pp_cohort_band_source(c("ae_gantt", "chem"), avail,
+                          list(chem = list(search = "x")))$viz_id,
+    "ae_gantt"
+  )
+})
+
 test_that("reordering the panels reorders what the band draws", {
   avail <- list(
     patient_overview = viz_stub("patient_overview"),
