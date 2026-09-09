@@ -957,7 +957,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   empty_msg <- if (is_aval) {
     paste("No", label, "records")
   } else {
-    paste0("No ", pp_findings_value_label(value), " (", value, ") records")
+    paste("No", value, "records")
   }
 
   tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl[[value]]), , drop = FALSE]

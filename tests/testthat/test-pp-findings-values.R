@@ -371,9 +371,9 @@ test_that("the value pill carries no dimension label", {
 
   expect_false(grepl("pp-ctrl-label", html, fixed = TRUE))
   expect_match(html, "pp-ctrl-pill")
-  expect_match(html, "Absolute")
+  expect_match(html, "AVAL")
   # The action still has somewhere to live.
-  expect_match(html, "Switch to Change")
+  expect_match(html, "Switch to CHG")
 })
 
 test_that("a control that declares a label still draws one", {
@@ -390,4 +390,24 @@ test_that("a control that declares a label still draws one", {
   html <- as.character(pp_controls_ui(viz, "x", dm_obj, list()))
   expect_match(html, "pp-ctrl-label")
   expect_match(html, "Lanes")
+})
+
+test_that("the pill is named after the columns it picks", {
+  # Three words cost eight characters of a 311px card header, and the pill
+  # reserves its widest rung, so they came off the parameter's name beside
+  # it. The column names are what the tooltip prints anyway.
+  expect_identical(names(PP_FINDINGS_VALUES), unname(PP_FINDINGS_VALUES))
+  expect_identical(unname(PP_FINDINGS_VALUES), c("AVAL", "CHG", "PCHG"))
+})
+
+test_that("an empty change panel names the column once", {
+  # The message used to read "No PCHG (PCHG) records" once the rung and the
+  # column were spelled the same.
+  adlb <- rbind(
+    transform(chg_adlb(), PARAMCD = "ALT", PARAM = "Alanine (U/L)"),
+    transform(neut_adlb(), BASE = NA_real_, CHG = NA_real_, PCHG = NA_real_)
+  )
+  chart <- render_findings_card(adlb, id = "adlb_all__NEUT",
+                                settings = list(value = "PCHG"))
+  expect_identical(chart$x$opts$title$text, "No PCHG records")
 })

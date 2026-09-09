@@ -70,17 +70,24 @@ pp_prepare_findings <- function(dm_obj, table_name,
 #' the others are measured AGAINST, which is why it is printed in the tooltip
 #' whenever a change is on screen rather than offered as a series of its own.
 #'
-#' Names are the pill's labels, values the columns. The first rung is
-#' "Absolute" rather than "Value": the control group is already labelled
-#' VALUE, and a pill reading "VALUE  Value" says one word twice where the
-#' gantt's "LANES  Preferred term" says a dimension and its current setting.
-#' It also avoids claiming AVAL was measured, which a carried-forward record
-#' was not.
+#' The rungs are named after the columns, because that is what they are.
+#'
+#' "Absolute / Change / % change" was three words for a control living in a
+#' 311px card header (the 600px rail gives the profile 551px and the card and
+#' cohort lists take 232 of it), and the pill reserves its widest rung, so
+#' those eight characters came straight off the parameter's name beside it:
+#' SDIAM was down to 24 of its 47. The column names are four, need no
+#' expanding for a reader of this profile, and are already what the tooltip
+#' prints and what the board's own chart bands offer. Every shorter form
+#' tried was an abbreviation of one of these three.
+#'
+#' Names and values are therefore identical, and callers print the column
+#' name directly rather than looking a label up.
 #' @noRd
 PP_FINDINGS_VALUES <- c(
-  "Absolute" = "AVAL",
-  "Change" = "CHG",
-  "% change" = "PCHG"
+  "AVAL" = "AVAL",
+  "CHG" = "CHG",
+  "PCHG" = "PCHG"
 )
 
 #' The pill a findings card carries for its value variable
@@ -132,15 +139,4 @@ pp_findings_value_column <- function(tbl, requested = NULL, default = "AVAL") {
   if (!requested %in% PP_FINDINGS_VALUES) return(default)
   if (!requested %in% colnames(tbl)) return(default)
   requested
-}
-
-#' The pill label for a value column ("% change" for `PCHG`)
-#'
-#' Falls back to the column name, so a value reached from board code rather
-#' than from the pill still names itself.
-#' @noRd
-pp_findings_value_label <- function(value) {
-  hit <- match(value, PP_FINDINGS_VALUES)
-  if (is.na(hit)) return(value)
-  names(PP_FINDINGS_VALUES)[[hit]]
 }

@@ -180,6 +180,10 @@
   font-weight: 500;
   color: var(--blockr-color-text-secondary, #374151);
   margin: 0;
+  /* Never shrinks. It is the card's name, it has no ellipsis, and the header
+     has two other items that can give way in order: the sublabel first, then
+     the controls (which scroll). */
+  flex: 0 0 auto;
 }
 
 /* Remove (x): muted, and only fully legible once the panel is hovered --
@@ -375,8 +379,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1;
+  /* `flex: 1` is `1 1 0%`, and a ZERO basis is what clipped the value pill:
+     with no free space to grow into, the wrapper stayed at its 8px of
+     padding while a 45px pill sat inside it, cut off at the panel edge. It
+     is a control, so it is sized by its content and gives way only after
+     the sublabel has (which is what that item's shrink factor is for). */
+  flex: 1 1 auto;
   min-width: 0;
+  /* Kept: the AE card's chips and find box legitimately outgrow any header,
+     and scroll once the sublabel has given everything it has. */
   overflow-x: auto;
   padding: 0 4px;
 }
@@ -1838,7 +1849,20 @@ body.pp-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  flex: 0 1 auto;
+  /* The header's elastic item, and deliberately the ONLY one that gives way.
+     A card panel is 311px in the 600px rail (the rail gives the profile
+     551px and the two lists take 232 of it), so a header with a parameter
+     name in it is always short of room, and something has to shrink. This is
+     the only child with an ellipsis, i.e. the only one whose loss degrades
+     rather than breaks: `.pp-chart-controls` was absorbing the whole deficit
+     instead, collapsing to 8px around a 45px pill and clipping it to a
+     sliver at the panel edge -- a control you cannot click, to save four
+     characters of a name that was truncated anyway.
+
+     A shrink factor rather than `flex-shrink: 0` on the controls: the AE
+     card's chips and find box legitimately outgrow any header, and they keep
+     their existing scroll behaviour once this has given everything it has. */
+  flex: 0 40 auto;
 }
 
 /* How the list is ordered, as a clause at the end of the caption row rather

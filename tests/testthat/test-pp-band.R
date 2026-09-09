@@ -685,11 +685,11 @@ test_that("the strip's caption says which value it is drawing", {
   avail <- value_band_avail()
   id <- names(avail)[[1L]]
   expect_identical(pp_cohort_band_source(id, avail)$sub, "Albumin (g/L)")
-  expect_match(
+  expect_identical(
     pp_cohort_band_source(
       id, avail, stats::setNames(list(list(value = "PCHG")), id)
     )$sub,
-    "% change"
+    "Albumin (g/L) \u00b7 PCHG"
   )
 })
 

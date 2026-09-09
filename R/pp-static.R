@@ -515,9 +515,7 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
   # On screen the card's header pill says which, and a print has no pill: a
   # page reading "-81" where the axis is percent change and the title carries
   # the parameter's own unit is a number a reader would take at face value.
-  value_tail <- if (is_aval) "" else {
-    paste0(" \u00b7 ", pp_findings_value_label(value))
-  }
+  value_tail <- if (is_aval) "" else paste0(" \u00b7 ", value)
   panel_label <- vapply(params, function(p) {
     if (!has_param) return(paste0(p, value_tail))
     full <- as.character(tbl$PARAM[tbl$PARAMCD == p][1])

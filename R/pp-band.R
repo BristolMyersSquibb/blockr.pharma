@@ -214,7 +214,7 @@ pp_band_sub <- function(caption, band) {
   # rather than taking a caption of its own.
   value <- band$value %||% "AVAL"
   if (!identical(value, "AVAL")) {
-    tail <- paste0(" \u00b7 ", pp_findings_value_label(value))
+    tail <- paste0(" \u00b7 ", value)
     return(if (nzchar(param)) paste0(param, tail) else trimws(tail))
   }
   if (!nzchar(param) || identical(param, caption)) return(NULL)
