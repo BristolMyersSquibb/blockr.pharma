@@ -974,6 +974,56 @@
   transform: rotate(180deg);
 }
 
+/* Drilled: an upstream click narrowed this cohort. The count takes the
+   active-filter tint the crossfilter's "Reset all" wears, and the reset
+   beside it wears the same, so the pair reads as one control standing for
+   one filter -- and the reader who has met the crossfilter's knows what
+   the glyph does. After .is-shut so it wins when both apply: a drilled
+   cohort is the louder fact. */
+.pp-cohort-count.is-drilled {
+  color: var(--blockr-color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.07);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.pp-cohort-count.is-drilled:hover {
+  color: var(--blockr-color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.13);
+  border-color: var(--blockr-color-primary, #2563eb);
+}
+
+.pp-cohort-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: -2px;
+  font: inherit;
+  color: var(--blockr-color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.pp-cohort-reset:hover {
+  background: rgba(37, 99, 235, 0.13);
+  border-color: var(--blockr-color-primary, #2563eb);
+}
+
+.pp-cohort-reset:focus-visible {
+  outline: 2px solid var(--blockr-blue-500, #3b82f6);
+  outline-offset: 1px;
+}
+
+.pp-cohort-reset.is-hidden {
+  display: none;
+}
+
 /* --- Who is on screen ------------------------------------------------------
    The header used to be a second patient picker. The sidebar's cohort list
    does that job better, so this became the answer to "who am I looking at" --

@@ -1,3 +1,14 @@
+# The reset glyph, the one the crossfilter's "Reset all" wears (blockr.dm,
+# crossfilter-block.js ICON_RESET): both stand for an active filter with a
+# way back, and a reader who has met one should recognise the other.
+PP_ICON_RESET <- paste0(
+  '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">',
+  '<path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 1 1 ',
+  '.908-.418A6 6 0 1 1 8 2v1z"/>',
+  '<path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 ',
+  '0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>'
+)
+
 #' The patient profile block's UI
 #'
 #' The static frame the server's outputs render into: the stylesheet and the
@@ -197,6 +208,18 @@ pp_block_ui <- function(id) {
               shiny::span(class = "pp-cohort-count-car",
                           shiny::HTML("&lsaquo;")),
               shiny::span(class = "pp-cohort-count-n")
+            ),
+            # The way back from a drill. Shown, and the count tinted, only
+            # while an upstream click has narrowed the cohort (the `drill`
+            # message, pp-header.js); its click asks R to clear the drill
+            # filter. A sibling of the count, not a child: the count is a
+            # button already, and a button inside a button is not markup.
+            shiny::tags$button(
+              class = "pp-cohort-reset is-hidden",
+              id = ns("pp_cohort_reset"),
+              type = "button",
+              title = "Show every patient again",
+              shiny::HTML(PP_ICON_RESET)
             ),
             shiny::uiOutput(ns("subject_facts"), inline = TRUE),
             shiny::span(class = "pp-subject-gap")

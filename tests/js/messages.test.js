@@ -28,6 +28,31 @@ test('subject_picker fills the cohort count and hides it at zero', () => {
   h.close();
 });
 
+test('drill tints the cohort count, shows the reset, and the reset asks R to undrill', () => {
+  const h = boot();
+  const count = h.el('pp_cohort_count');
+  const reset = h.el('pp_cohort_reset');
+  assert.equal(reset.classList.contains('is-hidden'), true);
+  h.send('drill', { clause: 'SEX = M' });
+  assert.equal(count.classList.contains('is-drilled'), true);
+  assert.equal(reset.classList.contains('is-hidden'), false);
+  assert.match(count.getAttribute('title'), /SEX = M/);
+  assert.match(reset.getAttribute('title'), /SEX = M/);
+  // The reset asks R; it does not touch the sidebar the count toggles.
+  const shutBefore = count.classList.contains('is-shut');
+  h.click(reset);
+  assert.equal(h.inputs('undrill').length, 1);
+  assert.equal(count.classList.contains('is-shut'), shutBefore);
+  // The whole study again: tint and reset go, the titles fall back.
+  h.send('drill', { clause: '' });
+  assert.equal(count.classList.contains('is-drilled'), false);
+  assert.equal(reset.classList.contains('is-hidden'), true);
+  assert.equal(count.getAttribute('title'), 'Show or hide the cohort');
+  h.send('drill', null);
+  assert.equal(count.classList.contains('is-drilled'), false);
+  h.close();
+});
+
 test('dl_menu_state labels the two download scopes and hides what does not apply', () => {
   const h = boot();
   const root = h.el('pp_dl_root');

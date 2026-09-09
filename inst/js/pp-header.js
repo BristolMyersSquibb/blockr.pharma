@@ -14,6 +14,9 @@ PatientProfile.part(function(ctx) {
   var gearBtnId = ns('pp_gear_btn');
   var gearPopoverId = ns('pp_gear_popover');
   var cohortCountId = ns('pp_cohort_count');
+  var cohortResetId = ns('pp_cohort_reset');
+  var drillMsgId = ns('drill');
+  var undrillInputId = ns('undrill');
   var subjectPickerMsgId = ns('subject_picker');
   var dlMenuMsgId = ns('dl_menu_state');
   var dlRootId = ns('pp_dl_root');
@@ -152,5 +155,31 @@ PatientProfile.part(function(ctx) {
   $(document).on('click', '#' + cohortCountId, function(e) {
     e.stopPropagation();
     toggleSidebar();
+  });
+
+  // The drill. R reads it off the dm it was handed (pp-drill.R) and sends
+  // the clause, or '' when the cohort is the whole study. Drilled, the
+  // count takes the active-filter tint and the reset beside it appears;
+  // the clause goes on both titles, so hovering either says what narrowed
+  // the list. The reset's click asks R to clear the drill filter -- the
+  // profile never edits its own data, it asks the block that did.
+  Shiny.addCustomMessageHandler(drillMsgId, function(msg) {
+    var clause = (msg && msg.clause) ? String(msg.clause) : '';
+    var drilled = clause.length > 0;
+    var $count = $('#' + cohortCountId);
+    var $reset = $('#' + cohortResetId);
+    $count.toggleClass('is-drilled', drilled);
+    $count.attr('title', drilled ?
+      'Drilled down to ' + clause + '. Show or hide the cohort' :
+      'Show or hide the cohort');
+    $reset.toggleClass('is-hidden', !drilled);
+    $reset.attr('title', drilled ?
+      'Show every patient again (drilled down to ' + clause + ')' :
+      'Show every patient again');
+  });
+
+  $(document).on('click', '#' + cohortResetId, function(e) {
+    e.stopPropagation();
+    Shiny.setInputValue(undrillInputId, Date.now(), {priority: 'event'});
   });
 });

@@ -18,6 +18,12 @@
     }
   },
   {
+    "channel": "drill",
+    "payload": {
+      "clause": ""
+    }
+  },
+  {
     "channel": "sync_band",
     "payload": {
       "viz_id": ""

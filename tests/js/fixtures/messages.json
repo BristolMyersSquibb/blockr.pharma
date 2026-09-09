@@ -20,6 +20,12 @@
     }
   },
   {
+    "channel": "drill",
+    "payload": {
+      "clause": ""
+    }
+  },
+  {
     "channel": "sync_band",
     "payload": {
       "viz_id": ""
@@ -40,17 +46,17 @@
     }
   },
   {
-    "channel": "sync_subject",
-    "payload": {
-      "id": "01-701-1015"
-    }
-  },
-  {
     "channel": "dl_menu_state",
     "payload": {
       "single": true,
       "picked": "01-701-1015",
       "n": 12
+    }
+  },
+  {
+    "channel": "sync_subject",
+    "payload": {
+      "id": "01-701-1015"
     }
   }
 ]

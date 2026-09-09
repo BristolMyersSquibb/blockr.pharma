@@ -755,6 +755,34 @@ new_patient_profile_block <- function(selected = NULL,
             )
           })
 
+          # Was this cohort drilled into, and by what. Read off the incoming
+          # dm's filter trail against the board's drill filter (pp-drill.R);
+          # the pill in the header takes the active-filter tint and grows a
+          # reset when there is a clause. An empty string, not NULL, for
+          # "no drill": jsonlite ships a NULL element as `{}`, which the
+          # client would read as true.
+          r_drill <- shiny::reactive({
+            tgt <- blockr.viz::ctrl_targets("drill_filter_block",
+                                            session = session)
+            pp_drill_state(blockr.dm::filter_trail(r_data()), unname(tgt))
+          })
+
+          shiny::observe({
+            pp_send(session, "drill", list(clause = r_drill()$clause %||% ""))
+          })
+
+          # The reset: tell the drill filter to forget its claim, over the
+          # same channel the click came in on. `ctrl_send()`, not
+          # `ctrl_clear()`: the clear is scoped to the block that made the
+          # claim, and this block did not -- the reader did, from the place
+          # where the drill's effect is visible.
+          shiny::observeEvent(input$undrill, {
+            d <- shiny::isolate(r_drill())
+            if (is.null(d)) return()
+            blockr.viz::ctrl_send(d$id, state = list(columns = list()),
+                                  session = session)
+          })
+
           # Handle viz control changes from client
           shiny::observeEvent(input$viz_ctrl, {
             msg <- input$viz_ctrl
