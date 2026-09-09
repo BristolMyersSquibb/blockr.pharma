@@ -200,26 +200,34 @@ pp_block_ui <- function(id) {
             # already know what it counted. It is also the only way back
             # once the sidebar is closed, since the floating expand button
             # is gone.
-            shiny::tags$button(
-              class = "pp-cohort-count is-hidden",
-              id = ns("pp_cohort_count"),
-              type = "button",
-              title = "Show or hide the cohort",
-              shiny::span(class = "pp-cohort-count-car",
-                          shiny::HTML("&lsaquo;")),
-              shiny::span(class = "pp-cohort-count-n")
-            ),
-            # The way back from a drill. Shown, and the count tinted, only
-            # while an upstream click has narrowed the cohort (the `drill`
-            # message, pp-header.js); its click asks R to clear the drill
-            # filter. A sibling of the count, not a child: the count is a
-            # button already, and a button inside a button is not markup.
-            shiny::tags$button(
-              class = "pp-cohort-reset is-hidden",
-              id = ns("pp_cohort_reset"),
-              type = "button",
-              title = "Show every patient again",
-              shiny::HTML(PP_ICON_RESET)
+            # One control, two jobs, a hairline between them. The count
+            # opens the sidebar; the cell beside it undoes an upstream
+            # drill and appears only while there is one (the `drill`
+            # message, pp-header.js). Two buttons rather than one with two
+            # regions, because they are two actions and a button inside a
+            # button is not markup; `.pp-cohort-seg` is what makes them
+            # read as one -- drilled, the pair takes the crossfilter's
+            # "Reset all" colours at the pill's own size, and the divider
+            # is the reset's own left border.
+            shiny::span(
+              class = "pp-cohort-seg",
+              id = ns("pp_cohort_seg"),
+              shiny::tags$button(
+                class = "pp-cohort-count is-hidden",
+                id = ns("pp_cohort_count"),
+                type = "button",
+                title = "Show or hide the cohort",
+                shiny::span(class = "pp-cohort-count-car",
+                            shiny::HTML("&lsaquo;")),
+                shiny::span(class = "pp-cohort-count-n")
+              ),
+              shiny::tags$button(
+                class = "pp-cohort-reset is-hidden",
+                id = ns("pp_cohort_reset"),
+                type = "button",
+                title = "Reset drill-down",
+                shiny::HTML(PP_ICON_RESET)
+              )
             ),
             shiny::uiOutput(ns("subject_facts"), inline = TRUE),
             shiny::span(class = "pp-subject-gap")

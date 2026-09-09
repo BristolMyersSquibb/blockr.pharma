@@ -1008,22 +1008,54 @@
   transform: rotate(180deg);
 }
 
-/* Drilled: an upstream click narrowed this cohort. The count takes the
-   active-filter tint the crossfilter's "Reset all" wears, and the reset
-   beside it wears the same, so the pair reads as one control standing for
-   one filter -- and the reader who has met the crossfilter's knows what
-   the glyph does. After .is-shut so it wins when both apply: a drilled
-   cohort is the louder fact. */
-.pp-cohort-count.is-drilled {
-  color: var(--blockr-color-primary, #2563eb);
-  background: rgba(37, 99, 235, 0.07);
-  border-color: rgba(37, 99, 235, 0.35);
+/* Drilled: the count and the reset become ONE segmented control.
+   
+   It wears the crossfilter's "Reset all" COLOURS -- same tint, same border,
+   same hover, same glyph (blockr.dm/inst/css/crossfilter-block.css,
+   `.jscf-reset-btn`) -- and the pill's OWN geometry: 11px type, 6px radius,
+   the height it already has at rest. So it lands a size under the
+   crossfilter's 26px button, on purpose. Two reasons. A control that grew
+   when it went blue and shrank when it went grey would jump under the eye
+   of the person clicking it, which is the one moment it must not move. And
+   of the two, this is the smaller claim: the crossfilter's reset drops every
+   table on the dashboard, this one only widens a patient list.
+
+   The pair is joined rather than spaced: the count loses its right radius
+   and its right border, the reset loses its left radius, and the reset's
+   left border IS the hairline between them -- no divider element. After
+   .is-shut so it wins when both apply; a drilled list is the louder fact. */
+.pp-cohort-seg {
+  display: inline-flex;
+  /* Stretch, so the reset is exactly as tall as the count whatever the
+     count's content settles on. The two halves cannot disagree by a pixel. */
+  align-items: stretch;
+  flex: 0 0 auto;
 }
 
-.pp-cohort-count.is-drilled:hover {
+.pp-cohort-seg.is-drilled .pp-cohort-count,
+.pp-cohort-reset {
   color: var(--blockr-color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+              color 0.15s ease;
+}
+
+.pp-cohort-seg.is-drilled .pp-cohort-count:hover,
+.pp-cohort-reset:hover {
   background: rgba(37, 99, 235, 0.13);
   border-color: var(--blockr-color-primary, #2563eb);
+  color: var(--blockr-color-primary, #2563eb);
+}
+
+/* The join. The count keeps its right border and the reset is pulled 1px
+   over it, the way a button group does it -- dropping the border instead
+   would make the count 1px narrower when drilled, and the number inside it
+   would shift under the cursor at the exact moment the control is being
+   read. */
+.pp-cohort-seg.is-drilled .pp-cohort-count {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .pp-cohort-reset {
@@ -1031,27 +1063,36 @@
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 24px;
   padding: 0;
-  margin-left: -2px;
-  font: inherit;
-  color: var(--blockr-color-primary, #2563eb);
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px solid rgba(37, 99, 235, 0.35);
+  margin-left: -1px;
+  /* The count's type, not the browser's: `font: inherit` would do it in one
+     line and is the trap -- the shorthand resets every font-* it does not
+     name, so it threw away the size and weight it was meant to carry. */
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
   border-radius: 6px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   cursor: pointer;
   flex: 0 0 auto;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.pp-cohort-reset:hover {
-  background: rgba(37, 99, 235, 0.13);
-  border-color: var(--blockr-color-primary, #2563eb);
+/* 12 in a ~23px cell is the crossfilter's 14-in-26 ratio, kept. Set here
+   rather than on the R constant, so the glyph stays the crossfilter's. */
+.pp-cohort-reset svg {
+  width: 12px;
+  height: 12px;
 }
 
+.pp-cohort-seg.is-drilled .pp-cohort-count:focus-visible,
 .pp-cohort-reset:focus-visible {
   outline: 2px solid var(--blockr-blue-500, #3b82f6);
   outline-offset: 1px;
+  /* Above the neighbour, so the ring is not clipped by the shared edge. */
+  position: relative;
+  z-index: 1;
 }
 
 .pp-cohort-reset.is-hidden {

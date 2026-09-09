@@ -19,11 +19,13 @@
   <div class="pp-chart-area">
     <div class="pp-chart-toolbar">
       <div class="pp-subject-picker" id="proxy1-pp_picker">
-        <button class="pp-cohort-count is-hidden" id="proxy1-pp_cohort_count" type="button" title="Show or hide the cohort">
-          <span class="pp-cohort-count-car">&lsaquo;</span>
-          <span class="pp-cohort-count-n"></span>
-        </button>
-        <button class="pp-cohort-reset is-hidden" id="proxy1-pp_cohort_reset" type="button" title="Show every patient again"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 1 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg></button>
+        <span class="pp-cohort-seg" id="proxy1-pp_cohort_seg">
+          <button class="pp-cohort-count is-hidden" id="proxy1-pp_cohort_count" type="button" title="Show or hide the cohort">
+            <span class="pp-cohort-count-car">&lsaquo;</span>
+            <span class="pp-cohort-count-n"></span>
+          </button>
+          <button class="pp-cohort-reset is-hidden" id="proxy1-pp_cohort_reset" type="button" title="Reset drill-down"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 1 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg></button>
+        </span>
         <span id="proxy1-subject_facts" class="shiny-html-output"></span>
         <span class="pp-subject-gap"></span>
       </div>

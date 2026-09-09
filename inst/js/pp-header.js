@@ -15,6 +15,7 @@ PatientProfile.part(function(ctx) {
   var gearPopoverId = ns('pp_gear_popover');
   var cohortCountId = ns('pp_cohort_count');
   var cohortResetId = ns('pp_cohort_reset');
+  var cohortSegId = ns('pp_cohort_seg');
   var drillMsgId = ns('drill');
   var undrillInputId = ns('undrill');
   var subjectPickerMsgId = ns('subject_picker');
@@ -23,8 +24,48 @@ PatientProfile.part(function(ctx) {
   var dlLabelPatientId = ns('pp_dl_label_patient');
   var dlLabelCohortId = ns('pp_dl_label_cohort');
 
-  // The cohort tag: its number, and whether it shows at all.
+  // The cohort tag: its number, whether it shows at all, and the reset
+  // beside it.
   //
+  // Two messages write this one control -- `subject_picker` carries the
+  // count, `drill` carries what narrowed it -- and they arrive in either
+  // order. So neither handler paints: they record, and paintCohort()
+  // decides. Painting from one handler alone would let a drill that lands
+  // first be undone by the count that follows it.
+  var cohortN = 0;
+  var drillClause = '';
+
+  function paintCohort() {
+    var $count = $('#' + cohortCountId);
+    var $reset = $('#' + cohortResetId);
+    var drilled = drillClause.length > 0;
+
+    $count.find('.pp-cohort-count-n').text(
+      cohortN.toLocaleString() + (cohortN === 1 ? ' patient' : ' patients'));
+
+    // Hidden at zero ONLY when nothing narrowed the list. No patients and no
+    // drill is a profile with nothing in it yet, and a tag reading "0" would
+    // be noise. No patients BECAUSE of a drill is a result -- the drill
+    // matched nobody -- and it is the one state where the way back matters
+    // most, so the tag says 0 and the reset stays.
+    $count.toggleClass('is-hidden', !cohortN && !drilled);
+    $count.attr('title', drilled ?
+      'Drilled down to ' + drillClause + '. Show or hide the patient list' :
+      'Show or hide the patient list');
+
+    // The class goes on the SEGMENT, not on either half: it is what joins
+    // the pair into one control, and neither half can draw a join alone.
+    $('#' + cohortSegId).toggleClass('is-drilled', drilled);
+
+    $reset.toggleClass('is-hidden', !drilled);
+    // Names the thing being UNDONE, not the thing you land on: the drill
+    // filter sits below the global filter, so what comes back is whatever
+    // the dashboard is currently showing, never "every patient".
+    $reset.attr('title', drilled ?
+      'Reset drill-down: ' + drillClause :
+      'Reset drill-down');
+  }
+
   // What is left of the subject_picker message. It used to mount a
   // Blockr.Select over every patient and keep its options in step;
   // the sidebar's cohort list does that job, so the message now
@@ -33,11 +74,8 @@ PatientProfile.part(function(ctx) {
   // never on a patient switch.
   Shiny.addCustomMessageHandler(subjectPickerMsgId, function(msg) {
     if (!msg) return;
-    var n = msg.count || 0;
-    var $count = $('#' + cohortCountId);
-    $count.find('.pp-cohort-count-n').text(
-      n.toLocaleString() + (n === 1 ? ' patient' : ' patients'));
-    $count.toggleClass('is-hidden', !n);
+    cohortN = msg.count || 0;
+    paintCohort();
   });
 
   // Download-menu scope sync. The menu is rendered ONCE (see
@@ -164,18 +202,8 @@ PatientProfile.part(function(ctx) {
   // the list. The reset's click asks R to clear the drill filter -- the
   // profile never edits its own data, it asks the block that did.
   Shiny.addCustomMessageHandler(drillMsgId, function(msg) {
-    var clause = (msg && msg.clause) ? String(msg.clause) : '';
-    var drilled = clause.length > 0;
-    var $count = $('#' + cohortCountId);
-    var $reset = $('#' + cohortResetId);
-    $count.toggleClass('is-drilled', drilled);
-    $count.attr('title', drilled ?
-      'Drilled down to ' + clause + '. Show or hide the cohort' :
-      'Show or hide the cohort');
-    $reset.toggleClass('is-hidden', !drilled);
-    $reset.attr('title', drilled ?
-      'Show every patient again (drilled down to ' + clause + ')' :
-      'Show every patient again');
+    drillClause = (msg && msg.clause) ? String(msg.clause) : '';
+    paintCohort();
   });
 
   $(document).on('click', '#' + cohortResetId, function(e) {

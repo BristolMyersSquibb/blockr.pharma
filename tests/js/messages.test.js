@@ -28,28 +28,68 @@ test('subject_picker fills the cohort count and hides it at zero', () => {
   h.close();
 });
 
-test('drill tints the cohort count, shows the reset, and the reset asks R to undrill', () => {
+test('a drill that matches nobody still says so, and keeps a whole reset', () => {
   const h = boot();
+  const count = h.el('pp_cohort_count');
+  const reset = h.el('pp_cohort_reset');
+  // No patients and no drill: nothing loaded, so the tag stays away.
+  h.send('subject_picker', { count: 0 });
+  assert.equal(count.classList.contains('is-hidden'), true);
+  assert.equal(reset.classList.contains('is-hidden'), true);
+  // No patients BECAUSE of a drill: a result, not an empty profile. The tag
+  // comes back reading 0 so the pair still reads as one control, and the
+  // reset stays -- this is the state where the way back matters most.
+  h.send('drill', { clause: 'SEX = M' });
+  assert.equal(count.classList.contains('is-hidden'), false);
+  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '0 patients');
+  assert.equal(reset.classList.contains('is-hidden'), false);
+  assert.equal(h.el('pp_cohort_seg').classList.contains('is-drilled'), true);
+  // Reset it and the tag goes away again: no patients, nothing narrowing.
+  h.send('drill', { clause: '' });
+  assert.equal(count.classList.contains('is-hidden'), true);
+  assert.equal(reset.classList.contains('is-hidden'), true);
+  h.close();
+});
+
+test('either message can land first; the control is painted from both', () => {
+  const h = boot();
+  const seg = h.el('pp_cohort_seg');
+  const reset = h.el('pp_cohort_reset');
+  // Drill first, count second: the count must not undo the drill.
+  h.send('drill', { clause: 'SEX = M' });
+  h.send('subject_picker', { count: 33 });
+  assert.equal(seg.classList.contains('is-drilled'), true);
+  assert.equal(reset.classList.contains('is-hidden'), false);
+  h.close();
+});
+
+test('drill joins the segment, shows the reset, and the reset asks R to undrill', () => {
+  const h = boot();
+  const seg = h.el('pp_cohort_seg');
   const count = h.el('pp_cohort_count');
   const reset = h.el('pp_cohort_reset');
   assert.equal(reset.classList.contains('is-hidden'), true);
   h.send('drill', { clause: 'SEX = M' });
-  assert.equal(count.classList.contains('is-drilled'), true);
+  // The class lands on the SEGMENT: it is what joins the two halves.
+  assert.equal(seg.classList.contains('is-drilled'), true);
   assert.equal(reset.classList.contains('is-hidden'), false);
   assert.match(count.getAttribute('title'), /SEX = M/);
-  assert.match(reset.getAttribute('title'), /SEX = M/);
+  // Names what is undone, never where you land.
+  assert.equal(reset.getAttribute('title'), 'Reset drill-down: SEX = M');
+  assert.doesNotMatch(reset.getAttribute('title'), /every patient|cohort/);
   // The reset asks R; it does not touch the sidebar the count toggles.
   const shutBefore = count.classList.contains('is-shut');
   h.click(reset);
   assert.equal(h.inputs('undrill').length, 1);
   assert.equal(count.classList.contains('is-shut'), shutBefore);
-  // The whole study again: tint and reset go, the titles fall back.
+  // Undrilled: the segment falls apart again and the reset goes.
   h.send('drill', { clause: '' });
-  assert.equal(count.classList.contains('is-drilled'), false);
+  assert.equal(seg.classList.contains('is-drilled'), false);
   assert.equal(reset.classList.contains('is-hidden'), true);
-  assert.equal(count.getAttribute('title'), 'Show or hide the cohort');
+  assert.equal(count.getAttribute('title'), 'Show or hide the patient list');
+  assert.equal(reset.getAttribute('title'), 'Reset drill-down');
   h.send('drill', null);
-  assert.equal(count.classList.contains('is-drilled'), false);
+  assert.equal(seg.classList.contains('is-drilled'), false);
   h.close();
 });
 
