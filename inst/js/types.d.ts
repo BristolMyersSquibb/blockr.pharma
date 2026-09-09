@@ -40,7 +40,7 @@ interface PpDlMenuState {
  *  (R: pp_slot_update()). */
 interface PpSlotUpdate {
   viz_id: string;
-  /** the panel header as HTML */
+  /** the whole panel header as HTML, root included (pp_slot_header_ui() rendered) */
   header: string;
   /** the echarts option, serialised by htmlwidgets' encoder */
   opts_json: string;

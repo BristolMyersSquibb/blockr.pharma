@@ -16,8 +16,10 @@ const widgetOf = (h, vid) => h.el(`viz_slot_${vid}`).querySelector('.pp-chart-bo
 
 const msg = (over) => Object.assign({
   viz_id: 'ae_gantt',
-  header: '<span class="pp-chart-grip"></span><div class="pp-chart-title">Adverse Events</div>' +
-    '<button class="pp-chart-remove" data-viz-id="ae_gantt"></button>',
+  // The whole header, root included, as pp_slot_header_ui() renders it.
+  header: '<div class="pp-chart-header"><span class="pp-chart-grip"></span>' +
+    '<div class="pp-chart-title">Adverse Events</div>' +
+    '<button class="pp-chart-remove" data-viz-id="ae_gantt"></button></div>',
   opts_json: JSON.stringify({
     series: [{ type: 'custom', renderItem: 'function(p, api) { return api.value(0); }' }],
     tooltip: { formatter: 'function(x) { return x.name; }' },
@@ -37,6 +39,8 @@ test('a slot message swaps the header and updates the live chart in place', () =
   const header = h.el('viz_slot_ae_gantt').querySelector('.pp-chart-header');
   assert.equal(header.querySelector('.pp-chart-title').textContent, 'Adverse Events');
   assert.equal(header.querySelector('.pp-ctrl-pill'), null, 'the old header is gone');
+  assert.equal(header.querySelector('.pp-chart-header'), null,
+    'the new header replaces the old one, it is not put inside it');
   assert.equal(h.win.__bound.map((b) => b[0]).join(), 'unbind,bind');
 
   assert.equal(widget, canvasBefore, 'the widget element survives');
@@ -102,8 +106,9 @@ test('a swapped header gets the find box text and caret back', () => {
   h.type(box, 'head');
   h.tick(400);
   h.send('slot', msg({
-    header: '<div class="pp-ctrl-search"><input type="text" class="pp-ctrl-search-input" ' +
-      'data-viz-id="ae_gantt" data-param="search" value=""></div>'
+    header: '<div class="pp-chart-header"><div class="pp-ctrl-search">' +
+      '<input type="text" class="pp-ctrl-search-input" ' +
+      'data-viz-id="ae_gantt" data-param="search" value=""></div></div>'
   }));
   const fresh = slot.querySelector('.pp-ctrl-search-input');
   assert.notEqual(fresh, box);

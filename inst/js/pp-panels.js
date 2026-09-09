@@ -341,7 +341,17 @@ PatientProfile.part(function(ctx) {
     if (header && typeof msg.header === 'string' &&
         lastHeader[msg.viz_id] !== msg.header) {
       if (Shiny.unbindAll) Shiny.unbindAll(header);
-      header.innerHTML = msg.header;
+      // msg.header is the whole header, root included (it is
+      // pp_slot_header_ui() rendered), and the root's class is where a
+      // legend row is declared. The live element keeps its identity and
+      // takes the new root's class and children: setting the string as
+      // innerHTML put a header inside the header, one more padding each
+      // way and 20px taller than the one it replaced.
+      var parsed = document.createElement('div');
+      parsed.innerHTML = msg.header;
+      var fresh = /** @type {HTMLElement} */ (parsed.firstElementChild);
+      header.className = fresh.className;
+      header.innerHTML = fresh.innerHTML;
       lastHeader[msg.viz_id] = msg.header;
       if (Shiny.bindAll) Shiny.bindAll(header);
       restoreSearch();
