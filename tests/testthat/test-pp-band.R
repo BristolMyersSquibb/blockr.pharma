@@ -633,3 +633,72 @@ test_that("a patient with no values for the parameter sorts last, either way", {
   expect_identical(frame$USUBJID[pp_cohort_order(frame, "high", m)][[3L]], "S-3")
   expect_identical(frame$USUBJID[pp_cohort_order(frame, "low", m)][[3L]], "S-3")
 })
+
+# ---------------------------------------------------------------------------
+# The strip follows the panel's Value pill
+#
+# A strip drawing AVAL under a card drawing percent change is two different
+# pictures claiming to be one.
+# ---------------------------------------------------------------------------
+
+value_band_avail <- function() {
+  adlb <- data.frame(
+    USUBJID = "S1", PARAMCD = "ALB", PARAM = "Albumin (g/L)",
+    AVAL = c(38, 41, 39), BASE = 37, CHG = c(1, 4, 2),
+    PCHG = c(2.7, 10.8, 5.4),
+    A1LO = 35, A1HI = 50,
+    ADT = as.Date(c("2024-02-01", "2024-04-01", "2024-06-01")),
+    stringsAsFactors = FALSE
+  )
+  pp_findings_vizs(dm::dm(adlb = adlb))
+}
+
+test_that("the strip draws the value the panel draws", {
+  avail <- value_band_avail()
+  id <- names(avail)[[1L]]
+
+  measured <- pp_cohort_band_source(id, avail)
+  expect_identical(measured$band$value, "AVAL")
+
+  changed <- pp_cohort_band_source(
+    id, avail, stats::setNames(list(list(value = "PCHG")), id)
+  )
+  expect_identical(changed$band$value, "PCHG")
+})
+
+test_that("the strip drops its reference hairline on a change scale", {
+  # The normal range is stated in the measurement's own units, so on a change
+  # scale there is no limit to draw. Naming absent columns is how the
+  # declaration says "none" (see med_col() in pp_cohort_series_marks()).
+  avail <- value_band_avail()
+  id <- names(avail)[[1L]]
+  measured <- pp_cohort_band_source(id, avail)$band
+  expect_identical(c(measured$lo, measured$hi), c("A1LO", "A1HI"))
+
+  changed <- pp_cohort_band_source(
+    id, avail, stats::setNames(list(list(value = "CHG")), id)
+  )$band
+  expect_true(all(is.na(c(changed$lo, changed$hi))))
+})
+
+test_that("the strip's caption says which value it is drawing", {
+  avail <- value_band_avail()
+  id <- names(avail)[[1L]]
+  expect_identical(pp_cohort_band_source(id, avail)$sub, "Albumin (g/L)")
+  expect_match(
+    pp_cohort_band_source(
+      id, avail, stats::setNames(list(list(value = "PCHG")), id)
+    )$sub,
+    "% change"
+  )
+})
+
+test_that("a value the ladder does not know leaves the band alone", {
+  avail <- value_band_avail()
+  id <- names(avail)[[1L]]
+  band <- pp_cohort_band_source(
+    id, avail, stats::setNames(list(list(value = "nonsense")), id)
+  )$band
+  expect_identical(band$value, "AVAL")
+  expect_identical(c(band$lo, band$hi), c("A1LO", "A1HI"))
+})

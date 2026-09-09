@@ -19,7 +19,8 @@ plotted_values <- function(chart) {
 # parameter under test rather than the group card that used to hold it. The
 # chart itself is unchanged: pp_render_findings() always drew one grid per
 # code and is handed one instead of three.
-render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_) {
+render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_,
+                                 settings = list()) {
   dm_obj <- dm::dm(
     adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
     adlb = adlb
@@ -31,7 +32,7 @@ render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_) {
   }
   expect_true(id %in% names(vizs))
   vizs[[id]]$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")),
-                    ref_ms = ref_ms)
+                    settings = settings, ref_ms = ref_ms)
 }
 
 tooltips <- function(chart) {
@@ -162,4 +163,200 @@ test_that("no *DY and no reference leaves the tooltip as it was", {
   tt <- tooltips(render_findings_card(neut_adlb()))
   expect_false(grepl("Day:", tt[1], fixed = TRUE))
   expect_match(tt[1], "2024-01-05<")
+})
+
+# ---------------------------------------------------------------------------
+# Which analysis value the card draws
+#
+# A card used to be able to draw AVAL and nothing else, while the cohort
+# charts beside it offered AVAL, CHG and PCHG on the same parameter. These
+# assert the pill's contract: the numbers are the requested column verbatim,
+# the two things that are statements about the MEASURED value stop being
+# drawn, and a request the study cannot answer never turns into a wrong
+# chart.
+# ---------------------------------------------------------------------------
+
+# A frame carrying the change columns beside the value, arithmetically
+# consistent with a baseline of 2.5 so a wrong column cannot pass by
+# coincidence.
+chg_adlb <- function(...) {
+  base <- neut_adlb(...)
+  base$BASE <- 2.5
+  base$CHG <- base$AVAL - 2.5
+  base$PCHG <- round(100 * base$CHG / 2.5, 4)
+  base
+}
+
+mark_areas <- function(chart) {
+  Filter(Negate(is.null),
+         lapply(chart$x$opts$series, function(s) s$markArea))
+}
+mark_lines <- function(chart) {
+  Filter(Negate(is.null),
+         lapply(chart$x$opts$series, function(s) s$markLine))
+}
+point_colors <- function(chart) {
+  pts <- Filter(function(s) identical(s$type, "scatter"),
+                chart$x$opts$series)[[1]]$data
+  vapply(pts, function(p) p$itemStyle$color %||% "", character(1))
+}
+
+test_that("a card draws the change column when the pill asks for it", {
+  expect_equal(
+    plotted_values(render_findings_card(chg_adlb(),
+                                        settings = list(value = "CHG"))),
+    c(0.2, 0.6, 0.4)
+  )
+})
+
+test_that("a card draws percent change when the pill asks for it", {
+  expect_equal(
+    plotted_values(render_findings_card(chg_adlb(),
+                                        settings = list(value = "PCHG"))),
+    c(8, 24, 16)
+  )
+})
+
+test_that("no setting still draws the measured value", {
+  # The default has to survive every board saved before the pill existed.
+  expect_equal(plotted_values(render_findings_card(chg_adlb())),
+               c(2.7, 3.1, 2.9))
+})
+
+test_that("a value column the study does not carry falls back to AVAL", {
+  # A board saved against a richer study names PCHG; this one ships none.
+  # The control that produced the setting is data-conditional, so this must
+  # degrade rather than error -- same contract as pp_lane_column().
+  expect_equal(
+    plotted_values(render_findings_card(neut_adlb(),
+                                        settings = list(value = "PCHG"))),
+    c(2.7, 3.1, 2.9)
+  )
+})
+
+test_that("a value outside the ladder falls back to AVAL", {
+  # Nothing stops board code or the ctrl channel writing an arbitrary string
+  # into viz_settings.
+  expect_equal(
+    plotted_values(render_findings_card(chg_adlb(),
+                                        settings = list(value = "AETOXGR"))),
+    c(2.7, 3.1, 2.9)
+  )
+  expect_equal(
+    plotted_values(render_findings_card(chg_adlb(),
+                                        settings = list(value = NULL))),
+    c(2.7, 3.1, 2.9)
+  )
+})
+
+test_that("the reference band is drawn on AVAL and not on a change", {
+  # The normal range is stated in the measurement's own units. Subtracting a
+  # baseline moves the values off it, so a band drawn there would be a limit
+  # for a number it was never computed for.
+  adlb <- chg_adlb(A1LO = 1.5, A1HI = 8)
+  expect_length(mark_areas(render_findings_card(adlb)), 1)
+  expect_length(
+    mark_areas(render_findings_card(adlb, settings = list(value = "CHG"))), 0
+  )
+})
+
+test_that("a change scale states zero, and AVAL does not", {
+  adlb <- chg_adlb(A1LO = 1.5, A1HI = 8)
+  expect_length(mark_lines(render_findings_card(adlb)), 0)
+  zero <- mark_lines(render_findings_card(adlb,
+                                          settings = list(value = "PCHG")))
+  expect_length(zero, 1)
+  expect_equal(zero[[1]]$data[[1]]$yAxis, 0)
+})
+
+test_that("ANRIND stops colouring the markers on a change scale", {
+  # ANRIND says where AVAL sat against its range. On a change axis the same
+  # red dot would read as "this CHANGE is abnormal", which the flag does not
+  # say.
+  adlb <- chg_adlb(ANRIND = c("H", "N", "L"))
+  expect_equal(point_colors(render_findings_card(adlb)),
+               c("#dc2626", "#059669", "#2563eb"))
+  flat <- point_colors(render_findings_card(adlb,
+                                            settings = list(value = "CHG")))
+  expect_equal(length(unique(flat)), 1L)
+  expect_false("#dc2626" %in% flat)
+})
+
+test_that("the tooltip names the column it drew", {
+  tt <- tooltips(render_findings_card(chg_adlb(),
+                                      settings = list(value = "PCHG")))
+  expect_match(tt[1], "PCHG:</span> <b>8%</b>")
+  expect_false(grepl("AVAL:</span> <b>", tt[1], fixed = TRUE))
+})
+
+test_that("a change tooltip also states the value and the baseline", {
+  # "How far has this moved" is answered by the chart; "from what, and to
+  # what" is the reader's next question and has nowhere else to go.
+  tt <- tooltips(render_findings_card(chg_adlb(BASETYPE = "LAST"),
+                                      settings = list(value = "CHG")))
+  expect_match(tt[1], "CHG:</span> <b>0.2</b>")
+  expect_match(tt[1], "AVAL:</span> 2.7")
+  expect_match(tt[1], "Baseline:</span> 2.5")
+  # Which baseline: ADaM lets one parameter carry more than one definition,
+  # so the rule rides behind the number.
+  expect_match(tt[1], "\\(LAST\\)")
+})
+
+test_that("an AVAL tooltip is unchanged", {
+  tt <- tooltips(render_findings_card(chg_adlb()))
+  expect_match(tt[1], "AVAL:</span> <b>2.7</b>")
+  expect_false(grepl("Baseline:", tt[1], fixed = TRUE))
+})
+
+test_that("a parameter with no change records says so", {
+  # The column exists table-wide (so the pill offers it) but this parameter
+  # has none. Silently swapping back to AVAL while the pill still reads
+  # "% change" is the failure this prevents.
+  adlb <- rbind(
+    transform(chg_adlb(), PARAMCD = "ALT", PARAM = "Alanine (U/L)"),
+    transform(neut_adlb(), BASE = NA_real_, CHG = NA_real_, PCHG = NA_real_)
+  )
+  chart <- render_findings_card(adlb, id = "adlb_all__NEUT",
+                                settings = list(value = "PCHG"))
+  # The empty placeholder carries its message as the chart title and has no
+  # series at all.
+  expect_null(chart$x$opts$series)
+  expect_match(chart$x$opts$title$text, "PCHG")
+})
+
+test_that("the Value pill is offered only where there is something to pick", {
+  plain <- pp_findings_vizs(dm::dm(adlb = neut_adlb()))[[1]]
+  with_chg <- pp_findings_vizs(dm::dm(adlb = chg_adlb()))[[1]]
+  # Declared on every card...
+  expect_named(plain$controls, "value")
+  # ...and drawn only where the data can answer it: choices_present filters
+  # to the columns the study carries, and a pill with one rung is not a
+  # choice.
+  dm_plain <- pp_normalize_dm(dm::dm(adlb = neut_adlb()))
+  dm_chg <- pp_normalize_dm(dm::dm(adlb = chg_adlb()))
+  expect_null(pp_controls_ui(plain, plain$id, dm_plain, list()))
+  expect_false(is.null(pp_controls_ui(with_chg, with_chg$id, dm_chg, list())))
+})
+
+test_that("the printed twin draws the value the screen drew", {
+  skip_if_not_installed("ggplot2")
+  dm_obj <- pp_scope_subject(
+    pp_normalize_dm(dm::dm(
+      adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
+      adlb = chg_adlb(A1LO = 1.5, A1HI = 8)
+    )),
+    "S1"
+  )
+  viz <- pp_findings_vizs(dm_obj)[[1]]
+  tr <- as.Date(c("2024-01-01", "2024-12-31"))
+
+  aval <- viz$exhibit(dm_obj, tr, list())
+  pchg <- viz$exhibit(dm_obj, tr, list(value = "PCHG"))
+  expect_equal(ggplot2::ggplot_build(aval$plot %||% aval)$data[[2]]$y,
+               c(2.7, 3.1, 2.9))
+  # Layer 1 on the change plot is the zero line, so the value layer shifts.
+  built <- ggplot2::ggplot_build(pchg$plot %||% pchg)
+  ys <- unlist(lapply(built$data, function(d) if ("y" %in% names(d)) d$y))
+  expect_true(all(c(8, 24, 16) %in% ys))
+  expect_true(0 %in% unlist(lapply(built$data, function(d) d$yintercept)))
 })

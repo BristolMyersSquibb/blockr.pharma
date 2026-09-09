@@ -107,6 +107,16 @@ pp_patient_info_fields <- function(dm_obj, settings = list()) {
     add("Death", "Yes (date unknown)")
   }
 
+  # The one outcome fact on this card, and the only thing it reads outside
+  # ADSL. The best overall response is what a reviewer opening a patient in
+  # an oncology study wants stated in words before any chart -- the response
+  # LANE says how the patient got there, this says where they ended up.
+  # Nothing else in adrs is printed: the rest of its subject-level parameters
+  # are derivations of this one (confirmed, clinical benefit, response
+  # yes/no), and a card that listed all twelve would bury the demographics.
+  bor <- pp_resp_bor_field(dm_obj)
+  if (!is.null(bor)) add(bor$label, bor$value)
+
   # Baseline measurements, when the study derived them into ADSL.
   h <- num("HEIGHTBL")
   if (!is.na(h)) add("Height (baseline)", paste(h, "cm"))
@@ -133,11 +143,18 @@ patient_info_viz <- new_pp_viz(
   description = "Demographics, arm, treatment period & baseline facts",
   tables = "adsl",
   requires = list(adsl = "USUBJID"),
-  optional = list(adsl = c(
-    "AGE", "AGEU", "SEX", "RACE", "ETHNIC", "COUNTRY", "SITEID",
-    "TRTSDT", "TRTEDT", "RFENDT", "DTHDT", "DTHFL",
-    "HEIGHTBL", "WEIGHTBL", "BMIBL"
-  )),
+  optional = list(
+    adsl = c(
+      "AGE", "AGEU", "SEX", "RACE", "ETHNIC", "COUNTRY", "SITEID",
+      "TRTSDT", "TRTEDT", "RFENDT", "DTHDT", "DTHFL",
+      "HEIGHTBL", "WEIGHTBL", "BMIBL"
+    ),
+    # Optional table AND optional columns: a study with no response data
+    # loses the row, not the card. `tables` stays "adsl" on purpose --
+    # listing adrs there would hide the whole patient info card from every
+    # study that does not ship one.
+    adrs = c("PARAMCD", "PARAM", "AVALC")
+  ),
   uses = "arm",
   render = function(dm_obj, time_range, settings = list(),
                     ref_ms = NA_real_, mode = "date") {

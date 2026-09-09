@@ -423,6 +423,57 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
 }
 
 # ---------------------------------------------------------------------------
+# Response lane twin
+# ---------------------------------------------------------------------------
+
+#' Static twin of pp_render_response_lane(): one lane of response segments.
+#'
+#' Shares pp_resp_segments() with the interactive render, so the printed card
+#' cannot place a bar anywhere the screen did not.
+#' @noRd
+pp_static_response_lane <- function(dm_obj, time_range, settings = list(),
+                                    ref_ms = NA_real_, mode = "date",
+                                    paramcd = NULL, table = "adrs") {
+  pp_gg_require()
+  tbls <- dm::dm_get_tables(dm_obj)
+  if (!table %in% names(tbls)) return(NULL)
+  tbl <- as.data.frame(tbls[[table]])
+  if (!is.null(paramcd)) {
+    tbl <- tbl[as.character(tbl$PARAMCD) %in% paramcd, , drop = FALSE]
+  }
+  if (nrow(tbl) == 0L) return(NULL)
+  if (!identical(mode, "rday") && !"ADT" %in% colnames(tbl)) return(NULL)
+
+  seg <- pp_resp_segments(tbl, time_range, ref_ms, mode)
+  if (nrow(seg) == 0L) return(NULL)
+  keep <- pp_gantt_in_window(seg$start, seg$end, time_range, ref_ms, mode)
+  seg <- seg[keep, , drop = FALSE]
+  if (nrow(seg) == 0L) return(NULL)
+
+  resp_colors <- settings$resp_colors
+  fill <- vapply(seg$resp, function(lv) {
+    if (!is.null(resp_colors) && lv %in% names(resp_colors)) {
+      unname(resp_colors[[lv]])
+    } else {
+      pp_resp_fallback_color(lv)
+    }
+  }, character(1L), USE.NAMES = FALSE)
+
+  bars <- data.frame(
+    start = seg$start, end = seg$end, lane = 0L,
+    fill = fill, outlined = FALSE,
+    ongoing = seg$ongoing,
+    # The category on the printed bar. A page is not a tooltip: nothing here
+    # can be hovered, so the only place the reading could go is the mark
+    # itself, and ggplot's text geom does not truncate across neighbours the
+    # way the interactive renderItem does.
+    label = seg$resp,
+    stringsAsFactors = FALSE
+  )
+  pp_static_gantt(bars, time_range, ref_ms, mode)
+}
+
+# ---------------------------------------------------------------------------
 # Findings twin (labs / vitals / per-parameter cards, ADAS trajectory)
 # ---------------------------------------------------------------------------
 
@@ -435,11 +486,17 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
 #' @noRd
 pp_static_findings <- function(dm_obj, time_range, table_name, label,
                                paramcds = NULL, ref_ms = NA_real_,
-                               mode = "date", smooth = "auto") {
+                               mode = "date", smooth = "auto",
+                               value = "AVAL") {
   pp_gg_require()
   tbl <- pp_prepare_findings(dm_obj, table_name)
   if (is.null(tbl)) return(NULL)
-  tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
+  # Same resolution and the same gating as the interactive twin: the printed
+  # card must draw the value the screen was drawing, and must not print a
+  # reference band the screen suppressed.
+  value <- pp_findings_value_column(tbl, value)
+  is_aval <- identical(value, "AVAL")
+  tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl[[value]]), , drop = FALSE]
   if (!is.null(paramcds)) {
     tbl <- tbl[tbl$PARAMCD %in% paramcds, , drop = FALSE]
   }
@@ -449,20 +506,30 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
   line_color <- blockr.theme::theme_palette("categorical", 1)
 
   params <- sort(unique(as.character(tbl$PARAMCD)))
-  has_anrind <- "ANRIND" %in% colnames(tbl)
-  has_ref <- all(c("A1LO", "A1HI") %in% colnames(tbl))
+  has_anrind <- is_aval && "ANRIND" %in% colnames(tbl)
+  has_ref <- is_aval && all(c("A1LO", "A1HI") %in% colnames(tbl))
   has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
 
+  # The panel title also names the VALUE when it is not the measured one.
+  # On screen the card's header pill says which, and a print has no pill: a
+  # page reading "-81" where the axis is percent change and the title carries
+  # the parameter's own unit is a number a reader would take at face value.
+  value_tail <- if (is_aval) "" else {
+    paste0(" \u00b7 ", pp_findings_value_label(value))
+  }
   panel_label <- vapply(params, function(p) {
-    if (!has_param) return(p)
+    if (!has_param) return(paste0(p, value_tail))
     full <- as.character(tbl$PARAM[tbl$PARAMCD == p][1])
-    if (is.na(full) || !nzchar(full)) return(p)
+    if (is.na(full) || !nzchar(full)) return(paste0(p, value_tail))
     if (nchar(full) > 40) full <- paste0(substr(full, 1, 37), "...")
-    paste0(p, " \u2014 ", full)
+    paste0(p, " \u2014 ", full, value_tail)
   }, character(1L))
 
   tbl$..x <- pp_xval(tbl$ADT, ref_ms, mode)
+  # The drawn value under a fixed name, so the aes below need not be built
+  # from a string.
+  tbl$..y <- tbl[[value]]
   tbl$..panel <- factor(panel_label[as.character(tbl$PARAMCD)],
                         levels = unname(panel_label))
   tbl$..derived <- if (has_dtype) {
@@ -491,7 +558,14 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
     }))
   }
 
-  p <- ggplot2::ggplot(tbl, ggplot2::aes(x = ..x, y = AVAL))
+  p <- ggplot2::ggplot(tbl, ggplot2::aes(x = ..x, y = ..y))
+  # Zero, on a change scale: the interactive twin's markLine. Solid against
+  # the dashed gridlines, for the reason given there.
+  if (!is_aval) {
+    p <- p + ggplot2::geom_hline(
+      yintercept = 0, linetype = "solid", linewidth = 0.4, color = "#9ca3af"
+    )
+  }
   if (!is.null(bands) && nrow(bands)) {
     p <- p + ggplot2::geom_rect(
       data = bands,

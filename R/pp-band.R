@@ -115,7 +115,8 @@ pp_cohort_band_source <- function(selected, available, settings = list()) {
   for (viz_id in selected) {
     viz <- available[[viz_id]]
     if (is.null(viz) || is.null(viz$band)) next
-    band <- pp_band_for_selection(viz, settings[[viz_id]]$items)
+    band <- pp_band_for_selection(viz, settings[[viz_id]]$items,
+                                  settings[[viz_id]]$value)
     caption <- pp_band_caption(viz$label, band)
     return(list(
       viz_id = viz_id,
@@ -148,17 +149,32 @@ pp_cohort_band_source <- function(selected, available, settings = list()) {
 #' going blank: the panel in that state draws nothing, and a strip is more
 #' use than an empty track while the user picks again.
 #'
+#' The band also follows the panel's VALUE pill, for the same reason: a strip
+#' drawing AVAL under a card drawing percent change is two different pictures
+#' claiming to be one. The reference limits go with it -- the normal range is
+#' stated in the measurement's units, so on a change scale there is no
+#' hairline to draw, and naming absent columns is how this declaration says
+#' "none" (see `med_col()` in pp_cohort_series_marks()).
+#'
 #' @param viz The `pp_viz` definition.
 #' @param items The PARAMCDs currently chosen, or `NULL`.
+#' @param value The panel's `settings$value`, or `NULL` for the measured one.
 #' @return The viz's band, possibly repointed.
 #' @noRd
-pp_band_for_selection <- function(viz, items = NULL) {
+pp_band_for_selection <- function(viz, items = NULL, value = NULL) {
   band <- viz$band
   if (!identical(band$kind, "series")) return(band)
   chosen <- sort(intersect(as.character(items), names(viz$params)))
-  if (!length(chosen)) return(band)
-  band$paramcd <- chosen[[1L]]
-  band$param <- unname(viz$params[[chosen[[1L]]]]) %||% chosen[[1L]]
+  if (length(chosen)) {
+    band$paramcd <- chosen[[1L]]
+    band$param <- unname(viz$params[[chosen[[1L]]]]) %||% chosen[[1L]]
+  }
+  if (!is.null(value) && length(value) &&
+        value %in% PP_FINDINGS_VALUES && !identical(value, "AVAL")) {
+    band$value <- as.character(value)[[1L]]
+    band$lo <- NA_character_
+    band$hi <- NA_character_
+  }
   band
 }
 
@@ -193,6 +209,14 @@ pp_band_caption <- function(label, band) {
 pp_band_sub <- function(caption, band) {
   if (!identical(band$kind, "series")) return(NULL)
   param <- band$param %||% ""
+  # Which value, when it is not the measured one. The strip has room for the
+  # parameter name and nothing else, so this rides in the same muted line
+  # rather than taking a caption of its own.
+  value <- band$value %||% "AVAL"
+  if (!identical(value, "AVAL")) {
+    tail <- paste0(" \u00b7 ", pp_findings_value_label(value))
+    return(if (nzchar(param)) paste0(param, tail) else trimws(tail))
+  }
   if (!nzchar(param) || identical(param, caption)) return(NULL)
   param
 }

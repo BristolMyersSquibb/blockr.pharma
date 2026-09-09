@@ -245,3 +245,77 @@ test_that("visit levels order by AVISITN, not lexically", {
     c("Baseline", "Week 10", "Week 2")
   )
 })
+
+# ---------------------------------------------------------------------------
+# Tumour burden is a findings table
+#
+# adtr carries PARAMCD / AVAL / ADT per visit like any BDS findings table, so
+# the sum of target-lesion diameters is a value line on the profile's shared
+# time axis rather than a chart of its own. These pin that it is wired in as
+# data, with no special case anywhere.
+# ---------------------------------------------------------------------------
+
+adtr_tbl <- function(codes = c("SDIAM", "LDIAM1"), subj = "S1") {
+  do.call(rbind, lapply(codes, function(cd) {
+    data.frame(
+      USUBJID = subj, PARAMCD = cd,
+      PARAM = paste(cd, "by Investigator"),
+      PARCAT1 = "Target Lesion(s)",
+      AVAL = c(60, 45, 51), BASE = 60,
+      CHG = c(0, -15, -9), PCHG = c(0, -25, -15),
+      ADT = as.Date(c("2024-02-01", "2024-04-01", "2024-06-01")),
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+
+test_that("adtr parameters get cards", {
+  vizs <- pp_findings_vizs(dm::dm(adtr = adtr_tbl()))
+  expect_setequal(names(vizs), c("adtr_all__SDIAM", "adtr_all__LDIAM1"))
+  expect_identical(vizs[["adtr_all__SDIAM"]]$domain, "Efficacy")
+})
+
+test_that("a single tumour category does not title the card with itself", {
+  # PARCAT1 is "Target Lesion(s)" on every row, and a column that puts every
+  # parameter in one group has not grouped anything -- the table is the
+  # group. Same rule the split lab tables get.
+  vizs <- pp_findings_vizs(dm::dm(adtr = adtr_tbl()))
+  expect_identical(vizs[["adtr_all__SDIAM"]]$group_label, "Tumor Burden")
+})
+
+test_that("the tumour card offers change and percent change", {
+  # The reason for putting adtr here rather than beside the cohort Efficacy
+  # panels: the endpoint a reviewer reads is the percent change, and adtr
+  # ships it.
+  dm_obj <- pp_scope_subject(
+    pp_normalize_dm(dm::dm(
+      adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
+      adtr = adtr_tbl("SDIAM")
+    )),
+    "S1"
+  )
+  viz <- pp_findings_vizs(dm_obj)[["adtr_all__SDIAM"]]
+  chart <- viz$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")),
+                      settings = list(value = "PCHG"))
+  line <- Filter(function(s) identical(s$type, "line") && length(s$data),
+                 chart$x$opts$series)
+  expect_equal(
+    unlist(lapply(line, function(s) {
+      vapply(s$data, function(d) as.numeric(d$value[[2]]), numeric(1))
+    })),
+    c(0, -25, -15)
+  )
+})
+
+test_that("adtr does not steal parameters from the lab tables", {
+  # Cards are claimed table by table in pp_findings_table_meta() order, and
+  # adtr is last, so adding it cannot change which card an existing PARAMCD
+  # lands on.
+  dm_obj <- dm::dm(
+    adlb = data.frame(USUBJID = "S1", PARAMCD = "ALT", AVAL = 30,
+                      ADT = as.Date("2024-02-01"), stringsAsFactors = FALSE),
+    adtr = adtr_tbl("SDIAM")
+  )
+  vizs <- pp_findings_vizs(dm_obj)
+  expect_setequal(names(vizs), c("adlb_all__ALT", "adtr_all__SDIAM"))
+})

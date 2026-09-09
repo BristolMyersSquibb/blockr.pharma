@@ -70,6 +70,18 @@ pp_viz_exhibit_settings <- function(viz, viz_settings, roles, dm_obj,
       viz_settings$indc_colors <- indc_colors
     }
   }
+  # The response categories' colours. Not a role -- there is nothing for a
+  # study to declare, because the category IS the response parameter's
+  # character analysis value by BDS definition -- but injected through the
+  # same `uses` channel and for the same reason: the bars and the header
+  # legend must read one resolved vector, or they drift.
+  if ("response" %in% uses) {
+    resp_colors <- pp_resp_scale_colors(scale_map, dm_obj,
+                                        paramcds = names(viz$params))
+    if (!is.null(resp_colors)) {
+      viz_settings$resp_colors <- resp_colors
+    }
+  }
   if ("cycle" %in% uses) {
     viz_settings$cycle_anchors <- cycle_anchors
   }

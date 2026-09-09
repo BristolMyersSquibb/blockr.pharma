@@ -54,11 +54,15 @@ pp_viz_full_label <- function(viz) {
 #'   or a study day (`ASTDY`), and renaming one to the other would put
 #'   integers in a date slot. Declare the alternatives here and let the
 #'   render function branch on which arrived.
-#' @param uses Character vector of role names the render consumes (see
-#'   pp-roles.R). The block injects `settings$roles` (the resolved columns)
-#'   for these, plus `settings$sev_colors` / `settings$indc_colors` when
-#'   `"severity"` / `"indication"` is used and the board scale map resolves.
-#'   This replaces any viz-id wiring in the block.
+#' @param uses Character vector of names declaring what the block should
+#'   inject into this viz's settings. Most are ROLES (see pp-roles.R): the
+#'   block resolves them once and hands over `settings$roles`, plus
+#'   `settings$sev_colors` / `settings$indc_colors` when `"severity"` /
+#'   `"indication"` is used and the board scale map resolves. `"response"` is
+#'   the one entry that is not a role -- the response category is a BDS
+#'   analysis value, not a column a study picks -- and injects
+#'   `settings$resp_colors` only. Either way this replaces viz-id wiring in
+#'   the block: the viz says what it needs, and nothing matches on its name.
 #' @param controls Optional named list of per-viz UI controls (passed through
 #'   unchanged to the existing controls toolbar). A `"radio"` or `"pill"`
 #'   control may set `choices_present = TRUE`, which means its choice values

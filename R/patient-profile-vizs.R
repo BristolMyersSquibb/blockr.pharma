@@ -936,18 +936,35 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
 pp_render_findings <- function(dm_obj, time_range, table_name, label,
                                base_color, paramcds = NULL,
                                ref_ms = NA_real_, mode = "date",
-                               smooth = "auto") {
+                               smooth = "auto", value = "AVAL") {
   # Structural columns (PARAMCD, AVAL, ADT) are validated upstream by the
   # dispatcher via pp_resolve_requires(). This function only handles row
   # emptiness and value filtering.
   tbl <- pp_prepare_findings(dm_obj, table_name)
   if (is.null(tbl)) return(pp_empty_chart(paste("No", label, "records")))
 
-  tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
+  # Which analysis value is on screen (the card's "Value" pill). Everything
+  # below reads `value`, and the two things that are statements ABOUT the
+  # measured value -- the reference band and the ANRIND marker colors -- are
+  # gated on it: a range and an in/out-of-range flag describe where AVAL sits
+  # against a limit, and drawn on a change scale they would say that of a
+  # number they were never computed for.
+  value <- pp_findings_value_column(tbl, value)
+  is_aval <- identical(value, "AVAL")
+  # "No Laboratory records" for the measured value, and for a change scale
+  # the value's own name, because a parameter can carry AVAL and no PCHG and
+  # the difference is the whole answer.
+  empty_msg <- if (is_aval) {
+    paste("No", label, "records")
+  } else {
+    paste0("No ", pp_findings_value_label(value), " (", value, ") records")
+  }
+
+  tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl[[value]]), , drop = FALSE]
   if (!is.null(paramcds)) {
     tbl <- tbl[tbl$PARAMCD %in% paramcds, , drop = FALSE]
   }
-  if (nrow(tbl) == 0) return(pp_empty_chart(paste("No", label, "records")))
+  if (nrow(tbl) == 0) return(pp_empty_chart(empty_msg))
 
   anrind_colors <- list(H = "#dc2626", L = "#2563eb", N = "#059669")
   # One line color for every parameter: the board theme's `categorical`
@@ -960,10 +977,17 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   line_color <- blockr.theme::theme_palette("categorical", 1)
 
   params <- sort(unique(tbl$PARAMCD))
-  has_anrind <- "ANRIND" %in% colnames(tbl)
-  has_ref <- all(c("A1LO", "A1HI") %in% colnames(tbl))
+  has_anrind <- is_aval && "ANRIND" %in% colnames(tbl)
+  has_ref <- is_aval && all(c("A1LO", "A1HI") %in% colnames(tbl))
   has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
+  # What a change is measured against, printed beside it. BASE is the number
+  # and BASETYPE is the rule that produced it, and on a study shipping both
+  # the rule is the part a reader cannot guess -- ADaM lets a parameter carry
+  # more than one baseline definition, so "percent change" alone names more
+  # than one quantity.
+  has_base <- !is_aval && "BASE" %in% colnames(tbl)
+  has_basetype <- !is_aval && "BASETYPE" %in% colnames(tbl)
   # The visit label of one row, for the cycle/day it may carry. Total: a study
   # shipping no AVISIT (or an unscheduled row) simply has none to report.
   opt_visit <- function(df, i) {
@@ -1063,12 +1087,12 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
     # Line data
     line_data <- lapply(seq_len(nrow(p_data)), function(i) {
       list(value = list(pp_xval(p_data$ADT[i], ref_ms, mode),
-                        p_data$AVAL[i]))
+                        p_data[[value]][i]))
     })
 
     # Scatter data with ANRIND coloring + rich tooltips
     scatter_data <- lapply(seq_len(nrow(p_data)), function(i) {
-      val <- p_data$AVAL[i]
+      val <- p_data[[value]][i]
       dt <- pp_xval(p_data$ADT[i], ref_ms, mode)
 
       pt_color <- color
@@ -1130,9 +1154,31 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         )
       }
       tt <- paste0(tt,
-        '<br/><span style="color:#6b7280">AVAL:</span> <b>',
-        round(val, 2), '</b>'
+        '<br/><span style="color:#6b7280">', value, ':</span> <b>',
+        round(val, 2), if (identical(value, "PCHG")) "%", '</b>'
       )
+      # On a change scale the measured value and the baseline it was taken
+      # from ride behind it: the chart answers "how far has this moved", and
+      # a reader's next question is "from what, and to what".
+      if (!is_aval && "AVAL" %in% colnames(p_data) && !is.na(p_data$AVAL[i])) {
+        tt <- paste0(tt,
+          '<br/><span style="color:#6b7280">AVAL:</span> ',
+          round(p_data$AVAL[i], 2)
+        )
+      }
+      if (has_base && !is.na(p_data$BASE[i])) {
+        base_lab <- if (has_basetype && !is.na(p_data$BASETYPE[i]) &&
+                          nzchar(trimws(as.character(p_data$BASETYPE[i])))) {
+          paste0(' <span style="color:#9ca3af">(',
+                 as.character(p_data$BASETYPE[i]), ')</span>')
+        } else {
+          ""
+        }
+        tt <- paste0(tt,
+          '<br/><span style="color:#6b7280">Baseline:</span> ',
+          round(p_data$BASE[i], 2), base_lab
+        )
+      }
       if (has_ref && !is.na(p_data$A1LO[i]) && !is.na(p_data$A1HI[i])) {
         tt <- paste0(tt, '<br/><span style="color:#6b7280">Ref:</span> ',
           round(p_data$A1LO[i], 1), ' \u2013 ', round(p_data$A1HI[i], 1))
@@ -1185,7 +1231,15 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       smooth = !identical(smooth, "off"),
       smoothMonotone = "x",
       lineStyle = list(color = color, width = 2.5),
-      areaStyle = list(color = area_gradient),
+      # On a change scale the area is the amount of change, so it is measured
+      # from zero. Echarts' default ("auto") fills toward the axis minimum,
+      # which on a chart running 0 to -100 shaded everything BELOW the curve
+      # and read as "at least this much".
+      areaStyle = if (is_aval) {
+        list(color = area_gradient)
+      } else {
+        list(color = area_gradient, origin = 0)
+      },
       itemStyle = list(color = color),
       symbol = "none",
       silent = TRUE,
@@ -1209,6 +1263,38 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         )
       )
     )))
+
+    # Zero, on a change scale.
+    #
+    # It replaces the reference band rather than joining it: on CHG or PCHG
+    # the question is which side of no-change a point is on, and zero is the
+    # only line that answers it. The band cannot be drawn here at all -- the
+    # normal range is stated in the measurement's own units, and subtracting
+    # a baseline moves the values off it.
+    if (!is_aval) {
+      all_series <- c(all_series, list(list(
+        type = "line",
+        name = paste0(param, " zero"),
+        xAxisIndex = grid_idx,
+        yAxisIndex = grid_idx,
+        data = list(),
+        silent = TRUE,
+        showSymbol = FALSE,
+        lineStyle = list(opacity = 0),
+        markLine = list(
+          silent = TRUE,
+          symbol = "none",
+          # SOLID, against dashed gridlines of the same weight. Dashed and
+          # grey it was indistinguishable from the split line that happens to
+          # sit at 0 -- checked on a rendered card -- and a zero a reader has
+          # to count gridlines to find is not stated at all. The line type
+          # carries the distinction, so the colour can stay quiet.
+          lineStyle = list(color = "#9ca3af", type = "solid", width = 1),
+          label = list(show = FALSE),
+          data = list(list(yAxis = 0))
+        )
+      )))
+    }
 
     # Reference bands
     if (has_ref) {
@@ -1344,7 +1430,24 @@ pp_findings_table_meta <- function() {
     adlb  = list(domain = "Laboratory", icon = "droplet", color = "#2563EB",
                  label = "Laboratory"),
     adeg  = list(domain = "Vitals", icon = "activity", color = "#7C3AED",
-                 label = "ECG")
+                 label = "ECG"),
+    # Tumour measurements. A BDS findings table like the others -- PARAMCD,
+    # AVAL, ADT per visit -- so it needs no render of its own: the sum of
+    # target-lesion diameters draws as a value line on the same time axis as
+    # the labs and the AE bars, which is the point of putting it here rather
+    # than beside the cohort-level Efficacy panels.
+    #
+    # It is the CHANGE a reader wants on this one, more often than the
+    # millimetres, and adtr ships CHG and PCHG: the card's "Value" pill is
+    # what makes that reachable (see PP_FINDINGS_VALUES).
+    #
+    # adtr also carries CHGNAD / PCHGNAD (change from NADIR rather than from
+    # baseline), which is a second, differently-anchored quantity and is
+    # deliberately not a rung on that pill -- offering it would need the card
+    # to say which anchor each number uses, and one anchor per pill is the
+    # smaller claim.
+    adtr  = list(domain = "Efficacy", icon = "bullseye", color = "#DB2777",
+                 label = "Tumor Burden")
   )
 }
 
@@ -1641,9 +1744,14 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
           requires = stats::setNames(list(c("PARAMCD", "AVAL", "ADT")),
                                      tbl_name),
           optional = stats::setNames(
-            list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN")),
+            list(c("PARAM", "ANRIND", "A1LO", "A1HI", "AVISITN",
+                   "CHG", "PCHG", "BASE", "BASETYPE")),
             tbl_name
           ),
+          # The header's "Value" pill. Offered only where the study ships
+          # something to switch to, so a table carrying AVAL alone draws no
+          # control at all (pp_ctrl_present_choices()).
+          controls = pp_value_control(),
           band = pp_band_series(tbl_name, code, param_label),
           render = local({
             .tbl_name <- tbl_name
@@ -1659,7 +1767,8 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
                 base_color = .color,
                 paramcds = .code,
                 ref_ms = ref_ms, mode = mode,
-                smooth = settings$smooth %||% "auto"
+                smooth = settings$smooth %||% "auto",
+                value = settings$value %||% "AVAL"
               )
             }
           }),
@@ -1675,7 +1784,8 @@ pp_findings_vizs_from_dict <- function(dict, tables) {
                 label = .label,
                 paramcds = .code,
                 ref_ms = ref_ms, mode = mode,
-                smooth = settings$smooth %||% "auto"
+                smooth = settings$smooth %||% "auto",
+                value = settings$value %||% "AVAL"
               )
             }
           })

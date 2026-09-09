@@ -421,6 +421,7 @@ new_patient_profile_block <- function(selected = NULL,
             # exist per discovered PARAMCD, the cycle lane only where the study
             # is dosed in cycles. Absent means absent -- no card, no gap report.
             c(patient_profile_static_vizs(), pp_cycle_vizs(dm_obj),
+              pp_response_vizs(dm_obj),
               pp_findings_vizs_from_dict(
                 dict, names(dm::dm_get_tables(dm_obj))
               ))
