@@ -445,29 +445,66 @@ PatientProfile.part(function(ctx) {
     applyFilter();
   });
 
-  // Escape clears too, while the box has focus
-  // What Enter would take.
-  //
-  // The first hit in reading order: a panel if the query found
-  // one, since panels are listed above, otherwise the first
-  // patient still standing. Marked as well as acted on -- a key
-  // that does something invisible is a key nobody presses.
+  // What a query has found, in reading order: the panels the catalogue is
+  // still showing, then the patients still standing. One list, because the
+  // box is one box -- a cursor that stopped at the bottom of the panels
+  // would make the patients below look like a different result set.
+  /** @returns {HTMLElement[]} */
+  function allHits(){
+    var rows = [].slice.call(document.querySelectorAll(
+      '#' + addPopId + ' .pp-add-row:not(.is-hidden)'));
+    return rows.concat([].slice.call(document.querySelectorAll(
+      '#' + layoutId + ' .pp-pt:not(.is-filtered-out)')));
+  }
+
   /** @returns {HTMLElement | null} */
   function firstHit(){
-    /** @type {HTMLElement | null} */
-    var row = document.querySelector(
-      '#' + addPopId + ' .pp-add-row:not(.is-hidden)');
-    if (row) return row;
-    return /** @type {HTMLElement | null} */ (document.querySelector(
-      '#' + layoutId + ' .pp-pt:not(.is-filtered-out)'));
+    var hits = allHits();
+    return hits.length ? hits[0] : null;
+  }
+
+  // The cursor: the row Enter would take. It starts on the first hit, so
+  // Enter alone still works on the result you were typing towards, and the
+  // arrows move it from there.
+  //
+  // Read off the DOM rather than held in a variable, because the lists are
+  // rebuilt under it: every keystroke re-filters, the cohort list is
+  // re-rendered by the server on a pick, and an index into a list that no
+  // longer exists is how a cursor ends up on the wrong row.
+  /** @returns {HTMLElement | null} */
+  function cursor(){
+    return /** @type {HTMLElement | null} */ (
+      document.querySelector('#' + layoutId + ' .is-enter'));
+  }
+
+  /** @param {HTMLElement | null} row */
+  function setCursor(row){
+    $('#' + layoutId + ' .is-enter').removeClass('is-enter');
+    if (!row) return;
+    row.classList.add('is-enter');
+    // `nearest`, so a cursor already on screen does not scroll the list
+    // under the pointer just because a key was pressed.
+    if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   }
 
   function markFirstHit(){
     var q = String($('#' + searchId).val() || '').trim();
-    $('#' + layoutId + ' .is-enter').removeClass('is-enter');
-    if (!q) return;
-    var row = firstHit();
-    if (row) row.classList.add('is-enter');
+    if (!q) { setCursor(null); return; }
+    setCursor(firstHit());
+  }
+
+  /** @param {number} delta */
+  function moveCursor(delta){
+    var hits = allHits();
+    if (!hits.length) return false;
+    var at = hits.indexOf(cursor());
+    // Clamped, not wrapping. The cohort can be three hundred rows, and
+    // wrapping from its last patient back up to the first panel is a jump
+    // the eye cannot follow.
+    var next = at < 0 ? (delta > 0 ? 0 : hits.length - 1)
+                      : Math.min(hits.length - 1, Math.max(0, at + delta));
+    setCursor(hits[next]);
+    return true;
   }
 
   $(document).on('keydown', '#' + searchId, function(e) {
@@ -478,8 +515,25 @@ PatientProfile.part(function(ctx) {
       applyFilter();
       return;
     }
+    if (e.key === 'ArrowDown' || e.keyCode === 40) {
+      // preventDefault whether or not there is anywhere to go: the box is a
+      // text input, and the browser's own Down would jump the caret to the
+      // end of the query mid-search.
+      e.preventDefault();
+      moveCursor(1);
+      return;
+    }
+    if (e.key === 'ArrowUp' || e.keyCode === 38) {
+      e.preventDefault();
+      moveCursor(-1);
+      return;
+    }
     if (e.key !== 'Enter' && e.keyCode !== 13) return;
-    var row = firstHit();
+    // The cursor if the arrows have moved it, the first hit otherwise. Never
+    // recompute when a cursor is set: the arrows are the only thing that
+    // could have moved it, and taking the first hit instead would ignore
+    // them.
+    var row = cursor() || firstHit();
     if (!row) return;
     e.preventDefault();
     row.click();

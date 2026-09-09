@@ -263,3 +263,107 @@ test('reduced motion skips the travel but keeps the landing tint longer', () => 
   assert.equal(landed.classList.contains('is-landed'), false);
   h.close();
 });
+
+// The arrows: a cursor over the hits, and Enter takes what it is on.
+//
+// Enter took the FIRST hit whatever you did, so a search that found the right
+// panel third gave you no way to reach it from the keyboard: you typed, then
+// let go of the keyboard and used the mouse.
+
+const hits = (h) =>
+  h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'))
+    .concat(h.shownIds());
+const at = (h) => {
+  const row = h.q('.is-enter');
+  if (!row) return null;
+  return row.getAttribute('data-viz-id') || row.getAttribute('data-usubjid');
+};
+
+test('the arrows walk the hits and the ring follows', () => {
+  const h = boot();
+  h.type(search(h), 'al');
+  const list = hits(h);
+  assert.ok(list.length >= 3, 'the query has several hits to walk');
+  assert.equal(at(h), list[0], 'the cursor starts on the first hit');
+
+  h.key(search(h), 'ArrowDown');
+  assert.equal(at(h), list[1]);
+  h.key(search(h), 'ArrowDown');
+  assert.equal(at(h), list[2]);
+  h.key(search(h), 'ArrowUp');
+  assert.equal(at(h), list[1]);
+  h.close();
+});
+
+test('the cursor clamps at both ends rather than wrapping', () => {
+  // The cohort can be three hundred rows, and wrapping from its last patient
+  // back to the first panel is a jump the eye cannot follow.
+  const h = boot();
+  h.type(search(h), 'al');
+  const list = hits(h);
+
+  h.key(search(h), 'ArrowUp');
+  assert.equal(at(h), list[0], 'up from the top stays put');
+
+  for (let i = 0; i < list.length + 3; i++) h.key(search(h), 'ArrowDown');
+  assert.equal(at(h), list[list.length - 1], 'down past the end stays put');
+  h.close();
+});
+
+test('the cursor crosses from the panels into the patients', () => {
+  // One box, one result list: a cursor that stopped at the bottom of the
+  // panels would make the patients below look like a different result set.
+  const h = boot();
+  h.type(search(h), 'p');
+  const list = hits(h);
+  const panels = h.qa('.pp-add-row:not(.is-hidden)').length;
+  assert.ok(panels > 0 && list.length > panels, 'the query finds both kinds');
+
+  for (let i = 0; i < panels; i++) h.key(search(h), 'ArrowDown');
+  assert.equal(at(h), list[panels], 'the first patient follows the last panel');
+  assert.ok(h.q('.is-enter').hasAttribute('data-usubjid'));
+  h.close();
+});
+
+test('Enter takes the row the arrows are on, not the first hit', () => {
+  const h = boot();
+  h.type(search(h), 'al');
+  const list = hits(h);
+  h.key(search(h), 'ArrowDown');
+  h.key(search(h), 'ArrowDown');
+  const want = list[2];
+  h.key(search(h), 'Enter');
+  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), [want]);
+  h.close();
+});
+
+test('a new keystroke puts the cursor back on the first hit', () => {
+  // The arrows move a cursor over THIS query's results. Carrying its position
+  // into the next query would land it on a row nobody was looking at.
+  const h = boot();
+  h.type(search(h), 'al');
+  h.key(search(h), 'ArrowDown');
+  h.key(search(h), 'ArrowDown');
+  h.type(search(h), 'alb');
+  assert.equal(at(h), hits(h)[0]);
+  h.close();
+});
+
+test('the arrows never move the caret in the box', () => {
+  // It is a text input: the browser's own Down jumps the caret to the end of
+  // the query, which is the last thing you want mid-search.
+  const h = boot();
+  h.type(search(h), 'al');
+  assert.equal(h.key(search(h), 'ArrowDown').defaultPrevented, true);
+  assert.equal(h.key(search(h), 'ArrowUp').defaultPrevented, true);
+
+  // Still swallowed with nothing to walk, so the caret cannot jump there
+  // either.
+  h.type(search(h), 'zzzz');
+  assert.equal(h.q('.is-enter'), null);
+  assert.equal(h.key(search(h), 'ArrowDown').defaultPrevented, true);
+  h.resetInputs();
+  assert.equal(h.key(search(h), 'Enter').defaultPrevented, false);
+  assert.equal(h.inputs().length, 0);
+  h.close();
+});

@@ -1489,14 +1489,9 @@
    A ring rather than a fill, because in the cohort the fill already means
    "this is the patient on screen" and the two would be indistinguishable
    at a glance. It only ever appears while the box has something in it. */
-.pp-pt.is-enter,
-.pp-add-row.is-enter {
-  box-shadow: inset 0 0 0 1px #93c5fd;
-  border-radius: 5px;
-}
+/* What Enter would take: the first hit until the arrows move it, in either
+   list.
 
-/* What Enter would take: the first hit, in either list.
-   
    A ring rather than a fill, because in the cohort the fill already means
    "this is the patient on screen" and the two would be indistinguishable
    at a glance. It only ever appears while the box has something in it. */
