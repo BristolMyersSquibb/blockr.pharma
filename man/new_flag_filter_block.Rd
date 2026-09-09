@@ -58,7 +58,10 @@ rules out \code{dm::dm_filter()}, whose FK cascade does exactly that -- see
 \code{\link[=flag_zoom_expr]{flag_zoom_expr()}}.
 
 In dm mode the block previews as blockr.dm's dm diagram, click a table to
-page through it, because the table preview cannot render a dm.
+page through it, because the table preview cannot render a dm. The clause
+the block writes to the filter trail is scoped to \code{table}, so a branch
+that leaves the dm through another table does not print it; see
+\code{\link[blockr.dm:filter_trail]{blockr.dm::filter_trail()}}.
 }
 
 \section{What a ticked box emits}{

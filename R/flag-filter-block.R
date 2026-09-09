@@ -51,7 +51,10 @@
 #' [flag_zoom_expr()].
 #'
 #' In dm mode the block previews as blockr.dm's dm diagram, click a table to
-#' page through it, because the table preview cannot render a dm.
+#' page through it, because the table preview cannot render a dm. The clause
+#' the block writes to the filter trail is scoped to `table`, so a branch
+#' that leaves the dm through another table does not print it; see
+#' [blockr.dm::filter_trail()].
 #'
 #' # What a ticked box emits
 #'
@@ -420,11 +423,17 @@ make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL) {
   # `data = d` and not the default: this block is `expr_type = "bquoted"`, so
   # its input is the `.()` slot, not a bare `data` symbol -- see the note on
   # `data_slot()` below.
+  #
+  # `table = table`: in dm mode the clause is scoped to the one table it
+  # narrowed, so a branch that leaves the dm through another table (the lab
+  # chart, off `lb` and `adsl`) does not print a filter that never touched
+  # its rows. The crossfilter's clauses are not scoped, because `dm_filter()`
+  # cascades and they really do reach every table.
   if (is.null(clause) && is.null(table)) {
     return(inner)
   }
 
-  blockr.dm::trail_expr(inner, key, clause, data = d)
+  blockr.dm::trail_expr(inner, key, clause, data = d, table = table)
 }
 
 # Selected flags as one clause. The flag NAME is the useful thing to print --
@@ -453,6 +462,11 @@ flag_filter_clause <- function(selected) {
 #'
 #' `dm_zoom_to()` / `dm_update_zoomed()` is the only one that gets both
 #' halves right: other tables keep their rows, and the keys survive.
+#'
+#' Because nothing cascades, the clause this block writes to the filter trail
+#' is scoped to `table`: a pull or flatten that leaves the dm through another
+#' table drops it, so only the exhibits built on the narrowed table print it.
+#' See [blockr.dm::filter_trail()].
 #'
 #' @param d The data slot.
 #' @param table Table name.
