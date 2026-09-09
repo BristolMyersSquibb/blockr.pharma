@@ -88,7 +88,14 @@ dm_stamp_group <- function(data, col, as = "Group") {
       )
     )
   )
-  dm::dm_update_zoomed(zoomed)
+  # `dm_zoom_to()` + `dm_update_zoomed()` build a fresh dm, which drops the
+  # attributes set on the old one -- including the filter trail the crossfilter
+  # below just recorded. Carrying it across is the whole reason this is not a
+  # bare `dm_update_zoomed()`: without it every board whose global filter is a
+  # population filter block loses the trail here, and every caption and table
+  # footnote downstream goes silent while the filter is plainly applied. See
+  # `blockr.dm::filter_trail()`.
+  blockr.dm::add_filter_trail(dm::dm_update_zoomed(zoomed), data)
 }
 
 #' Mark which column a copy came from

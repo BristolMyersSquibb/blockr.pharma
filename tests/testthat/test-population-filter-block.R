@@ -147,3 +147,41 @@ test_that("stamp_as = NULL leaves the crossfilter expression alone", {
     }
   )
 })
+
+test_that("the stamp carries the filter trail across", {
+  # `dm_zoom_to()` + `dm_update_zoomed()` build a fresh dm, so the trail the
+  # crossfilter recorded one step earlier is dropped unless it is carried over
+  # explicitly. Without this, every caption and table footnote downstream of a
+  # population filter block goes silent while the filter is plainly applied.
+  adsl <- data.frame(
+    USUBJID = c("a", "b", "c"),
+    SEX = c("F", "M", "F"),
+    TRT = c("P", "X", "P"),
+    stringsAsFactors = FALSE
+  )
+  ae <- data.frame(
+    USUBJID = c("a", "b"),
+    AEDECOD = c("COUGH", "RASH"),
+    stringsAsFactors = FALSE
+  )
+  d <- dm::dm(adsl = adsl, ae = ae)
+  d <- dm::dm_add_pk(d, adsl, USUBJID)
+  d <- dm::dm_add_fk(d, ae, USUBJID, adsl)
+
+  filtered <- blockr.dm::add_filter_trail(
+    dm::dm_filter(d, adsl = SEX == "F"), d, "global_filter", "SEX = F"
+  )
+  expect_equal(
+    unname(blockr.dm::filter_trail(filtered)), "SEX = F"
+  )
+
+  stamped <- dm_stamp_group(filtered, "TRT", "Group")
+  expect_equal(unname(blockr.dm::filter_trail(stamped)), "SEX = F")
+  expect_true("Group" %in% colnames(stamped$adsl))
+
+  # And the no-column path hands its input back untouched, trail included.
+  expect_equal(
+    unname(blockr.dm::filter_trail(dm_stamp_group(filtered, NULL))),
+    "SEX = F"
+  )
+})
