@@ -291,37 +291,98 @@
   color: var(--blockr-color-text-primary, #111827);
 }
 
-/* Patient info: the key-value facts table. A table, not a chart -- plain
-   rows, muted labels, hairline separators matching the panel chrome. */
-.pp-info-table {
-  width: 100%;
-  max-width: 560px;
-  margin: 4px 12px 8px;
-  border-collapse: collapse;
+/* Patient info: the subject's facts, two to a line.
+ *
+ * It was one fact per row with a fixed 160px label column and a hairline
+ * under each: eleven facts, a 31px row, a 400px card in a 311px-wide rail --
+ * taller than the chart beneath it and five times the response lane, for
+ * eleven values none of which is longer than half a line. The fixed column
+ * was the other half of it: the widest label is about 110px, so 50px of
+ * every row was reserved for nothing.
+ *
+ * Now a grid of label/value pairs, each label as wide as its own word. The
+ * long ones (the treatment period, the ethnicity) take `is-wide` and the
+ * grid's auto-placement pushes them to a row of their own, so the pairing
+ * heals itself whatever the optional fields do.
+ *
+ * The hairlines are gone with the rows: one fact per cell already reads as
+ * one fact, and at this density the rules were a second grid arguing with
+ * the first.
+ *
+ * 30px of left inset, not 12: the panel's own title starts at 30 (12px of
+ * header padding plus the drag grip), and the facts were the only thing in
+ * the card hanging out to the left of its own heading. */
+.pp-info-grid {
+  display: grid;
+  /* Two pairs to a line where the panel is wide enough for two, one where it
+     is not. `auto-fit` rather than a fixed four columns: a card panel is
+     311px in the default 600px rail and the sash can widen it to anything,
+     and a fixed second column at 311px broke every value a character at a
+     time down its own column. 132px is the widest pair the card can hold
+     (a "Response" label beside a subject id). */
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  column-gap: 18px;
+  margin: 4px 12px 8px 30px;
   font-size: 12px;
 }
 
-.pp-info-table tr {
-  border-bottom: 1px solid var(--blockr-grey-100, #f3f4f6);
+/* One pair, one grid item: label and value fold together or not at all. */
+.pp-info-pair {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  min-width: 0;
 }
 
-.pp-info-table tr:last-child {
-  border-bottom: none;
+/* A value no pair-width can hold -- the treatment period is two dates and a
+   span -- takes the whole line and wraps inside it. */
+.pp-info-pair.is-wide {
+  grid-column: 1 / -1;
 }
 
-.pp-info-table th {
-  width: 160px;
-  padding: 6px 12px 6px 0;
-  font-weight: 500;
+.pp-info-k {
   color: var(--blockr-color-text-muted, #6b7280);
-  text-align: left;
-  vertical-align: top;
   white-space: nowrap;
+  font-weight: 400;
+  /* A floor, not a column. Each pair sizes its own label, so folded to one
+     column the values started at six different x positions and the card read
+     as ragged prose. 72px is the widest paired label ("End of study"), which
+     lines every value up in either fold -- and it is still less than half
+     the 160px fixed column this replaced. A label wider than the floor (the
+     treatment period's) simply pushes its own value; that row spans, so it
+     has the room. */
+  min-width: 72px;
 }
 
-.pp-info-table td {
-  padding: 6px 0;
+.pp-info-v {
   color: var(--blockr-color-text-primary, #111827);
+  margin: 0;
+  min-width: 0;
+}
+
+/* Paired values do not wrap: they are a subject id, an age, an arm, and
+   breaking one over two lines to save a few pixels is how the four-column
+   version failed. The wide ones may. */
+.pp-info-pair:not(.is-wide) .pp-info-v {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The arm and the response, in the chip the cohort list draws them in --
+   pp_cohort_chip_style() computes the style for both, so the arm here and
+   the arm on the row this card was opened from cannot be two colours. */
+.pp-info-chip {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 15px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 4px; /* --blockr-radius-sm */
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Severity legend (AE panel): decodes the bar colors. Holds its natural

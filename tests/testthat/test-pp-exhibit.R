@@ -316,13 +316,17 @@ test_that("pp_patient_info_fields reads the subject's facts", {
   dm_obj <- pp_normalize_dm(pp_ex_dm())
   roles <- pp_resolve_roles(dm_obj)
   info <- pp_patient_info_fields(dm_obj, list(roles = roles))
-  expect_identical(colnames(info), c("Field", "Value"))
+  # Field and Value are the facts; Span and Tint are how the card lays them
+  # out, and the export drops them.
+  expect_identical(colnames(info), c("Field", "Value", "Span", "Tint"))
   get <- function(f) info$Value[info$Field == f]
   expect_identical(get("Subject"), "S1")
   expect_identical(get("Age"), "63 years")
   expect_identical(get("Sex"), "F")
   expect_identical(get("Race"), "White")
-  expect_identical(get("Treatment arm"), "Drug A 10mg")
+  # "Arm", not "Treatment arm": it pairs with Response on one line of the
+  # grid, and nothing else on the card could be meant.
+  expect_identical(get("Arm"), "Drug A 10mg")
   expect_match(get("Treatment period"), "2024-01-01 → 2024-03-01")
   expect_match(get("Treatment period"), "61 days")
   expect_identical(get("End of study"), "2024-03-15")
@@ -359,7 +363,7 @@ test_that("patient_info exports as a table exhibit", {
   f_html <- withr::local_tempfile(fileext = ".html")
   blockr.viz::write_exhibit_html(patient$plots[["patient_info"]], f_html,
                                  title = "Patient S1")
-  expect_true(grepl("Treatment arm",
+  expect_true(grepl("Drug A 10mg",
                     paste(readLines(f_html, warn = FALSE),
                           collapse = "")))
 })
@@ -376,7 +380,7 @@ test_that("patient_info is the first sidebar card and renders live", {
     dm_obj, NULL, list(roles = roles), NA_real_, "date"
   )
   html <- as.character(htmltools::doRenderTags(tag))
-  expect_match(html, "pp-info-table")
+  expect_match(html, "pp-info-grid")
   expect_match(html, "Drug A 10mg")
 })
 

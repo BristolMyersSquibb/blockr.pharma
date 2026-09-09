@@ -50,11 +50,16 @@ pp_exhibit_ready <- function() {
 #' @noRd
 pp_viz_exhibit_settings <- function(viz, viz_settings, roles, dm_obj,
                                     scale_map = NULL, cycle_anchors = NULL,
-                                    smooth = "auto") {
+                                    smooth = "auto", arm_colors = NULL) {
   viz_settings <- viz_settings %||% list()
   uses <- viz$uses %||% character()
   if (length(uses)) {
     viz_settings$roles <- roles[intersect(uses, names(roles))]
+  }
+  # The arm's colours, resolved over the COHORT by the block, so a card
+  # cannot assign a different one from the list it was opened out of.
+  if ("arm" %in% uses && !is.null(arm_colors)) {
+    viz_settings$arm_colors <- arm_colors
   }
   if ("severity" %in% uses) {
     sev_colors <- pp_sev_scale_colors(scale_map, dm_obj,

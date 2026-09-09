@@ -213,6 +213,18 @@ new_patient_profile_block <- function(selected = NULL,
           # the download. Separate from r_cohort() (which is the picker's
           # ids/labels) because it answers a different question -- not "who
           # can I pick" but "what does each of them look like".
+          # The arm palette, resolved ONCE. The cohort list's chips and the
+          # patient info card's arm chip both draw it, and they are two
+          # surfaces a reader compares directly -- the row they clicked and
+          # the card it opened -- so a second computation is a second chance
+          # to disagree. Keyed off the COHORT frame, never a scoped one:
+          # without a board binding the assignment is by sorted level, and a
+          # single-patient frame has one level.
+          r_arm_colors <- shiny::reactive({
+            pp_cohort_arm_colors(r_cohort_frame(), r_scale_map(), r_norm_dm(),
+                                 r_roles()$arm)
+          })
+
           r_cohort_frame <- shiny::reactive({
             nd <- r_norm_dm()
             if (is.null(nd)) return(pp_cohort_frame(NULL))
@@ -856,8 +868,7 @@ new_patient_profile_block <- function(selected = NULL,
               pp_sev_scale_colors(r_scale_map(), r_norm_dm(),
                                   r_roles()$severity)
             )
-            arm_col <- pp_cohort_arm_colors(frame, r_scale_map(), r_norm_dm(),
-                                            r_roles()$arm)
+            arm_col <- r_arm_colors()
 
             ord <- pp_cohort_order(frame, r_cohort_sort(), marks)
 
@@ -1101,6 +1112,7 @@ new_patient_profile_block <- function(selected = NULL,
             viz_settings <- pp_viz_exhibit_settings(
               viz, r_slot_settings[[viz_id]], r_roles(), dm_obj,
               scale_map = r_scale_map(),
+              arm_colors = r_arm_colors(),
               cycle_anchors = if ("cycle" %in% (viz$uses %||% character())) {
                 r_cycle_anchors()
               },
@@ -1173,6 +1185,7 @@ new_patient_profile_block <- function(selected = NULL,
             settings <- pp_viz_exhibit_settings(
               viz, r_viz_settings()[[viz_id]], r_roles(), dm_obj,
               scale_map = r_scale_map(),
+              arm_colors = r_arm_colors(),
               cycle_anchors = if ("cycle" %in% (viz$uses %||% character())) {
                 r_cycle_anchors()
               },

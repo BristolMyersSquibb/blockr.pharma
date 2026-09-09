@@ -311,8 +311,8 @@ test_that("the best overall response is reported as a patient fact", {
   expect_identical(pp_resp_bor_field(dm_obj),
                    list(label = "Best overall response", value = "PR"))
   info <- pp_patient_info_fields(dm_obj)
-  expect_true("Best overall response" %in% info$Field)
-  expect_identical(info$Value[info$Field == "Best overall response"], "PR")
+  expect_true("Response" %in% info$Field)
+  expect_identical(info$Value[info$Field == "Response"], "PR")
 })
 
 test_that("ADaM's literal MISSING is not reported as a response", {
@@ -321,7 +321,7 @@ test_that("ADaM's literal MISSING is not reported as a response", {
   # printing nothing.
   dm_obj <- resp_dm(rs("BOR", "MISSING", "2024-06-01"))
   expect_null(pp_resp_bor_field(dm_obj))
-  expect_false("Best overall response" %in% pp_patient_info_fields(dm_obj)$Field)
+  expect_false("Response" %in% pp_patient_info_fields(dm_obj)$Field)
 })
 
 test_that("a study with no response table keeps its info card", {
@@ -336,4 +336,62 @@ test_that("a study with no response table keeps its info card", {
   expect_identical(patient_profile_static_vizs()[["patient_info"]]$tables,
                    "adsl")
   expect_gt(nrow(pp_patient_info_fields(dm_obj)), 0L)
+})
+
+# ---------------------------------------------------------------------------
+# The info card's layout, which is data
+# ---------------------------------------------------------------------------
+
+test_that("the facts say which of them will not sit two to a line", {
+  # The card is a grid of pairs. Which values take a whole row is decided
+  # here, not by a length heuristic in CSS: the treatment period is a date
+  # range and the ethnicity is a sentence, and both are long whatever the
+  # study calls them.
+  dm_obj <- resp_dm(rbind(ovr(), rs("BOR", "PR", "2024-06-01")))
+  info <- pp_patient_info_fields(dm_obj, list(roles = list(arm = NULL)))
+  expect_true(all(c("Field", "Value", "Span", "Tint") %in% names(info)))
+  wide <- info$Field[info$Span]
+  expect_true("Treatment period" %in% wide)
+  expect_false("Subject" %in% wide)
+})
+
+test_that("the arm and the response carry the board's colours, nothing else does", {
+  dm_obj <- resp_dm(rbind(ovr(), rs("BOR", "PR", "2024-06-01")))
+  info <- pp_patient_info_fields(dm_obj, list(
+    roles = list(arm = "ARM"),
+    arm_colors = c(Placebo = "#2563eb"),
+    resp_colors = c(PR = "#FFD700")
+  ))
+  # No ARM column on this fixture, so only the response tints; what matters
+  # is that nothing else ever does.
+  expect_identical(info$Tint[info$Field == "Response"],
+                   pp_cohort_chip_style("#FFD700"))
+  expect_true(all(info$Tint[!info$Field %in% c("Arm", "Response")] == ""))
+})
+
+test_that("a level the board has no colour for gets no chip", {
+  dm_obj <- resp_dm(rs("BOR", "PR", "2024-06-01"))
+  info <- pp_patient_info_fields(dm_obj, list(resp_colors = c(CR = "#006400")))
+  expect_identical(info$Tint[info$Field == "Response"], "")
+})
+
+test_that("the export is label and value, not the layout", {
+  # Span and Tint are how the card lays the facts out. A download that
+  # carried them would be exporting CSS.
+  dm_obj <- resp_dm(rs("BOR", "PR", "2024-06-01"))
+  viz <- patient_profile_static_vizs()[["patient_info"]]
+  out <- viz$exhibit(dm_obj, NULL, list())
+  expect_named(out, c("Field", "Value"))
+})
+
+test_that("a coloured fact renders as the cohort list's chip", {
+  dm_obj <- resp_dm(rs("BOR", "PR", "2024-06-01"))
+  viz <- patient_profile_static_vizs()[["patient_info"]]
+  html <- as.character(htmltools::doRenderTags(
+    viz$render(dm_obj, NULL, list(resp_colors = c(PR = "#FFD700")),
+               NA_real_, "date")
+  ))
+  expect_match(html, "pp-info-chip")
+  # The very style pp_cohort_chip_style() computes, not a second tint.
+  expect_match(html, "rgba(255,215,0,0.12)", fixed = TRUE)
 })
