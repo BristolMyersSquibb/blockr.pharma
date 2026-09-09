@@ -107,6 +107,32 @@ register_pharma_blocks <- function() {
     overwrite = TRUE
   )
   register_blocks(
+    "new_population_filter_block",
+    name = "Global Population Filter",
+    uid = "population_filter_block",
+    description = paste0(
+      "Client-side crossfilter over the study dm, with the board's split ",
+      "pinned in an always-open card and copied into a `Group` column."
+    ),
+    category = "transform",
+    icon = "funnel",
+    guidance = paste0(
+      "One per board, upstream of everything a view shows. `featured` is the ",
+      "short list of columns worth a one-click chip (TRT, SEX, RACE, ETHNIC, ",
+      "AETOXGR, ...); `pinned` is the one the board is split by, which must ",
+      "be a categorical column of the SUBJECT table. Whatever is pinned is ",
+      "copied into a column named `Group`, so charts bind `color = \"Group\"` ",
+      "and summary tables split by `Group` instead of naming a fixed arm ",
+      "column -- one pick then re-points every exhibit on the board. ",
+      "Everything else about it is the crossfilter block."
+    ),
+    arguments = list(
+      population_filter_arguments()
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
     "new_population_join_block",
     name = "Population Join",
     description = paste0(
