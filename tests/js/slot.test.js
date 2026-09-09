@@ -116,3 +116,21 @@ test('a swapped header gets the find box text and caret back', () => {
   assert.equal(h.doc.activeElement, fresh);
   h.close();
 });
+
+test('a swapped header takes the class of the one that came, so a legend row can come and go', () => {
+  const h = boot();
+  const slot = h.el('viz_slot_ae_gantt');
+  widgetOf(h, 'ae_gantt').__echarts = true;
+  const header = slot.querySelector('.pp-chart-header');
+  h.send('slot', msg({
+    header: '<div class="pp-chart-header has-legend"><div class="pp-chart-title">Adverse Events</div>' +
+      '<div class="pp-chart-legend"><span class="pp-legend-item">Mild</span></div></div>'
+  }));
+  assert.equal(slot.querySelector('.pp-chart-header'), header, 'the element itself survives');
+  assert.equal(header.classList.contains('has-legend'), true);
+  assert.equal(header.querySelector('.pp-chart-legend').textContent, 'Mild');
+  h.send('slot', msg());
+  assert.equal(header.classList.contains('has-legend'), false);
+  assert.equal(header.querySelector('.pp-chart-legend'), null);
+  h.close();
+});

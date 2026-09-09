@@ -385,16 +385,46 @@
   white-space: nowrap;
 }
 
-/* Severity legend (AE panel): decodes the bar colors. Holds its natural
-   width so the levels read as one line -- the header has the room now that
-   the domain label is gone. Still wraps rather than overflowing if a study
-   carries enough severity levels to run out of header. */
+/* A panel's legend: decodes the bar colors. Holds its natural width so
+   the levels read as one line, and wraps rather than overflowing if a
+   study carries enough severity levels to run out of row. */
 .pp-chart-legend {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+/* --- The legend row --------------------------------------------------------
+   The legend used to sit on the title row, right of the controls, from
+   when the header had the room (the domain label had just gone). The find
+   box then took that room: on a 600px profile the two shared about 110px,
+   and the legend, which never shrinks, was what pushed the find box out
+   of view. It is the chart's key, not a control, so it has a row of its
+   own under the title, in every header that carries one (AE severity, CM
+   indication, response). Inside the header rather than in the body, so
+   the per-patient header swap (the `slot` message) carries it unchanged.
+   ========================================================================= */
+.pp-chart-header.has-legend {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.pp-chart-header.has-legend .pp-chart-controls {
+  /* A zero basis. In a wrapping row it is an item's basis that decides
+     whether it wraps, and the controls' content width would start a row of
+     its own long before it started to scroll. Growth then fills the row. */
+  flex-basis: 0;
+}
+
+.pp-chart-header.has-legend .pp-chart-legend {
+  /* Last, and the full width, so it is the second row whatever the DOM
+     order (the download menu and the (x) come after it there and belong on
+     the title row). 18px = the grip and its gap: under the title's text. */
+  order: 1;
+  flex-basis: 100%;
+  padding-left: 18px;
 }
 
 .pp-legend-item {
@@ -450,6 +480,10 @@
   /* Kept: the AE card's chips and find box legitimately outgrow any header,
      and scroll once the sublabel has given everything it has. */
   overflow-x: auto;
+  /* Where the bar is drawn (Windows, or any overlay-less setup) the classic
+     one is 15px of grey with arrows under a 22px row; the thin one is half
+     that and has none. Ignored where unsupported, so nothing to fall back to. */
+  scrollbar-width: thin;
   padding: 0 4px;
 }
 

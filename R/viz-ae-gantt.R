@@ -51,8 +51,13 @@ ae_gantt_viz <- new_pp_viz(
     "ASTDT", "AENDT", "ASTDY", "AENDY", "AETERM", "AEHLT", "AEBODSYS",
     "AESER", "AEOUT"
   )),
+  # The find box before the lanes pill. The controls box scrolls once the
+  # header runs out of room (a 600px profile leaves it about 110px), and
+  # what is cut is whatever comes last: with the pill first, the find box
+  # was the thing that vanished, and it is the control this panel is used
+  # through. The lanes are a once-a-session setting and can sit in the
+  # scrolled part.
   controls = c(
-    pp_lane_control(PP_AE_LANES, default = "AEDECOD"),
     list(search = list(
       type = "search",
       label = "Find",
@@ -60,7 +65,8 @@ ae_gantt_viz <- new_pp_viz(
       # Every coding level the study carries, so "infections" reaches a
       # body system whose preferred terms never contain the word.
       columns = c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
-    ))
+    )),
+    pp_lane_control(PP_AE_LANES, default = "AEDECOD")
   ),
   band = pp_band_ae(),
   uses = "severity",

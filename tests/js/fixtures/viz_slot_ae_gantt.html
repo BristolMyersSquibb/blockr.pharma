@@ -1,17 +1,17 @@
-<div class="pp-chart-header">
+<div class="pp-chart-header has-legend">
   <span class="pp-chart-grip" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1.35"/><circle cx="7" cy="4" r="1.35"/><circle cx="3" cy="8" r="1.35"/><circle cx="7" cy="8" r="1.35"/><circle cx="3" cy="12" r="1.35"/><circle cx="7" cy="12" r="1.35"/></svg></span>
   <div class="pp-chart-title" title="Gantt bars showing AE duration by preferred term">Adverse Events</div>
   <span class="pp-band-tag" title="Shown for every patient in the list of patients"><svg class="pp-band-glyph" width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><circle cx="4.5" cy="4.5" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
   <div class="pp-chart-controls">
     <div class="pp-ctrl-group">
-      <span class="pp-ctrl-label">Lanes</span>
-      <button class="pp-ctrl-pill" data-viz-id="ae_gantt" data-param="lanes" data-values="[&quot;AETERM&quot;,&quot;AEDECOD&quot;,&quot;AEHLT&quot;,&quot;AEBODSYS&quot;]" data-labels="[&quot;Reported&quot;,&quot;Preferred term&quot;,&quot;High-level term&quot;,&quot;Body system&quot;]" data-index="1" title="Switch to High-level term" style="min-width:15ch">Preferred term</button>
-    </div>
-    <div class="pp-ctrl-group">
       <div class="pp-ctrl-search ">
         <svg class="pp-search-icon" xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
         <input type="text" class="pp-ctrl-search-input" data-viz-id="ae_gantt" data-param="search" placeholder="Filter events" value=""/>
       </div>
+    </div>
+    <div class="pp-ctrl-group">
+      <span class="pp-ctrl-label">Lanes</span>
+      <button class="pp-ctrl-pill" data-viz-id="ae_gantt" data-param="lanes" data-values="[&quot;AETERM&quot;,&quot;AEDECOD&quot;,&quot;AEHLT&quot;,&quot;AEBODSYS&quot;]" data-labels="[&quot;Reported&quot;,&quot;Preferred term&quot;,&quot;High-level term&quot;,&quot;Body system&quot;]" data-index="1" title="Switch to High-level term" style="min-width:15ch">Preferred term</button>
     </div>
   </div>
   <div class="pp-chart-legend">
