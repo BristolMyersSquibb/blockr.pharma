@@ -93,7 +93,13 @@ PP_FINDINGS_VALUES <- c(
 pp_value_control <- function() {
   list(value = list(
     type = "pill",
-    label = "Value",
+    # No dimension label. "VALUE" stood in front of the pill on every
+    # findings card, and a profile is a stack of them: the same five
+    # characters repeated down a 600px rail, in front of a control whose own
+    # text ("Absolute", "% change") already says which value it is showing,
+    # under a header that already says which parameter. The tooltip carries
+    # the action ("Switch to Change"), as it does on the gantts' pill.
+    label = NULL,
     default = "AVAL",
     choices = PP_FINDINGS_VALUES,
     choices_present = TRUE

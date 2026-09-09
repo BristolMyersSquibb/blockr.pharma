@@ -8,11 +8,30 @@
 #' @param viz The `pp_viz` definition.
 #' @param viz_id Its id on the profile.
 #' @param dm_obj The patient's dm, for choices read off the data.
+#' A control's `label` is optional: declared empty or absent, the dimension
+#' name is left off and the control speaks for itself.
+#'
 #' @param settings The current settings for this panel.
 #' @noRd
 pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
   controls <- viz$controls
   if (is.null(controls) || length(controls) == 0) return(NULL)
+
+  # The dimension's name, or nothing.
+  #
+  # A control that names its own dimension does not need saying twice. The
+  # gantts' "LANES  Preferred term" is a dimension and a setting, and the
+  # label is what makes the setting mean something; a findings card's value
+  # pill reads "% change" under a header that already says ALB, Albumin
+  # (g/L), and the word VALUE in front of it only repeated on every card in a
+  # 600px rail. So the label is optional, and a control declaring none draws
+  # none rather than an empty span (which would still spend the group's 6px
+  # gap).
+  label_ui <- function(ctrl) {
+    lab <- ctrl$label %||% ""
+    if (!nzchar(lab)) return(NULL)
+    shiny::span(class = "pp-ctrl-label", lab)
+  }
 
   tags <- lapply(names(controls), function(param) {
     ctrl <- controls[[param]]
@@ -76,13 +95,13 @@ pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
         )
       })
       shiny::div(class = "pp-ctrl-group",
-        shiny::span(class = "pp-ctrl-label", ctrl$label),
+        label_ui(ctrl),
         shiny::div(class = "pp-ctrl-chips", chips)
       )
     } else if (ctrl$type == "toggle") {
       is_on <- isTRUE(cur_val)
       shiny::div(class = "pp-ctrl-group",
-        shiny::span(class = "pp-ctrl-label", ctrl$label),
+        label_ui(ctrl),
         shiny::tags$button(
           class = paste(
             "pp-ctrl-toggle",
@@ -116,7 +135,7 @@ pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
       nxt <- choice_names[idx %% length(choices) + 1L]
 
       shiny::div(class = "pp-ctrl-group",
-        shiny::span(class = "pp-ctrl-label", ctrl$label),
+        label_ui(ctrl),
         shiny::tags$button(
           class = "pp-ctrl-pill",
           `data-viz-id` = viz_id,
@@ -204,7 +223,7 @@ pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
         )
       })
       shiny::div(class = "pp-ctrl-group",
-        shiny::span(class = "pp-ctrl-label", ctrl$label),
+        label_ui(ctrl),
         shiny::div(class = "pp-ctrl-radios", btns)
       )
     } else {
