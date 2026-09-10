@@ -13,6 +13,7 @@
 #' | `subject_picker` | `list(count = )`                     | the cohort count tag |
 #' | `dl_menu_state`  | `list(single, picked, n)`            | download menu scopes |
 #' | `slot`           | `pp_slot_update()`: viz_id, header HTML, opts_json, height | updates one panel in place |
+#' | `find_vocab`     | `list(viz_id, token, groups)` or `list(viz_id, token, unchanged = TRUE)` | the cohort's terms, for the find popover |
 #'
 #' A test can watch the traffic: with the option
 #' `blockr.pharma.pp_message_sink` set to a function of `(channel, payload)`,

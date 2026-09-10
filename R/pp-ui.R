@@ -38,7 +38,7 @@ pp_block_ui <- function(id) {
       as.character(utils::packageVersion("blockr.pharma")),
       src = system.file("js", package = "blockr.pharma"),
       script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
-                 "pp-picker.js", "pp-panels.js")
+                 "pp-picker.js", "pp-panels.js", "pp-find.js")
     ),
     # Blockr.Select: the shared single-select primitive. Its dropdown is
     # portalled to <body>, which is what lets it escape `.pp-chart-area`'s

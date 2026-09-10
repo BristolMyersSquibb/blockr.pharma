@@ -87,15 +87,25 @@ test_that("a panel being searched drives the band, ahead of the first", {
   src <- function(settings = list()) {
     pp_cohort_band_source(sel, avail, settings)$viz_id
   }
+  pick <- function(v) list(list(col = "*", value = v))
   expect_identical(src(), "ae_gantt")
-  # A medication typed into the second panel: the strip follows it.
-  expect_identical(src(list(cm_gantt = list(search = "aspirin"))), "cm_gantt")
-  # Blank again, and the order rules again.
-  expect_identical(src(list(cm_gantt = list(search = ""))), "ae_gantt")
-  # Two live terms: the first in sidebar order.
+  # A medication picked in the second panel: the strip follows it.
+  expect_identical(src(list(cm_gantt = list(find = pick("aspirin")))),
+                   "cm_gantt")
+  # Cleared again, and the order rules again.
+  expect_identical(src(list(cm_gantt = list(find = list()))), "ae_gantt")
+  # Two filtered panels: the first in sidebar order.
   expect_identical(
-    src(list(ae_gantt = list(search = "x"), cm_gantt = list(search = "y"))),
+    src(list(ae_gantt = list(find = pick("x")),
+             cm_gantt = list(find = pick("y")))),
     "ae_gantt"
+  )
+  # A coded pick counts the same as a typed one.
+  expect_identical(
+    src(list(cm_gantt = list(
+      find = list(list(col = "CMDECOD", value = "ASPIRIN"))
+    ))),
+    "cm_gantt"
   )
   # A band that no search reaches does not take the strip over.
   avail$chem <- viz_stub(
@@ -263,12 +273,13 @@ test_that("the search matches every coding level the study carries", {
   expect_true(all(pp_search_match(ae, "AEHLT", "pneumonia")))
 })
 
-test_that("the search filters the band and counts what it kept", {
+test_that("the picks filter the band and count what they kept", {
   d <- band_dm(adsl = band_adsl(), adae = band_adae())
   roles <- pp_resolve_roles(d)
 
   all_ev <- pp_cohort_marks(d, roles)
-  hit <- pp_cohort_marks(d, roles, search = "pneumonia")
+  hit <- pp_cohort_marks(d, roles,
+                         picks = list(list(col = "*", value = "pneumonia")))
 
   expect_identical(nrow(all_ev$subjects[["S-1"]]$events), 3L)
   expect_identical(nrow(hit$subjects[["S-1"]]$events), 2L)
@@ -279,21 +290,61 @@ test_that("the search filters the band and counts what it kept", {
   expect_identical(unname(hit$hits[["S-2"]]), 0L)
   expect_identical(unname(hit$hits[["S-1"]]), 2L)
 
-  # No search, no counts: the row prints a number only while one is running.
+  # No picks, no counts: the row prints a number only while one is running.
   expect_null(all_ev$hits)
 })
 
-test_that("the search reaches a band through the body system alone", {
+test_that("a typed pick reaches a band through the body system alone", {
   d <- band_dm(adsl = band_adsl(), adae = band_adae())
-  m <- pp_cohort_marks(d, pp_resolve_roles(d), search = "infections")
+  m <- pp_cohort_marks(d, pp_resolve_roles(d),
+                       picks = list(list(col = "*", value = "infections")))
   expect_identical(nrow(m$subjects[["S-1"]]$events), 2L)
 })
 
-test_that("a band declaring no search columns ignores the term", {
+test_that("a coded pick matches its own column exactly", {
+  # What the picker sends: the level the row came from, matched with `==`.
+  # A body system pick reaches every record under it without the substring
+  # luck a typed term depends on.
+  d <- band_dm(adsl = band_adsl(), adae = band_adae())
+  ae <- as.data.frame(dm::dm_get_tables(d)$adae)
+  soc <- ae$AEBODSYS[ae$AEDECOD == "PNEUMONIA"][[1L]]
+  m <- pp_cohort_marks(
+    d, pp_resolve_roles(d),
+    picks = list(list(col = "AEBODSYS", value = soc))
+  )
+  expect_identical(nrow(m$subjects[["S-1"]]$events), 2L)
+  # And the same word as a PREFERRED term matches nothing, because the
+  # preferred terms are not body systems.
+  none <- pp_cohort_marks(
+    d, pp_resolve_roles(d),
+    picks = list(list(col = "AEDECOD", value = soc))
+  )
+  expect_identical(nrow(none$subjects[["S-1"]]$events), 0L)
+})
+
+test_that("two picks are an OR, which is what one term never was", {
+  d <- band_dm(adsl = band_adsl(), adae = band_adae())
+  roles <- pp_resolve_roles(d)
+  ae <- as.data.frame(dm::dm_get_tables(d)$adae)
+  s1 <- ae[ae$USUBJID == "S-1", ]
+  terms <- unique(s1$AEDECOD)
+  expect_gt(length(terms), 1L)
+  two <- pp_cohort_marks(d, roles, picks = list(
+    list(col = "AEDECOD", value = terms[[1L]]),
+    list(col = "AEDECOD", value = terms[[2L]])
+  ))
+  one <- pp_cohort_marks(d, roles, picks = list(
+    list(col = "AEDECOD", value = terms[[1L]])
+  ))
+  expect_gt(nrow(two$subjects[["S-1"]]$events),
+            nrow(one$subjects[["S-1"]]$events))
+})
+
+test_that("a band declaring no search columns ignores the picks", {
   d <- band_dm(adsl = band_adsl(), adae = band_adae())
   band <- pp_band_spans("adae", c("ASTDY", "ASTDT"), c("AENDY", "AENDT"))
   m <- pp_cohort_marks(d, pp_resolve_roles(d), band = band,
-                       search = "pneumonia")
+                       picks = list(list(col = "*", value = "pneumonia")))
   expect_identical(nrow(m$subjects[["S-1"]]$events), 3L)
 })
 
@@ -302,12 +353,12 @@ test_that("the AE panel and the cohort band filter the same records", {
   # beside a strip painting three.
   d <- band_dm(adsl = band_adsl(), adae = band_adae())
   ae <- as.data.frame(dm::dm_get_tables(d)$adae)
-  panel_n <- sum(pp_search_match(ae[ae$USUBJID == "S-1", ],
-                                 c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS"),
-                                 "pneumonia"))
+  picks <- list(list(col = "*", value = "pneumonia"))
+  panel_n <- sum(pp_find_match(ae[ae$USUBJID == "S-1", ], picks,
+                               PP_AE_SEARCH))
   band_n <- nrow(
     pp_cohort_marks(d, pp_resolve_roles(d),
-                    search = "pneumonia")$subjects[["S-1"]]$events
+                    picks = picks)$subjects[["S-1"]]$events
   )
   expect_identical(band_n, panel_n)
 })
@@ -317,12 +368,13 @@ test_that("the hit count is the patient's records, not the cohort's", {
   scoped <- pp_scope_subject(d, "S-1")
   ctrl <- list(columns = c("AEDECOD", "AEBODSYS"))
 
-  hits <- pp_ctrl_search_hits(ctrl, scoped, "adae", "pneumonia")
+  hits <- pp_find_hits(ctrl, scoped, "adae",
+                       list(list(col = "*", value = "pneumonia")))
   expect_identical(hits$n, 2L)
   expect_identical(hits$total, 3L)
-  # Nothing typed, nothing reported: the box shows a count only while it is
-  # filtering.
-  expect_null(pp_ctrl_search_hits(ctrl, scoped, "adae", ""))
+  # Nothing picked, nothing reported: the trigger shows a count only while
+  # it is filtering.
+  expect_null(pp_find_hits(ctrl, scoped, "adae", list()))
 })
 
 test_that("a parameter card is one card, drawing one parameter", {

@@ -490,11 +490,12 @@
   flex-shrink: 0;
 }
 
-/* The one item on the controls row that can give way. The find box is a text
-   field with no minimum; the pill beside it is a fixed set of words, and
-   shrinking it would clip a label. Shrink only -- a wide panel keeps the
-   box at its own width rather than stretching it across the row. */
-.pp-ctrl-group--search {
+/* The one item on the controls row that can give way. The find trigger is a
+   button whose text can be clipped without losing the control; the pill
+   beside it is a fixed set of words, and shrinking it would clip a label.
+   Shrink only -- a wide panel keeps the trigger at its own width rather than
+   stretching it across the row. */
+.pp-ctrl-group--find {
   flex-shrink: 1;
   min-width: 0;
 }
@@ -1477,7 +1478,13 @@
   color: var(--blockr-color-text-muted, #6b7280);
   font-weight: 600;
   white-space: nowrap;
-  flex: 0 0 auto;
+  /* Gives way before the filter chip beside it: the panel's name is printed
+     again in that panel's own header a few pixels to the right, and the chip
+     is not printed anywhere else. */
+  flex: 0 40 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The parameter's full name behind its code, in the caption. Same relation
@@ -1509,8 +1516,12 @@
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  min-width: 0;
-  flex: 0 1 auto;
+  /* Never squeezed to an initial: "2 filte..." says less than "2 filters"
+     does. The panel's name beside it gives way instead -- that name is
+     printed again in the panel's own header a few pixels to the right, and
+     this chip is the only thing on screen that says why the bands went
+     sparse. A long single term is bounded by the span's max-width below. */
+  flex: 0 0 auto;
 }
 
 .pp-cohort-bandcap-find:hover {
@@ -1519,6 +1530,7 @@
 }
 
 .pp-cohort-bandcap-find > span {
+  max-width: 132px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1545,57 +1557,70 @@
   flex: 0 0 auto;
 }
 
-/* --- The panel's find box ---------------------------------------------------
-   Sits in the chart header in the same 22px band as the LANES pill beside it,
-   so the toolbar keeps one baseline.
+/* --- The panel's find control ------------------------------------------------
+   A trigger in the chart header, in the same 22px band as the LANES pill
+   beside it, so the toolbar keeps one baseline. The picking happens in
+   .pp-find-pop, which is parented to <body>: see pp-find.js.
    ========================================================================= */
-.pp-ctrl-search {
+.pp-ctrl-find {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 7px;
   border: 1px solid var(--blockr-color-border, #e5e7eb);
   border-radius: 4px; /* --blockr-radius-sm */
   background: var(--blockr-color-bg-subtle, #f9fafb);
-  min-width: 0;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.pp-ctrl-search:focus-within {
-  border-color: #93c5fd;
-}
-
-.pp-ctrl-search.is-active {
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  border-color: var(--blockr-blue-100, #dbeafe);
-}
-
-.pp-ctrl-search .pp-search-icon {
-  flex: 0 0 auto;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-ctrl-search-input {
-  border: none;
-  outline: none;
-  background: none;
   /* Never a font-family of its own: see the design system's typography
      rules, and css-font-shorthand-inherit-drops for why this is not `font:`. */
   font: inherit;
   font-size: 11px;
   line-height: 1.4;
   color: var(--blockr-color-text-secondary, #374151);
-  width: 104px;
+  cursor: pointer;
+  white-space: nowrap;
   min-width: 0;
-  padding: 0;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.pp-ctrl-search-input::placeholder {
+.pp-ctrl-find:hover,
+.pp-ctrl-find.is-open {
+  border-color: #93c5fd;
+}
+
+.pp-ctrl-find.is-active {
+  background: var(--blockr-color-primary-bg, #eff6ff);
+  border-color: var(--blockr-blue-100, #dbeafe);
+  color: var(--blockr-color-primary-hover, #1d4ed8);
+}
+
+.pp-ctrl-find .pp-search-icon {
+  flex: 0 0 auto;
   color: var(--blockr-color-text-subtle, #9ca3af);
 }
 
-.pp-ctrl-search-hits {
+.pp-ctrl-find.is-active .pp-search-icon {
+  color: currentColor;
+}
+
+/* How many filters are on. The trigger cannot show the terms at this width,
+   so it shows the count and puts the terms in the tooltip, the caption above
+   the cohort list and the panel's own empty state. */
+.pp-ctrl-find-badge {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--blockr-color-primary-hover, #1d4ed8);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+/* How many of this patient's records survived, the count the find box printed
+   before it: an empty chart is never mistaken for a patient with no records. */
+.pp-ctrl-find-hits {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: var(--blockr-color-primary-hover, #1d4ed8);
@@ -1603,11 +1628,17 @@
   flex: 0 0 auto;
 }
 
-.pp-ctrl-search-clear {
+.pp-ctrl-find-caret {
+  font-size: 9px;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+
+.pp-ctrl-find-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 0 2px;
   border: none;
   background: none;
   color: var(--blockr-color-text-subtle, #9ca3af);
@@ -1617,8 +1648,281 @@
   flex: 0 0 auto;
 }
 
-.pp-ctrl-search-clear:hover {
+.pp-ctrl-find-clear:hover {
   color: var(--blockr-color-text-secondary, #374151);
+}
+
+/* --- The picker ------------------------------------------------------------
+   FIXED and parented to <body>, for the two reasons the chart ghost is:
+   Shiny styles its output wrappers `div:where(.shiny-html-output):has(> *)
+   { display: contents }` (blockr.ui#41), so nothing between the panel and the
+   body generates a box to be positioned against; and the panel header is
+   REPLACED on every settings change, which would destroy a popover inside it.
+   ========================================================================= */
+.pp-find-pop {
+  position: fixed;
+  z-index: 1080;
+  display: none;
+  width: 320px;
+  max-width: 92vw;
+  background: #fff;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 7px; /* --blockr-radius-md */
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.pp-find-pop.is-open {
+  display: block;
+}
+
+.pp-find-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--blockr-grey-100, #f3f4f6);
+}
+
+.pp-find-input {
+  border: none;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--blockr-color-text-secondary, #374151);
+}
+
+.pp-find-input::placeholder {
+  color: var(--blockr-color-text-subtle, #9ca3af);
+}
+
+/* The picks, pinned above the list. The list shows them ticked in place as
+   well; this row is what makes a pick the current patient does not have
+   reachable without scrolling to the bottom of its group. */
+.pp-find-picked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px 10px;
+  background: var(--blockr-color-primary-bg, #eff6ff);
+  border-bottom: 1px solid var(--blockr-blue-100, #dbeafe);
+}
+
+.pp-find-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  height: 17px;
+  padding: 0 3px 0 6px;
+  border-radius: 3px;
+  background: #fff;
+  border: 1px solid var(--blockr-blue-100, #dbeafe);
+  color: var(--blockr-color-primary-hover, #1d4ed8);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pp-find-tag > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-find-drop {
+  border: none;
+  background: none;
+  padding: 0 1px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.pp-find-drop:hover {
+  opacity: 1;
+}
+
+.pp-find-list {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+
+/* Which coding level a row came from. Picking a body system is a different
+   act from picking a preferred term, and the heading is what says so. */
+.pp-find-group {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  padding: 7px 10px 3px;
+}
+
+/* Where this patient's terms end and the rest of the cohort's begin. The
+   split is the honest way to offer a term the patient has none of: without
+   it a row reading zero looks like a bug, and with it the reader is arming a
+   filter on purpose. Only drawn while something is typed -- the cohort's
+   vocabulary runs to several hundred rows and would bury the patient's
+   eight. */
+.pp-find-split {
+  padding: 8px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--blockr-grey-100, #f3f4f6);
+  font-size: 10px;
+  color: var(--blockr-color-text-subtle, #9ca3af);
+}
+
+.pp-find-group--elsewhere {
+  padding-top: 4px;
+}
+
+/* Quieter than this patient's own rows, and its count is a different unit
+   (patients in the cohort, not records here), which is why it is spelled
+   out rather than left as a bare number beside them. */
+.pp-find-opt.is-elsewhere {
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.pp-find-opt.is-elsewhere .pp-find-n {
+  font-variant-numeric: normal;
+}
+
+.pp-find-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--blockr-color-text-secondary, #374151);
+}
+
+.pp-find-opt:hover,
+.pp-find-opt.is-cursor {
+  background: var(--blockr-color-bg-hover, #f3f4f6);
+}
+
+.pp-find-opt.is-picked {
+  background: var(--blockr-color-primary-bg, #eff6ff);
+}
+
+/* A picked term this patient has none of. Dimmed, never hidden: picks survive
+   a patient switch on purpose, and the control that would let you take one
+   off again is the one place that must not lose it. */
+.pp-find-opt.is-zero {
+  opacity: 0.45;
+}
+
+.pp-find-box {
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid var(--blockr-grey-300, #d1d5db);
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #fff;
+}
+
+.pp-find-opt.is-picked .pp-find-box {
+  background: var(--blockr-color-primary, #2563eb);
+  border-color: var(--blockr-color-primary, #2563eb);
+}
+
+.pp-find-text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-find-text mark {
+  background: #fef08a;
+  color: inherit;
+  padding: 0;
+}
+
+/* This patient's record count for the term. It is what answers "which of my
+   events are cardiac" before anything is picked and before the panel redraws. */
+.pp-find-n {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-subtle, #9ca3af);
+}
+
+.pp-find-empty,
+.pp-find-more {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  text-align: center;
+}
+
+.pp-find-more {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.pp-find-empty b {
+  color: var(--blockr-color-text-secondary, #374151);
+  font-weight: 500;
+}
+
+.pp-find-free {
+  margin-top: 8px;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--blockr-blue-100, #dbeafe);
+  background: var(--blockr-color-primary-bg, #eff6ff);
+  color: var(--blockr-color-primary-hover, #1d4ed8);
+}
+
+.pp-find-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--blockr-grey-100, #f3f4f6);
+  font-size: 11px;
+  color: var(--blockr-color-text-muted, #6b7280);
+  background: var(--blockr-color-bg-subtle, #f9fafb);
+}
+
+.pp-find-acts {
+  display: flex;
+  gap: 6px;
+}
+
+.pp-find-foot button {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: #fff;
+  color: var(--blockr-color-text-secondary, #374151);
+}
+
+.pp-find-done {
+  background: var(--blockr-color-primary, #2563eb) !important;
+  border-color: var(--blockr-color-primary, #2563eb) !important;
+  color: #fff !important;
 }
 
 /* --- Holding the last frame -------------------------------------------------
@@ -1865,11 +2169,12 @@
 .pp-chart-header .pp-ctrl-chip,
 .pp-chart-header .pp-ctrl-pill,
 .pp-chart-header .pp-ctrl-radio,
+.pp-chart-header .pp-ctrl-find,
 .pp-chart-header .pp-ctrl-toggle {
   cursor: pointer;
 }
 
-.pp-chart-header .pp-ctrl-search-input {
+.pp-find-input {
   cursor: text;
 }
 

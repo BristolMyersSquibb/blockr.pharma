@@ -37,6 +37,17 @@
 
 #' AE Gantt visualization definition
 #' @noRd
+# The header control, the chart, the printed twin and the cohort strip all
+# filter on this one vector, so a typed term means the same thing in each.
+PP_AE_SEARCH <- c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
+
+# The coding levels the picker offers as rows, coarsest first.
+PP_AE_LEVELS <- c(
+  AEBODSYS = "Body system",
+  AEHLT = "High level term",
+  AEDECOD = "Preferred term"
+)
+
 ae_gantt_viz <- new_pp_viz(
   id = "ae_gantt",
   label = "Adverse Events",
@@ -58,13 +69,18 @@ ae_gantt_viz <- new_pp_viz(
   # through. The lanes are a once-a-session setting and can sit in the
   # scrolled part.
   controls = c(
-    list(search = list(
-      type = "search",
+    list(find = list(
+      type = "find",
       label = "Find",
-      placeholder = "Filter events",
-      # Every coding level the study carries, so "infections" reaches a
-      # body system whose preferred terms never contain the word.
-      columns = c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
+      placeholder = "Search all coding levels",
+      # Every coding level the study carries, so typing "infections" reaches
+      # a body system whose preferred terms never contain the word.
+      columns = PP_AE_SEARCH,
+      # What the picker offers as rows, coarsest first. AETERM is missing on
+      # purpose: the verbatim report is close to one distinct value per
+      # record, so it is the level that would grow the list with the
+      # patient. It stays reachable by typing.
+      levels = PP_AE_LEVELS
     )),
     pp_lane_control(PP_AE_LANES, default = "AEDECOD")
   ),
@@ -100,16 +116,12 @@ ae_gantt_viz <- new_pp_viz(
     # survived -- a filtered panel is the panel of the matching events, not
     # the full panel with most of it hidden. The sidebar's cohort band reads
     # the same setting through pp_cohort_marks(), so the two agree.
-    search <- as.character(settings$search %||% "")
-    if (nzchar(search)) {
-      tbl <- tbl[
-        pp_search_match(tbl, c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS"),
-                        search), , drop = FALSE
-      ]
+    picks <- pp_find_picks(settings$find)
+    if (length(picks)) {
+      total <- nrow(tbl)
+      tbl <- tbl[pp_find_match(tbl, picks, PP_AE_SEARCH), , drop = FALSE]
       if (nrow(tbl) == 0) {
-        return(pp_empty_chart(
-          paste0("No adverse event matches \u201c", search, "\u201d")
-        ))
+        return(pp_empty_chart(pp_find_empty_msg(total, picks, "event")))
       }
     }
 

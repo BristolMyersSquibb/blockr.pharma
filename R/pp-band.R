@@ -113,16 +113,16 @@ pp_band_ae <- function() {
 #' @return `list(viz_id, label, caption, title, band)` or `NULL`.
 #' @noRd
 pp_cohort_band_source <- function(selected, available, settings = list()) {
-  # A panel being searched drives the strip, ahead of the first. The find
-  # box filters the strip as well as the panel (the block's r_band_search
-  # reads the SOURCE's term), so a medication typed into a panel that is
+  # A panel being filtered drives the strip, ahead of the first. The find
+  # control filters the strip as well as the panel (the block's r_band_picks
+  # reads the SOURCE's picks), so a medication picked in a panel that is
   # second in the list would otherwise narrow nothing the sidebar shows.
   # Only a panel whose band declares search columns qualifies; sidebar
-  # order breaks a tie between two live terms, and rules again once the
-  # boxes are blank.
+  # order breaks a tie between two filtered panels, and rules again once
+  # every panel is unfiltered.
   searched <- selected[vapply(selected, function(id) {
     length(available[[id]]$band$search %||% character()) > 0 &&
-      nzchar(as.character(settings[[id]]$search %||% ""))
+      length(pp_find_picks(settings[[id]]$find)) > 0L
   }, logical(1))]
   for (viz_id in unique(c(searched, selected))) {
     viz <- available[[viz_id]]

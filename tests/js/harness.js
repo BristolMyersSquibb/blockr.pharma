@@ -52,7 +52,8 @@ function jqueryPath() {
   ).trim();
 }
 const JQUERY = read(jqueryPath());
-const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js', 'pp-panels.js'];
+const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js',
+               'pp-panels.js', 'pp-find.js'];
 const BLOCK_JS = PARTS.map((f) => read(path.join(ROOT, 'inst', 'js', f))).join('\n');
 
 /* Objects built inside the window's realm have that realm's prototypes;

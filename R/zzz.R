@@ -241,7 +241,14 @@ pp_block_arguments <- function() {
         "cm_gantt: {lanes: the ADCM column the gantt draws one row per -- ",
         "\"CMTRT\", \"CMDECOD\" (default, coded name) or \"CMCLAS\" (drug ",
         "class, the coarse read)}. Only set `lanes` to a column the study ",
-        "actually carries; it is ignored otherwise."
+        "actually carries; it is ignored otherwise. ",
+        "Both gantts also take {find: array of filters, ORed together}. ",
+        "Each filter is {col, value}: `col` is the coding column and the ",
+        "value must match it EXACTLY (e.g. {col: \"AEBODSYS\", value: ",
+        "\"CARDIAC DISORDERS\"}), or `col` is \"*\" and the value is ",
+        "matched as a case-insensitive substring across every coding level ",
+        "(e.g. {col: \"*\", value: \"pneumo\"}). Use \"*\" unless you ",
+        "know the exact coded term. An empty array is no filter."
       ),
       example = list(
         adlb_chemistry = list(items = list("ALT", "AST")),

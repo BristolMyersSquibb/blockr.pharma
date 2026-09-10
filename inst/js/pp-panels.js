@@ -1,8 +1,8 @@
 // @ts-check
 /* The panels: the ghost held over a chart while it re-renders, dragging a
- * panel by its header, the band tag, the controls in a panel header, the
- * find box and its restore, and keeping every chart the width of its
- * container.
+ * panel by its header, the band tag, the controls in a panel header, and
+ * keeping every chart the width of its container. The find control is its
+ * own part (pp-find.js).
  *
  * Depends on: pp-core.js
  */
@@ -354,7 +354,11 @@ PatientProfile.part(function(ctx) {
       header.innerHTML = fresh.innerHTML;
       lastHeader[msg.viz_id] = msg.header;
       if (Shiny.bindAll) Shiny.bindAll(header);
-      restoreSearch();
+      // The find popover is parented to <body> and outlives this swap, but
+      // the button it hangs under has just been replaced. Tell it to
+      // re-anchor (pp-find.js).
+      document.dispatchEvent(new CustomEvent('pp-header-swapped',
+                                             {detail: {viz_id: msg.viz_id}}));
     }
     /** @type {HTMLElement | null} */
     var widget = slot.querySelector('.pp-chart-body .echarts4r');
@@ -378,10 +382,8 @@ PatientProfile.part(function(ctx) {
   });
 
   $(document).on('shiny:value', function(e) {
-    // The panel slot that owns the find box has just been
-    // replaced; put the caret back in it.
     if (e.name && e.name.indexOf('viz_slot_') >= 0) {
-      setTimeout(function(){ restoreSearch(); paintBandTag(); }, 0);
+      setTimeout(function(){ paintBandTag(); }, 0);
     }
     // The whole stack was rebuilt: a patient switch, or the first
     // render of all.
@@ -456,115 +458,8 @@ PatientProfile.part(function(ctx) {
     }, {priority: 'event'});
   });
 
-  // Find box. Debounced, because every keystroke re-renders the
-  // panel AND re-derives 254 cohort bands: sending on each one
-  // made typing 'pneumonia' nine round trips, of which eight were
-  // thrown away. 400ms is a pause between words rather than
-  // between characters -- at 250 the panel redrew mid-word and the
-  // whole thing read as nervous.
-  var searchTimer = null;
-  // What the user has typed but the server has not confirmed, and
-  // where their caret was. The panel slot is a renderUI, so the
-  // confirming render DESTROYS this input and builds a new one --
-  // which drops focus mid-word and leaves nothing to backspace
-  // into. Remembered here, restored below.
-  var searchState = null;
-
-  $(document).on('input',
-    '#' + layoutId + ' .pp-ctrl-search-input', function() {
-      var vizId = $(this).data('viz-id');
-      var param = $(this).data('param');
-      var value = String($(this).val() || '');
-      searchState = {
-        vizId: vizId, param: param, value: value,
-        caret: /** @type {HTMLInputElement} */ (this).selectionStart, at: Date.now()
-      };
-      // The box owns its own text while the user is in it: the
-      // server's confirming re-render must not move the caret, so
-      // the wrapper is styled optimistically here and the value is
-      // never read back off the DOM (see the input-binding echo
-      // trap this package has hit before).
-      $(this).closest('.pp-ctrl-search')
-        .toggleClass('is-active', value.length > 0);
-      if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(function() {
-        searchTimer = null;
-        Shiny.setInputValue(ctrlInputId, {
-          viz_id: vizId, param: param, value: value
-        }, {priority: 'event'});
-      }, 400);
-    });
-
-  // Track the caret on every move, not just on input: a click or
-  // an arrow key between keystrokes moves it, and restoring a
-  // stale position would be its own kind of losing your place.
-  $(document).on('keyup click',
-    '#' + layoutId + ' .pp-ctrl-search-input', function() {
-      if (searchState && searchState.vizId === $(this).data('viz-id')) {
-        searchState.caret = /** @type {HTMLInputElement} */ (this).selectionStart;
-      }
-    });
-  // No blur handler, deliberately. The blur that fires when the
-  // re-render DESTROYS the input is indistinguishable from the one
-  // that fires when the user clicks away, so reading blur as
-  // they-left-on-purpose threw away exactly the state the restore
-  // needed -- and the typing carried on into the page body.
-  // Recency tells the two apart instead; see below.
-
-  // Give the box back after the panel rebuilds under it. The value
-  // is the user's in-flight text rather than the server's echo:
-  // the two differ by whatever was typed during the round trip,
-  // and taking the server's would silently delete those keys.
-  // Only just typed counts. A panel that re-renders for its own
-  // reasons a minute later -- a patient switch, an upstream filter
-  // -- must not yank the caret back into a box the user left long
-  // ago, and 2.5s is far longer than the round trip that follows a
-  // keystroke and far shorter than any of that.
-  var SEARCH_RESTORE_MS = 2500;
-
-  function restoreSearch() {
-    if (!searchState) return;
-    if (Date.now() - searchState.at > SEARCH_RESTORE_MS) return;
-    // JSON.stringify for the quoting, like the drag handler does:
-    // the whole script is an R string, so a literal double quote
-    // here would end it.
-    var sel = '#' + layoutId + ' .pp-ctrl-search-input' +
-      '[data-viz-id=' + JSON.stringify(searchState.vizId) + ']';
-    var el = /** @type {HTMLInputElement | null} */ (document.querySelector(sel));
-    if (!el || el === document.activeElement) return;
-    if (el.value !== searchState.value) el.value = searchState.value;
-    el.focus();
-    var at = Math.min(searchState.caret, el.value.length);
-    try { el.setSelectionRange(at, at); } catch (e) { /* no-op */ }
-  }
-
-  // Clearing, from the box's own x or from the sidebar's echo of
-  // the term. Both send the empty string through the one channel
-  // the box uses, so there is a single path back to unfiltered.
-  $(document).on('click',
-    '#' + layoutId + ' .pp-ctrl-search-clear', function(e) {
-      e.stopPropagation();
-      if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = null;
-      searchState = null;
-      Shiny.setInputValue(ctrlInputId, {
-        viz_id: $(this).data('viz-id'),
-        param: $(this).data('param'),
-        value: ''
-      }, {priority: 'event'});
-    });
-  $(document).on('click',
-    '#' + layoutId + ' .pp-cohort-bandcap-find', function(e) {
-      e.stopPropagation();
-      if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = null;
-      searchState = null;
-      Shiny.setInputValue(ctrlInputId, {
-        viz_id: $(this).attr('data-viz-id'),
-        param: 'search',
-        value: ''
-      }, {priority: 'event'});
-    });
+  // The find control's own handlers live in pp-find.js: it owns a popover on
+  // <body>, which is what lets it survive the header swap below.
 
   // Radio click
   $(document).on('click', '#' + layoutId + ' .pp-ctrl-radio', function(e) {

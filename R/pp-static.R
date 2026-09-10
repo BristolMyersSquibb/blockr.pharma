@@ -266,14 +266,12 @@ pp_static_ae_gantt <- function(dm_obj, time_range, settings = list(),
   tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
 
-  # The panel's find box, applied to the printed twin as well: a download is
-  # the picture that was on screen, and a PowerPoint of every event from a
+  # The panel's find control, applied to the printed twin as well: a download
+  # is the picture that was on screen, and a PowerPoint of every event from a
   # panel showing two would be a different claim.
-  if (nzchar(as.character(settings$search %||% ""))) {
-    tbl <- tbl[
-      pp_search_match(tbl, c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS"),
-                      settings$search), , drop = FALSE
-    ]
+  if (length(pp_find_picks(settings$find))) {
+    tbl <- tbl[pp_find_match(tbl, settings$find, PP_AE_SEARCH), ,
+               drop = FALSE]
     if (nrow(tbl) == 0) return(NULL)
   }
 
@@ -357,10 +355,10 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   tbl <- tbl[!is.na(if (use_day) tbl$ASTDY else tbl$ASTDT), , drop = FALSE]
   if (nrow(tbl) == 0) return(NULL)
 
-  # The panel's find box, on the printed twin as well (as for the AE
+  # The panel's find control, on the printed twin as well (as for the AE
   # panel): the download is the picture that was on screen.
-  if (nzchar(as.character(settings$search %||% ""))) {
-    tbl <- tbl[pp_search_match(tbl, PP_CM_SEARCH, settings$search), ,
+  if (length(pp_find_picks(settings$find))) {
+    tbl <- tbl[pp_find_match(tbl, settings$find, PP_CM_SEARCH), ,
                drop = FALSE]
     if (nrow(tbl) == 0) return(NULL)
   }

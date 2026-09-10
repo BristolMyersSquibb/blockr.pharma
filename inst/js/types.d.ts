@@ -50,17 +50,53 @@ interface PpSlotUpdate {
   height: number | null;
 }
 
+/** One term the picker can offer, with a count. In the list that rides the
+ *  header `n` is this patient's RECORDS; in the cohort vocabulary below it is
+ *  the number of PATIENTS who have it. */
+interface PpFindOption { value: string; n: number }
+
+/** The terms of one coding level. */
+interface PpFindGroup {
+  /** the column, which is what a pick off this group is matched against */
+  col: string;
+  /** its display name ("Body system") */
+  label: string;
+  options: PpFindOption[];
+  /** how many the cap left out, or 0 */
+  truncated: number;
+}
+
+/** `find_vocab`: the COHORT's terms for one panel, in reply to the input of
+ *  the same name. `unchanged` means the client's token is still current and
+ *  no list was sent. */
+interface PpFindVocab {
+  viz_id: string;
+  token: string;
+  groups?: PpFindGroup[];
+  unchanged?: boolean;
+}
+
 /* --- What the client sends: Shiny.setInputValue(ns(name), value) --- */
 
 /** `pick_param`: a parameter row, for a multi-parameter panel. */
 interface PpPickParam { viz_id: string; paramcd: string }
 
+/** One filter on a panel's find control. `col` is the coding level the term
+ *  came from and the value is matched against that column exactly; the one
+ *  exception is `"*"`, the free-text pick, which is a substring across every
+ *  column the viz declares (R: pp_find_picks()). */
+interface PpFindPick { col: string; value: string }
+
+/** `find_vocab`: asking for the cohort's terms. `have` is the token of the
+ *  list this client already holds, `""` for none. */
+interface PpFindVocabRequest { viz_id: string; have: string }
+
 /** `viz_ctrl`: one control in a panel header changed. */
 interface PpVizCtrl {
   viz_id: string;
   param: string;
-  /** a pill or radio choice, a toggle, the active chips, or a find term */
-  value: string | boolean | string[];
+  /** a pill or radio choice, a toggle, the active chips, or the find picks */
+  value: string | boolean | string[] | PpFindPick[];
 }
 
 /** Every input by name suffix, with the value it carries. */
@@ -71,6 +107,7 @@ interface PpInputs {
   pick_param: PpPickParam;
   reorder_viz: string[];
   viz_ctrl: PpVizCtrl;
+  find_vocab: PpFindVocabRequest;
   timeline_mode: 'rday' | 'date';
   show_prestudy: boolean;
   smooth_mode: 'off' | 'auto';

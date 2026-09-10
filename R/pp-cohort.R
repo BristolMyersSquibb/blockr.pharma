@@ -230,10 +230,10 @@ pp_sev_rank <- function(x) {
 #'   Defaults to the adverse-event band the sidebar drew before it followed
 #'   the panels. `NULL` explicitly means nothing is drawable and every row
 #'   gets an empty track.
-#' @param search A term the panel's search box is filtering by, or `NULL`.
-#'   Only a spans band declaring `search` columns reads it; the strip then
-#'   paints the same subset the panel is showing, and `hits` reports how many
-#'   of each patient's records matched.
+#' @param picks The driving panel's find picks, or `NULL`. Only a spans band
+#'   declaring `search` columns reads them; the strip then paints the same
+#'   subset the panel is showing, and `hits` reports how many of each
+#'   patient's records matched.
 #' @return `list(kind, day0, days, subjects, hits, ...)` -- the axis bounds in
 #'   study days and a named list, one entry per USUBJID. A `"spans"` band
 #'   gives each subject `list(events = data.frame(start, end, sev), trt_end)`;
@@ -242,7 +242,7 @@ pp_sev_rank <- function(x) {
 #'   reference limit the rows draw against.
 #' @noRd
 pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
-                            band = pp_band_ae(), search = NULL) {
+                            band = pp_band_ae(), picks = NULL) {
 
   ids <- pp_subject_ids(dm_obj)
   empty <- list(kind = "none", day0 = 0, days = 1,
@@ -280,11 +280,11 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
   }
 
   ev <- pp_cohort_span_events(tbls, band, roles$severity, ref = src_ref,
-                              search = search)
-  # How many of this patient's records the search kept, before the axis
+                              picks = picks)
+  # How many of this patient's records the filter kept, before the axis
   # clipping below drops any -- the count answers "who had this", which is a
   # fact about the records and not about what fits on the strip.
-  hits <- if (nzchar(search %||% "")) {
+  hits <- if (length(pp_find_picks(picks))) {
     as.integer(tabulate(match(ev$subject, ids), nbins = length(ids)))
   }
 
@@ -442,13 +442,13 @@ pp_date_to_day <- function(date, ref) {
 #'
 #' @param band The [pp_band_spans()] declaration naming the table, the day /
 #'   date column pairs and the columns a search matches.
-#' @param search A search term, or `NULL`. Filters the records before
-#'   anything is measured, so the strip and the panel show one subset.
+#' @param picks The driving panel's pick list, or `NULL`. Filters the records
+#'   before anything is measured, so the strip and the panel show one subset.
 #' @param ref Per-row reference dates (the patient's treatment start), or
 #'   `NULL`. Only consulted when a day column is missing.
 #' @noRd
 pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
-                                  search = NULL) {
+                                  picks = NULL) {
 
   none <- list(subject = character(), start = numeric(), end = numeric(),
                sev = character(), open = logical())
@@ -457,13 +457,13 @@ pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
   adae <- as.data.frame(tbls[[band$table]])
   if (!"USUBJID" %in% colnames(adae)) return(none)
 
-  # The panel's search, applied to the same records the panel filters. Only
+  # The panel's filter, applied to the same records the panel filters. Only
   # the columns the band declares are matched, and only the ones the study
   # actually carries -- a study without AEHLT is not a study whose search is
   # broken. Dropping every row here is a legitimate answer: it means this
   # patient had none of what was asked for, and the empty track says so.
-  if (nzchar(search %||% "") && length(band$search %||% character())) {
-    hit <- pp_search_match(adae, band$search, search)
+  if (length(pp_find_picks(picks)) && length(band$search %||% character())) {
+    hit <- pp_find_match(adae, picks, band$search)
     adae <- adae[hit, , drop = FALSE]
     ref <- if (!is.null(ref)) ref[hit]
     if (!nrow(adae)) return(none)
@@ -1256,8 +1256,8 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   clip <- vapply(bands, function(b) b$clip %||% "", character(1L))
   clip_lo <- vapply(bands, function(b) b$clip_lo %||% "", character(1L))
 
-  # How many of this patient's records the panel's search matched. Present
-  # only while a search is running, and printed even when it is zero: an
+  # How many of this patient's records the panel's filter matched. Present
+  # only while a filter is running, and printed even when it is zero: an
   # empty band with no number beside it reads as "no data", and the whole
   # point of the count is to tell that apart from "none of what you asked
   # for".
@@ -1270,7 +1270,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   } else {
     # What the list was sorted by, in the same slot. Ordering 254 rows by a
     # peak and printing no peak asks the reader to take the order on faith.
-    # The search count wins the slot when there is one: it is the transient
+    # The filter count wins the slot when there is one: it is the transient
     # thing, and it answers the question that was just asked.
     val <- pp_cohort_sort_values(frame, ord, sort_by, marks)
     if (is.null(val)) {

@@ -126,6 +126,7 @@ new_patient_profile_block <- function(selected = NULL,
   }
 
   # viz_settings keys are validated at runtime (groups are dynamic)
+  viz_settings <- pp_migrate_viz_settings(viz_settings)
 
   blockr.core::new_transform_block(
     server = function(id, data) {
@@ -259,23 +260,22 @@ new_patient_profile_block <- function(selected = NULL,
             }
           })
 
-          # The term the STRIP follows, a beat behind the panel's.
+          # The picks the STRIP follows, a beat behind the panel's.
           #
-          # Both re-derive on the same keystroke and they do not cost the
-          # same: the panel redraws one patient's events, the strip redraws
-          # 254 patients' bands. Landing them together made typing a word
-          # feel nervous -- the sidebar flickering under the cursor while the
-          # chart above it was already settling. Debounced here rather than
-          # in the browser so the panel keeps its own shorter delay: what the
-          # user is looking at while typing answers first, and the list they
-          # will read afterwards catches up.
-          r_band_search_raw <- shiny::debounce(
+          # Both re-derive on the same change and they do not cost the same:
+          # the panel redraws one patient's events, the strip redraws 254
+          # patients' bands. Landing them together made the sidebar flicker
+          # under the cursor while the chart above it was already settling.
+          # Kept now that the picker applies a whole set at once rather than
+          # a character at a time, because the two costs have not changed and
+          # a set can still be built one tick at a time with the popover open.
+          r_band_picks_raw <- shiny::debounce(
             shiny::reactive({
               src <- r_band_source()
               if (is.null(src) || !length(src$band$search %||% character())) {
-                return("")
+                return(list())
               }
-              as.character(r_viz_settings()[[src$viz_id]]$search %||% "")
+              pp_find_picks(r_viz_settings()[[src$viz_id]]$find)
             }),
             350
           )
@@ -285,11 +285,11 @@ new_patient_profile_block <- function(selected = NULL,
           # band source made the strip redraw twice for one change: once when
           # the source moved, and again 350ms later when the debounce fired
           # with a term that had not changed.
-          r_band_search <- shiny::reactiveVal("")
+          r_band_picks <- shiny::reactiveVal(list())
           shiny::observe({
-            v <- r_band_search_raw()
-            if (!identical(shiny::isolate(r_band_search()), v)) {
-              r_band_search(v)
+            v <- r_band_picks_raw()
+            if (!identical(shiny::isolate(r_band_picks()), v)) {
+              r_band_picks(v)
             }
           })
 
@@ -300,17 +300,17 @@ new_patient_profile_block <- function(selected = NULL,
             nd <- r_norm_dm()
             src <- r_band_source()
             if (is.null(nd) || is.null(src)) return(pp_cohort_marks(NULL))
-            # The driving panel's own search filters the strip, so the two
+            # The driving panel's own filter filters the strip, so the two
             # show one subset of the records. A band whose panel declares no
-            # search box is unfiltered whatever else is typed on the board.
-            search <- r_band_search()
+            # find control is unfiltered whatever else is picked on the board.
+            picks <- r_band_picks()
             # Follows the profile's Pre-treatment toggle, so the band and the
             # panels floor their axis at the same place.
             pp_cohort_marks(
               nd, r_roles(),
               prestudy_days = if (r_show_prestudy()) Inf else 30,
               band = src$band,
-              search = search
+              picks = picks
             )
           })
 
@@ -799,6 +799,56 @@ new_patient_profile_block <- function(selected = NULL,
             r_viz_settings(settings)
           })
 
+          # The cohort's vocabulary for a find popover, on request.
+          #
+          # The picker ships this patient's terms with the header (a few
+          # hundred bytes). The COHORT's terms are a different thing: several
+          # hundred rows and about 16kB, bounded by the coding dictionary
+          # rather than by the study's size, and needed only when the reader
+          # types -- looking for a term this patient does not have is how you
+          # arm a filter before paging through the cohort. So it is fetched,
+          # once, and only then.
+          #
+          # The token is a counter rather than a hash: it is bumped by the
+          # same dm the vocabulary is built from, so a client holding the
+          # current token is holding the current list, and an upstream filter
+          # that narrows the cohort invalidates it for free.
+          r_vocab_token <- shiny::reactiveVal(0L)
+          shiny::observeEvent(r_norm_dm(), {
+            r_vocab_token(shiny::isolate(r_vocab_token()) + 1L)
+          })
+          vocab_cache <- new.env(parent = emptyenv())
+
+          shiny::observeEvent(input$find_vocab, {
+            msg <- input$find_vocab
+            viz_id <- as.character(msg$viz_id %||% "")
+            if (!nzchar(viz_id)) return()
+            token <- as.character(r_vocab_token())
+            # The client already has this one; say so rather than resending
+            # 16kB it would throw away.
+            if (identical(as.character(msg$have %||% ""), token)) {
+              pp_send(session, "find_vocab",
+                      list(viz_id = viz_id, token = token, unchanged = TRUE))
+              return()
+            }
+            viz <- r_available()[[viz_id]]
+            ctrl <- viz$controls$find
+            if (is.null(viz) || is.null(ctrl)) return()
+            key <- paste0(viz_id, "@", token)
+            groups <- vocab_cache[[key]]
+            if (is.null(groups)) {
+              groups <- pp_find_vocab(pp_find_table(r_norm_dm(), viz$tables),
+                                      ctrl$levels)
+              # One entry per token: the previous cohort's list is dead the
+              # moment the token moves, and holding both would grow the
+              # session by 16kB per upstream change.
+              rm(list = ls(vocab_cache), envir = vocab_cache)
+              assign(key, groups, envir = vocab_cache)
+            }
+            pp_send(session, "find_vocab",
+                    list(viz_id = viz_id, token = token, groups = groups))
+          })
+
           # Whether a single patient is on screen. A reactiveVal fed by an
           # observer, not a reactive: switching from patient A to patient B
           # re-executes r_scoped_dm but leaves this flag unchanged, and
@@ -966,7 +1016,7 @@ new_patient_profile_block <- function(selected = NULL,
             sorter <- cohort_sort_ui()
             pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
             if (is.null(src) && is.null(sorter) && !nzchar(pre)) return(NULL)
-            pp_band_caption_ui(src, sorter, pre, r_band_search())
+            pp_band_caption_ui(src, sorter, pre, r_band_picks())
           })
 
           # Who is on screen, and the facts about them the sidebar row has

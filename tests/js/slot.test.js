@@ -57,7 +57,7 @@ test('a slot message swaps the header and updates the live chart in place', () =
   h.close();
 });
 
-test('the same header again is not swapped, so the find box keeps its focus', () => {
+test('the same header again is not swapped, so an open control is left alone', () => {
   const h = boot();
   widgetOf(h, 'ae_gantt').__echarts = true;
   h.send('slot', msg());
@@ -98,22 +98,29 @@ test('a message for a panel that is not on the profile does nothing', () => {
   h.close();
 });
 
-test('a swapped header gets the find box text and caret back', () => {
+test('a swapped header leaves an open find popover standing', () => {
+  // The header is replaced wholesale on every settings change, which is why
+  // the popover is parented to <body> instead of living in the control. A
+  // reader mid-pick must not lose their list because the panel redrew.
   const h = boot();
   const slot = h.el('viz_slot_ae_gantt');
   widgetOf(h, 'ae_gantt').__echarts = true;
-  const box = slot.querySelector('.pp-ctrl-search-input');
-  h.type(box, 'head');
-  h.tick(400);
+  const trigger = slot.querySelector('.pp-ctrl-find');
+  h.click(trigger);
+  const popover = h.q('.pp-find-pop.is-open');
+  assert.ok(popover);
+  h.click(popover.querySelectorAll('.pp-find-opt')[0]);
+
   h.send('slot', msg({
-    header: '<div class="pp-chart-header"><div class="pp-ctrl-search">' +
-      '<input type="text" class="pp-ctrl-search-input" ' +
-      'data-viz-id="ae_gantt" data-param="search" value=""></div></div>'
+    header: '<div class="pp-chart-header">' +
+      '<button class="pp-ctrl-find" type="button" data-viz-id="ae_gantt" ' +
+      'data-param="find" data-picks="[]" data-options="[]"></button></div>'
   }));
-  const fresh = slot.querySelector('.pp-ctrl-search-input');
-  assert.notEqual(fresh, box);
-  assert.equal(fresh.value, 'head');
-  assert.equal(h.doc.activeElement, fresh);
+  const fresh = slot.querySelector('.pp-ctrl-find');
+  assert.notEqual(fresh, trigger, 'the trigger was replaced');
+  assert.equal(h.q('.pp-find-pop.is-open'), popover, 'the popover was not');
+  assert.equal(popover.querySelectorAll('.pp-find-tag').length, 1,
+    'and it still holds the pick that has not been sent yet');
   h.close();
 });
 

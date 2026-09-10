@@ -41,6 +41,13 @@
 # filter on this one vector, so a term means the same thing in each.
 PP_CM_SEARCH <- c("CMTRT", "CMDECOD", "CMCLAS")
 
+# The levels the picker offers, coarsest first. CMTRT is the verbatim report
+# and is left out for the reason PP_AE_LEVELS leaves out AETERM.
+PP_CM_LEVELS <- c(
+  CMCLAS = "Drug class",
+  CMDECOD = "Standardised name"
+)
+
 cm_gantt_viz <- new_pp_viz(
   id = "cm_gantt",
   label = "Concomitant Medications",
@@ -59,11 +66,12 @@ cm_gantt_viz <- new_pp_viz(
   # used through, and the one that must stay in view when the header is
   # short of room.
   controls = c(
-    list(search = list(
-      type = "search",
+    list(find = list(
+      type = "find",
       label = "Find",
-      placeholder = "Filter medications",
-      columns = PP_CM_SEARCH
+      placeholder = "Search medications",
+      columns = PP_CM_SEARCH,
+      levels = PP_CM_LEVELS
     )),
     pp_lane_control(PP_CM_LANES, default = "CMDECOD")
   ),
@@ -103,13 +111,12 @@ cm_gantt_viz <- new_pp_viz(
     # The header's find box, applied before the lanes are built so the
     # panel is the panel of the matching medications (see the AE panel).
     # The cohort strip reads the same setting through pp_cohort_marks().
-    search <- as.character(settings$search %||% "")
-    if (nzchar(search)) {
-      tbl <- tbl[pp_search_match(tbl, PP_CM_SEARCH, search), , drop = FALSE]
+    picks <- pp_find_picks(settings$find)
+    if (length(picks)) {
+      total <- nrow(tbl)
+      tbl <- tbl[pp_find_match(tbl, picks, PP_CM_SEARCH), , drop = FALSE]
       if (nrow(tbl) == 0) {
-        return(pp_empty_chart(
-          paste0("No medication matches \u201c", search, "\u201d")
-        ))
+        return(pp_empty_chart(pp_find_empty_msg(total, picks, "medication")))
       }
     }
 

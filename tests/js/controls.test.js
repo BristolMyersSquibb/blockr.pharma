@@ -1,5 +1,5 @@
 /* The controls in a panel's header: pills, chips, toggles, radios and the
- * find box, all funnelled into one viz_ctrl input. And the chart area's
+ * find control, all funnelled into one viz_ctrl input. And the chart area's
  * resize watch. */
 'use strict';
 const test = require('node:test');
@@ -70,66 +70,260 @@ test('chips, toggles and radios built like the header\'s are handled', () => {
   h.close();
 });
 
-test('the find box waits 400ms after the last keystroke, then sends once', () => {
+/* The find control. The trigger is in the header; the popover it opens is
+ * parented to <body> and owned by pp-find.js, which is what lets it survive
+ * the header swap a settings change performs. */
+const trigger = (h) => gantt(h).querySelector('.pp-ctrl-find');
+const pop = (h) => h.q('.pp-find-pop.is-open');
+const optRows = (h) => Array.from(pop(h).querySelectorAll('.pp-find-opt'))
+  .map((o) => o.querySelector('.pp-find-text').textContent);
+
+test('the trigger opens a popover listing every coding level with counts', () => {
   const h = boot();
-  const box = gantt(h).querySelector('.pp-ctrl-search-input');
-  h.type(box, 'he');
-  assert.equal(box.closest('.pp-ctrl-search').classList.contains('is-active'), true);
-  h.tick(300);
-  h.type(box, 'head');
-  h.tick(399);
+  assert.equal(pop(h), null, 'nothing is open before the click');
+  h.click(trigger(h));
+  const groups = Array.from(pop(h).querySelectorAll('.pp-find-group'))
+    .map((g) => g.textContent);
+  assert.deepEqual(groups, ['Body system', 'High level term', 'Preferred term']);
+  // The dictionary shouts; the list does not.
+  assert.ok(optRows(h).includes('Diarrhoea'));
+  // Every row carries this patient's record count, which is what answers
+  // "which of my events are these" before the panel redraws.
+  assert.ok(Array.from(pop(h).querySelectorAll('.pp-find-n'))
+    .every((n) => /^[0-9]+$/.test(n.textContent)));
+  // Nothing is sent by opening it.
   assert.equal(h.inputs('viz_ctrl').length, 0);
-  h.tick(1);
-  assert.deepEqual(h.inputs('viz_ctrl').map((i) => i.value),
-    [{ viz_id: 'ae_gantt', param: 'search', value: 'head' }]);
-  h.type(box, '');
-  assert.equal(box.closest('.pp-ctrl-search').classList.contains('is-active'), false);
   h.close();
 });
 
-test('a panel re-rendering within 2.5s gets the find text and focus back', () => {
+test('typing filters the list without touching the server', () => {
   const h = boot();
-  const slot = gantt(h);
-  const box = slot.querySelector('.pp-ctrl-search-input');
-  h.type(box, 'head');
-  h.tick(400);
-  // R re-renders the panel with an empty box, as the search filters it.
-  const html = slot.innerHTML;
-  h.doc.body.focus();
-  slot.innerHTML = html;
-  const fresh = slot.querySelector('.pp-ctrl-search-input');
-  fresh.value = '';
-  h.rendered('viz_slot_ae_gantt');
-  h.tick(0);
-  assert.equal(fresh.value, 'head');
-  assert.equal(h.doc.activeElement, fresh);
-
-  // Long after, a render leaves the box alone.
-  h.tick(3000);
-  slot.innerHTML = html;
-  const later = slot.querySelector('.pp-ctrl-search-input');
-  later.value = '';
-  h.rendered('viz_slot_ae_gantt');
-  h.tick(0);
-  assert.equal(later.value, '');
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'diarr');
+  assert.deepEqual(optRows(h), ['Diarrhoea']);
+  h.tick(1000);
+  assert.equal(h.inputs('viz_ctrl').length, 0, 'no round trip while typing');
   h.close();
 });
 
-test('the clear glyph and the caption\'s find link both empty the search', () => {
+test('picks batch: several ticks, one send, and only on close', () => {
   const h = boot();
-  const wrap = gantt(h).querySelector('.pp-ctrl-search');
-  wrap.insertAdjacentHTML('beforeend',
-    '<span class="pp-ctrl-search-clear" data-viz-id="ae_gantt" data-param="search"></span>');
-  h.type(wrap.querySelector('input'), 'x');
-  h.click(wrap.querySelector('.pp-ctrl-search-clear'));
-  assert.deepEqual(h.lastInput('viz_ctrl'), { viz_id: 'ae_gantt', param: 'search', value: '' });
-  h.tick(400);
-  assert.equal(h.inputs('viz_ctrl').length, 1, 'the pending keystroke was cancelled');
+  h.click(trigger(h));
+  const rows = () => Array.from(pop(h).querySelectorAll('.pp-find-opt'));
+  h.click(rows()[0]);
+  h.click(rows()[1]);
+  assert.equal(h.inputs('viz_ctrl').length, 0,
+    'a change to this setting redraws 254 cohort bands; ticking must not');
+  assert.equal(pop(h).querySelectorAll('.pp-find-tag').length, 2);
+  h.click(pop(h).querySelector('.pp-find-done'));
+  const sent = h.inputs('viz_ctrl');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].value.viz_id, 'ae_gantt');
+  assert.equal(sent[0].value.param, 'find');
+  assert.equal(sent[0].value.value.length, 2);
+  assert.equal(sent[0].value.value[0].col, 'AEBODSYS');
+  h.close();
+});
+
+test('a click outside applies, Escape abandons', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.click(pop(h).querySelectorAll('.pp-find-opt')[0]);
+  h.click(h.doc.body);
+  assert.equal(h.inputs('viz_ctrl').length, 1, 'clicking away applies');
+
+  h.resetInputs();
+  h.click(trigger(h));
+  h.click(pop(h).querySelectorAll('.pp-find-opt')[1]);
+  h.key(h.q('.pp-find-pop'), 'Escape');
+  assert.equal(h.inputs('viz_ctrl').length, 0,
+    'Escape abandons: the picks were never sent, so there is nothing to undo');
+  h.close();
+});
+
+test('opening and closing without a change sends nothing', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.click(pop(h).querySelector('.pp-find-done'));
+  assert.equal(h.inputs('viz_ctrl').length, 0);
+  h.close();
+});
+
+test('arrows walk the rows, Space ticks, Enter ticks and closes', () => {
+  const h = boot();
+  h.click(trigger(h));
+  const box = h.q('.pp-find-pop');
+  h.key(box, 'ArrowDown');
+  h.key(box, ' ');
+  assert.equal(pop(h).querySelectorAll('.pp-find-opt.is-picked').length, 1);
+  h.key(box, 'ArrowDown');
+  h.key(box, 'Enter');
+  assert.equal(h.q('.pp-find-pop.is-open'), null, 'Enter closes');
+  assert.equal(h.lastInput('viz_ctrl').value.length, 2);
+  h.close();
+});
+
+/* The cohort's terms. The list that rides the header is this patient's, which
+ * is what makes its counts mean something and what makes it useless for
+ * arming a filter before paging through the cohort. */
+const VOCAB = {
+  viz_id: 'ae_gantt',
+  token: '1',
+  groups: [{
+    col: 'AEDECOD', label: 'Preferred term', truncated: 0,
+    options: [{ value: 'PNEUMONIA', n: 12 }, { value: 'DIARRHOEA', n: 40 }]
+  }]
+};
+
+test('typing asks for the cohort terms once, and not before', () => {
+  const h = boot();
+  h.click(trigger(h));
+  assert.equal(h.inputs('find_vocab').length, 0, 'opening asks for nothing');
+  h.type(pop(h).querySelector('.pp-find-input'), 'pn');
+  assert.deepEqual(h.lastInput('find_vocab'), { viz_id: 'ae_gantt', have: '' });
+  // One request per popover session, however much is typed after it.
+  h.type(pop(h).querySelector('.pp-find-input'), 'pneu');
+  h.type(pop(h).querySelector('.pp-find-input'), 'pneumo');
+  assert.equal(h.inputs('find_vocab').length, 1);
+  h.close();
+});
+
+test('the cohort terms are offered under a split, counted in patients', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'pneu');
+  // Until the reply lands the reader is told the cohort is being searched,
+  // rather than being shown "no matches" and stopping there.
+  assert.match(pop(h).textContent, /Searching the rest of the cohort/);
+
+  h.send('find_vocab', VOCAB);
+  assert.match(pop(h).textContent, /Not in this patient/);
+  const row = pop(h).querySelector('.pp-find-opt.is-elsewhere');
+  assert.match(row.textContent, /Pneumonia/);
+  // A different unit from this patient's record counts beside it, so it is
+  // spelled out rather than left as a bare number.
+  assert.match(row.querySelector('.pp-find-n').textContent, /^12 patients$/);
+
+  // Picking one is the point: it applies like any other pick, and the panel
+  // goes to its empty state until a patient who has it comes up.
+  h.click(row);
+  h.click(pop(h).querySelector('.pp-find-done'));
+  assert.deepEqual(h.lastInput('viz_ctrl').value,
+    [{ col: 'AEDECOD', value: 'PNEUMONIA' }]);
+  h.close();
+});
+
+test('a cohort term this patient DOES have is not listed twice', () => {
+  const h = boot();
+  h.click(trigger(h));
+  // DIARRHOEA is in this patient's own list (the fixture's header carries it).
+  h.type(pop(h).querySelector('.pp-find-input'), 'diarr');
+  h.send('find_vocab', VOCAB);
+  const rows = Array.from(pop(h).querySelectorAll('.pp-find-opt'))
+    .map((o) => o.querySelector('.pp-find-text').textContent);
+  assert.deepEqual(rows, ['Diarrhoea']);
+  assert.equal(pop(h).querySelectorAll('.is-elsewhere').length, 0);
+  h.close();
+});
+
+test('a second search session sends the token instead of asking again', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'pn');
+  h.send('find_vocab', VOCAB);
+  h.click(pop(h).querySelector('.pp-find-done'));
+
+  h.resetInputs();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'pn');
+  assert.deepEqual(h.lastInput('find_vocab'), { viz_id: 'ae_gantt', have: '1' });
+  // The server says the list has not moved and sends none of it; what the
+  // client already holds is still drawn.
+  h.send('find_vocab', { viz_id: 'ae_gantt', token: '1', unchanged: true });
+  assert.equal(pop(h).querySelectorAll('.pp-find-opt.is-elsewhere').length, 1);
+  h.close();
+});
+
+test('a new cohort replaces the terms the client was holding', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'pn');
+  h.send('find_vocab', VOCAB);
+  assert.equal(pop(h).querySelectorAll('.pp-find-opt.is-elsewhere').length, 1);
+  // An upstream filter narrowed the cohort: a new token, a new list, and
+  // the term that is no longer in it is gone.
+  h.send('find_vocab', { viz_id: 'ae_gantt', token: '2', groups: [] });
+  assert.equal(pop(h).querySelectorAll('.pp-find-opt.is-elsewhere').length, 0);
+  h.close();
+});
+
+test('the cohort list is only offered while something is typed', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'pn');
+  h.send('find_vocab', VOCAB);
+  assert.equal(pop(h).querySelectorAll('.is-elsewhere').length, 1);
+  // Cleared again: several hundred cohort rows would bury this patient's few.
+  h.type(pop(h).querySelector('.pp-find-input'), '');
+  assert.equal(pop(h).querySelectorAll('.is-elsewhere').length, 0);
+  assert.equal(pop(h).textContent.indexOf('Not in this patient'), -1);
+  h.close();
+});
+
+test('a query nothing codes for becomes a free-text pick', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'zzzz');
+  assert.equal(pop(h).querySelectorAll('.pp-find-opt').length, 0);
+  h.click(pop(h).querySelector('.pp-find-free'));
+  h.click(pop(h).querySelector('.pp-find-done'));
+  // Which is exactly what the box this control replaced always sent.
+  assert.deepEqual(h.lastInput('viz_ctrl').value, [{ col: '*', value: 'zzzz' }]);
+  h.close();
+});
+
+test('Enter on a query that matched nothing does the same', () => {
+  const h = boot();
+  h.click(trigger(h));
+  h.type(pop(h).querySelector('.pp-find-input'), 'zzzz');
+  h.key(h.q('.pp-find-pop'), 'Enter');
+  assert.deepEqual(h.lastInput('viz_ctrl').value, [{ col: '*', value: 'zzzz' }]);
+  h.close();
+});
+
+test('a pick this patient has none of is shown at zero, never dropped', () => {
+  const h = boot();
+  const t = trigger(h);
+  t.setAttribute('data-picks',
+    '[{"col":"AEBODSYS","value":"CARDIAC DISORDERS"}]');
+  h.click(t);
+  const zero = Array.from(pop(h).querySelectorAll('.pp-find-opt.is-zero'));
+  assert.equal(zero.length, 1);
+  assert.match(zero[0].textContent, /Cardiac disorders/);
+  assert.ok(zero[0].classList.contains('is-picked'));
+  // And it can be taken off again, which is the whole reason it is drawn:
+  // picks survive a patient switch on purpose.
+  h.click(zero[0]);
+  h.click(pop(h).querySelector('.pp-find-done'));
+  assert.deepEqual(h.lastInput('viz_ctrl').value, []);
+  h.close();
+});
+
+test("the trigger's x and the caption's chip both clear every pick", () => {
+  const h = boot();
+  const header = gantt(h).querySelector('.pp-chart-header');
+  header.insertAdjacentHTML('beforeend',
+    '<button class="pp-ctrl-find-clear" data-viz-id="ae_gantt" ' +
+    'data-param="find"></button>');
+  h.click(header.querySelector('.pp-ctrl-find-clear'));
+  assert.deepEqual(h.lastInput('viz_ctrl'),
+    { viz_id: 'ae_gantt', param: 'find', value: [] });
 
   h.el('cohort_band_caption').insertAdjacentHTML('beforeend',
     '<a class="pp-cohort-bandcap-find" data-viz-id="ae_gantt"></a>');
   h.click(h.q('.pp-cohort-bandcap-find'));
-  assert.deepEqual(h.lastInput('viz_ctrl'), { viz_id: 'ae_gantt', param: 'search', value: '' });
+  assert.deepEqual(h.lastInput('viz_ctrl'),
+    { viz_id: 'ae_gantt', param: 'find', value: [] });
   h.close();
 });
 

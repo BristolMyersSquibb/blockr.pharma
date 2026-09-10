@@ -154,50 +154,71 @@ pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
           choice_names[idx]
         )
       )
-    } else if (ctrl$type == "search") {
-      # A find box for the panel's own records. It filters the
-      # chart AND the sidebar's cohort band (see r_cohort_marks),
-      # so the strip answers "who else had this" while the panel
-      # answers "when did this patient have it".
-      term <- as.character(cur_val %||% "")
-      hits <- pp_ctrl_search_hits(ctrl, dm_obj, viz$tables, term)
-      # The modifier names the one group in the row that can give way: on a
-      # narrow panel the controls take a row of their own and the box
-      # absorbs whatever the pill beside it leaves (see the container query
-      # in the stylesheet). A class rather than `:has(> .pp-ctrl-search)`,
-      # which restyles the whole document under Shiny (blockr.ui#41).
-      shiny::div(class = "pp-ctrl-group pp-ctrl-group--search",
-        shiny::div(
-          class = paste("pp-ctrl-search",
-                        if (nzchar(term)) "is-active"),
+    } else if (ctrl$type == "find") {
+      # The panel's filter. One compact trigger in the header; the picking
+      # happens in a popover the client owns and parents to <body>
+      # (pp-find.js), which is what lets it survive the header swap a
+      # settings change performs (pp_slot_update()).
+      #
+      # The options travel WITH the header rather than being fetched when
+      # the popover opens: a typical patient's list is a few hundred bytes
+      # against a slot payload of nine kilobytes, and a control that has to
+      # wait a round trip before it can show you anything is the one thing
+      # this control cannot be.
+      tbl <- pp_find_table(dm_obj, viz$tables)
+      # Nothing to filter is not a filter. A patient with no records in this
+      # table gets the panel's own "no records" message and no control at
+      # all, the rule the gear already follows: no options, no control.
+      if (is.null(tbl) || !nrow(tbl)) return(NULL)
+      picks <- pp_find_picks(cur_val)
+      opts <- pp_find_options(tbl, ctrl$levels)
+      if (!length(opts) && !length(picks)) return(NULL)
+      hits <- pp_find_hits(ctrl, dm_obj, viz$tables, picks)
+      labs <- pp_find_labels(picks)
+
+      shiny::div(class = "pp-ctrl-group pp-ctrl-group--find",
+        shiny::tags$button(
+          class = paste("pp-ctrl-find", if (length(picks)) "is-active"),
+          type = "button",
+          `data-viz-id` = viz_id,
+          `data-param` = param,
+          `data-picks` = as.character(jsonlite::toJSON(picks,
+                                                       auto_unbox = TRUE)),
+          `data-options` = as.character(jsonlite::toJSON(opts,
+                                                        auto_unbox = TRUE)),
+          `data-placeholder` = ctrl$placeholder %||% "Search",
+          # The trigger names the control; the tooltip names the state,
+          # which is the half that does not fit in the header.
+          title = if (length(labs)) {
+            paste0("Filtering on ", paste(labs, collapse = ", "))
+          } else {
+            ctrl$placeholder %||% ctrl$label
+          },
           shiny::HTML(pp_search_icon()),
-          shiny::tags$input(
-            type = "text",
-            class = "pp-ctrl-search-input",
-            `data-viz-id` = viz_id,
-            `data-param` = param,
-            placeholder = ctrl$placeholder %||% ctrl$label,
-            value = term
-          ),
-          # The count is the honest feedback: it says how many of
-          # this patient's records survived before the panel goes
-          # blank, so an empty chart is never mistaken for a
-          # patient with no records at all.
+          shiny::span(class = "pp-ctrl-find-label", ctrl$label %||% "Find"),
+          if (length(picks)) {
+            shiny::span(class = "pp-ctrl-find-badge", length(picks))
+          },
+          # The same honest count the find box printed: how many of this
+          # patient's records survived, so an empty panel is never mistaken
+          # for a patient with no records at all.
           if (!is.null(hits)) {
-            shiny::span(class = "pp-ctrl-search-hits",
+            shiny::span(class = "pp-ctrl-find-hits",
                         paste0(hits$n, "/", hits$total))
           },
-          if (nzchar(term)) {
-            shiny::tags$button(
-              class = "pp-ctrl-search-clear",
-              type = "button",
-              `data-viz-id` = viz_id,
-              `data-param` = param,
-              title = "Clear",
-              shiny::HTML("&times;")
-            )
-          }
-        )
+          shiny::span(class = "pp-ctrl-find-caret",
+                      shiny::HTML("&#9662;"))
+        ),
+        if (length(picks)) {
+          shiny::tags$button(
+            class = "pp-ctrl-find-clear",
+            type = "button",
+            `data-viz-id` = viz_id,
+            `data-param` = param,
+            title = "Clear the filters",
+            shiny::HTML("&times;")
+          )
+        }
       )
     } else if (ctrl$type == "radio") {
       choices <- ctrl$choices

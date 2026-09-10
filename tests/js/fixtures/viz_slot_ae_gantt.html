@@ -3,11 +3,12 @@
   <div class="pp-chart-title" title="Gantt bars showing AE duration by preferred term">Adverse Events</div>
   <span class="pp-band-tag" title="Shown for every patient in the list of patients"><svg class="pp-band-glyph" width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><circle cx="4.5" cy="4.5" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
   <div class="pp-chart-controls">
-    <div class="pp-ctrl-group pp-ctrl-group--search">
-      <div class="pp-ctrl-search ">
+    <div class="pp-ctrl-group pp-ctrl-group--find">
+      <button class="pp-ctrl-find " type="button" data-viz-id="ae_gantt" data-param="find" data-picks="[]" data-options="[{&quot;col&quot;:&quot;AEBODSYS&quot;,&quot;label&quot;:&quot;Body system&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;GASTROINTESTINAL DISORDERS&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;GENERAL DISORDERS AND ADMINISTRATION SITE CONDITIONS&quot;,&quot;n&quot;:2}],&quot;truncated&quot;:0},{&quot;col&quot;:&quot;AEHLT&quot;,&quot;label&quot;:&quot;High level term&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;HLT_0148&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;HLT_0317&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;HLT_0617&quot;,&quot;n&quot;:1}],&quot;truncated&quot;:0},{&quot;col&quot;:&quot;AEDECOD&quot;,&quot;label&quot;:&quot;Preferred term&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;APPLICATION SITE ERYTHEMA&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;APPLICATION SITE PRURITUS&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;DIARRHOEA&quot;,&quot;n&quot;:1}],&quot;truncated&quot;:0}]" data-placeholder="Search all coding levels" title="Search all coding levels">
         <svg class="pp-search-icon" xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
-        <input type="text" class="pp-ctrl-search-input" data-viz-id="ae_gantt" data-param="search" placeholder="Filter events" value=""/>
-      </div>
+        <span class="pp-ctrl-find-label">Find</span>
+        <span class="pp-ctrl-find-caret">&#9662;</span>
+      </button>
     </div>
     <div class="pp-ctrl-group">
       <span class="pp-ctrl-label">Lanes</span>

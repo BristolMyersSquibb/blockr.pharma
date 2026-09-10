@@ -31,14 +31,14 @@ pp_cohort_sort_ui <- function(choices, cur, ns) {
 }
 
 #' The caption above the cohort list: what the band shows, the live find
-#' term, the shared id prefix, and the sort clause.
+#' picks, the shared id prefix, and the sort clause.
 #'
 #' @param src The band source, or `NULL`.
 #' @param sorter The sort clause, or `NULL`.
 #' @param pre The id prefix every patient shares.
-#' @param search The panel's live find term, if any.
+#' @param picks The driving panel's find picks, if any.
 #' @noRd
-pp_band_caption_ui <- function(src, sorter, pre, search) {
+pp_band_caption_ui <- function(src, sorter, pre, picks) {
   shiny::div(
     class = "pp-cohort-bandcap",
     if (!is.null(src)) shiny::HTML(pp_band_glyph()),
@@ -63,16 +63,27 @@ pp_band_caption_ui <- function(src, sorter, pre, search) {
     if (!is.null(src) && !is.null(src$sub)) {
       shiny::span(class = "pp-cohort-bandcap-sub", src$sub)
     },
-    # The panel's search, echoed. Without it the bands go sparse
+    # The panel's filter, echoed. Without it the bands go sparse
     # for no visible reason, which is the sidebar quietly lying
-    # about the cohort.
-    if (!is.null(src) && nzchar(search %||% "")) {
+    # about the cohort. There is room for one pick and a count of
+    # the rest; the tooltip names them all, and the click clears
+    # them all, because a chip that removed only the one it names
+    # would leave the caption saying "+2" with no way to reach the
+    # two.
+    if (!is.null(src) && length(pp_find_picks(picks))) {
+      labs <- pp_find_labels(picks)
       shiny::span(
         class = "pp-cohort-bandcap-find",
         `data-viz-id` = src$viz_id,
-        title = paste0("Showing only records matching \u201c",
-                       search, "\u201d; click to clear"),
-        shiny::span(paste0("\u201c", search, "\u201d")),
+        title = paste0("Showing only records matching ",
+                       paste(labs, collapse = ", "), "; click to clear"),
+        # One pick is named; several are counted. There is no width here for
+        # "General disorders and administration site conditions +2" -- it
+        # ellipsized to "G..", which says less than a number does. The
+        # tooltip names them all either way.
+        shiny::span(if (length(labs) == 1L) labs else {
+          paste(length(labs), "filters")
+        }),
         shiny::HTML("&times;")
       )
     },
