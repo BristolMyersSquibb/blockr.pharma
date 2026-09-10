@@ -159,6 +159,11 @@
   border-radius: 8px;
   border: 1px solid var(--blockr-color-border, #e5e7eb);
   overflow: hidden;
+  /* The query container the header's controls row measures itself against
+     (see "The narrow header" below). The panel and not the viewport: the
+     profile's width is the dock sash, and a viewport query would put the
+     controls on their own row in a rail that had just been widened. */
+  container-type: inline-size;
 }
 
 .pp-chart-panel:last-child {
@@ -425,6 +430,61 @@
   order: 1;
   flex-basis: 100%;
   padding-left: 18px;
+}
+
+/* =========================================================================
+   The narrow header: the controls take a row of their own
+   -------------------------------------------------------------------------
+   A card panel is 311px in the 600px rail, and the gantts' header wants a
+   title, a find box and a Lanes pill in it. On the title row that fits at
+   about 460px and not below: the find box was cut mid-placeholder and the
+   pill was off the panel entirely, reachable only by dragging the controls'
+   own scrollbar -- 15px of grey with arrows under a 22px row on Windows, so
+   the row cost its height anyway and gave nothing back.
+
+   The whole controls group moves, not the find box alone. Moving one control
+   down leaves the pill scrolling next to a gap where the box used to be, and
+   a header with a legend would then be three rows deep for one control.
+
+   Same mechanism the legend uses, so the two stack in reading order: title,
+   what you can set, what the colours mean.
+   ========================================================================= */
+@container (max-width: 460px) {
+  .pp-chart-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /* Both selectors, because the zero basis .has-legend sets is the more
+     specific rule and it is for a controls group sharing the title row. */
+  .pp-chart-header .pp-chart-controls,
+  .pp-chart-header.has-legend .pp-chart-controls {
+    order: 1;
+    flex-basis: 100%;
+    padding-left: 18px;
+  }
+
+  .pp-chart-header.has-legend .pp-chart-legend {
+    order: 2;
+  }
+
+  /* The row's elastic item, and the only one that can be: the find box is a
+     text field with no minimum, while the pill beside it is a fixed set of
+     words. Growing, so the box takes the width the pill leaves; shrinking,
+     so 14px of deficit costs the box 14px instead of putting a scrollbar
+     under the row. */
+  .pp-chart-header .pp-ctrl-group--search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pp-chart-header .pp-ctrl-group--search .pp-ctrl-search {
+    flex: 1 1 auto;
+  }
+
+  .pp-chart-header .pp-ctrl-group--search .pp-ctrl-search-input {
+    width: 100%;
+  }
 }
 
 .pp-legend-item {

@@ -47,3 +47,21 @@ test_that("the block UI mounts the client with the namespace it was given", {
   expect_match(ui, 'id="t-pp_layout"')
   expect_match(ui, 'PatientProfile.mount\\(\\{"id":"t"', fixed = FALSE)
 })
+
+test_that("the find box's group is named, so the narrow row has one item that gives", {
+  # On a panel under 460px the controls take a row of their own and the find
+  # box absorbs what the pill beside it leaves. The stylesheet needs to know
+  # WHICH group that is, and `:has(> .pp-ctrl-search)` is not an option here
+  # (blockr.ui#41: it restyles the whole document under Shiny), so the class
+  # is written at the source.
+  dm_obj <- pp_normalize_dm(dm::dm(
+    adsl = data.frame(USUBJID = "S-1", stringsAsFactors = FALSE),
+    adcm = data.frame(USUBJID = "S-1", CMTRT = "ASPIRIN",
+                      CMDECOD = "ASPIRIN", CMCLAS = "ANALGESIC", ASTDY = 1,
+                      stringsAsFactors = FALSE)
+  ))
+  out <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", dm_obj, list()))
+  expect_match(out, "pp-ctrl-group pp-ctrl-group--search", fixed = TRUE)
+  # The pill's group is NOT named: it is the fixed half of the row.
+  expect_match(out, '<div class="pp-ctrl-group">', fixed = TRUE)
+})

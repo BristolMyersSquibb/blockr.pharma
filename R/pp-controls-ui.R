@@ -161,7 +161,12 @@ pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
       # answers "when did this patient have it".
       term <- as.character(cur_val %||% "")
       hits <- pp_ctrl_search_hits(ctrl, dm_obj, viz$tables, term)
-      shiny::div(class = "pp-ctrl-group",
+      # The modifier names the one group in the row that can give way: on a
+      # narrow panel the controls take a row of their own and the box
+      # absorbs whatever the pill beside it leaves (see the container query
+      # in the stylesheet). A class rather than `:has(> .pp-ctrl-search)`,
+      # which restyles the whole document under Shiny (blockr.ui#41).
+      shiny::div(class = "pp-ctrl-group pp-ctrl-group--search",
         shiny::div(
           class = paste("pp-ctrl-search",
                         if (nzchar(term)) "is-active"),
