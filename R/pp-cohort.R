@@ -494,7 +494,15 @@ pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
   if (all(is.na(start))) return(none)
   # An end before the start is data we cannot draw; treat it as no end at
   # all rather than as a backwards bar.
-  open <- is.na(end) | end < start
+  #
+  # A record with no start at all is dropped below (`keep`), but it must not
+  # make `open` NA on the way there: `end[open] <- start[open]` is a
+  # subscripted assignment, and R stops with "NAs are not allowed in
+  # subscripted assignments" the moment the index carries one alongside a
+  # TRUE. Concomitant medications are where this bites -- a med the patient
+  # cannot date the start of but stopped on a known day is ordinary CM data,
+  # and every CM table also has ongoing records to supply the TRUE.
+  open <- is.na(end) | (!is.na(start) & end < start)
   end[open] <- start[open]
 
   sev <- if (!is.null(sev_col) && sev_col %in% colnames(adae)) {

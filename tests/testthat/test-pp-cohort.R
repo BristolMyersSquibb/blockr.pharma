@@ -149,6 +149,26 @@ test_that("an end before the start is treated as no end, not a backwards bar", {
   expect_gte(ev$end[[1]], ev$start[[1]])
 })
 
+test_that("a record with no start does not kill the band it is in", {
+  # An undated start next to an ongoing record made `open` carry both TRUE
+  # and NA, and `end[open] <- start[open]` is a subscripted assignment: R
+  # stops with "NAs are not allowed in subscripted assignments". The strip is
+  # read from a plain observer, so the error ended the session -- on Connect,
+  # a crash. Concomitant medications are the domain where it fires: a med
+  # whose start the patient cannot date but whose stop day is recorded is
+  # ordinary CM data, and every CM table also has ongoing records.
+  adae <- test_adae()
+  adae$ASTDY <- c(5, NA, 3)
+  adae$AENDY <- c(9, 44, NA)
+  d <- cohort_dm(test_adsl(), adae)
+  m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  # The undated record is dropped, the dated one stays, the ongoing one runs
+  # to its own patient end.
+  expect_identical(nrow(m$subjects[["S-1"]]$events), 1L)
+  expect_identical(m$subjects[["S-1"]]$events$start[[1]], 5)
+  expect_identical(nrow(m$subjects[["S-2"]]$events), 1L)
+})
+
 test_that("the band draws one span per event, in adae order", {
   d <- cohort_dm(test_adsl(), test_adae())
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
