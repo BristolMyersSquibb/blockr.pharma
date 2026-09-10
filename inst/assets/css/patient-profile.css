@@ -159,11 +159,6 @@
   border-radius: 8px;
   border: 1px solid var(--blockr-color-border, #e5e7eb);
   overflow: hidden;
-  /* The query container the header's controls row measures itself against
-     (see "The narrow header" below). The panel and not the viewport: the
-     profile's width is the dock sash, and a viewport query would put the
-     controls on their own row in a rail that had just been widened. */
-  container-type: inline-size;
 }
 
 .pp-chart-panel:last-child {
@@ -390,101 +385,44 @@
   white-space: nowrap;
 }
 
-/* A panel's legend: decodes the bar colors. Holds its natural width so
-   the levels read as one line, and wraps rather than overflowing if a
-   study carries enough severity levels to run out of row. */
+/* A panel's legend: decodes the bar colors. The header's last row (see "The
+   header's rows" below), and it wraps within it if a study carries enough
+   severity levels to run out of one. */
 .pp-chart-legend {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   flex-shrink: 0;
-}
-
-/* --- The legend row --------------------------------------------------------
-   The legend used to sit on the title row, right of the controls, from
-   when the header had the room (the domain label had just gone). The find
-   box then took that room: on a 600px profile the two shared about 110px,
-   and the legend, which never shrinks, was what pushed the find box out
-   of view. It is the chart's key, not a control, so it has a row of its
-   own under the title, in every header that carries one (AE severity, CM
-   indication, response). Inside the header rather than in the body, so
-   the per-patient header swap (the `slot` message) carries it unchanged.
-   ========================================================================= */
-.pp-chart-header.has-legend {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-
-.pp-chart-header.has-legend .pp-chart-controls {
-  /* A zero basis. In a wrapping row it is an item's basis that decides
-     whether it wraps, and the controls' content width would start a row of
-     its own long before it started to scroll. Growth then fills the row. */
-  flex-basis: 0;
-}
-
-.pp-chart-header.has-legend .pp-chart-legend {
-  /* Last, and the full width, so it is the second row whatever the DOM
-     order (the download menu and the (x) come after it there and belong on
-     the title row). 18px = the grip and its gap: under the title's text. */
-  order: 1;
+  order: 2;
   flex-basis: 100%;
   padding-left: 18px;
 }
 
-/* =========================================================================
-   The narrow header: the controls take a row of their own
-   -------------------------------------------------------------------------
-   A card panel is 311px in the 600px rail, and the gantts' header wants a
-   title, a find box and a Lanes pill in it. On the title row that fits at
-   about 460px and not below: the find box was cut mid-placeholder and the
-   pill was off the panel entirely, reachable only by dragging the controls'
-   own scrollbar -- 15px of grey with arrows under a 22px row on Windows, so
-   the row cost its height anyway and gave nothing back.
+/* --- The header's rows ------------------------------------------------------
+   Three rows, in reading order: the title, what you can set, what the
+   colours mean. Both lower rows are the full width and indented 18px -- the
+   grip and its gap -- so they line up under the title's text.
 
-   The whole controls group moves, not the find box alone. Moving one control
-   down leaves the pill scrolling next to a gap where the box used to be, and
-   a header with a legend would then be three rows deep for one control.
+   Everything used to sit on the title row, and a card is 311px in the 600px
+   rail. The legend went first: it never shrinks, and on a 600px profile it
+   and the find box shared about 110px. The controls followed for the same
+   reason -- the find box was cut mid-placeholder and the gantts' Lanes pill
+   was off the panel entirely, reachable only by dragging the controls' own
+   scrollbar, which is 15px of grey with arrows under a 22px row on Windows.
+   The row cost its height anyway and gave nothing back.
 
-   Same mechanism the legend uses, so the two stack in reading order: title,
-   what you can set, what the colours mean.
+   Unconditionally, not under a container query at the width where the title
+   row runs out: the profile is read in the rail, so the wide sash where the
+   old single row still fitted is rare enough that making the header move
+   between the two was the more confusing half of the trade.
+
+   The download menu and the (x) come after the controls and the legend in
+   the DOM and belong on the title row, which `order` is what keeps.
    ========================================================================= */
-@container (max-width: 460px) {
-  .pp-chart-header {
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-
-  /* Both selectors, because the zero basis .has-legend sets is the more
-     specific rule and it is for a controls group sharing the title row. */
-  .pp-chart-header .pp-chart-controls,
-  .pp-chart-header.has-legend .pp-chart-controls {
-    order: 1;
-    flex-basis: 100%;
-    padding-left: 18px;
-  }
-
-  .pp-chart-header.has-legend .pp-chart-legend {
-    order: 2;
-  }
-
-  /* The row's elastic item, and the only one that can be: the find box is a
-     text field with no minimum, while the pill beside it is a fixed set of
-     words. Growing, so the box takes the width the pill leaves; shrinking,
-     so 14px of deficit costs the box 14px instead of putting a scrollbar
-     under the row. */
-  .pp-chart-header .pp-ctrl-group--search {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .pp-chart-header .pp-ctrl-group--search .pp-ctrl-search {
-    flex: 1 1 auto;
-  }
-
-  .pp-chart-header .pp-ctrl-group--search .pp-ctrl-search-input {
-    width: 100%;
-  }
+.pp-chart-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .pp-legend-item {
@@ -530,21 +468,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  /* `flex: 1` is `1 1 0%`, and a ZERO basis is what clipped the value pill:
-     with no free space to grow into, the wrapper stayed at its 8px of
-     padding while a 45px pill sat inside it, cut off at the panel edge. It
-     is a control, so it is sized by its content and gives way only after
-     the sublabel has (which is what that item's shrink factor is for). */
-  flex: 1 1 auto;
+  /* The header's middle row (see "The header's rows"): the full width, under
+     the title, indented to its text. */
+  order: 1;
+  flex-basis: 100%;
   min-width: 0;
-  /* Kept: the AE card's chips and find box legitimately outgrow any header,
-     and scroll once the sublabel has given everything it has. */
+  /* The last resort, for a findings card whose chips outgrow a whole row.
+     A gantt's find box and pill fit one now, and the box gives way first. */
   overflow-x: auto;
   /* Where the bar is drawn (Windows, or any overlay-less setup) the classic
      one is 15px of grey with arrows under a 22px row; the thin one is half
      that and has none. Ignored where unsupported, so nothing to fall back to. */
   scrollbar-width: thin;
-  padding: 0 4px;
+  padding: 0 4px 0 18px;
 }
 
 .pp-ctrl-group {
@@ -552,6 +488,15 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+/* The one item on the controls row that can give way. The find box is a text
+   field with no minimum; the pill beside it is a fixed set of words, and
+   shrinking it would clip a label. Shrink only -- a wide panel keeps the
+   box at its own width rather than stretching it across the row. */
+.pp-ctrl-group--search {
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .pp-ctrl-label {

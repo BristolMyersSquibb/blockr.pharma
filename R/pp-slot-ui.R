@@ -23,9 +23,11 @@ pp_slot_ui <- function(viz, viz_id, chart, controls_ui, legend_ui, download_ui) 
 #' @inheritParams pp_slot_ui
 #' @noRd
 pp_slot_header_ui <- function(viz, viz_id, controls_ui, legend_ui, download_ui) {
-  # A legend gets a row of its own under the title (see the CSS); the
-  # class is what turns the wrapping on, so a header without one keeps
-  # the single-row layout the card headers are tuned for.
+  # The header stacks its rows unconditionally now (see "The header's rows"
+  # in the CSS), so the class no longer turns anything on: it says the
+  # header carries a legend, and it is what the client's header swap
+  # carries across when a patient with no severity levels follows one with
+  # them.
   shiny::div(
     class = if (is.null(legend_ui)) "pp-chart-header" else
       "pp-chart-header has-legend",
