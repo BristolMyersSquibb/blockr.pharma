@@ -100,11 +100,14 @@ pp_slot_header_ui <- function(viz, viz_id, controls_ui, legend_ui, download_ui) 
 #' @noRd
 pp_slot_update <- function(viz_id, header, chart) {
   stopifnot(inherits(chart, "echarts4r"))
+  # Neither encoder is exported by htmlwidgets.
+  to_json <- utils::getFromNamespace("toJSON", "htmlwidgets")
+  js_evals <- utils::getFromNamespace("JSEvals", "htmlwidgets")
   list(
     viz_id = viz_id,
     header = as.character(htmltools::renderTags(header)$html),
-    opts_json = as.character(htmlwidgets:::toJSON(chart$x$opts)),
-    evals = as.list(htmlwidgets:::JSEvals(chart$x$opts)),
+    opts_json = as.character(to_json(chart$x$opts)),
+    evals = as.list(js_evals(chart$x$opts)),
     height = chart$height %||% NULL
   )
 }

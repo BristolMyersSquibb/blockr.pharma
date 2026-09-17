@@ -21,7 +21,7 @@
 
 # ggplot2 aes() columns -- quasiquotation R CMD check cannot see through.
 utils::globalVariables(c(
-  "..x", "..panel", "..series", "..total", "..derived", "..pt_col",
+  "..x", "..y", "..panel", "..series", "..total", "..derived", "..pt_col",
   ".data", "AVAL", "xmin", "xmax", "ymin", "ymax", "y", "lo", "hi",
   "outlined", "position", "value", "visit", "param", "item", "x",
   "color", "fill", "label", "lwd", "series"
