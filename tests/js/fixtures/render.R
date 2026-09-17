@@ -51,15 +51,16 @@ grab <- function(output, name) {
 # Every custom message the module sends while a fixture renders, as the
 # client receives it (Shiny serialises with auto_unbox). The JS tests send
 # these back to the handlers, so what R really emits is what they run on.
-messages <- list()
+recorded <- new.env()
+recorded$messages <- list()
 record_messages <- function(expr) {
-  messages <<- list()
+  recorded$messages <- list()
   withr::local_options(list(blockr.pharma.pp_message_sink = function(channel, payload) {
     wire <- jsonlite::fromJSON(
       jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"),
       simplifyVector = FALSE
     )
-    messages[[length(messages) + 1L]] <<- list(channel = channel, payload = wire)
+    recorded$messages[[length(recorded$messages) + 1L]] <- list(channel = channel, payload = wire)
   }))
   force(expr)
 }
@@ -86,7 +87,7 @@ render_profile <- function(prefix, selected) {
     cat(prefix, "namespace", id, "slots", length(slots), "\n")
   }))
   jsonlite::write_json(
-    messages, file.path(dir, paste0(prefix, "messages.json")),
+    recorded$messages, file.path(dir, paste0(prefix, "messages.json")),
     auto_unbox = TRUE, null = "null", pretty = TRUE
   )
 }

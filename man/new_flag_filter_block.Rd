@@ -55,7 +55,7 @@ so a filter that only speaks data frames can never reach it. What it must
 not do is reduce the cohort: getting rid of the non-treatment-emergent AEs
 is the point, getting rid of the patients who have none is a bug. That
 rules out \code{dm::dm_filter()}, whose FK cascade does exactly that -- see
-\code{\link[=flag_zoom_expr]{flag_zoom_expr()}}.
+\code{flag_zoom_expr()}.
 
 In dm mode the block previews as blockr.dm's dm diagram, click a table to
 page through it, because the table preview cannot render a dm. The clause

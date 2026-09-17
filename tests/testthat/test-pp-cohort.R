@@ -298,11 +298,15 @@ test_that("the fast row builder writes the markup htmltools would have", {
   rows_agree(no_code, test_adae())
 
   # The demography span disappears rather than rendering empty
-  no_sex <- test_adsl(); no_sex$SEX <- NULL
+  no_sex <- test_adsl()
+  no_sex$SEX <- NULL
   rows_agree(no_sex, test_adae())
-  no_age <- test_adsl(); no_age$AGE <- NULL
+  no_age <- test_adsl()
+  no_age$AGE <- NULL
   rows_agree(no_age, test_adae())
-  bare <- test_adsl(); bare$SEX <- NULL; bare$AGE <- NULL
+  bare <- test_adsl()
+  bare$SEX <- NULL
+  bare$AGE <- NULL
   rows_agree(bare, test_adae())
 
   # No adae: every band is empty, every row still renders

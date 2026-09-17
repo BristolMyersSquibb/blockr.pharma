@@ -83,19 +83,19 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
 
   out <- data.frame(USUBJID = ids, stringsAsFactors = FALSE)
 
-  take <- function(col, name = col) {
-    if (is.null(col) || !col %in% colnames(adsl)) return(invisible(NULL))
-    out[[name]] <<- adsl[[col]][at]
-    invisible(NULL)
+  take <- function(out, col, name = col) {
+    if (is.null(col) || !col %in% colnames(adsl)) return(out)
+    out[[name]] <- adsl[[col]][at]
+    out
   }
 
   roles <- roles %||% list()
-  take(roles$arm, "ARM")
-  take(roles$arm_code, "ARMCD")
-  take("SEX")
-  take("AGE")
-  take("TRTSDT")
-  take("TRTEDT")
+  out <- take(out, roles$arm, "ARM")
+  out <- take(out, roles$arm_code, "ARMCD")
+  out <- take(out, "SEX")
+  out <- take(out, "AGE")
+  out <- take(out, "TRTSDT")
+  out <- take(out, "TRTEDT")
   # Days on treatment: derived when both dates are there, because it is the
   # number a reader wants and the two dates are the number they would have
   # to subtract themselves.
@@ -104,9 +104,9 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
       as.Date(out$TRTEDT) - as.Date(out$TRTSDT)
     ) + 1
   }
-  take("EOSSTT")
-  take("DCSREAS")
-  take("DTHFL")
+  out <- take(out, "EOSSTT")
+  out <- take(out, "DCSREAS")
+  out <- take(out, "DTHFL")
 
   ae <- pp_cohort_ae_summary(tbls, ids, roles$severity)
   if (!is.null(ae)) {
@@ -365,20 +365,20 @@ pp_cohort_subject_end <- function(tbls, ids, trt_end, ev = NULL) {
   day_cols <- c("ASTDY", "AENDY", "ADY")
   acc <- trt_end
 
-  bump <- function(subject, day) {
+  bump <- function(acc, subject, day) {
     ok <- !is.na(day) & !is.na(subject)
-    if (!any(ok)) return(invisible(NULL))
+    if (!any(ok)) return(acc)
     at <- match(subject[ok], ids)
     d <- day[ok]
     keep <- !is.na(at)
-    if (!any(keep)) return(invisible(NULL))
+    if (!any(keep)) return(acc)
     # max per subject, without splitting the frame
     o <- order(at[keep], d[keep])
     a <- at[keep][o]
     v <- d[keep][o]
     last <- !duplicated(a, fromLast = TRUE)
-    acc[a[last]] <<- pmax(acc[a[last]], v[last], na.rm = TRUE)
-    invisible(NULL)
+    acc[a[last]] <- pmax(acc[a[last]], v[last], na.rm = TRUE)
+    acc
   }
 
   for (nm in names(tbls)) {
@@ -386,15 +386,15 @@ pp_cohort_subject_end <- function(tbls, ids, trt_end, ev = NULL) {
     if (!"USUBJID" %in% colnames(tbl)) next
     sub <- as.character(tbl$USUBJID)
     for (col in intersect(day_cols, colnames(tbl))) {
-      bump(sub, suppressWarnings(as.numeric(tbl[[col]])))
+      acc <- bump(acc, sub, suppressWarnings(as.numeric(tbl[[col]])))
     }
   }
 
   # Events already resolved (an open one contributes its start, which is the
   # least it can be).
   if (!is.null(ev) && length(ev$subject)) {
-    bump(ev$subject, ev$start)
-    bump(ev$subject, ev$end)
+    acc <- bump(acc, ev$subject, ev$start)
+    acc <- bump(acc, ev$subject, ev$end)
   }
 
   acc
@@ -1353,7 +1353,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
            sprintf(' data-limit-lo="%s"', esca(limit_lo)), ""),
     ifelse(nzchar(clip), sprintf(' data-clip="%s"', esca(clip)), ""),
     ifelse(nzchar(clip_lo), sprintf(' data-clip-lo="%s"', esca(clip_lo)), ""),
-    esca(ifelse(nzchar(arm), paste0(id, " · ", arm), id)),
+    esca(ifelse(nzchar(arm), paste0(id, " \u00b7 ", arm), id)),
     esc(shown),
     ifelse(nzchar(demo),
            sprintf('<span class="pp-pt-demo">%s</span>', esc(demo)), ""),

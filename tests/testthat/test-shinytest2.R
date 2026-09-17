@@ -668,7 +668,8 @@ test_that("the find popover filters the panel and the cohort strip", {
 
   # The header carries the options, so the popover has its list without a
   # round trip: it is drawn before anything reaches the server.
-  spy_install(); spy_reset()
+  spy_install()
+  spy_reset()
   run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find').click();")
   wait_js("document.querySelector('.pp-find-pop.is-open') !== null")
   expect_gt(js("document.querySelectorAll('.pp-find-opt').length"), 1)
@@ -734,11 +735,15 @@ test_that("typing reaches terms the cohort has and this patient does not", {
   for (term in others) {
     cand <- tolower(substr(term, 1L, 6L))
     if (nchar(cand) < 4L) next
-    if (!any(grepl(cand, tolower(mine), fixed = TRUE))) { q <- cand; break }
+    if (!any(grepl(cand, tolower(mine), fixed = TRUE))) {
+      q <- cand
+      break
+    }
   }
   expect_false(is.null(q))
 
-  spy_install(); spy_reset()
+  spy_install()
+  spy_reset()
   run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find').click();")
   wait_js("document.querySelector('.pp-find-pop.is-open') !== null")
   # Opening asks for nothing: the cohort's vocabulary is about 16kB and is
