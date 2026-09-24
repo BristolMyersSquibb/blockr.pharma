@@ -33,10 +33,14 @@
 #' @param col Column to copy. A column no table carries is a no-op, so a board
 #'   whose study lacks it still renders.
 #' @param as Name of the copy.
+#' @param groups The group definition for `col`, as the population filter's
+#'   `groups` state holds it: `list(show = <levels with a column of their
+#'   own>, pools = list(list(name = , members = ), ...))`. `NULL` copies `col`
+#'   as it is. See [stamp_group()].
 #'
 #' @return `data`, with the copy added.
 #' @export
-dm_stamp_group <- function(data, col, as = "Group") {
+dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
   if (is.null(col) || !length(col) || !nzchar(col[[1L]])) {
     return(data)
   }
@@ -44,7 +48,7 @@ dm_stamp_group <- function(data, col, as = "Group") {
 
   if (is.data.frame(data)) {
     if (col %in% names(data)) {
-      data[[as]] <- stamp_source(data[[col]], col)
+      data[[as]] <- stamp_group(data[[col]], col, groups)
     }
     return(data)
   }
@@ -81,7 +85,7 @@ dm_stamp_group <- function(data, col, as = "Group") {
       stats::setNames(
         list(
           as.call(
-            list(quote(blockr.pharma::stamp_source), as.symbol(col), col)
+            list(quote(blockr.pharma::stamp_group), as.symbol(col), col, groups)
           )
         ),
         as
@@ -96,6 +100,146 @@ dm_stamp_group <- function(data, col, as = "Group") {
   # footnote downstream goes silent while the filter is plainly applied. See
   # `blockr.dm::filter_trail()`.
   blockr.dm::add_filter_trail(dm::dm_update_zoomed(zoomed), data)
+}
+
+#' Build the board's group column from a group definition
+#'
+#' The population filter lets a reader pool, drop, rename and reorder the
+#' levels of the column the board is split by. This turns that definition into
+#' the `Group` column. Every subject keeps one row whatever the definition, so
+#' nothing that counts across groups (a Total column, the crossfilter) can
+#' count a subject twice.
+#'
+#' * No definition, or one that shows every level in level order with no
+#'   pools: a plain copy of `x`, as before groups existed.
+#' * A partition (no level in two groups): the group name, `NA` for a level in
+#'   no group.
+#' * Overlapping groups (a level in two, e.g. both doses pooled and the high
+#'   dose again on its own): the raw level. The groups travel as the
+#'   `blockr_groups` attribute and the consumers that split by `Group` expand
+#'   the rows themselves: composer tables through [group_by_args()], charts
+#'   through `blockr.viz::expand_groups()`.
+#'
+#' @param x The column the board is split by.
+#' @param col Its name, kept as the `blockr_source` attribute.
+#' @param groups `list(show = , pools = list(list(name = , members = ), ...))`
+#'   or `NULL`.
+#'
+#' @return The group column: character, carrying `blockr_source` and, for a
+#'   definition that changes anything, `blockr_groups` =
+#'   `list(groups = <name -> raw members, in column order>, overlap = )`.
+#' @export
+stamp_group <- function(x, col, groups = NULL) {
+  def <- group_definition(x, groups)
+  if (is.null(def)) {
+    return(stamp_source(x, col))
+  }
+
+  raw <- as.character(x)
+  out <- if (def$overlap) {
+    raw
+  } else {
+    to <- rep(names(def$groups), lengths(def$groups))
+    unname(stats::setNames(to, unlist(def$groups, use.names = FALSE))[raw])
+  }
+
+  attr(out, "label") <- attr(x, "label", exact = TRUE)
+  attr(out, "blockr_groups") <- def
+  stamp_source(out, col)
+}
+
+# The definition resolved against the data: which groups exist, in column
+# order, each with its raw members, and whether any level sits in two of them.
+# NULL when it changes nothing, so an untouched board stamps exactly as before.
+group_definition <- function(x, groups) {
+  if (is.null(groups)) {
+    return(NULL)
+  }
+  levels <- blockr.dm::crossfilter_level_order(x)
+
+  # A missing `show` is the default, every level. An empty one is a reader who
+  # removed them all and kept only the pools.
+  show <- if (is.null(groups$show)) {
+    levels
+  } else {
+    intersect(as.character(unlist(groups$show)), levels)
+  }
+
+  pools <- lapply(groups$pools %||% list(), function(p) {
+    list(
+      name = as.character(p$name)[1L],
+      members = intersect(as.character(unlist(p$members)), levels)
+    )
+  })
+  pools <- Filter(function(p) length(p$members) > 0L, pools)
+
+  if (identical(show, levels) && !length(pools)) {
+    return(NULL)
+  }
+
+  # The editor refuses a typed name another column has, but a level added back
+  # to `show` can still meet a pool that took its name meanwhile. The board
+  # splits on these names, so the later one gets a number rather than the
+  # whole board failing on a name.
+  names <- show
+  for (p in pools) {
+    name <- p$name
+    k <- 2L
+    while (name %in% names) {
+      name <- paste(p$name, k)
+      k <- k + 1L
+    }
+    names <- c(names, name)
+  }
+
+  cols <- stats::setNames(
+    c(as.list(show), lapply(pools, `[[`, "members")),
+    names
+  )
+
+  list(
+    groups = cols,
+    overlap = anyDuplicated(unlist(cols, use.names = FALSE)) > 0L
+  )
+}
+
+#' Column arguments for a composer table split by the board's group
+#'
+#' What a table script passes to `composer::by()` so its columns follow the
+#' groups defined in the population filter:
+#' `composer::colgroup(do.call(composer::by, group_by_args(data)))`.
+#'
+#' * No group definition: the levels present, sorted, as the tables have
+#'   always done it.
+#' * A partition: the group names, in the order the reader set.
+#' * Overlapping groups: the group names, and `pools` for every group that is
+#'   not a raw level under its own name. composer builds each pool from the
+#'   raw rows, so a subject counts once per column it belongs to.
+#'
+#' @param data A data frame carrying the group column.
+#' @param col Name of the group column.
+#'
+#' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
+#'   groups.
+#' @export
+group_by_args <- function(data, col = "Group") {
+  x <- data[[col]]
+  def <- attr(x, "blockr_groups", exact = TRUE)
+
+  if (is.null(def)) {
+    x <- as.character(x)
+    return(list(variable = col, levels = sort(unique(x[!is.na(x) & nzchar(x)]))))
+  }
+
+  if (!isTRUE(def$overlap)) {
+    return(list(variable = col, levels = names(def$groups)))
+  }
+
+  raw <- mapply(
+    function(name, members) identical(members, name),
+    names(def$groups), def$groups
+  )
+  list(variable = col, levels = names(def$groups), pools = def$groups[!raw])
 }
 
 #' Mark which column a copy came from
@@ -130,6 +274,10 @@ stamp_source <- function(x, col) {
 #' @param featured Columns worth showing up front, e.g.
 #'   `c("TRT", "SEX", "RACE", "AETOXGR")`.
 #' @param pinned The column the board is split by at start, one of `featured`.
+#' @param groups How the pinned column's levels become the board's groups,
+#'   keyed by column: `list(TRT = list(show = , pools = list(list(name = ,
+#'   members = , custom = ))))`. Edited under `Group by`; see
+#'   [stamp_group()] for what it does to `Group`.
 #' @param ... Forwarded to [blockr.dm::new_crossfilter_block()]. Pass
 #'   `stamp_as` here to write the pick to a column other than `Group`, or
 #'   `stamp_as = NULL` for no stamp at all, which leaves the plain
@@ -140,6 +288,7 @@ stamp_source <- function(x, col) {
 #' @export
 new_population_filter_block <- function(featured = character(),
                                         pinned = NULL,
+                                        groups = list(),
                                         ...) {
   # Serialization identity and class, both set AT CONSTRUCTION. The framework
   # injects ctor / ctor_pkg itself on a restore, and block metadata is looked
@@ -166,7 +315,7 @@ new_population_filter_block <- function(featured = character(),
 
   do.call(
     blockr.dm::new_crossfilter_block,
-    c(list(featured = featured, pinned = pinned), args)
+    c(list(featured = featured, pinned = pinned, groups = groups), args)
   )
 }
 
@@ -184,6 +333,7 @@ expr_server.population_filter_block <- function(x, data, ...) {
   # `out` inside the wrapper would make the wrapper call itself.
   inner_expr <- out[["expr"]]
   pinned <- out[["state"]][["pinned"]]
+  groups <- out[["state"]][["groups"]]
 
   out[["expr"]] <- shiny::reactive({
     inner <- inner_expr()
@@ -191,14 +341,38 @@ expr_server.population_filter_block <- function(x, data, ...) {
     if (is.null(pin) || !length(pin) || !nzchar(pin[[1L]])) {
       return(inner)
     }
+    def <- stamp_groups_arg(groups()[[pin[[1L]]]])
     # Self-qualified: the expression is also what a report or an export shows,
     # and it has to run outside this package's namespace.
+    if (is.null(def)) {
+      return(bquote(
+        blockr.pharma::dm_stamp_group(.(inner), .(pin[[1L]]), .(stamp_as))
+      ))
+    }
     bquote(
-      blockr.pharma::dm_stamp_group(.(inner), .(pin[[1L]]), .(stamp_as))
+      blockr.pharma::dm_stamp_group(
+        .(inner), .(pin[[1L]]), .(stamp_as), groups = .(def)
+      )
     )
   })
 
   out
+}
+
+# The state entry as the expression carries it: what the stamp needs and
+# nothing of the editor's (`custom` only says whether a pool name follows its
+# members). Plain vectors, so the expression deparses into readable code.
+stamp_groups_arg <- function(entry) {
+  if (is.null(entry)) {
+    return(NULL)
+  }
+  list(
+    show = as.character(unlist(entry$show)),
+    pools = lapply(entry$pools %||% list(), function(p) {
+      list(name = as.character(p$name)[1L],
+           members = as.character(unlist(p$members)))
+    })
+  )
 }
 
 #' @noRd
@@ -221,6 +395,25 @@ population_filter_arguments <- function() {
       ),
       example = "TRT",
       type = arg_string()
+    ),
+    # arbitrary-key map (column -> definition); type omitted.
+    groups = new_arg_spec(
+      paste0(
+        "How the pinned column's levels become the board's groups. Object: ",
+        "column name -> {show: levels that keep a column of their own, in ",
+        "order; pools: array of {name, members: levels pooled into one ",
+        "column, custom: true once the name was typed}}. A level may be shown ",
+        "and pooled at once (both doses pooled, and the high dose again on ",
+        "its own). A column with no entry shows every level."
+      ),
+      example = list(TRT = list(
+        show = list("Placebo", "Xanomeline High Dose"),
+        pools = list(list(
+          name = "All Xanomeline",
+          members = list("Xanomeline Low Dose", "Xanomeline High Dose"),
+          custom = FALSE
+        ))
+      ))
     )
   )
 }

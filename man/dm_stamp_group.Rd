@@ -4,7 +4,7 @@
 \alias{dm_stamp_group}
 \title{Stamp the board's group column}
 \usage{
-dm_stamp_group(data, col, as = "Group")
+dm_stamp_group(data, col, as = "Group", groups = NULL)
 }
 \arguments{
 \item{data}{A \link[dm:dm]{dm} or a data frame.}
@@ -13,6 +13,10 @@ dm_stamp_group(data, col, as = "Group")
 whose study lacks it still renders.}
 
 \item{as}{Name of the copy.}
+
+\item{groups}{The group definition for \code{col}, as the population filter's
+\code{groups} state holds it: \verb{list(show = <levels with a column of their own>, pools = list(list(name = , members = ), ...))}. \code{NULL} copies \code{col}
+as it is. See \code{\link[=stamp_group]{stamp_group()}}.}
 }
 \value{
 \code{data}, with the copy added.

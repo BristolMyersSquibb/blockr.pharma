@@ -124,7 +124,9 @@ register_pharma_blocks <- function() {
       "copied into a column named `Group`, so charts bind `color = \"Group\"` ",
       "and summary tables split by `Group` instead of naming a fixed arm ",
       "column -- one pick then re-points every exhibit on the board. ",
-      "Everything else about it is the crossfilter block."
+      "`groups` pools, drops and reorders the pinned column's levels for ",
+      "every exhibit at once (e.g. an 'All Xanomeline' column over both ",
+      "doses). Everything else about it is the crossfilter block."
     ),
     arguments = list(
       population_filter_arguments()
