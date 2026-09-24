@@ -120,7 +120,7 @@ test('Escape and the clear button empty the box and restore everything', () => {
   h.close();
 });
 
-test('picking a catalogue row moves it onto the profile and resets the search', () => {
+test('picking a catalogue row moves it onto the profile and keeps the search', () => {
   const h = boot();
   h.type(search(h), 'temp');
   const row = h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]');
@@ -133,11 +133,13 @@ test('picking a catalogue row moves it onto the profile and resets the search', 
   assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
   assert.equal(h.q('.pp-add-ord[data-viz-id="advs_all__TEMP"]').classList.contains('is-landed'), true);
 
-  // The box empties and, a tick later, the filter follows it.
-  assert.equal(search(h).value, '');
+  // The query and its hits stay, so the next pick needs no retyping, and
+  // the box has the focus again with the cursor on the row just picked.
+  assert.equal(search(h).value, 'temp');
   h.tick(0);
-  assert.equal(h.shownIds().length, 12);
-  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
+  assert.equal(row.classList.contains('is-hidden'), false);
+  assert.equal(h.doc.activeElement, search(h));
+  assert.equal(row.classList.contains('is-enter'), true);
 
   // The landing tint outlives the move and then goes.
   h.tick(190 + 419);
@@ -157,7 +159,8 @@ test('Enter picks the first hit, a panel before a patient', () => {
   h.type(search(h), 'temp');
   h.key(search(h), 'Enter');
   assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
-  assert.equal(search(h).value, '');
+  assert.equal(search(h).value, 'temp');
+  h.key(search(h), 'Escape');
 
   // A patient hit: Enter clicks the row, which picks the patient and keeps
   // the query in the box.

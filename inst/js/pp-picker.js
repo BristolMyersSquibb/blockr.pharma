@@ -359,18 +359,16 @@ PatientProfile.part(function(ctx) {
     var before = addFlipRects();
     this.classList.toggle('is-on', nowOn);
     if (kind === 'panel') {
-      // The query has done its job, and it is also hiding the
-      // cohort: one box filters both lists, so a query left
-      // standing after the pick leaves the patients filtered away
-      // by a search you have already acted on.
+      // The query stays, and so do its hits: "blood" finds several
+      // panels, and picking one should not make you type it again to
+      // pick the next. Focus goes back to the box, and the cursor to
+      // this row, so typing or the arrows carry on from here. The
+      // query also filters the cohort below; x or Escape clears it.
       var box = /** @type {HTMLInputElement | null} */ (
         document.getElementById(addInputId));
       if (box && box.value) {
-        box.value = '';
-        var emptied = box;
-        window.setTimeout(function(){
-          $(emptied).trigger('input');
-        }, 0);
+        box.focus({preventScroll: true});
+        setCursor(this);
       }
       var at = lastSelected.indexOf(vizId);
       if (nowOn && at < 0) lastSelected = lastSelected.concat([vizId]);
