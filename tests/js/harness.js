@@ -174,10 +174,14 @@ function mount(opts = {}) {
     };
     window.echarts = {
       __resized: [],
+      __resizeOpts: [],
       __options: [],
       getInstanceByDom: function (el) {
         var inst = {
-          resize: function () { window.echarts.__resized.push(el); },
+          resize: function (o) {
+            window.echarts.__resized.push(el);
+            window.echarts.__resizeOpts.push(o);
+          },
           setOption: function (opts, o) { window.echarts.__options.push({el: el, opts: opts, how: o || null}); }
         };
         return el && el.__echarts ? inst : null;

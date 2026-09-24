@@ -4,7 +4,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mount } = require('./harness.js');
+const { mount, json } = require('./harness.js');
 
 const boot = () => {
   const h = mount();
@@ -334,6 +334,8 @@ test('the chart area is watched for size and its charts resized, debounced', () 
   assert.ok(h.observed().resize.includes(area));
   const widget = gantt(h).querySelector('.echarts4r');
   widget.__echarts = true;
+  let width = 400;
+  Object.defineProperty(area, 'clientWidth', { get: () => width, configurable: true });
   h.resize(area);
   h.resize(area);
   h.tick(79);
@@ -341,6 +343,18 @@ test('the chart area is watched for size and its charts resized, debounced', () 
   h.tick(1);
   assert.equal(h.win.echarts.__resized.length, 1);
   assert.equal(h.win.echarts.__resized[0], widget);
+  // 'auto', so a size htmlwidgets pinned on the instance is measured again.
+  assert.deepEqual(json(h.win.echarts.__resizeOpts[0]), { width: 'auto', height: 'auto' });
+
+  // A collapsed rail hides the area: nothing is resized to 0.
+  width = 0;
+  h.resize(area);
+  h.tick(80);
+  assert.equal(h.win.echarts.__resized.length, 1);
+  width = 400;
+  h.resize(area);
+  h.tick(80);
+  assert.equal(h.win.echarts.__resized.length, 2);
 
   // A render that replaces the area re-watches the new element.
   const again = h.doc.createElement('div');

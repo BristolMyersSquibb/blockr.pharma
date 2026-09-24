@@ -334,6 +334,19 @@ PatientProfile.part(function(ctx) {
   /** @type {Object<string, string>} */
   var lastHeader = {};
 
+  // Fit a chart to its element, always with 'auto'. The echarts4r
+  // binding answers htmlwidgets' own resize handler with
+  // chart.resize({width, height}), zrender keeps those numbers, and a
+  // bare resize() afterwards applies them again instead of measuring.
+  // That handler runs on every window resize and Shiny shown/hidden
+  // event and skips only a 0 x 0 element. A chart in a collapsed dock
+  // rail is 0 wide but keeps its px height, so it was pinned at width
+  // 0 and stayed blank when the rail opened, until a sash drag sent a
+  // window resize.
+  function fitChart(inst) {
+    inst.resize({width: 'auto', height: 'auto'});
+  }
+
   function applySlot(msg, tries) {
     var slot = document.getElementById(ns('viz_slot_' + msg.viz_id));
     if (!slot) return;
@@ -373,7 +386,7 @@ PatientProfile.part(function(ctx) {
     if (msg.height) widget.style.height = msg.height + 'px';
     inst.setOption(reviveFunctions(JSON.parse(msg.opts_json), msg.evals),
                    {notMerge: true});
-    inst.resize();
+    fitChart(inst);
   }
 
   Shiny.addCustomMessageHandler(slotMsgId, function(msg) {
@@ -503,10 +516,12 @@ PatientProfile.part(function(ctx) {
 
   function resizeChartsIn(root) {
     const ec = window.echarts;
-    if (!ec) return;
+    // A collapsed rail hides the area (0 wide). Nothing to fit; the
+    // observer fires again when it opens.
+    if (!ec || !root.clientWidth) return;
     $(root).find('.echarts4r').each(function() {
       var inst = ec.getInstanceByDom(this);
-      if (inst) inst.resize();
+      if (inst) fitChart(inst);
     });
   }
 

@@ -54,6 +54,7 @@ test('a slot message swaps the header and updates the live chart in place', () =
   assert.equal(typeof applied[0].opts.title.text, 'string', 'text not on the list stays text');
   assert.equal(h.win.echarts.__resized.length, 1);
   assert.equal(h.win.echarts.__resized[0], widget);
+  assert.deepEqual(json(h.win.echarts.__resizeOpts[0]), { width: 'auto', height: 'auto' });
   h.close();
 });
 
