@@ -69,6 +69,9 @@ join_population <- function(events, population, id = "USUBJID") {
          call. = FALSE)
   }
 
+  # Held before `events` is rebuilt below; see the last line.
+  input <- events
+
   # Only what the events lack. Joining a column they already have would
   # produce a .x/.y pair and leave the caller to guess which one to group by --
   # and on ADAE the pair is TRT01A and SAFFL, i.e. exactly the columns this
@@ -96,7 +99,11 @@ join_population <- function(events, population, id = "USUBJID") {
   }
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
-  out
+  # merge() and rbind() drop the filter trail the events carried, and the
+  # tables downstream build their "Filtered:" footnote from it. The events'
+  # trail is the one to keep: it already holds the global filter's clauses,
+  # which are the population's too.
+  blockr.dm::add_filter_trail(out, input)
 }
 
 #' Population join block

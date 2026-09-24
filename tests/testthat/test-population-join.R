@@ -110,3 +110,11 @@ test_that("the real gap is uneven across arms, which is why it matters", {
             as.integer(n_pop[["Xanomeline High Dose"]]) -
               as.integer(n_ev[["Xanomeline High Dose"]]))
 })
+
+test_that("the events' filter trail survives the join", {
+  ev <- data.frame(USUBJID = c("S1", "S2"), AEDECOD = c("Nausea", "Rash"))
+  attr(ev, "blockr_filters") <- c(ae_flags = "TRTEMFL")
+  pop <- data.frame(USUBJID = c("S1", "S2", "S3"), TRT01A = "A")
+  out <- join_population(ev, pop)
+  expect_equal(unname(blockr.dm::filter_trail(out)), "TRTEMFL")
+})
