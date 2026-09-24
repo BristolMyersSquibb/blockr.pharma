@@ -126,7 +126,9 @@ register_pharma_blocks <- function() {
       "column -- one pick then re-points every exhibit on the board. ",
       "`groups` pools, drops and reorders the pinned column's levels for ",
       "every exhibit at once (e.g. an 'All Xanomeline' column over both ",
-      "doses). Everything else about it is the crossfilter block."
+      "doses). `subgroup` is a second split, copied into `Subgroup`: tables ",
+      "nest it under the group, charts bind `facet = \"Subgroup\"`. ",
+      "Everything else about it is the crossfilter block."
     ),
     arguments = list(
       population_filter_arguments()

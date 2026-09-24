@@ -8,6 +8,7 @@ new_population_filter_block(
   featured = character(),
   pinned = NULL,
   groups = list(),
+  subgroup = NULL,
   ...
 )
 }
@@ -20,6 +21,11 @@ new_population_filter_block(
 \item{groups}{How the pinned column's levels become the board's groups,
 keyed by column: \code{list(TRT = list(show = , pools = list(list(name = , members = , custom = ))))}. Edited under \verb{Group by}; see
 \code{\link[=stamp_group]{stamp_group()}} for what it does to \code{Group}.}
+
+\item{subgroup}{A second column the board is split by, stamped as
+\code{Subgroup} when set: tables nest it under the group, charts facet by it.
+\code{NULL} (the default) stamps nothing, and a chart faceted by \code{Subgroup}
+then draws one panel.}
 
 \item{...}{Forwarded to \code{\link[blockr.dm:new_crossfilter_block]{blockr.dm::new_crossfilter_block()}}. Pass
 \code{stamp_as} here to write the pick to a column other than \code{Group}, or

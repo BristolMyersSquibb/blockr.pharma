@@ -170,3 +170,76 @@ test_that("the block carries its groups state into the stamp", {
     }
   )
 })
+
+make_sub_dm <- function() {
+  d <- make_arm_dm()
+  adsl <- dm::dm_get_tables(d)$adsl
+  adsl$SEX <- rep(c("F", "M", "F"), 3)
+  ae <- dm::dm_get_tables(d)$ae
+  dm::dm_add_fk(
+    dm::dm_add_pk(dm::dm(adsl = adsl, ae = ae), adsl, USUBJID),
+    ae, USUBJID, adsl
+  )
+}
+
+test_that("group_by_args nests the subgroup as a composer::by() call", {
+  df <- data.frame(Group = c("A", "B", "A"), Subgroup = c("M", "F", "F"))
+  args <- group_by_args(df)
+  expect_equal(args[c("variable", "levels")], list(variable = "Group", levels = c("A", "B")))
+  nested <- args[[3L]]
+  expect_true(is.call(nested))
+  expect_equal(deparse(nested[[1L]]), "composer::by")
+  expect_equal(nested$variable, "Subgroup")
+  expect_equal(nested$levels, c("F", "M"))
+
+  expect_length(group_by_args(df, sub = NULL), 2L)
+  expect_length(group_by_args(df["Group"]), 2L)
+})
+
+test_that("a composer table nests the subgroup under pooled groups", {
+  skip_if_not_installed("composer")
+  adsl <- as.data.frame(dm::dm_get_tables(
+    dm_stamp_group(
+      dm_stamp_group(make_sub_dm(), "TRT", groups = overlapping),
+      "SEX", "Subgroup"
+    )
+  )$adsl)
+
+  tbl <- composer::table(
+    title = "x", population = "All", data = adsl,
+    denominator = composer::make_denom(adsl)
+  ) |>
+    composer::colgroup(do.call(composer::by, group_by_args(adsl))) |>
+    composer::block_continuous(
+      label = "Age", variable = "AGE", statistic = "{N:xx}"
+    ) |>
+    composer::compose()
+
+  d <- tbl[["panes"]][[1]]$data
+  n_row <- d[trimws(d$label) == "N", ]
+  # All active = Low + High: F is S04, S06, S07, S09; M is S05, S08.
+  expect_equal(trimws(n_row[["All active;:F"]]), "4")
+  expect_equal(trimws(n_row[["All active;:M"]]), "2")
+  expect_equal(trimws(n_row[["Placebo;:F"]]), "2")
+})
+
+test_that("the block stamps Subgroup only when one is picked", {
+  blk <- new_population_filter_block(
+    featured = c("TRT", "SEX"), pinned = "TRT", subgroup = "SEX"
+  )
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    args = list(x = blk, data = list(data = function() make_sub_dm())),
+    {
+      session$flushReact()
+      result <- eval(session$returned$expr(), list(data = make_sub_dm()))
+      expect_equal(as.vector(result$adsl$Subgroup), result$adsl$SEX)
+      expect_equal(attr(result$adsl$Subgroup, "blockr_source"), "SEX")
+
+      session$setInputs(`expr-set_subgroup` = "")
+      session$flushReact()
+      result <- eval(session$returned$expr(), list(data = make_sub_dm()))
+      expect_false("Subgroup" %in% colnames(result$adsl))
+    }
+  )
+})

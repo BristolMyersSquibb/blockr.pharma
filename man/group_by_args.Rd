@@ -4,16 +4,19 @@
 \alias{group_by_args}
 \title{Column arguments for a composer table split by the board's group}
 \usage{
-group_by_args(data, col = "Group")
+group_by_args(data, col = "Group", sub = "Subgroup")
 }
 \arguments{
 \item{data}{A data frame carrying the group column.}
 
 \item{col}{Name of the group column.}
+
+\item{sub}{Name of the subgroup column, nested under \code{col} when \code{data} has
+it. \code{NULL} never nests.}
 }
 \value{
 \code{list(variable = , levels = )}, plus \verb{pools = } for overlapping
-groups.
+groups and an unnamed \code{composer::by()} call for the subgroup.
 }
 \description{
 What a table script passes to \code{composer::by()} so its columns follow the
@@ -29,4 +32,9 @@ always done it.
 not a raw level under its own name. composer builds each pool from the
 raw rows, so a subject counts once per column it belongs to.
 }
+
+When the board also has a subgroup (a \code{Subgroup} column, stamped only when
+one is picked), the result carries a nested \code{composer::by()} for it, as an
+unevaluated call that \code{do.call()} evaluates: the table gets the subgroup's
+columns under each group, and this package needs no composer dependency.
 }

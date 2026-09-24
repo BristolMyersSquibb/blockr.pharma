@@ -216,30 +216,47 @@ group_definition <- function(x, groups) {
 #'   not a raw level under its own name. composer builds each pool from the
 #'   raw rows, so a subject counts once per column it belongs to.
 #'
+#' When the board also has a subgroup (a `Subgroup` column, stamped only when
+#' one is picked), the result carries a nested `composer::by()` for it, as an
+#' unevaluated call that `do.call()` evaluates: the table gets the subgroup's
+#' columns under each group, and this package needs no composer dependency.
+#'
 #' @param data A data frame carrying the group column.
 #' @param col Name of the group column.
+#' @param sub Name of the subgroup column, nested under `col` when `data` has
+#'   it. `NULL` never nests.
 #'
 #' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
-#'   groups.
+#'   groups and an unnamed `composer::by()` call for the subgroup.
 #' @export
-group_by_args <- function(data, col = "Group") {
+group_by_args <- function(data, col = "Group", sub = "Subgroup") {
   x <- data[[col]]
   def <- attr(x, "blockr_groups", exact = TRUE)
 
-  if (is.null(def)) {
+  args <- if (is.null(def)) {
     x <- as.character(x)
-    return(list(variable = col, levels = sort(unique(x[!is.na(x) & nzchar(x)]))))
+    list(variable = col, levels = sort(unique(x[!is.na(x) & nzchar(x)])))
+  } else if (!isTRUE(def$overlap)) {
+    list(variable = col, levels = names(def$groups))
+  } else {
+    raw <- mapply(
+      function(name, members) identical(members, name),
+      names(def$groups), def$groups
+    )
+    list(variable = col, levels = names(def$groups), pools = def$groups[!raw])
   }
 
-  if (!isTRUE(def$overlap)) {
-    return(list(variable = col, levels = names(def$groups)))
+  if (!is.null(sub) && !identical(sub, col) && sub %in% names(data)) {
+    sub_levels <- blockr.dm::crossfilter_level_order(data[[sub]])
+    if (length(sub_levels)) {
+      args <- c(
+        args,
+        list(bquote(composer::by(variable = .(sub), levels = .(sub_levels))))
+      )
+    }
   }
 
-  raw <- mapply(
-    function(name, members) identical(members, name),
-    names(def$groups), def$groups
-  )
-  list(variable = col, levels = names(def$groups), pools = def$groups[!raw])
+  args
 }
 
 #' Mark which column a copy came from
@@ -274,6 +291,10 @@ stamp_source <- function(x, col) {
 #' @param featured Columns worth showing up front, e.g.
 #'   `c("TRT", "SEX", "RACE", "AETOXGR")`.
 #' @param pinned The column the board is split by at start, one of `featured`.
+#' @param subgroup A second column the board is split by, stamped as
+#'   `Subgroup` when set: tables nest it under the group, charts facet by it.
+#'   `NULL` (the default) stamps nothing, and a chart faceted by `Subgroup`
+#'   then draws one panel.
 #' @param groups How the pinned column's levels become the board's groups,
 #'   keyed by column: `list(TRT = list(show = , pools = list(list(name = ,
 #'   members = , custom = ))))`. Edited under `Group by`; see
@@ -289,6 +310,7 @@ stamp_source <- function(x, col) {
 new_population_filter_block <- function(featured = character(),
                                         pinned = NULL,
                                         groups = list(),
+                                        subgroup = NULL,
                                         ...) {
   # Serialization identity and class, both set AT CONSTRUCTION. The framework
   # injects ctor / ctor_pkg itself on a restore, and block metadata is looked
@@ -315,7 +337,11 @@ new_population_filter_block <- function(featured = character(),
 
   do.call(
     blockr.dm::new_crossfilter_block,
-    c(list(featured = featured, pinned = pinned, groups = groups), args)
+    c(
+      list(featured = featured, pinned = pinned, groups = groups,
+           subgroup = subgroup),
+      args
+    )
   )
 }
 
@@ -334,6 +360,7 @@ expr_server.population_filter_block <- function(x, data, ...) {
   inner_expr <- out[["expr"]]
   pinned <- out[["state"]][["pinned"]]
   groups <- out[["state"]][["groups"]]
+  subgroup <- out[["state"]][["subgroup"]]
 
   out[["expr"]] <- shiny::reactive({
     inner <- inner_expr()
@@ -344,15 +371,27 @@ expr_server.population_filter_block <- function(x, data, ...) {
     def <- stamp_groups_arg(groups()[[pin[[1L]]]])
     # Self-qualified: the expression is also what a report or an export shows,
     # and it has to run outside this package's namespace.
-    if (is.null(def)) {
-      return(bquote(
+    stamped <- if (is.null(def)) {
+      bquote(
         blockr.pharma::dm_stamp_group(.(inner), .(pin[[1L]]), .(stamp_as))
-      ))
+      )
+    } else {
+      bquote(
+        blockr.pharma::dm_stamp_group(
+          .(inner), .(pin[[1L]]), .(stamp_as), groups = .(def)
+        )
+      )
+    }
+
+    # The subgroup is stamped only when one is picked. No column is the "no
+    # subgroup" state every consumer already reads: a chart faceted by a
+    # column the data lacks draws one panel, and group_by_args() nests nothing.
+    sub <- as.character(unlist(subgroup()))
+    if (!length(sub) || !nzchar(sub[[1L]]) || identical(sub[[1L]], pin[[1L]])) {
+      return(stamped)
     }
     bquote(
-      blockr.pharma::dm_stamp_group(
-        .(inner), .(pin[[1L]]), .(stamp_as), groups = .(def)
-      )
+      blockr.pharma::dm_stamp_group(.(stamped), .(sub[[1L]]), "Subgroup")
     )
   })
 
@@ -394,6 +433,16 @@ population_filter_arguments <- function() {
         "table."
       ),
       example = "TRT",
+      type = arg_string()
+    ),
+    subgroup = new_arg_spec(
+      paste0(
+        "A second column the board is split by, under `pinned`: copied into ",
+        "`Subgroup`, which tables nest under the group and charts facet by. ",
+        "A categorical column of the subject table, not the pinned one. Null ",
+        "for none."
+      ),
+      example = "SEX",
       type = arg_string()
     ),
     # arbitrary-key map (column -> definition); type omitted.
