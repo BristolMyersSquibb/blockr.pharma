@@ -18,9 +18,10 @@ new_population_filter_block(
 
 \item{pinned}{The column the board is split by at start, one of \code{featured}.}
 
-\item{groups}{How the pinned column's levels become the board's groups,
-keyed by column: \code{list(TRT = list(show = , pools = list(list(name = , members = , custom = ))))}. Edited under \verb{Group by}; see
-\code{\link[=stamp_group]{stamp_group()}} for what it does to \code{Group}.}
+\item{groups}{How the levels of the pinned column and the subgroup become
+the board's groups and subgroups, keyed by column: \code{list(TRT = list(show = , pools = list(list(name = , members = , custom = ))))}. Edited under
+\verb{Group by} and \verb{Subgroup by}; see \code{\link[=stamp_group]{stamp_group()}} for what it does to
+\code{Group} and \code{Subgroup}.}
 
 \item{subgroup}{A second column the board is split by, stamped as
 \code{Subgroup} when set: tables nest it under the group, charts facet by it.

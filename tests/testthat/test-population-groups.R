@@ -244,6 +244,55 @@ test_that("the block stamps Subgroup only when one is picked", {
   )
 })
 
+test_that("the subgroup is pooled from its own entry in groups", {
+  blk <- new_population_filter_block(
+    featured = c("TRT", "SEX"), pinned = "TRT", subgroup = "SEX",
+    groups = list(SEX = list(show = list(), pools = list(
+      list(name = "Both", members = list("F", "M"), custom = TRUE)
+    )))
+  )
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", blk),
+    args = list(x = blk, data = list(data = function() make_sub_dm())),
+    {
+      session$flushReact()
+      result <- eval(session$returned$expr(), list(data = make_sub_dm()))
+      sg <- result$adsl$Subgroup
+      expect_equal(unique(as.vector(sg)), "Both")
+      expect_equal(names(attr(sg, "blockr_groups")$groups), "Both")
+      expect_equal(attr(sg, "blockr_source"), "SEX")
+      # The group is untouched.
+      expect_equal(as.vector(result$adsl$Group), result$adsl$TRT)
+
+      # Swapped: TRT is the subgroup, SEX the group, and SEX keeps its pool.
+      session$setInputs(`expr-swap_split` = 1)
+      session$flushReact()
+      result <- eval(session$returned$expr(), list(data = make_sub_dm()))
+      expect_equal(unique(as.vector(result$adsl$Group)), "Both")
+      expect_equal(as.vector(result$adsl$Subgroup), result$adsl$TRT)
+    }
+  )
+})
+
+test_that("group_by_args nests a subgroup partition by its group names", {
+  df <- data.frame(Group = c("A", "B", "A"))
+  df$Subgroup <- stamp_group(c("M", "F", "F"), "SEX", list(
+    show = "F", pools = list(list(name = "Male", members = "M"))
+  ))
+  nested <- group_by_args(df)[[3L]]
+  expect_equal(nested$levels, c("F", "Male"))
+})
+
+test_that("overlapping subgroup pools error, naming the way out", {
+  df <- data.frame(Group = c("A", "B", "A"))
+  df$Subgroup <- stamp_group(c("M", "F", "F"), "SEX", list(
+    show = c("F", "M"), pools = list(list(name = "Both", members = c("F", "M")))
+  ))
+  expect_error(group_by_args(df), "Switch group and subgroup")
+  # Without a subgroup the table still builds.
+  expect_length(group_by_args(df, sub = NULL), 2L)
+})
+
 test_that("total adds an all-subjects pool, and a column named Total errors", {
   df <- data.frame(Group = c("A", "B"))
   args <- group_by_args(df, total = "All Patients")

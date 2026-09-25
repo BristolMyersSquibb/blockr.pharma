@@ -49,6 +49,7 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
   if (is.data.frame(data)) {
     if (col %in% names(data)) {
       data[[as]] <- stamp_group(data[[col]], col, groups)
+      data <- mark_group_kind(data, as)
     }
     return(data)
   }
@@ -99,7 +100,46 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
   # population filter block loses the trail here, and every caption and table
   # footnote downstream goes silent while the filter is plainly applied. See
   # `blockr.dm::filter_trail()`.
-  blockr.dm::add_filter_trail(dm::dm_update_zoomed(zoomed), data)
+  out <- blockr.dm::add_filter_trail(dm::dm_update_zoomed(zoomed), data)
+  mark_group_kind(out, as)
+}
+
+# The chart's role dropdowns offer the columns a board marks as the "group"
+# kind (`blockr_kinds` on each frame, see blockr.viz::mark_column_kinds()). A
+# column the stamp creates is marked by nobody, so Group and Subgroup were
+# missing from every Facet and Colour list. Marked here on every table that
+# already carries marks: the column lives on the subject table, but a flatten
+# keeps the start table's marks, and a mark naming a column a table does not
+# have is ignored until a join brings it in. A frame with no marks is left
+# alone, since its dropdowns offer every column and one mark would cut that
+# to one.
+mark_group_kind <- function(data, col) {
+  mark <- function(x) {
+    kinds <- attr(x, "blockr_kinds", exact = TRUE)
+    if (!length(kinds) || col %in% names(kinds)) {
+      return(x)
+    }
+    kinds <- c(kinds, stats::setNames("group", col))
+    attr(x, "blockr_kinds") <- kinds[order(names(kinds))]
+    x
+  }
+
+  if (is.data.frame(data)) {
+    return(mark(data))
+  }
+
+  tbls <- dm::dm_get_tables(data)
+  changed <- Filter(Negate(is.null), lapply(names(tbls), function(nm) {
+    marked <- mark(tbls[[nm]])
+    if (identical(marked, tbls[[nm]])) NULL else stats::setNames(list(marked), nm)
+  }))
+  if (!length(changed)) {
+    return(data)
+  }
+  blockr.dm::add_filter_trail(
+    do.call(dm::dm_mutate_tbl, c(list(data), unlist(changed, recursive = FALSE))),
+    data
+  )
 }
 
 #' Build the board's group column from a group definition
@@ -220,6 +260,10 @@ group_definition <- function(x, groups) {
 #' one is picked), the result carries a nested `composer::by()` for it, as an
 #' unevaluated call that `do.call()` evaluates: the table gets the subgroup's
 #' columns under each group, and this package needs no composer dependency.
+#' A subgroup partition (pooled, dropped or renamed levels, none in two
+#' columns) gives its group names as the nested levels. Overlapping subgroup
+#' pools are an error: composer supports `pools =` on the outermost `by()`
+#' only.
 #'
 #' `total` adds a column over every subject, as a pool with no members listed.
 #' That is the way to a Total column once pools can overlap: composer's own
@@ -262,7 +306,12 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
     args$pools <- c(args$pools, stats::setNames(list(NULL), total))
   }
 
-  if ("Total" %in% args$levels) {
+  sub_levels <- if (!is.null(sub) && !identical(sub, col) &&
+                    sub %in% names(data)) {
+    subgroup_levels(data[[sub]])
+  }
+
+  if ("Total" %in% c(args$levels, sub_levels)) {
     stop(
       "A column of this table is named \"Total\". composer computes a column ",
       "of that name as its own Total, which counts a subject in two pools ",
@@ -272,17 +321,34 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
     )
   }
 
-  if (!is.null(sub) && !identical(sub, col) && sub %in% names(data)) {
-    sub_levels <- blockr.dm::crossfilter_level_order(data[[sub]])
-    if (length(sub_levels)) {
-      args <- c(
-        args,
-        list(bquote(composer::by(variable = .(sub), levels = .(sub_levels))))
-      )
-    }
+  if (length(sub_levels)) {
+    args <- c(
+      args,
+      list(bquote(composer::by(variable = .(sub), levels = .(sub_levels))))
+    )
   }
 
   args
+}
+
+# The columns of the nested subgroup by(). A partition is already written into
+# the column (stamp_group()), so its group names are the levels. Overlapping
+# pools would need `pools =` on the inner by(), which composer refuses.
+subgroup_levels <- function(x) {
+  def <- attr(x, "blockr_groups", exact = TRUE)
+  if (is.null(def)) {
+    return(blockr.dm::crossfilter_level_order(x))
+  }
+  if (isTRUE(def$overlap)) {
+    stop(
+      "The subgroup's pools overlap (a level in two columns), and composer ",
+      "tables can pool only the outer split, so this table cannot show them. ",
+      "Switch group and subgroup in the population filter, or pool the ",
+      "subgroup without repeating a level.",
+      call. = FALSE
+    )
+  }
+  names(def$groups)
 }
 
 #' Mark which column a copy came from
@@ -321,10 +387,11 @@ stamp_source <- function(x, col) {
 #'   `Subgroup` when set: tables nest it under the group, charts facet by it.
 #'   `NULL` (the default) stamps nothing, and a chart faceted by `Subgroup`
 #'   then draws one panel.
-#' @param groups How the pinned column's levels become the board's groups,
-#'   keyed by column: `list(TRT = list(show = , pools = list(list(name = ,
-#'   members = , custom = ))))`. Edited under `Group by`; see
-#'   [stamp_group()] for what it does to `Group`.
+#' @param groups How the levels of the pinned column and the subgroup become
+#'   the board's groups and subgroups, keyed by column: `list(TRT = list(show
+#'   = , pools = list(list(name = , members = , custom = ))))`. Edited under
+#'   `Group by` and `Subgroup by`; see [stamp_group()] for what it does to
+#'   `Group` and `Subgroup`.
 #' @param ... Forwarded to [blockr.dm::new_crossfilter_block()]. Pass
 #'   `stamp_as` here to write the pick to a column other than `Group`, or
 #'   `stamp_as = NULL` for no stamp at all, which leaves the plain
@@ -416,9 +483,19 @@ expr_server.population_filter_block <- function(x, data, ...) {
     if (!length(sub) || !nzchar(sub[[1L]]) || identical(sub[[1L]], pin[[1L]])) {
       return(stamped)
     }
-    bquote(
-      blockr.pharma::dm_stamp_group(.(stamped), .(sub[[1L]]), "Subgroup")
-    )
+    # Pooled exactly like the group, from the subgroup column's own entry.
+    sub_def <- stamp_groups_arg(groups()[[sub[[1L]]]])
+    if (is.null(sub_def)) {
+      bquote(
+        blockr.pharma::dm_stamp_group(.(stamped), .(sub[[1L]]), "Subgroup")
+      )
+    } else {
+      bquote(
+        blockr.pharma::dm_stamp_group(
+          .(stamped), .(sub[[1L]]), "Subgroup", groups = .(sub_def)
+        )
+      )
+    }
   })
 
   out
@@ -474,7 +551,8 @@ population_filter_arguments <- function() {
     # arbitrary-key map (column -> definition); type omitted.
     groups = new_arg_spec(
       paste0(
-        "How the pinned column's levels become the board's groups. Object: ",
+        "How the levels of the pinned column and the subgroup become the ",
+        "board's groups and subgroups. Object: ",
         "column name -> {show: levels that keep a column of their own, in ",
         "order; pools: array of {name, members: levels pooled into one ",
         "column, custom: true once the name was typed}}. A level may be shown ",
