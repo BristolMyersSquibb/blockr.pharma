@@ -243,3 +243,44 @@ test_that("the block stamps Subgroup only when one is picked", {
     }
   )
 })
+
+test_that("total adds an all-subjects pool, and a column named Total errors", {
+  df <- data.frame(Group = c("A", "B"))
+  args <- group_by_args(df, total = "All Patients")
+  expect_equal(args$levels, c("A", "B", "All Patients"))
+  expect_true("All Patients" %in% names(args$pools))
+  expect_null(args$pools[["All Patients"]])
+
+  expect_error(group_by_args(df, total = "Total"), "named \"Total\"")
+
+  named <- data.frame(USUBJID = 1:3)
+  named$Group <- stamp_group(c("Placebo", "Low", "High"), "TRT", list(
+    show = "Placebo",
+    pools = list(list(name = "Total", members = c("Low", "High")))
+  ))
+  expect_error(group_by_args(named), "All Patients")
+})
+
+test_that("the all-subjects column counts every subject once under overlap", {
+  skip_if_not_installed("composer")
+  adsl <- as.data.frame(dm::dm_get_tables(
+    dm_stamp_group(make_arm_dm(), "TRT", groups = overlapping)
+  )$adsl)
+
+  tbl <- composer::table(
+    title = "x", population = "All", data = adsl,
+    denominator = composer::make_denom(adsl)
+  ) |>
+    composer::colgroup(
+      do.call(composer::by, group_by_args(adsl, total = "All Patients"))
+    ) |>
+    composer::block_continuous(
+      label = "Age", variable = "AGE", statistic = "{N:xx}"
+    ) |>
+    composer::compose()
+
+  d <- tbl[["panes"]][[1]]$data
+  n_row <- d[trimws(d$label) == "N", ]
+  expect_equal(trimws(n_row[["All active"]]), "6")
+  expect_equal(trimws(n_row[["All Patients"]]), "9")
+})

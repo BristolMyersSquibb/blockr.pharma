@@ -221,15 +221,26 @@ group_definition <- function(x, groups) {
 #' unevaluated call that `do.call()` evaluates: the table gets the subgroup's
 #' columns under each group, and this package needs no composer dependency.
 #'
+#' `total` adds a column over every subject, as a pool with no members listed.
+#' That is the way to a Total column once pools can overlap: composer's own
+#' `total_col` is computed over the pooled rows and counts a subject in two
+#' pools twice, a pool is built from the raw rows. For the same reason no
+#' column may be called "Total": composer computes a column of that name its
+#' own way, whatever it is defined as, so the name is refused with an error.
+#'
 #' @param data A data frame carrying the group column.
 #' @param col Name of the group column.
 #' @param sub Name of the subgroup column, nested under `col` when `data` has
 #'   it. `NULL` never nests.
+#' @param total Name of a column over every subject, added last, for example
+#'   `"All Patients"`. `NULL` (the default) adds none.
 #'
 #' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
-#'   groups and an unnamed `composer::by()` call for the subgroup.
+#'   groups or a `total` column and an unnamed `composer::by()` call for the
+#'   subgroup.
 #' @export
-group_by_args <- function(data, col = "Group", sub = "Subgroup") {
+group_by_args <- function(data, col = "Group", sub = "Subgroup",
+                          total = NULL) {
   x <- data[[col]]
   def <- attr(x, "blockr_groups", exact = TRUE)
 
@@ -244,6 +255,21 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup") {
       names(def$groups), def$groups
     )
     list(variable = col, levels = names(def$groups), pools = def$groups[!raw])
+  }
+
+  if (!is.null(total)) {
+    args$levels <- c(args$levels, total)
+    args$pools <- c(args$pools, stats::setNames(list(NULL), total))
+  }
+
+  if ("Total" %in% args$levels) {
+    stop(
+      "A column of this table is named \"Total\". composer computes a column ",
+      "of that name as its own Total, which counts a subject in two pools ",
+      "twice. Rename it, for example to \"All Patients\" (the `total` ",
+      "argument, or the pool's name in the population filter).",
+      call. = FALSE
+    )
   }
 
   if (!is.null(sub) && !identical(sub, col) && sub %in% names(data)) {

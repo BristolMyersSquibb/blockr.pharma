@@ -4,7 +4,7 @@
 \alias{group_by_args}
 \title{Column arguments for a composer table split by the board's group}
 \usage{
-group_by_args(data, col = "Group", sub = "Subgroup")
+group_by_args(data, col = "Group", sub = "Subgroup", total = NULL)
 }
 \arguments{
 \item{data}{A data frame carrying the group column.}
@@ -13,10 +13,14 @@ group_by_args(data, col = "Group", sub = "Subgroup")
 
 \item{sub}{Name of the subgroup column, nested under \code{col} when \code{data} has
 it. \code{NULL} never nests.}
+
+\item{total}{Name of a column over every subject, added last, for example
+\code{"All Patients"}. \code{NULL} (the default) adds none.}
 }
 \value{
 \code{list(variable = , levels = )}, plus \verb{pools = } for overlapping
-groups and an unnamed \code{composer::by()} call for the subgroup.
+groups or a \code{total} column and an unnamed \code{composer::by()} call for the
+subgroup.
 }
 \description{
 What a table script passes to \code{composer::by()} so its columns follow the
@@ -37,4 +41,11 @@ When the board also has a subgroup (a \code{Subgroup} column, stamped only when
 one is picked), the result carries a nested \code{composer::by()} for it, as an
 unevaluated call that \code{do.call()} evaluates: the table gets the subgroup's
 columns under each group, and this package needs no composer dependency.
+
+\code{total} adds a column over every subject, as a pool with no members listed.
+That is the way to a Total column once pools can overlap: composer's own
+\code{total_col} is computed over the pooled rows and counts a subject in two
+pools twice, a pool is built from the raw rows. For the same reason no
+column may be called "Total": composer computes a column of that name its
+own way, whatever it is defined as, so the name is refused with an error.
 }
