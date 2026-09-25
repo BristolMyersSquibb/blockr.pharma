@@ -62,7 +62,8 @@ test_that("the stamp survives a filter and keeps column marks", {
   d <- do.call(dm::dm_mutate_tbl, c(list(d), tbls))
 
   out <- dm_stamp_group(dm::dm_filter(d, adsl = SEX == "F"), "TRT")
-  expect_equal(attr(out$adsl, "blockr_kinds"), c(TRT = "group"))
+  # The marks survive, and the stamped column joins them.
+  expect_equal(attr(out$adsl, "blockr_kinds"), c(Group = "group", TRT = "group"))
   expect_equal(nrow(out$adsl), 2L)
 })
 
