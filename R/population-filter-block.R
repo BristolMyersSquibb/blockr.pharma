@@ -265,12 +265,12 @@ group_definition <- function(x, groups) {
 #' pools are an error: composer supports `pools =` on the outermost `by()`
 #' only.
 #'
-#' `total` adds a column over every subject, as a pool with no members listed.
+#' `total` adds a column over every subject, as a pool of the raw group members.
 #' That is the way to a Total column once pools can overlap: composer's own
 #' `total_col` is computed over the pooled rows and counts a subject in two
-#' pools twice, a pool is built from the raw rows. For the same reason no
-#' column may be called "Total": composer computes a column of that name its
-#' own way, whatever it is defined as, so the name is refused with an error.
+#' pools twice. For the same reason no column may be called "Total": composer
+#' computes a column of that name its own way, whatever it is defined as, so the
+#' name is refused with an error.
 #'
 #' @param data A data frame carrying the group column.
 #' @param col Name of the group column.
@@ -302,8 +302,13 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
   }
 
   if (!is.null(total)) {
+    total_members <- if (!is.null(def) && isTRUE(def$overlap)) {
+      unique(unlist(def$groups, use.names = FALSE))
+    } else {
+      args$levels
+    }
     args$levels <- c(args$levels, total)
-    args$pools <- c(args$pools, stats::setNames(list(NULL), total))
+    args$pools <- c(args$pools, stats::setNames(list(total_members), total))
   }
 
   sub_levels <- if (!is.null(sub) && !identical(sub, col) &&
@@ -329,6 +334,70 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
   }
 
   args
+}
+
+#' Add explicit group-pool rows to a composer denominator
+#'
+#' `composer::by(pools = )` can create a total column from raw rows for a
+#' table-level denominator, but a denominator passed directly to a block is
+#' validated as-is. This helper makes synthetic group levels explicit there.
+#'
+#' @param denominator A data frame, typically from [composer::make_denom()].
+#' @param col Grouping column to overwrite in the duplicated rows.
+#' @param total Total level name. `NULL` returns `denominator` unchanged.
+#'
+#' @return `denominator`, plus duplicated rows with `col` set to the synthetic
+#'   group names.
+#' @export
+add_total_group_denominator <- function(denominator, col = "Group",
+                                        total = "All Patients") {
+  if (!col %in% names(denominator)) {
+    return(denominator)
+  }
+
+  x <- denominator[[col]]
+  x_chr <- as.character(x)
+  def <- attr(x, "blockr_groups", exact = TRUE)
+  pools <- list()
+
+  if (!is.null(def) && isTRUE(def$overlap)) {
+    for (nm in names(def$groups)) {
+      members <- def$groups[[nm]]
+      if (!identical(members, nm)) {
+        pools[[nm]] <- members
+      }
+    }
+  }
+
+  if (!is.null(total) && length(total) && nzchar(total[[1L]])) {
+    pools[[total[[1L]]]] <- if (!is.null(def) && isTRUE(def$overlap)) {
+      unique(unlist(def$groups, use.names = FALSE))
+    } else {
+      unique(x_chr[!is.na(x_chr) & nzchar(x_chr) & x_chr != total[[1L]]])
+    }
+  }
+
+  if (!length(pools)) {
+    return(denominator)
+  }
+
+  attrs <- attributes(denominator)
+  col_attrs <- attributes(x)
+  extra <- lapply(names(pools), function(nm) {
+    rows <- denominator[x_chr %in% pools[[nm]], , drop = FALSE]
+    rows[[col]] <- nm
+    rows
+  })
+  extra <- do.call(rbind, extra)
+
+  out <- unique(rbind(denominator, extra))
+  for (nm in setdiff(names(attrs), c("names", "row.names"))) {
+    attr(out, nm) <- attrs[[nm]]
+  }
+  for (nm in names(col_attrs)) {
+    attr(out[[col]], nm) <- col_attrs[[nm]]
+  }
+  out
 }
 
 # The columns of the nested subgroup by(). A partition is already written into
