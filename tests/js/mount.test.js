@@ -47,7 +47,7 @@ test('every message R sent while rendering has a handler and the shape the clien
     // After the replay the page shows what R last said.
     assert.equal(h.selectedId(), '01-701-1015');
     assert.equal(h.onProfile().length, profile === 'lab' ? 3 : 5);
-    assert.equal(h.text('.pp-cohort-count-n'), '12 patients');
+    assert.equal(h.text('.pp-cohort-status'), '12 patients');
     h.close();
   }
 });

@@ -768,7 +768,9 @@ new_patient_profile_block <- function(selected = NULL,
           })
 
           shiny::observe({
-            pp_send(session, "drill", list(clause = r_drill()$clause %||% ""))
+            d <- r_drill()
+            pp_send(session, "drill", list(clause = d$clause %||% "",
+                                           before = d$before))
           })
 
           # The reset: tell the drill filter to forget its claim, over the
@@ -1019,7 +1021,7 @@ new_patient_profile_block <- function(selected = NULL,
             sorter <- cohort_sort_ui()
             frame <- r_cohort_frame()
             pre <- pp_cohort_id_display(frame$USUBJID)$prefix
-            pp_band_caption_ui(src, sorter, pre, nrow(frame))
+            pp_band_caption_ui(src, sorter, pre)
           })
 
           # Who is on screen, and the facts about them the sidebar row has

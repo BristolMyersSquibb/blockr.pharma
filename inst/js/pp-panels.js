@@ -49,6 +49,12 @@ PatientProfile.part(function(ctx) {
     // Nothing painted yet -- a slot's first render has no frame to
     // hold, and photographing it produced a 0x0 overlay.
     if (!box.width || !box.height) return;
+    // Nothing on screen either. A dock tab that is not in front keeps
+    // its layout and is only visibility:hidden, so its panels have
+    // boxes; a photograph of one, parented to <body>, is NOT hidden
+    // and lay over whatever tab was in front (the assistant, drawn
+    // over with the profile's charts).
+    if (getComputedStyle(body).visibility === 'hidden') return;
 
     var ghost = document.createElement('div');
     ghost.className = 'pp-chart-ghost';
@@ -75,7 +81,16 @@ PatientProfile.part(function(ctx) {
     }
     document.body.appendChild(ghost);
     panel.__ghost = ghost;
+    // The photograph comes down when the panel's new value arrives. An
+    // output that never sends one (Shiny suspends it once its tab is
+    // hidden) would leave it up for good, over other tabs, so it has a
+    // deadline of its own.
+    setTimeout(function() {
+      if (panel.__ghost === ghost) panel.__ghost = null;
+      dropGhost(ghost);
+    }, GHOST_MAX_MS);
   }
+  var GHOST_MAX_MS = 3000;
 
   function dropGhost(ghost) {
     if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);

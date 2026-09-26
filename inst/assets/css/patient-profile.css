@@ -167,13 +167,6 @@
 
 /* The count after a section title: the number, not a shout. */
 .pp-add-n,
-.pp-cohort-bandcap-n {
-  font-weight: var(--blockr-font-weight-normal);
-  letter-spacing: 0;
-  text-transform: none;
-  font-variant-numeric: tabular-nums;
-}
-
 .pp-panels {
   flex: 0 0 auto;
   min-height: 0;
@@ -361,13 +354,12 @@
 /* The patients: a section title, then one sentence saying what the strip
    draws and how the list is ordered. */
 .pp-cohort-bandcap {
-  padding: 12px 12px 6px 14px;
+  padding: 14px 12px 10px 14px;
   flex-shrink: 0;
   min-width: 0;
 }
 
 .pp-cohort-prefix {
-  margin-left: auto;
   font-weight: var(--blockr-font-weight-normal);
   letter-spacing: 0;
   text-transform: none;
@@ -616,104 +608,103 @@
 .pp-cohort-seg {
   grid-area: seg;
   display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.pp-cohort-seg.is-hidden {
+/* The list toggle: the sidebar glyph, muted like the download icon beside
+   the gear. Rare, and nothing to do with filtering. */
+.pp-list-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--blockr-control-h-xs);
+  height: var(--blockr-control-h-xs);
+  padding: 0;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
+  background: transparent;
+  color: var(--blockr-color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--blockr-transition), color var(--blockr-transition);
+}
+
+.pp-list-toggle:hover {
+  background: var(--blockr-color-bg-hover);
+  color: var(--blockr-color-text-default);
+}
+
+.pp-list-toggle:focus-visible,
+.pp-drill-reset:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+/* The cohort's status, painted by pp-header.js: on the patients' header in
+   the sidebar, and in the header row only while the list is shut. */
+.pp-layout:not(.sidebar-collapsed) .pp-head .pp-cohort-status {
   display: none;
 }
 
-.pp-cohort-count,
-.pp-cohort-reset {
-  position: relative;
+.pp-cohort-status {
   display: inline-flex;
-  align-items: center;
-  height: var(--blockr-control-h-xs);
-  border: 1px solid var(--blockr-color-border-default);
-  font: inherit;
-  font-size: var(--blockr-font-size-xs);
-  font-weight: var(--blockr-font-weight-medium);
-  cursor: pointer;
-  transition: background-color var(--blockr-transition),
-    border-color var(--blockr-transition), color var(--blockr-transition);
+  min-width: 0;
 }
 
-.pp-cohort-count {
-  gap: 5px;
-  padding: 0 9px 0 6px;
-  border-radius: var(--blockr-radius-sm) 0 0 var(--blockr-radius-sm);
-  background: var(--blockr-color-bg-surface);
-  color: var(--blockr-color-text-default);
+/* The patients' title holds the 26px status on its right: centre the row
+   on it and keep its height when there is none. */
+.pp-cohort-bandcap-title {
+  align-items: center;
+  gap: 8px;
+  min-height: var(--blockr-control-h-xs);
+  margin-bottom: 6px;
+}
+
+.pp-cohort-bandcap-title .pp-cohort-status {
+  margin-left: auto;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pp-cohort-total {
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.pp-cohort-count:hover {
-  z-index: 1;
-  background: var(--blockr-color-bg-hover);
-  border-color: var(--blockr-color-border-strong);
-}
-
-/* The chevron points at the edge the list slides from: left while it is
-   open, right while it is shut. */
-.pp-cohort-count-car {
+/* The drill's reset, the population filter's button (blockr.dm
+   .jscf-reset-btn): the design system's 26px main button, the icon and how
+   many patients the drill kept. */
+.pp-drill-reset {
   display: inline-flex;
-  color: var(--blockr-color-text-muted);
-  transform: rotate(90deg);
-  transition: transform var(--blockr-transition), color var(--blockr-transition);
-}
-
-.pp-cohort-count.is-shut .pp-cohort-count-car {
-  transform: rotate(-90deg);
-}
-
-.pp-cohort-count:hover .pp-cohort-count-car {
-  color: var(--blockr-color-text-default);
-}
-
-.pp-cohort-reset {
-  justify-content: center;
-  margin-left: -1px;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: var(--blockr-control-h-xs);
   padding: 0 7px;
-  border-radius: 0 var(--blockr-radius-sm) var(--blockr-radius-sm) 0;
+  border: 1px solid var(--blockr-color-border-accent-subtle);
+  border-radius: var(--blockr-radius-sm);
   background: var(--blockr-color-bg-accent-subtle);
-  border-color: var(--blockr-color-border-accent-subtle);
   color: var(--blockr-color-text-accent);
+  font: inherit;
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--blockr-transition),
+    border-color var(--blockr-transition);
 }
 
-.pp-cohort-reset svg {
-  width: 12px;
-  height: 12px;
-}
-
-.pp-cohort-reset:hover:not(:disabled),
-.pp-cohort-seg.is-drilled .pp-cohort-count:hover {
-  z-index: 1;
+.pp-drill-reset:hover {
   background: var(--blockr-color-bg-accent-subtle-hover);
   border-color: var(--blockr-color-border-accent);
 }
 
-.pp-cohort-reset:disabled {
-  background: transparent;
-  border-color: var(--blockr-color-border-default);
-  color: var(--blockr-color-text-disabled);
-  cursor: default;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count {
-  background: var(--blockr-color-bg-accent-subtle);
-  border-color: var(--blockr-color-border-accent-subtle);
-  color: var(--blockr-color-text-accent);
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count-car {
-  color: var(--blockr-color-text-accent);
-}
-
-.pp-cohort-count:focus-visible,
-.pp-cohort-reset:focus-visible {
-  z-index: 2;
-  outline: var(--blockr-focus-outline);
-  outline-offset: var(--blockr-focus-offset);
+.pp-drill-reset svg {
+  flex: none;
 }
 
 /* --- The gear tray (blockr.ui's .blockr-settings) ------------------------

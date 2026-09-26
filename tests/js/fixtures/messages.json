@@ -22,7 +22,8 @@
   {
     "channel": "drill",
     "payload": {
-      "clause": ""
+      "clause": "",
+      "before": null
     }
   },
   {
