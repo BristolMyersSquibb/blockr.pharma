@@ -62,6 +62,22 @@
     });
     return o;
   }
+  /* No mark in the profile does anything on click, so none shows the hand
+   * (design system: what looks clickable is clickable). ECharts has no option
+   * that reaches every mark: a custom series' elements keep zrender's
+   * default `pointer` whatever the series or the element says. So the
+   * instance's DOM proxy, which writes the cursor onto the canvas, is told
+   * to write the plain one, whatever is hovered. A panel that one day takes
+   * a click has to undo this for its chart. */
+  /** @param {any} inst */
+  function plainCursor(inst) {
+    var h = inst.getZr && inst.getZr().handler;
+    var proxy = h && h.proxy;
+    if (!proxy || !proxy.setCursor || proxy.__ppCursor) return;
+    var set = proxy.setCursor;
+    proxy.setCursor = function() { return set.call(this, 'default'); };
+    proxy.__ppCursor = true;
+  }
   /* Every chart instance resolves its options on the way in, whichever path
    * sets them: htmlwidgets' first render or pp_slot_update()'s setOption. */
   function patchEcharts() {
@@ -70,6 +86,10 @@
     var init = ec.init;
     ec.init = function() {
       var inst = init.apply(this, arguments);
+      // echarts.init is the page's: blockr.viz charts on the same board
+      // drill on click and keep their hand.
+      var dom = /** @type {any} */ (arguments[0]);
+      if (dom && dom.closest && dom.closest('.pp-layout')) plainCursor(inst);
       var set = inst.setOption;
       inst.setOption = function(/** @type {any} */ opt) {
         resolveInk(opt);
