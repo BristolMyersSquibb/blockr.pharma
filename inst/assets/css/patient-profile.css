@@ -1172,3 +1172,64 @@ body.pp-dragging * {
   pointer-events: none;
 }
 
+
+/* --- Data tooltip ------------------------------------------------------------
+   The content PatientProfile.tip() draws (pp-core.js); the card around it is
+   pp_tooltip()'s. blockr.viz's rules (chart.css .dd-tt-*, design system
+   "Charts"): headline 13px/600 with a swatch, rows 12px with the name muted
+   and the value at 500 in tabular figures. The line under the headline and
+   the meta after a value are muted. */
+.pp-tt-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: var(--blockr-font-weight-semibold);
+  color: var(--blockr-color-text-default);
+}
+
+.pp-tt-sw {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.pp-tt-sub {
+  margin: -2px 0 3px;
+  font-size: 12px;
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-tt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.pp-tt-label {
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-tt-value {
+  margin-left: auto;
+  padding-left: 16px;
+  font-weight: var(--blockr-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-default);
+}
+
+.pp-tt-meta {
+  margin-left: 6px;
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-tt-note {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--blockr-color-text-muted);
+}

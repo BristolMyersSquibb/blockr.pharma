@@ -19,7 +19,7 @@
 # why the other gantts write one label per LANE rather than one per bar: on a
 # lane of eight assessments, per-bar labels would each run under their
 # neighbours. The legend says the vocabulary once, and the tooltip says which
-# category this bar is.
+# category this bar is, in words, and from when until when it held.
 
 #' Response lane definitions for a dm
 #'
@@ -167,9 +167,13 @@ pp_render_response_lane <- function(dm_obj, time_range, settings = list(),
 
   seg <- pp_resp_segments(tbl, time_range, ref_ms, mode)
   if (nrow(seg) == 0L) return(pp_empty_chart("No response records"))
+  when <- pp_resp_tip_when(tbl, ref_ms, mode)
 
   keep <- pp_gantt_in_window(seg$start, seg$end, time_range, ref_ms, mode)
   seg <- seg[keep, , drop = FALSE]
+  # Each bar's own assessment, indexed before the window cut: a bar's end is
+  # the NEXT assessment, which may itself be outside the window.
+  seg_row <- which(keep)
   if (nrow(seg) == 0L) {
     return(pp_empty_chart("No response assessments in this time range"))
   }
@@ -188,9 +192,11 @@ pp_render_response_lane <- function(dm_obj, time_range, settings = list(),
   }
 
   lane_label <- pp_term_label(param %||% paramcd %||% "Response")
+  tip_sub <- pp_tip_param_words(param %||% paramcd)
 
   bar_data <- lapply(seq_len(nrow(seg)), function(i) {
     col <- bar_color(seg$resp[i])
+    k <- seg_row[i]
     list(
       value = list(
         seg$start[i], seg$end[i], 0L,
@@ -203,6 +209,14 @@ pp_render_response_lane <- function(dm_obj, time_range, settings = list(),
         "",
         seg$ongoing[i], col
       ),
+      tip = pp_tip(
+        pp_resp_word(seg$resp[i]), color = col, sub = tip_sub,
+        rows = pp_tip_span(
+          when[[k]],
+          if (k < length(when)) when[[k + 1L]] else pp_tip_when(),
+          open = seg$ongoing[i], end_inside = FALSE
+        )
+      ),
       itemStyle = list(color = col)
     )
   })
@@ -213,36 +227,7 @@ pp_render_response_lane <- function(dm_obj, time_range, settings = list(),
     renderItem = pp_gantt_render_item(6, ongoing_idx = 7),
     encode = list(x = list(0, 1), y = 2),
     data = bar_data,
-    tooltip = list(
-      formatter = htmlwidgets::JS(sprintf("
-        function(params) {
-          var v = params.value;
-          var resp = v[3] || '';
-          var s = v[4] || '';
-          var e = v[5] || '';
-          var ongoing = !!v[7];
-          var badge = v[8] || '';
-          var html = '<div style=\"min-width:170px\">';
-          html += '<div style=\"font-size:14px;font-weight:700;' +
-            'margin-bottom:2px\">' + %s + '</div>';
-          html += '<div style=\"font-size:11px;color:#888;' +
-            'margin-bottom:4px\">' + %s + '</div>';
-          if (resp) {
-            html += '<span style=\"display:inline-block;background:' +
-              badge + ';color:#fff;padding:1px 8px;border-radius:3px;' +
-              'font-size:11px;font-weight:600;margin-bottom:4px\">' +
-              resp + '</span><br/>';
-          }
-          html += '<span style=\"font-size:12px\">Assessed: ' + s +
-            '</span><br/>';
-          html += '<span style=\"font-size:12px\">' +
-            (ongoing ? 'Held until: last assessment' : 'Held until: ' + e) +
-            '</span>';
-          html += '</div>';
-          return html;
-        }
-      ", pp_js_str(paramcd %||% "Response"), pp_js_str(param %||% "")))
-    )
+    tooltip = list(formatter = PP_TIP_FORMATTER)
   ))
 
   echarts4r::e_charts(height = pp_gantt_height(1L)) |>
@@ -269,4 +254,85 @@ pp_render_response_lane <- function(dm_obj, time_range, settings = list(),
     echarts4r::e_text_style(
       fontFamily = "var(--bs-body-font-family)"
     )
+}
+
+#' The response categories in words, for the tooltip
+#'
+#' The legend prints the codes the study ships; the tooltip names the one
+#' under the pointer, with the legend's swatch in front of it.
+#' @noRd
+pp_resp_words <- c(
+  "CR"            = "Complete response",
+  "PR"            = "Partial response",
+  "SD"            = "Stable disease",
+  "NON-CR/NON-PD" = "Non-CR/non-PD",
+  "PD"            = "Progressive disease",
+  "NE"            = "Not evaluable",
+  "NED"           = "No evidence of disease",
+  "UN"            = "Unknown",
+  "MISSING"       = "Missing"
+)
+
+#' One response category in words
+#'
+#' A code this package does not know is printed as the study wrote it, in
+#' sentence case when it is a word rather than a short code.
+#' @param resp A single response category.
+#' @return A string.
+#' @noRd
+pp_resp_word <- function(resp) {
+  s <- pp_tip_str(resp)
+  key <- toupper(s)
+  if (key %in% names(pp_resp_words)) return(unname(pp_resp_words[[key]]))
+  if (nchar(s) <= 3L) s else pp_tip_case(s)
+}
+
+#' Each assessment's day and date, in the order the lane draws them
+#'
+#' pp_resp_segments() returns positions and labels only; the tooltip needs
+#' the record's own ADT and ADY. This keeps the records it keeps and orders
+#' them the way it does, so element i belongs to segment i. Keep the two in
+#' step.
+#' @param tbl One parameter's records for one patient.
+#' @param ref_ms,mode As passed to a viz render.
+#' @return A list of [pp_tip_when()] results.
+#' @noRd
+pp_resp_tip_when <- function(tbl, ref_ms = NA_real_, mode = "date") {
+  use_day <- identical(mode, "rday") && "ADY" %in% colnames(tbl)
+  at <- if (use_day) pp_as_numeric(tbl$ADY) else tbl$ADT
+  keep <- !is.na(at) & !is.na(tbl$AVALC) &
+    nzchar(trimws(as.character(tbl$AVALC)))
+  tbl <- tbl[keep, , drop = FALSE]
+  tbl <- tbl[order(at[keep]), , drop = FALSE]
+  col <- function(nm) {
+    if (nm %in% colnames(tbl)) tbl[[nm]] else rep(NA, nrow(tbl))
+  }
+  adt <- col("ADT")
+  ady <- col("ADY")
+  lapply(seq_len(nrow(tbl)), function(i) {
+    pp_tip_when(adt[i], ady[i], ref_ms, mode)
+  })
+}
+
+#' A study's parameter name as a tooltip writes it
+#'
+#' Sentence case for a name the study wrote in title case ("Overall Response
+#' by Investigator" reads "Overall response by investigator"). Only words
+#' written as a capital and then lower case are lowered, so codes and
+#' abbreviations inside the name ("CR/PR", "ADAS-Cog") keep their capitals. A
+#' name in capitals throughout goes through [pp_tip_case()].
+#' @param x A single name.
+#' @return A string.
+#' @noRd
+pp_tip_param_words <- function(x) {
+  s <- pp_tip_str(x)
+  if (!nzchar(s) || s == toupper(s)) return(pp_tip_case(s))
+  words <- strsplit(s, " ", fixed = TRUE)[[1L]]
+  if (length(words) > 1L) {
+    rest <- words[-1L]
+    lower <- grepl("^\\(?[A-Z][a-z]+\\W*$", rest)
+    rest[lower] <- tolower(rest[lower])
+    words[-1L] <- rest
+  }
+  paste(words, collapse = " ")
 }

@@ -238,15 +238,43 @@ cm_gantt_viz <- new_pp_viz(
       lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
       indc <- indc_at(i)
       col <- bar_color(indc)
+      at <- function(nm) if (nm %in% colnames(tbl)) tbl[[nm]][i] else NA
+      # A dictionary's "UNCODED" is not a name: the tooltip heads with the
+      # reported one instead, and drops a class of the same word.
+      reported <- opt_chr(tbl, "CMTRT", i)
+      head <- if (pp_cm_uncoded(med) && nzchar(reported)) reported else med
+      klass <- opt_chr(tbl, "CMCLAS", i)
+      if (pp_cm_uncoded(klass)) klass <- ""
+      # The reported name is worth a row only where the headline shows a
+      # coded name that reads differently.
+      if (identical(toupper(trimws(reported)), toupper(trimws(head)))) {
+        reported <- ""
+      }
       list(
-        # Value 12 is the tooltip's badge color: the color resolved in R, so
-        # the badge cannot pick a palette of its own, and empty when the bars
-        # are uniformly colored (a badge would then claim a distinction the
-        # plot does not draw).
+        # Value 12 is the bar's color when the bars are colored by
+        # indication, and empty when they are uniformly colored.
         value = list(s, e, lane, med, dose,
                      opt_chr(tbl, "CMROUTE", i), opt_chr(tbl, "CMCLAS", i),
                      indc, s_lab, e_lab, lab,
                      is_ongoing(i), if (length(indc_hex)) col else ""),
+        tip = pp_tip(
+          pp_tip_case(head), color = col, sub = pp_tip_case(klass),
+          rows = c(
+            list(
+              pp_tip_row("Indication", pp_tip_case(indc)),
+              pp_tip_row("Dose", pp_cm_tip_dose(
+                at("CMDOSE"), opt_chr(tbl, "CMDOSU", i),
+                opt_chr(tbl, "CMROUTE", i)
+              )),
+              pp_tip_row("Reported as", pp_tip_case(reported))
+            ),
+            pp_tip_span(
+              pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+              pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+              open = is_ongoing(i)
+            )
+          )
+        ),
         itemStyle = list(color = col)
       )
     })
@@ -257,50 +285,7 @@ cm_gantt_viz <- new_pp_viz(
       renderItem = pp_gantt_render_item(10, ongoing_idx = 11),
       encode = list(x = list(0, 1), y = 2),
       data = bar_data,
-      tooltip = list(
-        formatter = htmlwidgets::JS("
-          function(params) {
-            var v = params.value;
-            var med = v[3] || '';
-            var dose = v[4] || '';
-            var route = v[5] || '';
-            var klass = v[6] || '';
-            var indc = '' + (v[7] == null ? '' : v[7]);
-            var s = v[8] || '';
-            var e = v[9] || '';
-            var badge = v[12] || '';
-            var html = '<div style=\"min-width:180px\">';
-            html += '<div style=\"font-size:14px;font-weight:700;' +
-              'margin-bottom:4px\">' + med + '</div>';
-            if (indc && badge) {
-              html += '<span style=\"display:inline-block;background:' +
-                badge + ';color:#fff;padding:1px 8px;border-radius:3px;' +
-                'font-size:11px;font-weight:600;margin-bottom:4px\">' +
-                indc + '</span><br/>';
-            }
-            if (klass) {
-              html += '<span style=\"color:#888;font-size:11px\">' +
-                klass.toUpperCase() + '</span><br/>';
-            }
-            html += '<span style=\"font-size:12px\">' +
-              s + ' \\u2192 ' + e + '</span><br/>';
-            if (dose) {
-              html += '<span style=\"font-size:12px\">Dose: ' +
-                dose + '</span><br/>';
-            }
-            if (route) {
-              html += '<span style=\"font-size:12px\">Route: ' +
-                route + '</span><br/>';
-            }
-            if (indc && !badge) {
-              html += '<span style=\"font-size:12px\">Indication: ' +
-                indc + '</span>';
-            }
-            html += '</div>';
-            return html;
-          }
-        ")
-      )
+      tooltip = list(formatter = PP_TIP_FORMATTER)
     ))
 
     chart_height <- pp_gantt_height(length(meds))
@@ -336,3 +321,21 @@ cm_gantt_viz <- new_pp_viz(
       )
   }
 )
+
+#' A medication's dose, as one tooltip value
+#'
+#' The amount and its unit, then the route: "5 mg, oral". Missing parts drop
+#' out; a route on its own is written in sentence case.
+#' @noRd
+pp_cm_tip_dose <- function(dose, unit = "", route = "") {
+  amount <- pp_tip_str(if (is.numeric(dose)) pp_tip_num(dose) else dose)
+  amount <- trimws(paste(amount, if (nzchar(amount)) pp_tip_str(unit) else ""))
+  route <- pp_tip_str(route)
+  if (!nzchar(route)) return(amount)
+  if (!nzchar(amount)) return(pp_tip_case(route))
+  paste0(amount, ", ", if (route == toupper(route)) tolower(route) else route)
+}
+
+#' Whether a coded value is the dictionary's placeholder for "not coded"
+#' @noRd
+pp_cm_uncoded <- function(x) identical(toupper(pp_tip_str(x)), "UNCODED")

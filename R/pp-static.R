@@ -543,7 +543,7 @@ pp_static_findings <- function(dm_obj, time_range, table_name, label,
   }
   tbl$..pt_col <- line_color
   if (has_anrind) {
-    anr <- as.character(tbl$ANRIND)
+    anr <- pp_anrind_code(tbl$ANRIND)
     hit <- !is.na(anr) & anr %in% names(anrind_colors)
     tbl$..pt_col[hit] <- anrind_colors[anr[hit]]
   }

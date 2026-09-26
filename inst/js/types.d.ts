@@ -123,6 +123,25 @@ interface PpInputs {
   smooth_mode: 'off' | 'auto';
 }
 
+/* --- The data tooltip (R/pp-tooltip.R) --- */
+
+interface PpTipRow {
+  label: string;
+  value: string;
+  /** muted text after the value: the date after a day, a span's length */
+  meta?: string;
+}
+
+interface PpTip {
+  head: string;
+  /** the swatch before the headline */
+  color?: string;
+  /** a muted line under the headline */
+  sub?: string;
+  rows: PpTipRow[];
+  note?: string;
+}
+
 /* --- The mount --- */
 
 /** What R hands PatientProfile.mount() (R/patient-profile-block.R). */
@@ -145,6 +164,8 @@ interface PatientProfileNamespace {
   ink(name: string): string;
   /** Resolve every `var(--token)` string in an ECharts option, in place. */
   resolveInk(option: any): any;
+  /** Draw a data point's tooltip from its `tip` (R/pp-tooltip.R). */
+  tip(params: any): string;
   part(fn: PpPart): void;
   mount(cfg: PpConfig): PpContext;
 }
