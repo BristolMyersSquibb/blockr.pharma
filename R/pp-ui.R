@@ -40,28 +40,12 @@ pp_block_ui <- function(id) {
       script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
                  "pp-picker.js", "pp-panels.js", "pp-find.js")
     ),
-    # Blockr.Select: the shared single-select primitive. Its dropdown is
-    # portalled to <body>, which is what lets it escape `.pp-chart-area`'s
-    # `overflow-y: auto` — a hand-rolled absolute popover gets clipped and
-    # scrolls away with the chart list. blockr_blocks_css_dep() carries the
-    # canonical `.blockr-field--required-empty` amber cue.
-    blockr.dplyr::blockr_blocks_css_dep(),
-    blockr.dplyr::blockr_select_dep(),
+    # The design system: tokens, the shared controls and their stylesheets.
+    # The profile's stylesheet reads the tokens without fallbacks, so this
+    # comes along wherever the block is drawn.
+    blockr.ui::controls_dep(),
     shiny::div(
       class = "pp-layout", id = ns("pp_layout"),
-
-      # The check-mark glyph, defined ONCE and referenced by every card,
-      # group row and parameter row. Inlined, it was 286 bytes per row
-      # and the search results put one on all ~75 of them -- 31KB of
-      # identical markup in a sidebar payload of 72KB.
-      shiny::HTML(paste0(
-        '<svg xmlns="http://www.w3.org/2000/svg" style="display:none" ',
-        'aria-hidden="true"><symbol id="', ns("check"), '" ',
-        'viewBox="0 0 16 16"><path fill="currentColor" ',
-        'd="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5',
-        '-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 ',
-        '.708 0z"/></symbol></svg>'
-      )),
 
       # Left sidebar
       shiny::div(
