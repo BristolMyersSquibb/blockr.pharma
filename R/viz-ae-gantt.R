@@ -435,17 +435,24 @@ pp_term_label <- function(term) {
   )
 }
 
-#' Minimal empty chart placeholder
-#' @param msg Message to display
+#' A panel with nothing to draw
+#'
+#' blockr.ui's empty state (one line of 13px `text-muted`, left-aligned with
+#' the panel's title, no italic), drawn as an ECharts title rather than
+#' as HTML: a patient switch updates an echarts panel in place, and an HTML
+#' placeholder would rebuild the widget every time a patient without the
+#' data came and went.
+#'
+#' @param msg The line. Say what was looked for, not only that it is absent.
 #' @noRd
 pp_empty_chart <- function(msg) {
-  echarts4r::e_charts(height = 80) |>
+  echarts4r::e_charts(height = 52) |>
     echarts4r::e_list(list(
       title = list(
         text = msg,
-        left = "center", top = "center",
+        left = 13, top = "middle",
         textStyle = list(fontSize = 13, color = "var(--blockr-color-text-muted)",
-                         fontWeight = 400, fontStyle = "italic",
+                         fontWeight = 400,
                          fontFamily = "var(--bs-body-font-family)")
       ),
       xAxis = list(show = FALSE),

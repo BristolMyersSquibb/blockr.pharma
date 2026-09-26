@@ -544,6 +544,12 @@
   background: var(--blockr-color-bg-surface);
 }
 
+/* The chart area's empty states (blockr.ui's .blockr-empty) start where the
+   header's title does, so the line reads as the rest of its sentence. */
+.pp-chart-area .blockr-empty--block {
+  padding-inline: 13px 12px;
+}
+
 /* --- The header row (design system, "Header row") -------------------------
    The count of patients and the drill-down reset lead the row; the subject
    id is the output title; download and the gear sit on the right, gear last.
@@ -575,10 +581,6 @@
   line-height: 1.35;
   color: var(--blockr-color-text-default);
   font-variant-numeric: tabular-nums;
-}
-
-.pp-head-title.is-none {
-  color: var(--blockr-color-text-muted);
 }
 
 .pp-head-tools {
@@ -976,34 +978,6 @@
   line-height: 1;
   white-space: nowrap;
   vertical-align: middle;
-}
-
-/* --- Empty state --------------------------- */
-.pp-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--blockr-color-text-muted);
-}
-
-.pp-empty-state-icon {
-  margin-bottom: 12px;
-  color: var(--blockr-color-border-strong);
-}
-
-.pp-empty-state-text {
-  font-size: 14px;
-  color: var(--blockr-color-text-muted);
-  margin: 0 0 4px;
-}
-
-.pp-empty-state-hint {
-  font-size: 12px;
-  color: var(--blockr-color-text-muted);
-  margin: 0;
 }
 
 /* --- Scrollbar styling --------------------- */

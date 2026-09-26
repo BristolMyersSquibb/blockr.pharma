@@ -1140,10 +1140,9 @@ new_patient_profile_block <- function(selected = NULL,
             total <- r_cohort_total()
             shiny::req(!is.null(total))
             if (isTRUE(total > 1L)) {
-              paste0("Pick one of ", total,
-                     " patients above, or drill down on a chart")
+              "Or click a patient in any chart on the board."
             } else {
-              "No patient data in the incoming tables"
+              "No patients in the incoming tables."
             }
           })
 
@@ -1172,8 +1171,10 @@ new_patient_profile_block <- function(selected = NULL,
             shiny::req(inherits(dm_obj, "dm"), isTRUE(scoped$single))
             viz <- r_available()[[viz_id]]
             shiny::req(!is.null(viz))
+            # NULL when the patient has no dated record at all (a screen
+            # failure): the panels still draw, and say so, rather than the
+            # whole stack staying blank.
             time_range <- r_time_range()
-            shiny::req(time_range)
             ref_ms <- r_ref_ms()
             tl_mode <- r_timeline_mode()
             # Relative-day mode requires a reference timestamp; if TRTSDT
@@ -1215,6 +1216,10 @@ new_patient_profile_block <- function(selected = NULL,
               # this particular patient has no rows in any of its tables;
               # say so instead of drawing an empty axis.
               pp_empty_chart("No data for this patient")
+            } else if (is.null(time_range) && !identical(viz$tables, "adsl")) {
+              # Rows, but none of them dated: there is no axis to put them
+              # on. A panel reading only ADSL has no axis and draws.
+              pp_empty_chart("No dated records for this patient")
             } else {
               tryCatch(
                 viz$render(dm_obj, time_range, viz_settings,

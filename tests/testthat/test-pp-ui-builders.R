@@ -10,11 +10,11 @@ html <- function(x) as.character(htmltools::renderTags(x)$html)
 
 test_that("the chart area renders both empty states and the stack", {
   none <- html(pp_chart_area_ui(ns, single = FALSE, character()))
-  expect_match(none, "pp-empty-state")
+  expect_match(none, "blockr-empty")
   expect_match(none, 'id="t-pp_empty_hint"')
 
   bare <- html(pp_chart_area_ui(ns, single = TRUE, character()))
-  expect_match(bare, "No visualizations selected")
+  expect_match(bare, "Add a panel")
 
   stack <- html(pp_chart_area_ui(ns, TRUE, c("patient_overview", "ae_gantt")))
   expect_match(stack, 'id="t-viz_slot_patient_overview"')
@@ -198,5 +198,5 @@ test_that("the header's sentence says the facts in words and drops what is missi
   expect_null(pp_subject_sentence_ui(bare, 1L, NA, red))
 
   expect_match(html(pp_subject_title_ui("01-701-1015")), ">01-701-1015<")
-  expect_match(html(pp_subject_title_ui(NULL)), "is-none")
+  expect_match(html(pp_subject_title_ui(NULL)), ">Choose a patient<")
 })

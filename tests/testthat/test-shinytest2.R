@@ -216,8 +216,8 @@ test_that("the cohort lists every subject and a click picks one", {
   expect_equal(js("document.querySelectorAll('[id*=viz_slot_] canvas').length"), 0)
   # Before any pick the chart area explains itself, and nothing in the
   # block has errored.
-  expect_true(js("!!document.querySelector('.pp-chart-area .pp-empty-state')"))
-  expect_match(js("document.querySelector('.pp-empty-state-hint').innerText"), "Pick one of 254")
+  expect_match(js("document.querySelector('.pp-head-title').innerText"), "Choose a patient")
+  expect_match(js("document.querySelector('.pp-chart-area .blockr-empty').innerText"), "click a patient")
   expect_equal(js("document.querySelectorAll('.pp-layout .shiny-output-error').length"), 0)
 
   pick_patient(ids[1])

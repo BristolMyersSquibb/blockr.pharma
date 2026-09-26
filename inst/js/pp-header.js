@@ -117,6 +117,18 @@ PatientProfile.part(function(ctx) {
     toggleSidebar();
   });
 
+  // The slot words of the empty states ("Choose a patient", "Add a panel"):
+  // both are answered from the sidebar's search, so open the list and put
+  // the cursor there. Scoped to this block's layout, since the handler is
+  // on the document and a board can hold two profiles.
+  $(document).on('click', '.pp-open-search', function(e) {
+    if (!$(this).closest('#' + layoutId).length) return;
+    e.stopPropagation();
+    toggleSidebar(false);
+    var search = byId(ns('search'));
+    if (search) search.focus();
+  });
+
   // The download menu. Rendered once in R; this names the cohort's size and
   // hides the section that does not apply -- the patient's while nobody is
   // picked, the cohort's while it is one patient -- and the whole menu when
