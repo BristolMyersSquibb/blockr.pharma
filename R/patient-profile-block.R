@@ -1140,7 +1140,12 @@ new_patient_profile_block <- function(selected = NULL,
             total <- r_cohort_total()
             shiny::req(!is.null(total))
             if (isTRUE(total > 1L)) {
-              "Or click a patient in any chart on the board."
+              shiny::tagList(
+                "No patient selected. ",
+                shiny::tags$button(type = "button",
+                                   class = "blockr-slot pp-open-search",
+                                   "Search for one")
+              )
             } else {
               "No patients in the incoming tables."
             }

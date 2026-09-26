@@ -437,8 +437,8 @@ pp_term_label <- function(term) {
 
 #' A panel with nothing to draw
 #'
-#' blockr.ui's empty state (one line of 13px `text-muted`, left-aligned with
-#' the panel's title, no italic), drawn as an ECharts title rather than
+#' blockr.ui's empty state (one line of italic 13px `text-muted`, left-aligned
+#' with the panel's title), drawn as an ECharts title rather than
 #' as HTML: a patient switch updates an echarts panel in place, and an HTML
 #' placeholder would rebuild the widget every time a patient without the
 #' data came and went.
@@ -452,7 +452,7 @@ pp_empty_chart <- function(msg) {
         text = msg,
         left = 13, top = "middle",
         textStyle = list(fontSize = 13, color = "var(--blockr-color-text-muted)",
-                         fontWeight = 400,
+                         fontWeight = 400, fontStyle = "italic",
                          fontFamily = "var(--bs-body-font-family)")
       ),
       xAxis = list(show = FALSE),

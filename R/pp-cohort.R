@@ -1855,18 +1855,14 @@ pp_subject_sentence_ui <- function(frame, at, arm, color) {
 
 #' The header's title: the subject on screen
 #'
-#' The id in full, as the output title. Without a pick the title is the
-#' question, as a slot word in the id's place: it opens the list of patients
-#' and puts the cursor in its search (pp-header.js).
+#' The id in full, as the output title. Without a pick there is no title;
+#' the chart area below says that nobody is picked.
 #'
 #' @param id The picked USUBJID, or `NULL`.
 #' @noRd
 pp_subject_title_ui <- function(id) {
   if (length(id) != 1L || !nzchar(id)) {
-    return(shiny::div(class = "pp-head-title",
-      shiny::tags$button(type = "button", class = "blockr-slot pp-open-search",
-                         "Choose a patient")
-    ))
+    return(NULL)
   }
   shiny::div(class = "pp-head-title", id)
 }

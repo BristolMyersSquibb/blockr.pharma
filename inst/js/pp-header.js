@@ -117,7 +117,7 @@ PatientProfile.part(function(ctx) {
     toggleSidebar();
   });
 
-  // The slot words of the empty states ("Choose a patient", "Add a panel"):
+  // The slot words of the empty states ("Search for one", "Add one"):
   // both are answered from the sidebar's search, so open the list and put
   // the cursor there. Scoped to this block's layout, since the handler is
   // on the document and a board can hold two profiles.
