@@ -34,14 +34,18 @@
 #' @param top_n LEGACY. A board saved with it restores it as the script's
 #'   `top_n`.
 #' @param max_height LEGACY. The matrix scrolls with its panel.
+#' @param drill,filter_column,filter_values,ctrl_target,ctrl_table LEGACY. A
+#'   row click goes to the board's drill filter, as from a composer table;
+#'   the block no longer filters.
 #' @param title,subtitle Text above the matrix. The subtitle is the block's
 #'   sentence; its `{@top_n}` word is the control for the cap.
 #' @param script The prepare script. `NULL` (the default) builds the top-n
 #'   script for `col`, see [ae_heatmap_script()]; `""` means none.
-#' @param cell_numbers,drill,download,filter_column,filter_values,ctrl_target,ctrl_table,caption,values
+#' @param cell_numbers,download,caption,values
 #'   As in [blockr.viz::new_heatmap_block()].
 #' @param ... Forwarded to the engine constructor.
-#' @return A transform block of class `heatmap_block`.
+#' @return A transform block of class `heatmap_block`, whose result is the
+#'   subject x term matrix of counts.
 #' @examplesIf interactive()
 #' new_ae_heatmap_block(group = "TRT01A", drill = TRUE)
 #' @export
@@ -51,13 +55,13 @@ new_ae_heatmap_block <- function(row = "USUBJID",
                                  group = character(),
                                  top_n = NULL,       # LEGACY: script value
                                  cell_numbers = TRUE,
-                                 drill = FALSE,
+                                 drill = NULL,         # LEGACY: bridge only
                                  download = FALSE,
-                                 filter_column = NULL,
-                                 filter_values = NULL,
-                                 max_height = NULL,  # LEGACY: panel scroll
-                                 ctrl_target = "",
-                                 ctrl_table = "",
+                                 filter_column = NULL, # LEGACY: no filter
+                                 filter_values = NULL, # LEGACY: no filter
+                                 max_height = NULL,    # LEGACY: panel scroll
+                                 ctrl_target = NULL,   # LEGACY: auto target
+                                 ctrl_table = NULL,    # LEGACY: auto target
                                  title = "Adverse events by subject",
                                  subtitle = ae_heatmap_subtitle(),
                                  caption = NULL,
@@ -185,14 +189,6 @@ ae_heatmap_arguments <- function() {
       example = TRUE,
       type = blockr.core::arg_boolean()
     ),
-    drill = new_arg_spec(
-      paste0(
-        "true = a row click filters downstream on the subject (click ",
-        "again to clear). Default false."
-      ),
-      example = TRUE,
-      type = blockr.core::arg_boolean()
-    ),
     download = new_arg_spec(
       paste0(
         "Offer the matrix as a download (xlsx / html / pptx of the count ",
@@ -200,19 +196,6 @@ ae_heatmap_arguments <- function() {
       ),
       example = TRUE,
       type = blockr.core::arg_boolean()
-    ),
-    ctrl_target = new_arg_spec(
-      paste0(
-        "BETA. Block id of a value filter block on the same board the ",
-        "drill claim is also pushed to. Empty = off."
-      ),
-      example = "cohort_filter",
-      type = arg_string()
-    ),
-    ctrl_table = new_arg_spec(
-      "BETA. Only with ctrl_target: the dm table the claim applies to.",
-      example = "adsl",
-      type = arg_string()
     )
   )
 }
@@ -226,8 +209,8 @@ ae_heatmap_guidance <- function() {
     "NOT feed a worst-grade-per-patient dedup upstream; that flattens ",
     "every count to 1. Typical wiring: after the AE local filter (or the ",
     "AE flatten), group by the arm column the study carries (TRT01A / ",
-    "ACTARM). The data output is a PASSTHROUGH of the input rows, filtered ",
-    "to the clicked subject when drill is on -- downstream blocks (the ",
-    "patient profile) receive AE rows, not the matrix."
+    "ACTARM). The result is the subject x term matrix of counts. A row ",
+    "click is sent to the board's drill filter block, when there is one; ",
+    "nothing needs configuring for it."
   )
 }

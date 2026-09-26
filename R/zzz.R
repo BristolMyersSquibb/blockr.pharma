@@ -95,7 +95,8 @@ register_pharma_blocks <- function() {
     uid = "ae_heatmap_block",
     description = paste0(
       "Subject x term AE matrix: cell = occurrence count, color = worst ",
-      "grade; top-N cap, arm rail, click-to-filter drill."
+      "grade; top-N terms, rows grouped by arm, a click drills to the ",
+      "patient."
     ),
     category = "plot",
     icon = "grid-3x3",
