@@ -9,15 +9,20 @@ new_ae_heatmap_block(
   col = "AEDECOD",
   color = "AETOXGR",
   group = character(),
-  top_n = 25L,
+  top_n = NULL,
   cell_numbers = TRUE,
   drill = FALSE,
   download = FALSE,
   filter_column = NULL,
   filter_values = NULL,
-  max_height = "600px",
+  max_height = NULL,
   ctrl_target = "",
   ctrl_table = "",
+  title = "Adverse events by subject",
+  subtitle = ae_heatmap_subtitle(),
+  caption = NULL,
+  script = NULL,
+  values = list(),
   ...
 )
 }
@@ -35,7 +40,18 @@ own level order).}
 \item{group}{Optional column grouping the rows, e.g. the treatment arm
 (\code{"TRT01A"}, \code{"ACTARM"}). Empty: no grouping.}
 
-\item{top_n, cell_numbers, drill, download, filter_column, filter_values, max_height, ctrl_target, ctrl_table}{As in \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}.}
+\item{top_n}{LEGACY. A board saved with it restores it as the script's
+\code{top_n}.}
+
+\item{cell_numbers, drill, download, filter_column, filter_values, ctrl_target, ctrl_table, caption, values}{As in \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}.}
+
+\item{max_height}{LEGACY. The matrix scrolls with its panel.}
+
+\item{title, subtitle}{Text above the matrix. The subtitle is the block's
+sentence; its \verb{\{@top_n\}} word is the control for the cap.}
+
+\item{script}{The prepare script. \code{NULL} (the default) builds the top-n
+script for \code{col}, see \code{\link[=ae_heatmap_script]{ae_heatmap_script()}}; \code{""} means none.}
 
 \item{...}{Forwarded to the engine constructor.}
 }
@@ -45,10 +61,10 @@ A transform block of class \code{heatmap_block}.
 \description{
 Renders long adverse-event rows (one row per AE record) as a subject x
 term matrix: the cell shows the AE occurrence count and is painted by
-the worst grade -- the classic CDEx safety heatmap. Columns cap to the
-top-N most frequent terms (the "Top n" toolbar slider); the cell counts
-toggle off into a pure color heatmap. Rows group by treatment arm (a
-rotated rail tile marks each arm) and order by AE burden within it.
+the worst grade -- the classic CDEx safety heatmap. A prepare script
+keeps the \code{top_n} most frequent terms, and "Top 25" in the sentence under
+the title is the control for it. Rows group by treatment arm and order by
+AE burden within it.
 }
 \details{
 A thin constructor over \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}, which owns
