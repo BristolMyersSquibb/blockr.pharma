@@ -32,18 +32,18 @@ pp_cohort_sort_ui <- function(choices, cur, ns) {
 
 #' The patients' caption: a section title and one sentence
 #'
-#' "PATIENTS 306", then what the strip beside each patient draws and how the
+#' "PATIENTS", the cohort's status on the right ("306 patients", or while a
+#' drill narrows them the reset, "6 of 179 patients", painted by
+#' pp-header.js), then what the strip beside each patient draws and how the
 #' list is ordered: "Adverse events, by *patient id*". The id prefix every
-#' patient shares sits at the right of the title, since the rows leave it
-#' out. A filter on the strip is not repeated here; the panel that sets it
-#' says so.
+#' patient shares follows the title, since the rows leave it out. A filter
+#' on the strip is not repeated here; the panel that sets it says so.
 #'
 #' @param src The band source, or `NULL`.
 #' @param sorter The sort word, from [pp_cohort_sort_ui()], or `NULL`.
 #' @param pre The id prefix every patient shares.
-#' @param n How many patients the list holds.
 #' @noRd
-pp_band_caption_ui <- function(src, sorter, pre, n = NULL) {
+pp_band_caption_ui <- function(src, sorter, pre) {
   what <- if (!is.null(src)) htmltools::htmlEscape(src$caption) else ""
   # A parameter's strip names the code, then the parameter, muted.
   if (!is.null(src) && !is.null(src$sub)) {
@@ -62,8 +62,8 @@ pp_band_caption_ui <- function(src, sorter, pre, n = NULL) {
     shiny::div(
       class = "pp-cohort-bandcap-title",
       shiny::span("Patients"),
-      if (!is.null(n)) shiny::span(class = "pp-cohort-bandcap-n", n),
-      if (nzchar(pre)) shiny::span(class = "pp-cohort-prefix", pre)
+      if (nzchar(pre)) shiny::span(class = "pp-cohort-prefix", pre),
+      shiny::span(class = "pp-cohort-status")
     ),
     if (nzchar(sentence)) {
       shiny::div(class = "pp-cohort-bandcap-what", shiny::HTML(sentence))

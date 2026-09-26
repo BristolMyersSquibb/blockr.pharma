@@ -11,82 +11,77 @@ const boot = () => {
   return h;
 };
 
-test('subject_picker fills the cohort count and hides the segment at zero', () => {
+// The cohort's status is painted into two places: the patients' header in
+// the sidebar, and the header row (shown only while the list is shut).
+const statuses = (h) => h.qa(`#${h.NS}-pp_layout .pp-cohort-status`);
+const statusText = (h) => statuses(h).map((el) => el.textContent.trim());
+const resets = (h) => h.qa(`#${h.NS}-pp_layout .pp-drill-reset`);
+
+test('subject_picker writes the cohort in grey, in both places', () => {
   const h = boot();
-  const seg = h.el('pp_cohort_seg');
-  const count = h.el('pp_cohort_count');
+  assert.equal(statuses(h).length, 2, 'the sidebar header and the header row');
   h.sendRecorded('subject_picker');
-  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '12 patients');
-  assert.equal(seg.classList.contains('is-hidden'), false);
-  h.send('subject_picker', { count: 254 });
-  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '254 patients');
+  assert.deepEqual(statusText(h), ['12 patients', '12 patients']);
+  assert.equal(resets(h).length, 0, 'no reset while nothing is drilled');
   h.send('subject_picker', { count: 1 });
-  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '1 patient');
+  assert.deepEqual(statusText(h), ['1 patient', '1 patient']);
   h.send('subject_picker', { count: 0 });
-  assert.equal(seg.classList.contains('is-hidden'), true);
-  h.send('subject_picker', null);
-  assert.equal(seg.classList.contains('is-hidden'), true);
+  assert.deepEqual(statusText(h), ['', '']);
+  h.close();
+});
+
+test('a drill turns the count into the reset, with what it started from', () => {
+  const h = boot();
+  h.send('subject_picker', { count: 6 });
+  h.send('drill', { clause: 'SEX = F', before: 179 });
+  assert.deepEqual(statusText(h), ['6 of 179 patients', '6 of 179 patients']);
+  const r = resets(h)[0];
+  // Names what is undone, and how many come back.
+  assert.equal(r.getAttribute('data-blockr-tooltip'), 'Show all 179 patients, clearing SEX = F');
+  h.send('drill', { clause: '' });
+  assert.deepEqual(statusText(h), ['6 patients', '6 patients']);
+  assert.equal(resets(h).length, 0);
+  h.close();
+});
+
+test('a drill whose filter did not count says only what it kept', () => {
+  // A remote dm: the drill filter skips the count.
+  const h = boot();
+  h.send('subject_picker', { count: 6 });
+  h.send('drill', { clause: 'SEX = F' });
+  assert.deepEqual(statusText(h), ['6 patients', '6 patients']);
+  assert.equal(resets(h)[0].getAttribute('data-blockr-tooltip'), 'Show all patients, clearing SEX = F');
   h.close();
 });
 
 test('a drill that matches nobody still says so, and keeps the reset', () => {
   const h = boot();
-  const seg = h.el('pp_cohort_seg');
-  const count = h.el('pp_cohort_count');
-  const reset = h.el('pp_cohort_reset');
-  // No patients and no drill: nothing loaded, so the segment stays away.
   h.send('subject_picker', { count: 0 });
-  assert.equal(seg.classList.contains('is-hidden'), true);
+  assert.equal(resets(h).length, 0);
   // No patients BECAUSE of a drill: a result, and the state where the way
-  // back matters most. The segment says 0 and the reset works.
-  h.send('drill', { clause: 'SEX = M' });
-  assert.equal(seg.classList.contains('is-hidden'), false);
-  assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '0 patients');
-  assert.equal(reset.disabled, false);
-  assert.equal(seg.classList.contains('is-drilled'), true);
-  h.send('drill', { clause: '' });
-  assert.equal(seg.classList.contains('is-hidden'), true);
-  assert.equal(reset.disabled, true);
+  // back matters most.
+  h.send('drill', { clause: 'SEX = M', before: 12 });
+  assert.deepEqual(statusText(h), ['0 of 12 patients', '0 of 12 patients']);
   h.close();
 });
 
-test('either message can land first; the segment is painted from both', () => {
+test('either message can land first; the status is painted from both', () => {
   const h = boot();
-  const seg = h.el('pp_cohort_seg');
-  const reset = h.el('pp_cohort_reset');
-  // Drill first, count second: the count must not undo the drill.
-  h.send('drill', { clause: 'SEX = M' });
+  h.send('drill', { clause: 'SEX = M', before: 40 });
   h.send('subject_picker', { count: 33 });
-  assert.equal(seg.classList.contains('is-drilled'), true);
-  assert.equal(reset.disabled, false);
+  assert.deepEqual(statusText(h), ['33 of 40 patients', '33 of 40 patients']);
   h.close();
 });
 
-test('the reset is disabled until a drill, names it, and asks R to undrill', () => {
+test('the reset asks R to undrill and leaves the list alone', () => {
   const h = boot();
-  const seg = h.el('pp_cohort_seg');
-  const count = h.el('pp_cohort_count');
-  const reset = h.el('pp_cohort_reset');
-  h.sendRecorded('subject_picker');
-  // Always there, so the segment keeps its width; disabled with nothing to undo.
-  assert.equal(reset.disabled, true);
-  assert.equal(reset.getAttribute('data-blockr-tooltip'), null);
-  h.send('drill', { clause: 'SEX = M' });
-  // The class lands on the SEGMENT: it is what joins the two halves.
-  assert.equal(seg.classList.contains('is-drilled'), true);
-  assert.equal(reset.disabled, false);
-  // Names what is undone, never where you land.
-  assert.equal(reset.getAttribute('data-blockr-tooltip'), 'Reset drill-down: SEX = M');
-  // The reset asks R; it does not touch the list the count toggles.
-  const shutBefore = count.classList.contains('is-shut');
-  h.click(reset);
+  const sidebar = h.el('pp_sidebar');
+  h.send('subject_picker', { count: 6 });
+  h.send('drill', { clause: 'SEX = M', before: 12 });
+  const shutBefore = sidebar.classList.contains('collapsed');
+  h.click(resets(h)[0]);
   assert.equal(h.inputs('undrill').length, 1);
-  assert.equal(count.classList.contains('is-shut'), shutBefore);
-  h.send('drill', { clause: '' });
-  assert.equal(seg.classList.contains('is-drilled'), false);
-  assert.equal(reset.disabled, true);
-  h.send('drill', null);
-  assert.equal(seg.classList.contains('is-drilled'), false);
+  assert.equal(sidebar.classList.contains('collapsed'), shutBefore);
   h.close();
 });
 
@@ -181,7 +176,7 @@ test('gear_state builds the Display section and each control sends its input', (
   h.close();
 });
 
-test('the cohort count toggles the list and turns its chevron', () => {
+test('the list toggle opens and closes the list, and says which', () => {
   const h = boot();
   const sidebar = h.el('pp_sidebar');
   const layout = h.el('pp_layout');

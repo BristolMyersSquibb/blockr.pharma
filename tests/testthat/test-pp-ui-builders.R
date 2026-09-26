@@ -29,9 +29,12 @@ test_that("the header row, the tray, the sort clause and caption take their name
   expect_match(head, 'id="t-subject_facts"')
   # The gear is the design system's: the one framed square, last.
   expect_match(head, 'class="blockr-gear-btn" id="t-pp_gear_btn"', fixed = TRUE)
-  # The reset is there from the start, disabled until a drill.
-  expect_match(head, '<button class="pp-cohort-reset" id="t-pp_cohort_reset" type="button" disabled',
+  # The list toggle is the muted glyph; the cohort's status beside it is
+  # painted by pp-header.js (and shown only while the list is shut).
+  expect_match(head, '<button class="pp-list-toggle" id="t-pp_cohort_count"',
                fixed = TRUE)
+  expect_match(head, 'class="pp-cohort-status" id="t-pp_head_status"', fixed = TRUE)
+  expect_no_match(head, "pp-cohort-reset", fixed = TRUE)
 
   tray <- html(pp_gear_tray_ui(ns))
   expect_match(tray, 'blockr-settings blockr-settings--beak pp-gear-tray', fixed = TRUE)
@@ -48,10 +51,11 @@ test_that("the header row, the tray, the sort clause and caption take their name
 
   cap <- html(pp_band_caption_ui(
     list(viz_id = "ae_gantt", title = "t", caption = "Adverse events"),
-    sorter, pre = "01-701-", n = 306
+    sorter, pre = "01-701-"
   ))
   expect_match(cap, "<span>Patients</span>", fixed = TRUE)
-  expect_match(cap, '<span class="pp-cohort-bandcap-n">306</span>', fixed = TRUE)
+  # The count is the status slot, painted by pp-header.js.
+  expect_match(cap, '<span class="pp-cohort-status"></span>', fixed = TRUE)
   expect_match(cap, "01-701-", fixed = TRUE)
   expect_match(cap, "Adverse events, by <button", fixed = TRUE)
   # The strip's filter is not repeated here; the panel that sets it says so.
@@ -60,7 +64,7 @@ test_that("the header row, the tray, the sort clause and caption take their name
   # A parameter's strip names the parameter after its code.
   lab <- html(pp_band_caption_ui(
     list(viz_id = "x", title = "t", caption = "ALB", sub = "Albumin (g/L)"),
-    NULL, pre = "", n = 3
+    NULL, pre = ""
   ))
   expect_match(lab, 'ALB<span class="pp-gear-meta">Albumin (g/L)</span>', fixed = TRUE)
 })

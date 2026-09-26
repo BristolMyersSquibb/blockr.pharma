@@ -22,9 +22,11 @@
 #' @param target The drill filter's board id, from
 #'   `blockr.viz::ctrl_targets("drill_filter_block")`. Anything other than
 #'   exactly one id means there is no drill to report.
-#' @return `NULL` when the cohort is not drilled, else `list(id=, clause=)`:
-#'   the filter's board id (where a reset is sent) and its clause (what the
-#'   pill says).
+#' @return `NULL` when the cohort is not drilled, else
+#'   `list(id=, clause=, before=)`: the filter's board id (where a reset is
+#'   sent), its clause (what the reset's tooltip names) and how many patients
+#'   went into it (the "179" of "6 of 179 patients"), `NULL` when the filter
+#'   did not count them (a remote dm).
 #' @noRd
 pp_drill_state <- function(trail, target) {
 
@@ -48,5 +50,9 @@ pp_drill_state <- function(trail, target) {
     return(NULL)
   }
 
-  list(id = unname(target), clause = unname(clause))
+  counts <- attr(trail, "counts", exact = TRUE)
+  before <- if (is.list(counts)) counts[[hit]][["before"]]
+
+  list(id = unname(target), clause = unname(clause),
+       before = if (length(before) == 1L && !is.na(before)) as.integer(before))
 }

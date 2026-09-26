@@ -55,9 +55,9 @@ PP_ICON_GEAR <- paste0(
 #'
 #' The design system's header row for an output: the subject id is the
 #' output title, the facts about them are the sentence under it, the tools
-#' sit on the right with the gear last. The count of patients and the reset
-#' of a drill-down lead the row as one segment, on the edge the list of
-#' patients slides from.
+#' sit on the right with the gear last. The list toggle leads the row, on
+#' the edge the list slides from, with the cohort's status beside it while
+#' the list is shut.
 #'
 #' Static, so nothing in it re-renders on a pick: the title and the sentence
 #' are outputs of their own, the download menu's labels and the gear tray's
@@ -84,37 +84,39 @@ pp_head_ui <- function(ns) {
   )
 }
 
-#' The count of patients and the drill-down reset, as one segment
+# The sidebar glyph: a panel with its left column ruled off.
+PP_ICON_PANEL <- paste0(
+  '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" ',
+  'stroke="currentColor" stroke-width="1.3" aria-hidden="true">',
+  '<rect x="1.8" y="2.5" width="12.4" height="11" rx="2"/>',
+  '<path d="M6 2.5v11"/></svg>'
+)
+
+#' The list toggle, and the cohort's status while the list is shut
 #'
-#' The count opens and shuts the list of patients; the reset beside it
-#' undoes a drill-down upstream. Two buttons, because they are two actions;
-#' the segment is what makes them read as one (design system, "Showing that a
-#' block filters"). The reset is always there and disabled while nothing is
-#' drilled, so the segment never changes width under the pointer.
-#' `pp-header.js` fills in the count, the tooltips and the drilled state.
+#' Two things that used to be one segment. The toggle opens and closes the
+#' list of patients: rare, and nothing to do with filtering, so it is the
+#' muted sidebar glyph, like the download icon. The status says how many
+#' patients the profile holds, and while a drill narrows them it is the reset
+#' ("6 of 179 patients"). It lives on the patients' own header in the
+#' sidebar; this copy stands in for it while the list is shut
+#' (pp-header.js paints both).
 #'
 #' @param ns The module's namespace function.
 #' @noRd
 pp_cohort_seg_ui <- function(ns) {
   shiny::span(
-    class = "pp-cohort-seg is-hidden",
+    class = "pp-cohort-seg",
     id = ns("pp_cohort_seg"),
     shiny::tags$button(
-      class = "pp-cohort-count",
+      class = "pp-list-toggle",
       id = ns("pp_cohort_count"),
       type = "button",
+      `aria-label` = "Hide the list of patients",
       `data-blockr-tooltip` = "Hide the list of patients",
-      shiny::span(class = "pp-cohort-count-car", shiny::HTML(PP_ICON_CHEVRON)),
-      shiny::span(class = "pp-cohort-count-n")
+      shiny::HTML(PP_ICON_PANEL)
     ),
-    shiny::tags$button(
-      class = "pp-cohort-reset",
-      id = ns("pp_cohort_reset"),
-      type = "button",
-      disabled = NA,
-      `aria-label` = "Reset drill-down",
-      shiny::HTML(PP_ICON_RESET)
-    )
+    shiny::span(class = "pp-cohort-status", id = ns("pp_head_status"))
   )
 }
 

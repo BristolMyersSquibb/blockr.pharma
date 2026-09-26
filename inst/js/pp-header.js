@@ -20,8 +20,6 @@ PatientProfile.part(function(ctx) {
   var gearDisplayId = ns('pp_gear_display');
   var gearStateMsgId = ns('gear_state');
   var cohortCountId = ns('pp_cohort_count');
-  var cohortResetId = ns('pp_cohort_reset');
-  var cohortSegId = ns('pp_cohort_seg');
   var drillMsgId = ns('drill');
   var undrillInputId = ns('undrill');
   var subjectPickerMsgId = ns('subject_picker');
@@ -32,46 +30,63 @@ PatientProfile.part(function(ctx) {
   /** @param {string} id */
   var byId = function(id) { return document.getElementById(id); };
 
-  // The count and the reset: one segment, written by two messages.
+  // The cohort's status: "306 patients" in grey, or while a drill narrows
+  // the cohort the reset, "6 of 179 patients". Painted into every
+  // .pp-cohort-status of this block: the one on the patients' header in the
+  // sidebar, and the one in the header row that stands in for it while the
+  // list is shut (CSS shows one or the other).
   //
   // `subject_picker` carries the count, `drill` carries what narrowed it,
   // and they arrive in either order. So neither handler paints: they record,
   // and paintCohort() decides. Painting from one handler alone would let a
-  // drill that lands first be undone by the count that follows it.
+  // drill that lands first be undone by the count that follows it. The
+  // sidebar's copy is re-rendered with the caption, so it is painted again
+  // whenever that output arrives.
   var cohortN = 0;
   var drillClause = '';
+  /** @type {number | null} */
+  var drillBefore = null;
+
+  /** @param {number} n */
+  function patients(n) {
+    return n.toLocaleString() + (n === 1 ? ' patient' : ' patients');
+  }
 
   function paintCohort() {
-    var seg = byId(cohortSegId);
-    var count = byId(cohortCountId);
-    var reset = /** @type {HTMLButtonElement | null} */ (byId(cohortResetId));
-    if (!seg || !count || !reset) return;
+    var layout = byId(layoutId);
+    if (!layout) return;
     var drilled = drillClause.length > 0;
-
-    var n = count.querySelector('.pp-cohort-count-n');
-    if (n) {
-      n.textContent = cohortN.toLocaleString() +
-        (cohortN === 1 ? ' patient' : ' patients');
-    }
-
-    // Hidden at zero ONLY when nothing narrowed the list. No patients and no
-    // drill is a profile with nothing in it yet. No patients BECAUSE of a
-    // drill is a result, and the one state where the way back matters most,
-    // so the segment says 0 and the reset stays.
-    seg.classList.toggle('is-hidden', !cohortN && !drilled);
-    seg.classList.toggle('is-drilled', drilled);
-
-    // Always there, disabled while nothing is drilled, so the segment never
-    // changes width under the pointer. Its tooltip names what is UNDONE:
-    // the drill filter sits below the global filter, so what comes back is
-    // whatever the dashboard shows, never "every patient".
-    reset.disabled = !drilled;
+    var html = '';
     if (drilled) {
-      reset.setAttribute('data-blockr-tooltip', 'Reset drill-down: ' + drillClause);
-    } else {
-      reset.removeAttribute('data-blockr-tooltip');
+      // The reset names what it undoes. The drill filter sits below the
+      // population filter, so what comes back is the population, never
+      // "every patient": the count it started from says how many.
+      var label = drillBefore != null ?
+        cohortN.toLocaleString() + ' of ' + patients(drillBefore) :
+        patients(cohortN);
+      var tip = (drillBefore != null ?
+        'Show all ' + patients(drillBefore) : 'Show all patients') +
+        ', clearing ' + drillClause;
+      html = '<button type="button" class="pp-drill-reset" data-blockr-tooltip="' +
+        esc(tip) + '">' + ICON_RESET + '<span>' + esc(label) + '</span></button>';
+    } else if (cohortN) {
+      html = '<span class="pp-cohort-total">' + esc(patients(cohortN)) + '</span>';
     }
+    layout.querySelectorAll('.pp-cohort-status').forEach(function(el) {
+      if (el.innerHTML !== html) el.innerHTML = html;
+    });
   }
+
+  /** @param {string} s */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  var ICON_RESET = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" ' +
+    'aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 1 1 ' +
+    '.908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 ' +
+    '1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>';
 
   Shiny.addCustomMessageHandler(subjectPickerMsgId, function(msg) {
     if (!msg) return;
@@ -80,21 +95,28 @@ PatientProfile.part(function(ctx) {
   });
 
   // The drill. R reads it off the dm it was handed (pp-drill.R) and sends
-  // the clause, or '' when the cohort is the whole study. The reset asks R
-  // to clear the drill filter; the profile never edits its own data, it
-  // asks the block that did.
+  // the clause, or '' when the cohort is the whole population, with how
+  // many patients the drill started from when the filter counted them. The
+  // reset asks R to clear the drill filter; the profile never edits its own
+  // data, it asks the block that did.
   Shiny.addCustomMessageHandler(drillMsgId, function(msg) {
     drillClause = (msg && msg.clause) ? String(msg.clause) : '';
+    drillBefore = (msg && typeof msg.before === 'number') ? msg.before : null;
     paintCohort();
   });
 
-  $(document).on('click', '#' + cohortResetId, function(e) {
+  $(document).on('shiny:value', function(e) {
+    var t = /** @type {HTMLElement} */ (e.target);
+    if (t && t.id === ns('cohort_band_caption')) setTimeout(paintCohort, 0);
+  });
+
+  $(document).on('click', '#' + layoutId + ' .pp-drill-reset', function(e) {
     e.stopPropagation();
     Shiny.setInputValue(undrillInputId, Date.now(), {priority: 'event'});
   });
 
-  // The count is the list's toggle. The chevron points at the edge the list
-  // slides from: left while it is open, right while it is shut.
+  // The list's toggle: the sidebar glyph, muted, at the edge the list slides
+  // from.
   /** @param {boolean} [force] */
   function toggleSidebar(force) {
     var sidebar = byId(sidebarId);
@@ -106,9 +128,10 @@ PatientProfile.part(function(ctx) {
     sidebar.classList.toggle('collapsed', shut);
     layout.classList.toggle('sidebar-collapsed', shut);
     if (count) {
+      var tipText = shut ? 'Show the list of patients' : 'Hide the list of patients';
       count.classList.toggle('is-shut', shut);
-      count.setAttribute('data-blockr-tooltip',
-        shut ? 'Show the list of patients' : 'Hide the list of patients');
+      count.setAttribute('data-blockr-tooltip', tipText);
+      count.setAttribute('aria-label', tipText);
     }
   }
 
