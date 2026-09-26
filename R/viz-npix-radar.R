@@ -10,7 +10,7 @@
 #' @noRd
 npix_radar_viz <- new_pp_viz(
   id = "npix_radar",
-  label = "NPI-X Radar",
+  label = "NPI-X radar",
   domain = "Questionnaires",
   icon = "clipboard-pulse",
   color = "#E11D48",
@@ -22,6 +22,7 @@ npix_radar_viz <- new_pp_viz(
     visits = list(
       type = "checkbox",
       label = "Visits",
+      all_word = "all visits",
       default = NULL,
       choices_from = "AVISIT"
     )

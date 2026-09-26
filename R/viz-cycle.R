@@ -68,7 +68,7 @@ pp_cycle_vizs <- function(dm_obj) {
 #' @noRd
 cycle_viz <- new_pp_viz(
   id = "cycle_lane",
-  label = "Treatment Cycles",
+  label = "Treatment cycles",
   domain = "Treatment",
   icon = "arrow-repeat",
   color = "#7C3AED",

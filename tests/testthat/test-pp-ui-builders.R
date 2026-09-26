@@ -92,64 +92,58 @@ cm_ctrl_dm <- function(rows = 1L) {
   ))
 }
 
-# The find trigger alone. The lanes pill beside it carries every level in its
-# own data-values, CMTRT included, so a grep over the whole header cannot say
-# what the PICKER offers.
-find_trigger <- function(out) {
-  m <- regmatches(out, regexpr("<button class=\"pp-ctrl-find[^>]*>", out))
+# The filter's word alone.
+find_word <- function(out) {
+  m <- regmatches(out, regexpr('<button[^>]*data-kind="find"[^>]*>', out))
   if (!length(m)) "" else m
 }
 
-test_that("the find group is named, so the narrow row has one item that gives", {
-  # On a narrow panel the controls take a row of their own and the find
-  # trigger absorbs what the pill beside it leaves. The stylesheet needs to
-  # know WHICH group that is, and `:has(> .pp-ctrl-find)` is not an option
-  # here (blockr.ui#41: it restyles the whole document under Shiny), so the
-  # class is written at the source.
+test_that("a panel's sentence names what it draws, each setting a live word", {
   out <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", cm_ctrl_dm(), list()))
-  expect_match(out, "pp-ctrl-group pp-ctrl-group--find", fixed = TRUE)
-  # The pill's group is NOT named: it is the fixed half of the row.
-  expect_match(out, '<div class="pp-ctrl-group">', fixed = TRUE)
+  expect_match(out, '<span class="pp-chart-sentence">1 medication by <button')
+  expect_match(out, '>coded name</button>, showing <button', fixed = TRUE)
+  # The lanes word lists every level the data has, labels first in the menu.
+  expect_match(out, 'data-title="Lanes"', fixed = TRUE)
+  expect_match(out, "Drug class", fixed = TRUE)
 })
 
-test_that("the trigger carries the options and the picks the popover reads", {
-  # The list travels WITH the header rather than being fetched when the
-  # popover opens: a few hundred bytes against a nine-kilobyte slot payload,
-  # and a control that waits a round trip before it can show anything is the
-  # one thing this control cannot be.
+test_that("the filter's word carries this patient's terms at the lanes' level", {
   out <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", cm_ctrl_dm(), list()))
-  expect_match(out, "pp-ctrl-find", fixed = TRUE)
-  expect_match(out, "data-options", fixed = TRUE)
-  expect_match(out, "Drug class", fixed = TRUE)
-  expect_match(out, "ANALGESIC", fixed = TRUE)
-  # The verbatim level is not offered as a row: it is close to one distinct
-  # value per record, so it is the level that would grow the list with the
-  # patient. It stays reachable by typing.
-  expect_false(grepl("CMTRT", find_trigger(out), fixed = TRUE))
+  w <- find_word(out)
+  expect_match(w, 'data-col="CMDECOD"', fixed = TRUE)
+  expect_match(w, "ASPIRIN", fixed = TRUE)
+  expect_match(w, 'data-title="Show"', fixed = TRUE)
 
-  # With picks: the count, the clear button and the terms in the tooltip.
+  # A level of its own: the class, not the name.
+  by_class <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", cm_ctrl_dm(),
+                                  list(lanes = "CMCLAS")))
+  expect_match(find_word(by_class), "ANALGESIC", fixed = TRUE)
+
+  # With picks: the word lists them, and the sentence says how many of this
+  # patient's records are left.
   picked <- html(pp_controls_ui(
     cm_gantt_viz, "cm_gantt", cm_ctrl_dm(),
     list(find = list(list(col = "CMDECOD", value = "ASPIRIN")))
   ))
-  expect_match(picked, "pp-ctrl-find is-active", fixed = TRUE)
-  expect_match(picked, "pp-ctrl-find-badge", fixed = TRUE)
-  expect_match(picked, "pp-ctrl-find-clear", fixed = TRUE)
-  expect_match(picked, "Filtering on Aspirin", fixed = TRUE)
-  # And the honest hit count: 1 of this patient's 1 record.
-  expect_match(picked, "1/1", fixed = TRUE)
+  expect_match(picked, ">Aspirin</button> (1 of 1)", fixed = TRUE)
 })
 
-test_that("a patient with no records in the table gets no find control", {
-  # Nothing to filter is not a filter. The panel says "no medication
-  # records" and the header does not offer a control over an empty table --
-  # the rule the gear already follows: no options, no control.
+test_that("a patient with no records in the table gets no controls", {
+  # Nothing to filter is not a filter, and no rows means no levels to group
+  # by: no options, no control.
   out <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", cm_ctrl_dm(0L),
                              list()))
-  expect_false(grepl("pp-ctrl-find", out, fixed = TRUE))
-  # And with the lanes pill gone for the same reason (no rows, no levels to
-  # group by), the header carries no controls row at all.
   expect_identical(out, "")
+})
+
+test_that("an on/off control is a checkbox, not a switch", {
+  viz <- structure(list(id = "x", tables = "t", controls = list(
+    chg = list(type = "toggle", label = "Change from baseline", default = FALSE)
+  )), class = c("pp_viz", "list"))
+  out <- html(pp_controls_ui(viz, "x", dm::dm(t = data.frame(a = 1)), list(chg = TRUE)))
+  expect_match(out, 'class="blockr-checkbox pp-ctrl-check"', fixed = TRUE)
+  expect_match(out, 'data-param="chg" checked', fixed = TRUE)
+  expect_match(out, "Change from baseline")
 })
 
 test_that("the download menu is an action menu of Shiny download links", {

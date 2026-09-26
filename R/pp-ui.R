@@ -42,7 +42,7 @@ pp_block_ui <- function(id) {
       as.character(utils::packageVersion("blockr.pharma")),
       src = system.file("js", package = "blockr.pharma"),
       script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
-                 "pp-picker.js", "pp-panels.js", "pp-find.js")
+                 "pp-picker.js", "pp-panels.js", "pp-slots.js")
     ),
     shiny::div(
       class = "pp-layout", id = ns("pp_layout"),

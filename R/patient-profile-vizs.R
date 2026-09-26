@@ -1304,7 +1304,7 @@ pp_param_cat_cols <- function() {
 pp_findings_table_meta <- function() {
   list(
     advs  = list(domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-                 label = "Vital Signs"),
+                 label = "Vital signs"),
     adlbc = list(domain = "Laboratory", icon = "droplet", color = "#2563EB",
                  label = "Chemistry"),
     adlbh = list(domain = "Laboratory", icon = "droplet-half",
@@ -1329,7 +1329,7 @@ pp_findings_table_meta <- function() {
     # to say which anchor each number uses, and one anchor per pill is the
     # smaller claim.
     adtr  = list(domain = "Efficacy", icon = "bullseye", color = "#DB2777",
-                 label = "Tumor Burden")
+                 label = "Tumor burden")
   )
 }
 

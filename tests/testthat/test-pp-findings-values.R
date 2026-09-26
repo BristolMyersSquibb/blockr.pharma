@@ -361,24 +361,20 @@ test_that("the printed twin draws the value the screen drew", {
   expect_true(0 %in% unlist(lapply(built$data, function(d) d$yintercept)))
 })
 
-test_that("the value pill carries no dimension label", {
-  # It stood in front of the pill on every findings card, and a profile is a
-  # stack of them. The pill's own text says which value, the header says
-  # which parameter, and the tooltip says what a click does.
+test_that("the value is a word in the card's sentence, named in words", {
+  # The word sits under the title, so it has room to say what the value is;
+  # the menu it opens puts the column after each name.
   dm_chg <- pp_normalize_dm(dm::dm(adlb = chg_adlb()))
   viz <- pp_findings_vizs(dm_chg)[[1]]
   html <- as.character(pp_controls_ui(viz, viz$id, dm_chg, list()))
 
-  expect_false(grepl("pp-ctrl-label", html, fixed = TRUE))
-  expect_match(html, "pp-ctrl-pill")
-  expect_match(html, "AVAL")
-  # The action still has somewhere to live.
-  expect_match(html, "Switch to CHG")
+  expect_match(html, ">Analysis value</button>", fixed = TRUE)
+  expect_match(html, 'data-title="Value"', fixed = TRUE)
+  expect_match(html, "Change from baseline", fixed = TRUE)
+  expect_match(html, "&quot;value&quot;:&quot;CHG&quot;", fixed = TRUE)
 })
 
-test_that("a control that declares a label still draws one", {
-  # The gantts' lane pill is a dimension AND a setting: "Preferred term" on
-  # its own does not say what it is the term FOR.
+test_that("the lanes word takes its place in the sentence", {
   ctrl <- pp_lane_control(PP_CM_LANES, default = "CMDECOD")
   viz <- structure(
     list(id = "x", controls = ctrl, tables = "adcm"),
@@ -388,8 +384,10 @@ test_that("a control that declares a label still draws one", {
     CMTRT = "a", CMDECOD = "b", CMCLAS = "c", stringsAsFactors = FALSE
   ))
   html <- as.character(pp_controls_ui(viz, "x", dm_obj, list()))
-  expect_match(html, "pp-ctrl-label")
-  expect_match(html, "Lanes")
+  # "By", capitalised: the word starts the sentence.
+  expect_match(html, 'By <button', fixed = TRUE)
+  expect_match(html, ">coded name</button>", fixed = TRUE)
+  expect_match(html, 'data-title="Lanes"', fixed = TRUE)
 })
 
 test_that("the pill is named after the columns it picks", {

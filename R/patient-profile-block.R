@@ -794,6 +794,13 @@ new_patient_profile_block <- function(selected = NULL,
 
             settings <- r_viz_settings()
             if (is.null(settings[[viz_id]])) settings[[viz_id]] <- list()
+            # The filter picks values of the level the lanes show, so a new
+            # level starts unfiltered rather than keeping picks it cannot
+            # offer.
+            if (identical(param, "lanes") &&
+                !identical(settings[[viz_id]]$lanes, value)) {
+              settings[[viz_id]]$find <- NULL
+            }
             settings[[viz_id]][[param]] <- value
             r_viz_settings(settings)
           })

@@ -1,18 +1,26 @@
 <div class="pp-chart-header has-legend">
-  <span class="pp-chart-grip" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1.35"/><circle cx="7" cy="4" r="1.35"/><circle cx="3" cy="8" r="1.35"/><circle cx="7" cy="8" r="1.35"/><circle cx="3" cy="12" r="1.35"/><circle cx="7" cy="12" r="1.35"/></svg></span>
-  <div class="pp-chart-title" title="Gantt bars showing AE duration by preferred term">Adverse Events</div>
-  <span class="pp-band-tag" title="Shown for every patient in the list of patients"><svg class="pp-band-glyph" width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><circle cx="4.5" cy="4.5" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-  <div class="pp-chart-controls">
-    <div class="pp-ctrl-group pp-ctrl-group--find">
-      <button class="pp-ctrl-find " type="button" data-viz-id="ae_gantt" data-param="find" data-picks="[]" data-options="[{&quot;col&quot;:&quot;AEBODSYS&quot;,&quot;label&quot;:&quot;Body system&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;GASTROINTESTINAL DISORDERS&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;GENERAL DISORDERS AND ADMINISTRATION SITE CONDITIONS&quot;,&quot;n&quot;:2}],&quot;truncated&quot;:0},{&quot;col&quot;:&quot;AEHLT&quot;,&quot;label&quot;:&quot;High level term&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;HLT_0148&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;HLT_0317&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;HLT_0617&quot;,&quot;n&quot;:1}],&quot;truncated&quot;:0},{&quot;col&quot;:&quot;AEDECOD&quot;,&quot;label&quot;:&quot;Preferred term&quot;,&quot;options&quot;:[{&quot;value&quot;:&quot;APPLICATION SITE ERYTHEMA&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;APPLICATION SITE PRURITUS&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;DIARRHOEA&quot;,&quot;n&quot;:1}],&quot;truncated&quot;:0}]" data-placeholder="Search all coding levels" title="Search all coding levels">
-        <svg class="pp-search-icon" xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
-        <span class="pp-ctrl-find-label">Find</span>
-        <span class="pp-ctrl-find-caret">&#9662;</span>
-      </button>
+  <div class="pp-chart-head">
+    <div class="pp-chart-titles">
+      <div class="pp-chart-title">Adverse events</div>
+      <div class="pp-chart-controls">
+        <span class="pp-chart-sentence">3 events by <button type="button" class="blockr-slot pp-slot" data-viz-id="ae_gantt" data-param="lanes" data-kind="single" data-title="Lanes" data-options="[{&quot;value&quot;:&quot;AETERM&quot;,&quot;label&quot;:&quot;Reported term&quot;},{&quot;value&quot;:&quot;AEDECOD&quot;,&quot;label&quot;:&quot;Preferred term&quot;},{&quot;value&quot;:&quot;AEHLT&quot;,&quot;label&quot;:&quot;High-level term&quot;},{&quot;value&quot;:&quot;AEBODSYS&quot;,&quot;label&quot;:&quot;Body system&quot;}]" data-value="&quot;AEDECOD&quot;">preferred term</button>, showing <button type="button" class="blockr-slot pp-slot" data-viz-id="ae_gantt" data-param="find" data-kind="find" data-title="Show" data-col="AEDECOD" data-options="[{&quot;value&quot;:&quot;APPLICATION SITE ERYTHEMA&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;APPLICATION SITE PRURITUS&quot;,&quot;n&quot;:1},{&quot;value&quot;:&quot;DIARRHOEA&quot;,&quot;n&quot;:1}]" data-picks="[]">all</button></span>
+      </div>
     </div>
-    <div class="pp-ctrl-group">
-      <span class="pp-ctrl-label">Lanes</span>
-      <button class="pp-ctrl-pill" data-viz-id="ae_gantt" data-param="lanes" data-values="[&quot;AETERM&quot;,&quot;AEDECOD&quot;,&quot;AEHLT&quot;,&quot;AEBODSYS&quot;]" data-labels="[&quot;Reported&quot;,&quot;Preferred term&quot;,&quot;High-level term&quot;,&quot;Body system&quot;]" data-index="1" title="Switch to High-level term" style="min-width:15ch">Preferred term</button>
+    <div class="pp-chart-tools">
+      <span class="blockr-action-menu" data-align="end">
+        <button aria-expanded="false" aria-haspopup="menu" aria-label="Download adverse events" class="blockr-tool pp-chart-download blockr-action-menu__trigger" data-blockr-tooltip="Download adverse events" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7l3.5 3.5L11.5 7M3 13.5h10"/></svg></button>
+        <div class="blockr-menu" role="menu" tabindex="-1" hidden>
+          <a aria-disabled="true" class="shiny-download-link disabled blockr-menu__item" download href="" id="proxy1-dl_png_ae_gantt" role="menuitem" tabindex="-1" target="_blank">
+            <span class="blockr-menu__label">Image</span>
+            <span class="blockr-menu__meta">.png</span>
+          </a>
+          <a aria-disabled="true" class="shiny-download-link disabled blockr-menu__item" download href="" id="proxy1-dl_pptx_ae_gantt" role="menuitem" tabindex="-1" target="_blank">
+            <span class="blockr-menu__label">PowerPoint</span>
+            <span class="blockr-menu__meta">.pptx</span>
+          </a>
+        </div>
+      </span>
+      <button class="blockr-tool pp-chart-remove" type="button" data-viz-id="ae_gantt" aria-label="Remove Adverse events" data-blockr-tooltip="Remove from the profile"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
     </div>
   </div>
   <div class="pp-chart-legend">
@@ -21,14 +29,6 @@
       Mild
     </span>
   </div>
-  <details class="pp-chart-download">
-    <summary title="Download Adverse Events"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg></summary>
-    <div class="pp-chart-download-menu">
-      <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_png_ae_gantt" tabindex="-1" target="_blank">PNG</a>
-      <a aria-disabled="true" class="shiny-download-link disabled" download href="" id="proxy1-dl_pptx_ae_gantt" tabindex="-1" target="_blank">PowerPoint</a>
-    </div>
-  </details>
-  <button class="pp-chart-remove" type="button" data-viz-id="ae_gantt" title="Remove Adverse Events"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg></button>
 </div>
 <div class="pp-chart-body">
   <div id="htmlwidget-ae_gantt-1" style="width:100%;height:154px;" class="echarts4r html-widget"></div>

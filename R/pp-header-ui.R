@@ -14,6 +14,13 @@ PP_ICON_DOWNLOAD <- paste0(
   '<path d="M8 2.5v8M4.5 7l3.5 3.5L11.5 7M3 13.5h10"/></svg>'
 )
 
+# A thin x, the design system's remove glyph.
+PP_ICON_X <- paste0(
+  '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" ',
+  'stroke="currentColor" stroke-width="1.3" stroke-linecap="round" ',
+  'aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>'
+)
+
 # Bootstrap's gear-fill at 14px: the design system's gear.
 PP_ICON_GEAR <- paste0(
   '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" ',

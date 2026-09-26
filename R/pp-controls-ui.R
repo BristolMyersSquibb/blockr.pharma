@@ -1,262 +1,291 @@
-#' A panel's header controls
+#' A panel's sentence
 #'
-#' One builder per control type in a viz definition (`viz$controls`):
-#' checkbox chips, a toggle, a click-through pill, a find box, radios. Each
-#' carries `data-viz-id` and `data-param`; the client turns a click into one
-#' `viz_ctrl` input (see pp-panels.js).
+#' What a panel shows, as one sentence under its title (design system, "The
+#' sentence and its slots"): "6 events by *preferred term*, showing *all*".
+#' Each control a viz declares (`viz$controls`) is a live word in it, a
+#' `.blockr-slot` that opens blockr.ui's `Select.menu` listing its values
+#' (pp-slots.js); an on/off control is a checkbox after the sentence. The
+#' words print what the panel draws, so the same sentence reads as a caption.
+#'
+#' Per control type:
+#'
+#' * `pill`, `radio`: one of a few values. The word is the value's name.
+#' * `checkbox`: several of the values the data carries. The word lists the
+#'   first three picks, then "+N more", or `all_word` when all are picked.
+#' * `find`: the panel's filter, over the values of the level the lanes show.
+#'   The word is `all_word` ("all") or the picks; the sentence then says how
+#'   many of the patient's records are left. The control's `noun` puts a
+#'   count in front ("6 events"): of records, or with `count = "lanes"` of
+#'   the lanes the chart draws ("4 medications").
+#' * `toggle`: a checkbox, labelled with the control's label.
+#'
+#' A control's `phrase` places its word, `"by {}"` for the lanes; the default
+#' is the word alone. A control with fewer than two values to offer draws
+#' nothing: no options, no control.
 #'
 #' @param viz The `pp_viz` definition.
 #' @param viz_id Its id on the profile.
 #' @param dm_obj The patient's dm, for choices read off the data.
-#' A control's `label` is optional: declared empty or absent, the dimension
-#' name is left off and the control speaks for itself.
-#'
 #' @param settings The current settings for this panel.
 #' @noRd
 pp_controls_ui <- function(viz, viz_id, dm_obj, settings) {
   controls <- viz$controls
   if (is.null(controls) || length(controls) == 0) return(NULL)
 
-  # The dimension's name, or nothing.
-  #
-  # A control that names its own dimension does not need saying twice. The
-  # gantts' "LANES  Preferred term" is a dimension and a setting, and the
-  # label is what makes the setting mean something; a findings card's value
-  # pill reads "% change" under a header that already says ALB, Albumin
-  # (g/L), and the word VALUE in front of it only repeated on every card in a
-  # 600px rail. So the label is optional, and a control declaring none draws
-  # none rather than an empty span (which would still spend the group's 6px
-  # gap).
-  label_ui <- function(ctrl) {
-    lab <- ctrl$label %||% ""
-    if (!nzchar(lab)) return(NULL)
-    shiny::span(class = "pp-ctrl-label", lab)
+  words <- list()
+  checks <- list()
+  prefix <- NULL
+  find_word <- NULL
+
+  for (param in names(controls)) {
+    ctrl <- controls[[param]]
+    cur <- settings[[param]] %||% ctrl$default
+    if (identical(ctrl$type, "toggle")) {
+      checks[[length(checks) + 1L]] <- pp_ctrl_checkbox(viz_id, param, ctrl,
+                                                         isTRUE(cur))
+    } else if (identical(ctrl$type, "find")) {
+      found <- pp_find_word(viz, viz_id, param, ctrl, dm_obj, settings)
+      if (!is.null(found)) {
+        prefix <- found$prefix
+        find_word <- found$word
+      }
+    } else {
+      w <- switch(ctrl$type,
+        pill = ,
+        radio = pp_single_word(viz, viz_id, param, ctrl, dm_obj, cur),
+        checkbox = pp_multi_word(viz, viz_id, param, ctrl, dm_obj, cur),
+        NULL
+      )
+      if (!is.null(w)) words[[length(words) + 1L]] <- w
+    }
+  }
+  if (!is.null(find_word)) words[[length(words) + 1L]] <- find_word
+  if (!length(words) && !length(checks)) return(NULL)
+
+  # The first word starts the sentence, so it takes the capital.
+  if (length(words) && is.null(prefix)) {
+    words[[1L]] <- pp_capitalise_word(words[[1L]])
   }
 
-  tags <- lapply(names(controls), function(param) {
-    ctrl <- controls[[param]]
-    input_id <- paste0(viz_id, "__", param)
-    cur_val <- settings[[param]] %||% ctrl$default
+  # One string: htmltools puts a line break between a tag's children, which
+  # reads as a space before every comma.
+  text <- ""
+  if (!is.null(prefix)) text <- htmltools::htmlEscape(prefix)
+  for (i in seq_along(words)) {
+    lead <- if (i == 1L && !is.null(prefix)) " " else if (i > 1L) ", " else ""
+    text <- paste0(text, lead, words[[i]])
+  }
 
-    if (ctrl$type == "checkbox") {
-      # Get choices from data
-      choices <- ctrl$choices
-      if (is.null(choices) && !is.null(ctrl$choices_from)) {
-        tbls <- dm::dm_get_tables(dm_obj)
-        for (tbl_name in viz$tables) {
-          if (tbl_name %in% names(tbls)) {
-            tbl <- as.data.frame(tbls[[tbl_name]])
-            col <- ctrl$choices_from
-            if (col %in% colnames(tbl)) {
-              # Visits come in visit order (AVISITN when present):
-              # lexical order puts "Week 10" before "Week 2".
-              choices <- if (identical(col, "AVISIT")) {
-                pp_visit_levels(tbl)
-              } else {
-                sort(unique(as.character(tbl[[col]])))
-              }
-              # Restrict to the viz's declared subset (a findings
-              # group's PARAMCDs), in the subset's clinical order.
-              if (!is.null(ctrl$choices_subset)) {
-                choices <- intersect(ctrl$choices_subset, choices)
-              }
-              break
-            }
-          }
-        }
-      }
-      if (is.null(choices)) choices <- character(0)
-      if (is.null(cur_val)) cur_val <- choices
+  shiny::div(
+    class = "pp-chart-controls",
+    if (nzchar(text)) shiny::span(class = "pp-chart-sentence", shiny::HTML(text)),
+    checks
+  )
+}
 
-      # Build compact multi-select chips. A findings control ships
-      # `choice_labels` (PARAMCD -> PARAM), so the chip reads
-      # "Alanine Aminotransferase" rather than "ALT"; the code
-      # stays the wire value and the untruncated name is the
-      # tooltip. Controls with no label map (visits, questionnaire
-      # domains) caption themselves, as before.
-      labs <- ctrl$choice_labels
-      chips <- lapply(choices, function(ch) {
-        is_active <- ch %in% cur_val
-        full <- if (!is.null(labs) && ch %in% names(labs)) {
-          unname(labs[[ch]])
-        } else {
-          ch
-        }
-        shiny::tags$button(
-          class = paste(
-            "pp-ctrl-chip",
-            if (is_active) "is-active"
-          ),
-          `data-viz-id` = viz_id,
-          `data-param` = param,
-          `data-value` = ch,
-          title = if (!identical(full, ch)) paste0(full, " (", ch, ")"),
-          pp_param_short(full)
-        )
-      })
-      shiny::div(class = "pp-ctrl-group",
-        label_ui(ctrl),
-        shiny::div(class = "pp-ctrl-chips", chips)
-      )
-    } else if (ctrl$type == "toggle") {
-      is_on <- isTRUE(cur_val)
-      shiny::div(class = "pp-ctrl-group",
-        label_ui(ctrl),
-        shiny::tags$button(
-          class = paste(
-            "pp-ctrl-toggle",
-            if (is_on) "is-on"
-          ),
-          `data-viz-id` = viz_id,
-          `data-param` = param,
-          shiny::span(class = "pp-ctrl-toggle-track",
-            shiny::span(class = "pp-ctrl-toggle-thumb")
-          )
-        )
-      )
-    } else if (ctrl$type == "pill") {
-      # The house click-through pill: one button carrying the
-      # current value, cycling in place (blockr.docs
-      # design-system/components/blockr-row.md). Used here for an
-      # ordered ladder, so the cycle wraps coarse back to granular
-      # rather than dead-ending. See pp_lane_control().
-      choices <- ctrl$choices
-      if (is.null(choices)) choices <- character(0)
-      choices <- pp_ctrl_present_choices(
-        choices, ctrl, dm_obj, viz$tables
-      )
-      # Fewer than two rungs is not a choice; draw nothing.
-      if (length(choices) < 2L) return(NULL)
-      if (is.null(cur_val) || !cur_val %in% choices) {
-        cur_val <- choices[1]
-      }
-      choice_names <- unname(names(choices) %||% choices)
-      idx <- match(cur_val, choices)
-      nxt <- choice_names[idx %% length(choices) + 1L]
+#' A live word: a `.blockr-slot` button the client opens a menu from
+#'
+#' @param text What the word says.
+#' @param phrase Its place in the sentence: `"by {}"`, or `"{}"`.
+#' @param attrs The data the menu needs, as `data-*` attributes.
+#' @noRd
+pp_slot_word <- function(text, phrase, attrs) {
+  phrase <- phrase %||% "{}"
+  parts <- strsplit(phrase, "{}", fixed = TRUE)[[1L]]
+  before <- if (length(parts)) parts[[1L]] else ""
+  after <- if (length(parts) > 1L) parts[[2L]] else ""
+  btn <- do.call(shiny::tags$button, c(
+    list(type = "button", class = "blockr-slot pp-slot", text),
+    attrs
+  ))
+  paste0(htmltools::htmlEscape(before), as.character(btn),
+         htmltools::htmlEscape(after))
+}
 
-      shiny::div(class = "pp-ctrl-group",
-        label_ui(ctrl),
-        shiny::tags$button(
-          class = "pp-ctrl-pill",
-          `data-viz-id` = viz_id,
-          `data-param` = param,
-          `data-values` = jsonlite::toJSON(unname(choices)),
-          `data-labels` = jsonlite::toJSON(choice_names),
-          `data-index` = idx - 1L,
-          # The pill names the state, so the tooltip is where the
-          # action goes: what one click will make it.
-          title = paste0("Switch to ", nxt),
-          # Reserve the widest rung: the click target must not
-          # move out from under the cursor as the label cycles.
-          style = paste0(
-            "min-width:", max(nchar(choice_names)), "ch"
-          ),
-          choice_names[idx]
-        )
-      )
-    } else if (ctrl$type == "find") {
-      # The panel's filter. One compact trigger in the header; the picking
-      # happens in a popover the client owns and parents to <body>
-      # (pp-find.js), which is what lets it survive the header swap a
-      # settings change performs (pp_slot_update()).
-      #
-      # The options travel WITH the header rather than being fetched when
-      # the popover opens: a typical patient's list is a few hundred bytes
-      # against a slot payload of nine kilobytes, and a control that has to
-      # wait a round trip before it can show you anything is the one thing
-      # this control cannot be.
-      tbl <- pp_find_table(dm_obj, viz$tables)
-      # Nothing to filter is not a filter. A patient with no records in this
-      # table gets the panel's own "no records" message and no control at
-      # all, the rule the gear already follows: no options, no control.
-      if (is.null(tbl) || !nrow(tbl)) return(NULL)
-      picks <- pp_find_picks(cur_val)
-      opts <- pp_find_options(tbl, ctrl$levels)
-      if (!length(opts) && !length(picks)) return(NULL)
-      hits <- pp_find_hits(ctrl, dm_obj, viz$tables, picks)
-      labs <- pp_find_labels(picks)
+#' Lower-case a value's name for use inside a sentence, unless it is an
+#' acronym ("ADAS-Cog", "NPI-X") or a code.
+#' @noRd
+pp_sentence_case <- function(x) {
+  if (grepl("^[A-Z][a-z]", x)) {
+    paste0(tolower(substr(x, 1L, 1L)), substr(x, 2L, nchar(x)))
+  } else {
+    x
+  }
+}
 
-      shiny::div(class = "pp-ctrl-group pp-ctrl-group--find",
-        shiny::tags$button(
-          class = paste("pp-ctrl-find", if (length(picks)) "is-active"),
-          type = "button",
-          `data-viz-id` = viz_id,
-          `data-param` = param,
-          `data-picks` = as.character(jsonlite::toJSON(picks,
-                                                       auto_unbox = TRUE)),
-          `data-options` = as.character(jsonlite::toJSON(opts,
-                                                        auto_unbox = TRUE)),
-          `data-placeholder` = ctrl$placeholder %||% "Search",
-          # The trigger names the control; the tooltip names the state,
-          # which is the half that does not fit in the header.
-          title = if (length(labs)) {
-            paste0("Filtering on ", paste(labs, collapse = ", "))
-          } else {
-            ctrl$placeholder %||% ctrl$label
-          },
-          shiny::HTML(pp_search_icon()),
-          shiny::span(class = "pp-ctrl-find-label", ctrl$label %||% "Find"),
-          if (length(picks)) {
-            shiny::span(class = "pp-ctrl-find-badge", length(picks))
-          },
-          # The same honest count the find box printed: how many of this
-          # patient's records survived, so an empty panel is never mistaken
-          # for a patient with no records at all.
-          if (!is.null(hits)) {
-            shiny::span(class = "pp-ctrl-find-hits",
-                        paste0(hits$n, "/", hits$total))
-          },
-          shiny::span(class = "pp-ctrl-find-caret",
-                      shiny::HTML("&#9662;"))
-        ),
-        if (length(picks)) {
-          shiny::tags$button(
-            class = "pp-ctrl-find-clear",
-            type = "button",
-            `data-viz-id` = viz_id,
-            `data-param` = param,
-            title = "Clear the filters",
-            shiny::HTML("&times;")
-          )
-        }
-      )
-    } else if (ctrl$type == "radio") {
-      choices <- ctrl$choices
-      if (is.null(choices)) choices <- character(0)
-      choices <- pp_ctrl_present_choices(
-        choices, ctrl, dm_obj, viz$tables
-      )
-      if (isTRUE(ctrl$choices_present)) {
-        if (length(choices) < 2L) return(NULL)
-        if (is.null(cur_val) || !cur_val %in% choices) {
-          cur_val <- choices[1]
-        }
-      }
-      if (is.null(cur_val)) cur_val <- choices[1]
-      choice_names <- names(choices) %||% choices
+#' Capitalise the first letter of the sentence's first word, whether it is
+#' plain text or a slot button.
+#' @noRd
+pp_capitalise_word <- function(word) {
+  # The word is HTML: capitalise the first letter of its text, whether that
+  # is plain text or the label of the slot button it starts with.
+  sub("^((?:<[^>]+>)*)([a-z])", "\\1\\U\\2", word, perl = TRUE)
+}
 
-      btns <- lapply(seq_along(choices), function(ci) {
-        is_active <- choices[ci] == cur_val
-        shiny::tags$button(
-          class = paste(
-            "pp-ctrl-radio",
-            if (is_active) "is-active"
-          ),
-          `data-viz-id` = viz_id,
-          `data-param` = param,
-          `data-value` = choices[ci],
-          choice_names[ci]
-        )
-      })
-      shiny::div(class = "pp-ctrl-group",
-        label_ui(ctrl),
-        shiny::div(class = "pp-ctrl-radios", btns)
-      )
+#' One of a few values: the lanes, a findings card's value, a radio.
+#' @noRd
+pp_single_word <- function(viz, viz_id, param, ctrl, dm_obj, cur) {
+  choices <- ctrl$choices %||% character(0)
+  choices <- pp_ctrl_present_choices(choices, ctrl, dm_obj, viz$tables)
+  if (length(choices) < 2L) return(NULL)
+  if (is.null(cur) || !cur %in% choices) cur <- choices[[1L]]
+  names_ <- unname(names(choices) %||% choices)
+  opts <- lapply(seq_along(choices), function(i) {
+    if (identical(names_[[i]], unname(choices[[i]]))) {
+      list(value = unname(choices[[i]]))
     } else {
-      NULL
+      list(value = unname(choices[[i]]), label = names_[[i]])
     }
   })
-  tags <- Filter(Negate(is.null), tags)
-  if (length(tags) == 0) return(NULL)
-  shiny::div(class = "pp-chart-controls", tags)
+  shown <- names_[[match(cur, choices)]]
+  pp_slot_word(pp_sentence_case(shown), ctrl$phrase, list(
+    `data-viz-id` = viz_id,
+    `data-param` = param,
+    `data-kind` = "single",
+    `data-title` = ctrl$label %||% ctrl$title %||% "",
+    `data-options` = as.character(jsonlite::toJSON(opts, auto_unbox = TRUE)),
+    `data-value` = as.character(jsonlite::toJSON(unname(cur), auto_unbox = TRUE))
+  ))
+}
+
+#' Several of the values the data carries: items, visits.
+#' @noRd
+pp_multi_word <- function(viz, viz_id, param, ctrl, dm_obj, cur) {
+  choices <- ctrl$choices
+  if (is.null(choices) && !is.null(ctrl$choices_from)) {
+    tbls <- dm::dm_get_tables(dm_obj)
+    for (tbl_name in viz$tables) {
+      if (!tbl_name %in% names(tbls)) next
+      tbl <- as.data.frame(tbls[[tbl_name]])
+      col <- ctrl$choices_from
+      if (!col %in% colnames(tbl)) next
+      # Visits come in visit order (AVISITN when present): lexical order
+      # puts "Week 10" before "Week 2".
+      choices <- if (identical(col, "AVISIT")) {
+        pp_visit_levels(tbl)
+      } else {
+        sort(unique(as.character(tbl[[col]])))
+      }
+      if (!is.null(ctrl$choices_subset)) {
+        choices <- intersect(ctrl$choices_subset, choices)
+      }
+      break
+    }
+  }
+  choices <- as.character(choices %||% character(0))
+  if (length(choices) < 2L) return(NULL)
+  picked <- intersect(as.character(cur %||% choices), choices)
+  if (!length(picked)) picked <- choices
+
+  labs <- ctrl$choice_labels
+  opts <- lapply(choices, function(ch) {
+    full <- if (!is.null(labs) && ch %in% names(labs)) unname(labs[[ch]])
+    if (is.null(full) || identical(full, ch)) list(value = ch) else
+      list(value = ch, label = full)
+  })
+  name_of <- function(ch) {
+    full <- if (!is.null(labs) && ch %in% names(labs)) unname(labs[[ch]])
+    pp_param_short(full %||% ch)
+  }
+  text <- if (length(picked) == length(choices)) {
+    ctrl$all_word %||% "all"
+  } else {
+    pp_slot_list_text(vapply(picked, name_of, character(1)))
+  }
+  pp_slot_word(text, ctrl$phrase, list(
+    `data-viz-id` = viz_id,
+    `data-param` = param,
+    `data-kind` = "multi",
+    `data-title` = ctrl$label %||% "",
+    `data-options` = as.character(jsonlite::toJSON(opts, auto_unbox = TRUE)),
+    `data-value` = as.character(jsonlite::toJSON(picked))
+  ))
+}
+
+#' The first three picks, then how many more (design system, "Many values").
+#' @noRd
+pp_slot_list_text <- function(x, max_shown = 3L) {
+  if (length(x) <= max_shown) return(paste(x, collapse = ", "))
+  paste0(paste(x[seq_len(max_shown)], collapse = ", "),
+         " +", length(x) - max_shown, " more")
+}
+
+#' The panel's filter, as a word
+#'
+#' Over the values of the level the lanes show. The options are this
+#' patient's terms with their record counts; pp-slots.js adds the rest of the
+#' cohort's terms, fetched once over `find_vocab`, so a filter can be armed
+#' for a term this patient does not have before paging through the cohort.
+#'
+#' @return `list(prefix, word)`, or `NULL` when the patient has no records.
+#' @noRd
+pp_find_word <- function(viz, viz_id, param, ctrl, dm_obj, settings) {
+  tbl <- pp_find_table(dm_obj, viz$tables)
+  if (is.null(tbl) || !nrow(tbl)) return(NULL)
+
+  lanes <- viz$controls$lanes
+  col <- if (!is.null(lanes)) {
+    pp_lane_column(tbl, lanes$choices, settings$lanes, lanes$default)
+  }
+  col <- col %||% (names(ctrl$levels) %||% unname(ctrl$levels))[[1L]]
+  if (is.null(col) || !col %in% colnames(tbl)) return(NULL)
+
+  picks <- pp_find_picks(settings[[param]] %||% ctrl$default)
+  v <- as.character(tbl[[col]])
+  v <- v[!is.na(v) & nzchar(trimws(v))]
+  tt <- table(v)
+  opts <- lapply(names(tt), function(k) {
+    list(value = k, n = unname(as.integer(tt[[k]])))
+  })
+
+  hits <- pp_find_hits(ctrl, dm_obj, viz$tables, picks)
+  text <- if (length(picks)) {
+    pp_slot_list_text(pp_find_labels(picks))
+  } else {
+    ctrl$all_word %||% "all"
+  }
+  word <- paste0(
+    pp_slot_word(text, ctrl$phrase %||% "showing {}", list(
+      `data-viz-id` = viz_id,
+      `data-param` = param,
+      `data-kind` = "find",
+      `data-title` = ctrl$title %||% "Show",
+      `data-col` = col,
+      `data-options` = as.character(jsonlite::toJSON(opts, auto_unbox = TRUE)),
+      `data-picks` = as.character(jsonlite::toJSON(picks, auto_unbox = TRUE))
+    )),
+    # How many of this patient's records the filter leaves, so an emptied
+    # panel is never mistaken for a patient with no records.
+    if (!is.null(hits)) sprintf(" (%d of %d)", hits$n, hits$total) else ""
+  )
+
+  # What the count counts: records (an adverse event is one), or the lanes
+  # the chart draws (a medication given twenty times is one medication).
+  noun <- ctrl$noun
+  prefix <- if (!is.null(noun)) {
+    n <- if (identical(ctrl$count, "lanes")) length(tt) else nrow(tbl)
+    paste(n, if (n == 1L) noun[[1L]] else noun[[length(noun)]])
+  }
+  list(prefix = prefix, word = word)
+}
+
+#' An on/off control: blockr.ui's checkbox, labelled with what "on" does.
+#' @noRd
+pp_ctrl_checkbox <- function(viz_id, param, ctrl, on) {
+  shiny::tags$label(
+    class = "blockr-checkbox pp-ctrl-check",
+    shiny::tags$input(
+      type = "checkbox",
+      `data-viz-id` = viz_id,
+      `data-param` = param,
+      checked = if (on) NA
+    ),
+    shiny::span(class = "blockr-checkbox__box", shiny::HTML(paste0(
+      '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">',
+      '<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5',
+      '-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/>',
+      '</svg>'
+    ))),
+    shiny::span(class = "blockr-checkbox__label", ctrl$label %||% param)
+  )
 }

@@ -11,7 +11,7 @@
 #' @noRd
 questionnaire_heatmap_viz <- new_pp_viz(
   id = "questionnaire_heatmap",
-  label = "Questionnaire Heatmap",
+  label = "Questionnaire heatmap",
   domain = "Questionnaires",
   icon = "grid-3x3",
   color = "#6366F1",
@@ -36,7 +36,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
       type = "radio",
       label = "Value",
       default = "AVAL",
-      choices = c("Absolute" = "AVAL", "Change" = "CHG")
+      choices = c("Analysis value" = "AVAL", "Change from baseline" = "CHG")
     )
   ),
   exhibit = function(dm_obj, time_range, settings = list(),

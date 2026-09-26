@@ -64,8 +64,9 @@ function blockrUiPath() {
   ).trim();
 }
 const BLOCKR_UI = read(blockrUiPath());
+const BLOCKR_SELECT = read(path.join(path.dirname(blockrUiPath()), 'blockr-select.js'));
 const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js',
-               'pp-panels.js', 'pp-find.js'];
+               'pp-panels.js', 'pp-slots.js'];
 const BLOCK_JS = PARTS.map((f) => read(path.join(ROOT, 'inst', 'js', f))).join('\n');
 
 /* Objects built inside the window's realm have that realm's prototypes;
@@ -220,6 +221,7 @@ function mount(opts = {}) {
 
   win.eval(JQUERY);
   win.eval(BLOCKR_UI);
+  win.eval(BLOCKR_SELECT);
   win.eval(BLOCK_JS);
   win.eval(`window.PatientProfile.mount(${JSON.stringify({
     id: NS,

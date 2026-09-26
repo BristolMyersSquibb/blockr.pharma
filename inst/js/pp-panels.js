@@ -1,8 +1,8 @@
 // @ts-check
 /* The panels: the ghost held over a chart while it re-renders, dragging a
- * panel by its header, the band tag, the controls in a panel header, and
- * keeping every chart the width of its container. The find control is its
- * own part (pp-find.js).
+ * panel by its header, the band tag, removing a panel, and keeping every
+ * chart the width of its container. The words in a panel's sentence are
+ * their own part (pp-slots.js).
  *
  * Depends on: pp-core.js
  */
@@ -211,9 +211,8 @@ PatientProfile.part(function(ctx) {
   $(document).on('mousedown', '#' + layoutId + ' .pp-chart-header',
     function(e) {
       // Everything clickable in the header keeps its click.
-      if (e.target.closest('button, a, input, select, details, ' +
-                           '.pp-ctrl-chip, .pp-ctrl-pill, ' +
-                           '.pp-ctrl-radio, .pp-ctrl-toggle')) return;
+      if (e.target.closest('button, a, input, select, details, label, ' +
+                           '.blockr-slot, .blockr-action-menu')) return;
       var panels = slotPanels();
       if (panels.length < 2) return;
       var slot = e.target.closest('[id*=viz_slot_]');
@@ -367,9 +366,7 @@ PatientProfile.part(function(ctx) {
       header.innerHTML = fresh.innerHTML;
       lastHeader[msg.viz_id] = msg.header;
       if (Shiny.bindAll) Shiny.bindAll(header);
-      // The find popover is parented to <body> and outlives this swap, but
-      // the button it hangs under has just been replaced. Tell it to
-      // re-anchor (pp-find.js).
+      // Anything hung on the old header (a menu on <body>) can listen.
       document.dispatchEvent(new CustomEvent('pp-header-swapped',
                                              {detail: {viz_id: msg.viz_id}}));
     }
@@ -415,77 +412,7 @@ PatientProfile.part(function(ctx) {
       Shiny.setInputValue(toggleInputId, vizId, {priority: 'event'});
     });
 
-  // Chip click (checkbox controls)
-  $(document).on('click', '#' + layoutId + ' .pp-ctrl-chip', function(e) {
-    e.stopPropagation();
-    $(this).toggleClass('is-active');
-    var vizId = $(this).data('viz-id');
-    var param = $(this).data('param');
-    var active = [];
-    $(this).closest('.pp-ctrl-chips').find('.pp-ctrl-chip.is-active').each(function() {
-      active.push($(this).data('value'));
-    });
-    Shiny.setInputValue(ctrlInputId, {
-      viz_id: vizId, param: param, value: active
-    }, {priority: 'event'});
-  });
-
-  // Toggle click
-  $(document).on('click', '#' + layoutId + ' .pp-ctrl-toggle', function(e) {
-    e.stopPropagation();
-    $(this).toggleClass('is-on');
-    var vizId = $(this).data('viz-id');
-    var param = $(this).data('param');
-    var isOn = $(this).hasClass('is-on');
-    Shiny.setInputValue(ctrlInputId, {
-      viz_id: vizId, param: param, value: isOn
-    }, {priority: 'event'});
-  });
-
-  // Click-through pill: advance to the next value, wrapping. The
-  // index lives in the attribute, not in jQuery's data cache: the
-  // cache is populated once per element and would hand back the
-  // boot value on every later click.
-  $(document).on('click', '#' + layoutId + ' .pp-ctrl-pill', function(e) {
-    var $pill = $(this);
-    // The pill is a shared component, and not every one of them
-    // belongs to a viz: the cohort sort borrows the look and has
-    // its own handler. Without this guard both fire, the index
-    // advances twice (skipping a rung) and this one sends an
-    // undefined viz_id to the viz-settings observer.
-    if (!$pill.data('viz-id')) return;
-    e.stopPropagation();
-    var values = $pill.data('values');
-    var labels = $pill.data('labels');
-    if (!values || !values.length) return;
-    var idx = (parseInt($pill.attr('data-index') || '0', 10) + 1) %
-      values.length;
-    $pill.attr('data-index', idx);
-    $pill.text(labels[idx]);
-    $pill.attr('title',
-      'Switch to ' + labels[(idx + 1) % values.length]);
-    Shiny.setInputValue(ctrlInputId, {
-      viz_id: $pill.data('viz-id'),
-      param: $pill.data('param'),
-      value: values[idx]
-    }, {priority: 'event'});
-  });
-
-  // The find control's own handlers live in pp-find.js: it owns a popover on
-  // <body>, which is what lets it survive the header swap below.
-
-  // Radio click
-  $(document).on('click', '#' + layoutId + ' .pp-ctrl-radio', function(e) {
-    e.stopPropagation();
-    $(this).siblings('.pp-ctrl-radio').removeClass('is-active');
-    $(this).addClass('is-active');
-    var vizId = $(this).data('viz-id');
-    var param = $(this).data('param');
-    var value = $(this).data('value');
-    Shiny.setInputValue(ctrlInputId, {
-      viz_id: vizId, param: param, value: value
-    }, {priority: 'event'});
-  });
+  // The words in a panel's sentence and its checkboxes are pp-slots.js's.
 
   var $doc = $(document);
 

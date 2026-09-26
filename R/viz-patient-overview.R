@@ -27,7 +27,7 @@
 #' @noRd
 patient_overview_viz <- new_pp_viz(
   id = "patient_overview",
-  label = "Patient Overview",
+  label = "Patient overview",
   domain = "Treatment",
   icon = "capsule",
   color = "#059669",

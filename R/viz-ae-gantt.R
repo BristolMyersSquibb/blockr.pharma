@@ -50,7 +50,7 @@ PP_AE_LEVELS <- c(
 
 ae_gantt_viz <- new_pp_viz(
   id = "ae_gantt",
-  label = "Adverse Events",
+  label = "Adverse events",
   domain = "Adverse Events",
   icon = "exclamation-triangle",
   color = "#7C3AED",
@@ -71,8 +71,8 @@ ae_gantt_viz <- new_pp_viz(
   controls = c(
     list(find = list(
       type = "find",
-      label = "Find",
-      placeholder = "Search all coding levels",
+      title = "Show",
+      noun = c("event", "events"),
       # Every coding level the study carries, so typing "infections" reaches
       # a body system whose preferred terms never contain the word.
       columns = PP_AE_SEARCH,

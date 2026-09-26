@@ -11,7 +11,7 @@
 #' @noRd
 adas_trajectory_viz <- new_pp_viz(
   id = "adas_trajectory",
-  label = "ADAS-Cog Trajectory",
+  label = "ADAS-Cog trajectory",
   domain = "Questionnaires",
   icon = "clipboard-pulse",
   color = "#7C3AED",
@@ -23,6 +23,8 @@ adas_trajectory_viz <- new_pp_viz(
     items = list(
       type = "checkbox",
       label = "Items",
+      phrase = "items: {}",
+      all_word = "all",
       default = "ACTOT",
       choices_from = "PARAMCD"
     ),

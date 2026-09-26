@@ -25,6 +25,7 @@ ortho_bp_viz <- new_pp_viz(
     visits = list(
       type = "checkbox",
       label = "Visits",
+      all_word = "all visits",
       default = NULL,
       choices_from = "AVISIT"
     )

@@ -90,25 +90,32 @@ PP_FINDINGS_VALUES <- c(
   "PCHG" = "PCHG"
 )
 
-#' The pill a findings card carries for its value variable
+#' The names a findings card's value word prints
+#'
+#' The word sits in the card's sentence, not beside its title, so it has the
+#' room to say what the value is; the menu it opens puts the column after
+#' each name (design system, "Column names and their labels").
+#' @noRd
+PP_FINDINGS_VALUE_LABELS <- c(
+  AVAL = "Analysis value",
+  CHG = "Change from baseline",
+  PCHG = "% change from baseline"
+)
+
+#' The word a findings card carries for its value variable
 #'
 #' `choices_present = TRUE`, so a study shipping no change columns is offered
-#' no switch at all rather than a pill that draws an empty chart on its
-#' second rung (see [pp_ctrl_present_choices()], and [pp_lane_control()] for
+#' no choice at all rather than a word that draws an empty chart on its
+#' second value (see [pp_ctrl_present_choices()], and [pp_lane_control()] for
 #' the same declaration on the gantts).
 #' @noRd
 pp_value_control <- function() {
   list(value = list(
     type = "pill",
-    # No dimension label. "VALUE" stood in front of the pill on every
-    # findings card, and a profile is a stack of them: the same five
-    # characters repeated down a 600px rail, in front of a control whose own
-    # text ("Absolute", "% change") already says which value it is showing,
-    # under a header that already says which parameter. The tooltip carries
-    # the action ("Switch to Change"), as it does on the gantts' pill.
-    label = NULL,
+    label = "Value",
     default = "AVAL",
-    choices = PP_FINDINGS_VALUES,
+    choices = stats::setNames(PP_FINDINGS_VALUES,
+                              PP_FINDINGS_VALUE_LABELS[PP_FINDINGS_VALUES]),
     choices_present = TRUE
   ))
 }

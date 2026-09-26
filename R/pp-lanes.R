@@ -25,7 +25,7 @@
 #' already folded `AESOC` into it.
 #' @noRd
 PP_AE_LANES <- c(
-  "Reported" = "AETERM",
+  "Reported term" = "AETERM",
   "Preferred term" = "AEDECOD",
   "High-level term" = "AEHLT",
   "Body system" = "AEBODSYS"
@@ -37,7 +37,7 @@ PP_AE_LANES <- c(
 #' name (the default when present), `CMCLAS` the drug class.
 #' @noRd
 PP_CM_LANES <- c(
-  "Reported" = "CMTRT",
+  "Reported name" = "CMTRT",
   "Coded name" = "CMDECOD",
   "Drug class" = "CMCLAS"
 )
@@ -171,6 +171,7 @@ pp_lane_control <- function(ladder, default) {
   list(lanes = list(
     type = "pill",
     label = "Lanes",
+    phrase = "by {}",
     default = default,
     choices = ladder,
     # Choice values are column names: offer only the levels the data has.

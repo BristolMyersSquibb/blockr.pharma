@@ -50,7 +50,7 @@ PP_CM_LEVELS <- c(
 
 cm_gantt_viz <- new_pp_viz(
   id = "cm_gantt",
-  label = "Concomitant Medications",
+  label = "Concomitant medications",
   domain = "Medications",
   icon = "capsule",
   color = "#0891B2",
@@ -68,8 +68,9 @@ cm_gantt_viz <- new_pp_viz(
   controls = c(
     list(find = list(
       type = "find",
-      label = "Find",
-      placeholder = "Search medications",
+      title = "Show",
+      noun = c("medication", "medications"),
+      count = "lanes",
       columns = PP_CM_SEARCH,
       levels = PP_CM_LEVELS
     )),
