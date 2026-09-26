@@ -5,20 +5,23 @@
 #' @param active_ids The panels on the profile, in order.
 #' @noRd
 pp_chart_area_ui <- function(ns, single, active_ids) {
-  # The header's title asks for the patient ("Choose a patient"); the body
-  # finishes the sentence. One line each, no icon (blockr.ui's empty state).
+  # One line, no icon (blockr.ui's empty state). The link in it opens the
+  # list and puts the cursor in its search (pp-header.js).
   if (!isTRUE(single)) {
     # The line lives in its own output: reading the cohort size here would
     # put it back into this output's dependencies and redraw the whole
     # placeholder on every upstream filter.
-    return(shiny::uiOutput(ns("pp_empty_hint"),
-                           class = "blockr-empty blockr-empty--block"))
+    # The class sits on a wrapper: Shiny lays its output container out as
+    # display: contents, which drops any padding put on it.
+    return(shiny::div(class = "blockr-empty blockr-empty--block",
+      shiny::uiOutput(ns("pp_empty_hint"), inline = TRUE)
+    ))
   }
   if (length(active_ids) == 0) {
     return(shiny::p(class = "blockr-empty blockr-empty--block",
+      "No panels on the profile. ",
       shiny::tags$button(type = "button", class = "blockr-slot pp-open-search",
-                         "Add a panel"),
-      " from the list on the left."
+                         "Add one")
     ))
   }
   shiny::tagList(lapply(active_ids, function(viz_id) {
