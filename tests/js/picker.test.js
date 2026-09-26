@@ -27,14 +27,17 @@ test('sync_selected paints the On list in order, ticks the catalogue, counts', (
   assert.deepEqual(on.sort(), ON.slice().sort());
   assert.equal(h.q('.pp-add-on-wrap').classList.contains('is-hidden'), false);
 
-  // A parameter row carries its code, a panel row its colour.
+  // A parameter row carries its code, then its name as meta; a panel row
+  // its name. No grip and no colour dot: the whole row drags.
   const alb = h.q('.pp-add-ord[data-viz-id="adlbc_all__ALB"]');
   assert.equal(alb.querySelector('.pp-add-ord-code').textContent, 'ALB');
-  assert.equal(alb.querySelector('.pp-add-name').textContent, 'Albumin (g/L)');
+  assert.equal(alb.querySelector('.pp-add-name.is-meta').textContent, 'Albumin (g/L)');
   const ae = h.q('.pp-add-ord[data-viz-id="ae_gantt"]');
-  assert.ok(ae.querySelector('.pp-add-dot'));
-  assert.ok(ae.querySelector('.pp-add-ord-grip .grip'), 'the grip glyph from the mount config');
-  assert.ok(ae.querySelector('button.pp-add-ord-x'));
+  assert.equal(ae.querySelector('.pp-add-ord-code'), null);
+  assert.equal(ae.querySelector('.pp-add-dot, .pp-add-ord-grip'), null);
+  assert.equal(ae.tabIndex, 0, 'focusable, for Alt+Up and Alt+Down');
+  assert.equal(ae.querySelector('button.pp-add-ord-x').getAttribute('data-blockr-tooltip'),
+    'Remove from the profile');
 
   // Nothing selected: the block hides the whole On section and says nothing.
   h.send('sync_selected', []);
@@ -75,8 +78,9 @@ test('a query filters panels and patients together and marks the first hit', () 
   h.type(search(h), 'temp');
   const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
   assert.deepEqual(shown, ['advs_all__TEMP']);
-  assert.ok(h.qa('.pp-add-results .pp-add-group').every((g) => g.classList.contains('is-hidden')),
-    'group headings never show during a query');
+  // The hit's section title shows; the others, with nothing under them, do not.
+  const titles = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent);
+  assert.deepEqual(titles, ['Vital signs']);
   assert.equal(h.shownIds().length, 0, 'no patient matches "temp"');
   assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false, 'one panel matched');
   assert.equal(h.q('.is-enter').getAttribute('data-viz-id'), 'advs_all__TEMP');
@@ -368,5 +372,21 @@ test('the arrows never move the caret in the box', () => {
   h.resetInputs();
   assert.equal(h.key(search(h), 'Enter').defaultPrevented, false);
   assert.equal(h.inputs().length, 0);
+  h.close();
+});
+
+test('Alt+Up and Alt+Down move the focused row and send the new order', () => {
+  const h = boot();
+  const second = h.onProfile()[1];
+  const row = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
+  h.key(row, 'ArrowUp', { altKey: true });
+  assert.equal(h.onProfile()[0], second);
+  assert.equal(h.lastInput('reorder_viz')[0], second);
+  const moved = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
+  assert.equal(h.doc.activeElement, moved, 'focus stays with the row');
+  // At the top it goes no further.
+  const n = h.inputs('reorder_viz').length;
+  h.key(moved, 'ArrowUp', { altKey: true });
+  assert.equal(h.inputs('reorder_viz').length, n);
   h.close();
 });

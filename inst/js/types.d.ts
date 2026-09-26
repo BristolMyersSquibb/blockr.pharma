@@ -129,8 +129,6 @@ interface PpInputs {
 interface PpConfig {
   /** the module's namespace; every id is `id + '-' + name` */
   id: string;
-  /** the drag-handle glyph the On rows reuse (pp_grip_glyph()) */
-  grip: string;
   /** height of a spans band (pp_cohort_band_h_spans) */
   bandH: number;
 }
@@ -174,6 +172,7 @@ interface BlockrUiNamespace {
     { el: HTMLElement; set(value: string): void; get(): string };
   checkbox(label: string, checked: boolean, onChange: (checked: boolean) => void):
     { el: HTMLElement; input: HTMLInputElement; set(value: boolean): void; get(): boolean };
+  Select?: { menu?: (anchor: HTMLElement, config: object) => { close(): void } };
 }
 
 declare var Shiny: ShinyStatic;

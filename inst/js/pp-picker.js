@@ -15,7 +15,10 @@ PatientProfile.part(function(ctx) {
   var clearBtnId = ns('search_clear');
   var pickParamInputId = ns('pick_param');
   var addOnId = ns('pp_add_on');
-  var GRIP_SVG = cfg.grip;
+  // The design system's thin x, for the remove tool on an On row.
+  var X_SVG = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.3" stroke-linecap="round" ' +
+    'aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>';
   var syncMsgId = ns('sync_selected');
   var syncParamsMsgId = ns('sync_params');
   var reorderInputId = ns('reorder_viz');
@@ -62,13 +65,10 @@ PatientProfile.part(function(ctx) {
     var map = {};
     addRows().forEach(function(r){
       if (r.getAttribute('data-kind') !== 'panel') return;
-      /** @type {HTMLElement | null} */
-      var dot = r.querySelector('.pp-add-dot');
       var code = r.querySelector('.pp-add-code');
       var name = r.querySelector('.pp-add-name');
       map[r.getAttribute('data-viz-id') || ''] = {
         label: (name && name.textContent) || '',
-        colour: dot ? dot.style.background : '',
         code: code ? code.textContent : ''
       };
     });
@@ -106,31 +106,26 @@ PatientProfile.part(function(ctx) {
       var row = document.createElement('div');
       row.className = 'pp-add-ord';
       row.setAttribute('data-viz-id', id);
-      var grip = document.createElement('span');
-      grip.className = 'pp-add-ord-grip';
-      grip.innerHTML = GRIP_SVG;
-      // A panel is a colour, a parameter is its code -- the
-      // same two row styles the catalogue below uses, so a thing
-      // looks the same wherever it currently sits.
-      var mark;
+      row.setAttribute('role', 'listitem');
+      // Focusable, so Alt+Up and Alt+Down can move it: the whole row drags,
+      // and the keyboard needs a row to hold.
+      row.tabIndex = 0;
+      // A parameter shows its code, then its name as meta; a panel its name.
       if (m.code) {
-        mark = document.createElement('span');
-        mark.className = 'pp-add-ord-code';
-        mark.textContent = m.code;
-      } else {
-        mark = document.createElement('span');
-        mark.className = 'pp-add-dot';
-        mark.style.background = m.colour;
+        var code = document.createElement('span');
+        code.className = 'pp-add-ord-code';
+        code.textContent = m.code;
+        row.appendChild(code);
       }
       var name = document.createElement('span');
-      name.className = 'pp-add-name';
+      name.className = m.code ? 'pp-add-name is-meta' : 'pp-add-name';
       name.textContent = m.label;
       var x = document.createElement('button');
       x.className = 'pp-add-ord-x';
       x.type = 'button';
-      x.title = 'Remove';
-      x.innerHTML = '&times;';
-      row.appendChild(grip); row.appendChild(mark);
+      x.setAttribute('aria-label', 'Remove ' + (m.code || m.label));
+      x.setAttribute('data-blockr-tooltip', 'Remove from the profile');
+      x.innerHTML = X_SVG;
       row.appendChild(name); row.appendChild(x);
       list.appendChild(row);
     });
@@ -274,11 +269,33 @@ PatientProfile.part(function(ctx) {
       document.addEventListener('mouseup', up);
     });
 
+  // The keyboard's drag: Alt+Up and Alt+Down move the focused row.
+  $(document).on('keydown', '#' + addOnId + ' .pp-add-ord', function(e) {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    var host = document.getElementById(addOnId);
+    if (!host) return;
+    var ids = Array.prototype.slice.call(host.children).map(function(r){
+      return r.getAttribute('data-viz-id'); });
+    var id = this.getAttribute('data-viz-id');
+    var from = ids.indexOf(id);
+    var to = from + (e.key === 'ArrowUp' ? -1 : 1);
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, id);
+    lastSelected = ids;
+    renderAddOn();
+    var moved = /** @type {HTMLElement | null} */ (host.querySelector(
+      '.pp-add-ord[data-viz-id=' + JSON.stringify(id) + ']'));
+    if (moved) moved.focus();
+    Shiny.setInputValue(reorderInputId, ids, {priority: 'event'});
+  });
+
   $(document).on('click', '#' + addOnId + ' .pp-add-ord-x',
     function(e) {
       e.stopPropagation();
-      var id = this.parentElement ?
-        this.parentElement.getAttribute('data-viz-id') : null;
+      var owner = this.closest('.pp-add-ord');
+      var id = owner ? owner.getAttribute('data-viz-id') : null;
       // The same move, downwards: it travels back to where the
       // catalogue keeps it, which is where you would look for it
       // if you wanted it again.
@@ -333,7 +350,7 @@ PatientProfile.part(function(ctx) {
         if (!n.classList.contains('is-hidden')) { any = true; break; }
         n = n.nextElementSibling;
       }
-      g.classList.toggle('is-hidden', !any || !!q);
+      g.classList.toggle('is-hidden', !any);
     });
     var none = pop.querySelector('.pp-add-none');
     // Only when the query found nothing ANYWHERE. It counted panel
@@ -495,7 +512,8 @@ PatientProfile.part(function(ctx) {
   function moveCursor(delta){
     var hits = allHits();
     if (!hits.length) return false;
-    var at = hits.indexOf(cursor());
+    var cur = cursor();
+    var at = cur ? hits.indexOf(cur) : -1;
     // Clamped, not wrapping. The cohort can be three hundred rows, and
     // wrapping from its last patient back up to the first panel is a jump
     // the eye cannot follow.

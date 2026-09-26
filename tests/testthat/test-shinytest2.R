@@ -316,7 +316,7 @@ test_that("arrow keys walk the list in DOM order without a focus ring", {
 # 4. Picking a panel moves its row onto the profile and resets the search.
 # ---------------------------------------------------------------------------
 
-test_that("a picked panel moves to the On list and the search resets", {
+test_that("a picked panel moves to the On list and the search stays", {
   skip_if_no_app()
 
   search_clear()
@@ -337,7 +337,6 @@ test_that("a picked panel moves to the On list and the search resets", {
   run_js("[...document.querySelectorAll('.pp-add-row[data-viz-id*=\"TEMP\"]')]
             .filter(r => r.offsetParent)[0].click();")
   wait_js(sprintf("document.querySelectorAll('.pp-add-ord').length === %d", n0 + 1))
-  wait_js("document.querySelector('input[id$=\"-search\"]').value === ''")
   app$wait_for_idle()
 
   after <- on_profile()
@@ -346,6 +345,9 @@ test_that("a picked panel moves to the On list and the search resets", {
   expect_identical(after[seq_len(n0)], before)
   expect_identical(js("document.querySelector('.pp-add-n').innerText.trim()"),
                    as.character(n0 + 1))
+  # The query stays, so a second match is one click away (0e616b1); x clears it.
+  expect_identical(search_value(), "TEMP")
+  search_clear()
   expect_length(shown_ids(), 254)
   wait_js(sprintf("document.querySelectorAll('[id*=viz_slot_]').length === %d", slots0 + 1))
 
@@ -379,7 +381,7 @@ test_that("Enter picks the first hit and Escape clears the search", {
   cdp_key("Enter")
   wait_profile(target)
   expect_identical(selected_id(), target)
-  # Only a PANEL pick resets the box; a patient pick keeps the query.
+  # A pick keeps the query, a patient's or a panel's (0e616b1).
   expect_identical(search_value(), "1130")
 
   search_clear()
@@ -388,7 +390,7 @@ test_that("Enter picks the first hit and Escape clears the search", {
   cdp_key("Enter")
   wait_js(sprintf("document.querySelectorAll('.pp-add-ord').length === %d", n0 + 1))
   expect_true(any(grepl("TEMP", on_profile())))
-  expect_identical(search_value(), "")
+  expect_identical(search_value(), "TEMP")
 
   search_type("zzzz")
   wait_js("!!document.querySelector('.pp-add-none.is-shown')")
@@ -587,32 +589,35 @@ test_that("the gear opens its tray in flow, with the Display controls", {
 # 10. Sorting: the clause names the key and the rows reorder.
 # ---------------------------------------------------------------------------
 
-test_that("the sort clause cycles and reorders the cohort", {
+sort_text <- function() js("document.querySelector('[id$=cohort_sort_by]').innerText.trim()")
+
+# Open the sort word's menu and pick a key by its name.
+sort_by <- function(name) {
+  prev <- sort_text()
+  run_js("document.querySelector('[id$=cohort_sort_by]').click();")
+  wait_js("document.querySelector('.blockr-select__dropdown') !== null")
+  run_js(sprintf(
+    "[...document.querySelectorAll('.blockr-select__option')]
+       .find(e => e.innerText.trim() === '%s').click();", name))
+  wait_js(sprintf(
+    "document.querySelector('[id$=cohort_sort_by]').innerText.trim() !== '%s'", prev))
+  app$wait_for_idle()
+}
+
+test_that("the sort word opens its keys and reorders the cohort", {
   skip_if_no_app()
 
   search_clear()
-  sort_text <- function() js("document.querySelector('.pp-cohort-sortby').innerText.trim()")
   ids0 <- shown_ids()
   expect_length(ids0, 254)
-  t0 <- sort_text()
-  expect_match(t0, "patient id")
+  expect_match(sort_text(), "patient id")
 
-  run_js("document.querySelector('.pp-cohort-sortby').click();")
-  wait_js(sprintf("document.querySelector('.pp-cohort-sortby').innerText.trim() !== '%s'", t0))
-  app$wait_for_idle()
-  t1 <- sort_text()
+  sort_by("Worst severity")
   expect_false(identical(shown_ids(), ids0))
   expect_gt(js("document.querySelectorAll('.pp-pt .pp-pt-val').length"), 200)
 
-  # Cycle back round to the id order.
-  for (i in 1:3) {
-    if (identical(sort_text(), t0)) break
-    prev <- sort_text()
-    run_js("document.querySelector('.pp-cohort-sortby').click();")
-    wait_js(sprintf("document.querySelector('.pp-cohort-sortby').innerText.trim() !== '%s'", prev))
-    app$wait_for_idle()
-  }
-  expect_identical(sort_text(), t0)
+  sort_by("Patient id")
+  expect_identical(sort_text(), "patient id")
   expect_identical(shown_ids(), ids0)
 })
 
@@ -791,7 +796,7 @@ test_that("a lab band draws the reference range and sorts by peak", {
   expect_equal(band$h, 30)
   expect_lt(band$hi, band$lo)
   expect_length(band$rects, 1)
-  expect_match(band$rects[[1]]$fill, "pp-cohort-ref")
+  expect_match(band$rects[[1]]$fill, "blockr-pharma-cohort-ref")
   expect_equal(band$rects[[1]]$y, band$hi)
   expect_equal(band$rects[[1]]$h, band$lo - band$hi, tolerance = 0.01)
   expect_equal(band$undrawn, 0)
@@ -801,8 +806,7 @@ test_that("a lab band draws the reference range and sorts by peak", {
   expect_gt(band$median, 3)
   expect_lte(band$median, 30)
 
-  run_js("document.querySelector('.pp-cohort-sortby').click();")
-  wait_js("document.querySelector('.pp-cohort-sortby').innerText.indexOf('peak') >= 0")
-  app$wait_for_idle()
+  sort_by("Peak value")
+  expect_match(sort_text(), "peak")
   expect_gt(js("document.querySelectorAll('.pp-pt .pp-pt-val').length"), 200)
 })

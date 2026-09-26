@@ -10,8 +10,6 @@ PatientProfile.part(function(ctx) {
   var cfg = ctx.cfg;
   var layoutId = ns('pp_layout');
   var pickSubjectInputId = ns('pick_subject');
-  var cohortSortInputId = ns('cohort_sort');
-  var cohortSortById = ns('cohort_sort_by');
   var cohortWellId = ns('pp_cohort_well');
   var syncSubjectMsgId = ns('sync_subject');
 
@@ -275,13 +273,13 @@ PatientProfile.part(function(ctx) {
       frag.appendChild(el('rect', {
         x: 0, y: hi, width: 176,
         height: Math.max(0, parseFloat(lo) - parseFloat(hi)),
-        fill: 'var(--pp-cohort-ref, rgba(5, 150, 105, 0.10))'
+        fill: 'var(--blockr-pharma-cohort-ref)'
       }));
     } else if (hi || lo) {
       var one = hi || lo;
       frag.appendChild(el('line', {
         x1: 0, y1: one, x2: 176, y2: one,
-        stroke: 'var(--pp-cohort-limit, #9ca3af)',
+        stroke: 'var(--blockr-pharma-cohort-limit)',
         'stroke-width': '0.75', 'stroke-dasharray': '2 2',
         opacity: '0.75'
       }));
@@ -293,7 +291,7 @@ PatientProfile.part(function(ctx) {
       var xy = one.split(',');
       frag.appendChild(el('circle', {
         cx: xy[0], cy: xy[1], r: '1.6',
-        fill: 'var(--pp-cohort-line, #2563eb)'
+        fill: 'var(--blockr-pharma-cohort-line)'
       }));
     } else if (spec) {
       // The `d` arrives interpolated (pp_monotone_path()), so the
@@ -301,7 +299,7 @@ PatientProfile.part(function(ctx) {
       // draws it. Nothing here decides the shape of a curve.
       frag.appendChild(el('path', {
         d: spec, fill: 'none',
-        stroke: 'var(--pp-cohort-line, #2563eb)',
+        stroke: 'var(--blockr-pharma-cohort-line)',
         'stroke-width': '1.1', 'stroke-linejoin': 'round',
         'stroke-linecap': 'round'
       }));
@@ -313,7 +311,7 @@ PatientProfile.part(function(ctx) {
       v.split(' ').forEach(function(cx) {
         frag.appendChild(el('line', {
           x1: cx, y1: y1, x2: cx, y2: y2,
-          stroke: 'var(--pp-cohort-clip, #dc2626)',
+          stroke: 'var(--blockr-pharma-cohort-clip)',
           'stroke-width': '1.2'
         }));
       });
@@ -349,7 +347,7 @@ PatientProfile.part(function(ctx) {
         d: 'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
            'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +
            'Z',
-        fill: 'var(--pp-cohort-eot, #6b7280)'
+        fill: 'var(--blockr-pharma-cohort-eot)'
       }));
     }
     svg.appendChild(frag);
@@ -390,23 +388,7 @@ PatientProfile.part(function(ctx) {
   // Sort key: the house click-through pill. Its own handler
   // rather than the viz one, because that sends {viz_id, param,
   // value} to a viz-settings observer and this is neither.
-  $(document).on('click', '#' + cohortSortById, function(e) {
-    e.stopPropagation();
-    var $by = $(this);
-    var values = $by.data('values');
-    var labels = $by.data('labels');
-    if (!values || !values.length) return;
-    var idx = (parseInt($by.attr('data-index') || '0', 10) + 1) %
-      values.length;
-    $by.attr('data-index', idx);
-    // Only the key, not the whole control: the word before it
-    // and the caret after it are markup, and .text() eats them.
-    $by.find('b').text(labels[idx]);
-    $by.attr('title',
-      'Sort by ' + labels[(idx + 1) % values.length]);
-    Shiny.setInputValue(cohortSortInputId, values[idx],
-                        {priority: 'event'});
-  });
+  // The sort is a word in the caption; pp-slots.js opens its menu.
 
   // The pick, from anywhere that is not this list. Moves a class;
   // never re-renders the rows.

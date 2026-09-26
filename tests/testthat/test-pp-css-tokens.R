@@ -50,7 +50,13 @@ test_that("every token the stylesheet reads is a meaning token blockr.ui defines
   ))
   expect_identical(legacy, character(), info = "legacy aliases")
 
-  expect_identical(setdiff(names, ui_tokens()), character(),
+  # Local tokens are the profile's own, defined in its stylesheet.
+  local <- grep("^--blockr-pharma-", names, value = TRUE)
+  defined <- unlist(regmatches(pp_css(), regexpr("--blockr-pharma-[a-z0-9-]+(?=:)",
+                                                 pp_css(), perl = TRUE)))
+  expect_identical(setdiff(local, defined), character(),
+                   info = "local tokens the stylesheet does not define")
+  expect_identical(setdiff(setdiff(names, local), ui_tokens()), character(),
                    info = "tokens blockr.ui does not define")
 })
 

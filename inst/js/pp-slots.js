@@ -73,19 +73,36 @@ PatientProfile.part(function(ctx) {
     }));
   }
 
-  /** One of a few values: applies at once. @param {HTMLElement} word */
+  /** One of a few values: applies at once. A word may send to an input of
+   *  its own (`data-input`, the patients' sort) rather than to `viz_ctrl`,
+   *  and its options may carry a `key` apart from what they show.
+   *  @param {HTMLElement} word */
   function openSingle(word) {
     var vizId = word.getAttribute('data-viz-id') || '';
     var param = word.getAttribute('data-param') || '';
+    var input = word.getAttribute('data-input');
     var cur = parseAttr(word, 'data-value');
+    /** @type {Array<{value: string, label?: string, key?: string}>} */
+    var options = parseAttr(word, 'data-options') || [];
+    /** @type {Record<string, string>} */
+    var keyOf = {};
+    options.forEach(function(o) { if (o.key !== undefined) keyOf[o.value] = o.key; });
     openMenu(word, {
       title: word.getAttribute('data-title') || undefined,
-      options: parseAttr(word, 'data-options') || [],
+      options: options.map(function(o) {
+        return o.label ? { value: o.value, label: o.label } : { value: o.value };
+      }),
       selected: cur,
-      labelFirst: true,
+      labelFirst: word.getAttribute('data-label-first') !== 'false',
       search: false,
       onChange: function(/** @type {string} */ v) {
-        if (v && v !== cur) send(vizId, param, v);
+        if (!v || v === cur) return;
+        var value = keyOf[v] !== undefined ? keyOf[v] : v;
+        if (input) {
+          Shiny.setInputValue(ns(input), value, {priority: 'event'});
+        } else {
+          send(vizId, param, value);
+        }
       }
     });
   }

@@ -757,7 +757,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
 
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
-           'fill="var(--pp-cohort-track, #f3f4f6)"/>'),
+           'fill="var(--blockr-pharma-cohort-track)"/>'),
     width, h
   ))
 
@@ -769,14 +769,14 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     if (!is.na(geom$limit) && !is.na(geom$limit_lo)) {
       parts <- c(parts, sprintf(
         paste0('<rect x="0" y="%s" width="%s" height="%s" ',
-               'fill="var(--pp-cohort-ref, rgba(5, 150, 105, 0.10))"/>'),
+               'fill="var(--blockr-pharma-cohort-ref)"/>'),
         geom$limit, width, max(0, geom$limit_lo - geom$limit)
       ))
     } else if (!is.na(geom$limit) || !is.na(geom$limit_lo)) {
       one <- if (is.na(geom$limit)) geom$limit_lo else geom$limit
       parts <- c(parts, sprintf(
         paste0('<line x1="0" y1="%s" x2="%s" y2="%s" ',
-               'stroke="var(--pp-cohort-limit, #9ca3af)" stroke-width="0.75" ',
+               'stroke="var(--blockr-pharma-cohort-limit)" stroke-width="0.75" ',
                'stroke-dasharray="2 2" opacity="0.75"/>'),
         one, width, one
       ))
@@ -784,7 +784,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     if (nzchar(geom$path)) {
       parts <- c(parts, sprintf(
         paste0('<path d="%s" fill="none" ',
-               'stroke="var(--pp-cohort-line, #2563eb)" stroke-width="1.1" ',
+               'stroke="var(--blockr-pharma-cohort-line)" stroke-width="1.1" ',
                'stroke-linejoin="round" stroke-linecap="round"/>'),
         geom$path
       ))
@@ -793,7 +793,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     # "no data", which is a different fact.
     if (length(geom$dot)) {
       parts <- c(parts, sprintf(
-        '<circle cx="%s" cy="%s" r="1.6" fill="var(--pp-cohort-line, #2563eb)"/>',
+        '<circle cx="%s" cy="%s" r="1.6" fill="var(--blockr-pharma-cohort-line)"/>',
         geom$dot[[1L]], geom$dot[[2L]]
       ))
     }
@@ -804,14 +804,14 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     for (cx in geom$clip) {
       parts <- c(parts, sprintf(
         paste0('<line x1="%s" y1="0" x2="%s" y2="2.5" ',
-               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+               'stroke="var(--blockr-pharma-cohort-clip)" stroke-width="1.2"/>'),
         cx, cx
       ))
     }
     for (cx in geom$clip_lo) {
       parts <- c(parts, sprintf(
         paste0('<line x1="%s" y1="%s" x2="%s" y2="%s" ',
-               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+               'stroke="var(--blockr-pharma-cohort-clip)" stroke-width="1.2"/>'),
         cx, h - 2.5, cx, h
       ))
     }
@@ -834,7 +834,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(
-      '<path d="M%s %sL%s %sL%s %sL%s %sZ" fill="var(--pp-cohort-eot, #6b7280)"/>',
+      '<path d="M%s %sL%s %sL%s %sL%s %sZ" fill="var(--blockr-pharma-cohort-eot)"/>',
       cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy
     ))
   }
@@ -1293,12 +1293,12 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
 
   badge <- ifelse(
     nzchar(code),
-    sprintf('<span class="pp-pt-code" title="%s" style="%s">%s</span>',
+    sprintf('<span class="pp-pt-code" data-blockr-tooltip="%s" style="%s">%s</span>',
             esca(arm), esca(chip), esc(code)),
     ifelse(
       nzchar(arm),
       sprintf(
-        '<span class="pp-pt-swatch" title="%s" style="background:%s"></span>',
+        '<span class="pp-pt-swatch" data-blockr-tooltip="%s" style="background:%s"></span>',
         esca(arm), esca(tint)
       ),
       ""
@@ -1318,7 +1318,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     ""
   } else {
     paste0('<rect x="0" y="0" width="176" height="', h, '" rx="2"',
-           ' fill="var(--pp-cohort-track, #f3f4f6)"/>')
+           ' fill="var(--blockr-color-bg-hover)"/>')
   }
 
   html <- sprintf(
@@ -1329,9 +1329,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       # Search matches the same text a reader sees, plus the arm, which is
       # not printed in full anywhere in the row.
       ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s', kind,
-      # The tooltip carries the id in full, always: the row shows the part
-      # that varies, never the whole thing.
-      ' title="%s">',
+      '>',
       '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
       '<span class="pp-pt-gap"></span>%s%s</div>',
       # The empty track, always: the row keeps its height whether or not its
@@ -1353,7 +1351,6 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
            sprintf(' data-limit-lo="%s"', esca(limit_lo)), ""),
     ifelse(nzchar(clip), sprintf(' data-clip="%s"', esca(clip)), ""),
     ifelse(nzchar(clip_lo), sprintf(' data-clip-lo="%s"', esca(clip_lo)), ""),
-    esca(ifelse(nzchar(arm), paste0(id, " \u00b7 ", arm), id)),
     esc(shown),
     ifelse(nzchar(demo),
            sprintf('<span class="pp-pt-demo">%s</span>', esc(demo)), ""),

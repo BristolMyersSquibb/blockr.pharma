@@ -21,6 +21,21 @@ PP_ICON_X <- paste0(
   'aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>'
 )
 
+PP_ICON_SEARCH <- paste0(
+  '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" ',
+  'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" ',
+  'aria-hidden="true"><circle cx="7" cy="7" r="4.5"/>',
+  '<path d="M10.5 10.5L14 14"/></svg>'
+)
+
+# The check of a picked row, as blockr.ui's menus draw it.
+PP_ICON_CHECK <- paste0(
+  '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" ',
+  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ',
+  'stroke-linejoin="round" aria-hidden="true">',
+  '<path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>'
+)
+
 # Bootstrap's gear-fill at 14px: the design system's gear.
 PP_ICON_GEAR <- paste0(
   '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" ',

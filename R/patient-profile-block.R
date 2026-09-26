@@ -999,16 +999,15 @@ new_patient_profile_block <- function(selected = NULL,
           # Sort keys follow the data: a study with no adae is not offered a
           # sort by event count.
           #
-          # It reads as a clause on the caption row -- "Chemistry . ALT ...
-          # by peak" -- rather than as a labelled control on a row of its
-          # own. The caption says what the strip draws and the sort says how
-          # those are ordered, which is one sentence, and putting it on one
-          # line gave the well back a row of the sidebar. A click walks to
-          # the next rung, as the pill did.
+          # It is a word in the caption's sentence -- "Adverse events, by
+          # patient id" -- which says what the strip draws and how the list is
+          # ordered in one line. A click opens the keys as a menu.
           cohort_sort_ui <- function() {
+            # Not isolated: the word names the key, so a new key redraws the
+            # caption (a line of text) with it.
             pp_cohort_sort_ui(
               pp_cohort_sort_choices(r_cohort_frame(), r_cohort_marks()$kind),
-              shiny::isolate(r_cohort_sort()),
+              r_cohort_sort(),
               session$ns
             )
           }
@@ -1020,9 +1019,9 @@ new_patient_profile_block <- function(selected = NULL,
           output$cohort_band_caption <- shiny::renderUI({
             src <- r_band_source()
             sorter <- cohort_sort_ui()
-            pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
-            if (is.null(src) && is.null(sorter) && !nzchar(pre)) return(NULL)
-            pp_band_caption_ui(src, sorter, pre, r_band_picks())
+            frame <- r_cohort_frame()
+            pre <- pp_cohort_id_display(frame$USUBJID)$prefix
+            pp_band_caption_ui(src, sorter, pre, nrow(frame))
           })
 
           # Who is on screen, and the facts about them the sidebar row has

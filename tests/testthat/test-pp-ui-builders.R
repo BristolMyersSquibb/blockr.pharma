@@ -38,41 +38,31 @@ test_that("the header row, the tray, the sort clause and caption take their name
   expect_match(tray, 'id="t-pp_gear_display"')
   expect_match(tray, 'id="t-gear_coverage"')
 
-  sorter <- pp_cohort_sort_ui(c(id = "Patient id", worst = "Worst"), "worst", ns)
-  expect_match(html(sorter), 'id="t-cohort_sort_by"')
-  expect_match(html(sorter), 'data-index="1"')
+  sorter <- pp_cohort_sort_ui(c(id = "Patient id", worst = "Worst severity"),
+                              "worst", ns)
+  expect_match(sorter, 'id="t-cohort_sort_by"', fixed = TRUE)
+  expect_match(sorter, 'data-input="cohort_sort"', fixed = TRUE)
+  expect_match(sorter, "^by <button")
+  expect_match(sorter, ">severity</button>", fixed = TRUE)
   expect_null(pp_cohort_sort_ui(c(id = "Patient id"), "id", ns))
 
   cap <- html(pp_band_caption_ui(
-    list(viz_id = "ae_gantt", title = "t", caption = "Adverse Events"),
-    sorter, pre = "01-701-",
-    picks = list(list(col = "*", value = "rash"))
+    list(viz_id = "ae_gantt", title = "t", caption = "Adverse events"),
+    sorter, pre = "01-701-", n = 306
   ))
-  expect_match(cap, "pp-cohort-bandcap-find")
-  expect_match(cap, "01-701-")
+  expect_match(cap, "<span>Patients</span>", fixed = TRUE)
+  expect_match(cap, '<span class="pp-cohort-bandcap-n">306</span>', fixed = TRUE)
+  expect_match(cap, "01-701-", fixed = TRUE)
+  expect_match(cap, "Adverse events, by <button", fixed = TRUE)
+  # The strip's filter is not repeated here; the panel that sets it says so.
+  expect_no_match(cap, "bandcap-find")
 
-  # One pick is named.
-  expect_match(cap, "\u201crash\u201d", fixed = TRUE)
-
-  # Several are counted, not named: there is no width in this caption for
-  # "General disorders and administration site conditions +2", which
-  # ellipsized to "G.." and said less than a number does. The tooltip names
-  # them all either way.
-  many <- html(pp_band_caption_ui(
-    list(viz_id = "ae_gantt", title = "t", caption = "Adverse Events"),
-    sorter, pre = "",
-    picks = list(list(col = "AEBODSYS", value = "CARDIAC DISORDERS"),
-                 list(col = "AEDECOD", value = "PNEUMONIA"))
+  # A parameter's strip names the parameter after its code.
+  lab <- html(pp_band_caption_ui(
+    list(viz_id = "x", title = "t", caption = "ALB", sub = "Albumin (g/L)"),
+    NULL, pre = "", n = 3
   ))
-  expect_match(many, ">2 filters<", fixed = TRUE)
-  expect_match(many, "Cardiac disorders, Pneumonia", fixed = TRUE)
-
-  # No picks, no chip: the caption is not a control that does nothing.
-  bare <- html(pp_band_caption_ui(
-    list(viz_id = "ae_gantt", title = "t", caption = "Adverse Events"),
-    sorter, pre = "", picks = list()
-  ))
-  expect_false(grepl("pp-cohort-bandcap-find", bare, fixed = TRUE))
+  expect_match(lab, 'ALB<span class="pp-gear-meta">Albumin (g/L)</span>', fixed = TRUE)
 })
 
 test_that("the block UI mounts the client with the namespace it was given", {

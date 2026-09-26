@@ -56,44 +56,26 @@ pp_block_ui <- function(id) {
         # tag in the toolbar now does from a place you can see when this
         # is shut.
 
-        # Search
+        # Search: one box, two tenants, the panels and the patients.
         shiny::div(class = "pp-sidebar-search",
           shiny::div(class = "pp-sidebar-search-wrapper",
             shiny::span(class = "pp-sidebar-search-icon",
-              shiny::HTML(paste0(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-                'height="16" fill="currentColor" viewBox="0 0 16 16">',
-                '<path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h',
-                '-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-',
-                '1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 ',
-                '5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>'
-              ))
-            ),
+                        shiny::HTML(PP_ICON_SEARCH)),
             shiny::tags$input(
               type = "text",
               class = "pp-sidebar-search-input",
               id = ns("search"),
-              # Patients only now: the panels this used to
-              # find are in the picker's own box.
-              # One box, two tenants: the panels above it and the
-              # patients below it.
-              placeholder = "Search panels and patients..."
+              placeholder = "Search panels and patients",
+              `aria-label` = "Search panels and patients"
             ),
-            # Clear: appears only while the box has text. Restores the
-            # full list, SELECTED section included.
+            # Clear: appears only while the box has text.
             shiny::tags$button(
               class = "pp-sidebar-search-clear is-hidden",
               id = ns("search_clear"),
               type = "button",
-              title = "Clear search",
-              shiny::HTML(paste0(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="14" ',
-                'height="14" fill="currentColor" viewBox="0 0 16 16">',
-                '<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646',
-                '-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 ',
-                '0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708',
-                'L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>'
-              ))
+              `aria-label` = "Clear the search",
+              `data-blockr-tooltip` = "Clear the search",
+              shiny::HTML(PP_ICON_X)
             )
           )
         ),
@@ -163,14 +145,13 @@ pp_block_ui <- function(id) {
     ),
 
     # The client half lives in inst/js/pp-*.js and is mounted here with
-    # the three things it needs from R: the namespace every id
-    # derives from, the grip glyph the sidebar rows reuse, and the spans
-    # band height. A jQuery-ready wrapper, because in a dock panel this
-    # fragment can land before the layout it mounts on.
+    # the two things it needs from R: the namespace every id derives from
+    # and the spans band height. A jQuery-ready wrapper, because in a dock
+    # panel this fragment can land before the layout it mounts on.
     shiny::tags$script(shiny::HTML(sprintf(
       "$(function() { PatientProfile.mount(%s); });",
       jsonlite::toJSON(
-        list(id = id, grip = pp_grip_glyph(), bandH = pp_cohort_band_h_spans),
+        list(id = id, bandH = pp_cohort_band_h_spans),
         auto_unbox = TRUE
       )
     )))

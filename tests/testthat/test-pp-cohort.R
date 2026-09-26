@@ -232,10 +232,10 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
       marks, color)
     tint <- unname(arm_col[[arm]] %||% "#9ca3af")
     badge <- if (nzchar(code)) {
-      shiny::span(class = "pp-pt-code", title = arm,
+      shiny::span(class = "pp-pt-code", `data-blockr-tooltip` = arm,
                   style = pp_cohort_chip_style(tint), code)
     } else if (nzchar(arm)) {
-      shiny::span(class = "pp-pt-swatch", title = arm,
+      shiny::span(class = "pp-pt-swatch", `data-blockr-tooltip` = arm,
                   style = paste0("background:", tint))
     }
     shiny::div(
@@ -243,7 +243,6 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
       `data-usubjid` = id,
       `data-search-text` = tolower(paste(id, demo, arm, code)),
       `data-band` = band$band, `data-eot` = band$eot,
-      title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
       shiny::div(class = "pp-pt-line",
         shiny::span(class = "pp-pt-id", disp$short[[i]]),
         if (nzchar(demo)) shiny::span(class = "pp-pt-demo", demo),
@@ -255,7 +254,7 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
         `aria-hidden` = "true",
         shiny::tags$rect(x = 0, y = 0, width = 176,
                          height = pp_cohort_band_h, rx = 2,
-                         fill = "var(--pp-cohort-track, #f3f4f6)")))
+                         fill = "var(--blockr-color-bg-hover)")))
   })
   as.character(htmltools::renderTags(shiny::tagList(rows))$html)
 }
@@ -334,7 +333,7 @@ test_that("study text is escaped, in attributes and in content alike", {
 
   # Nothing a study wrote closes an attribute or opens a tag
   expect_match(html, 'data-usubjid="S&quot;1"', fixed = TRUE)
-  expect_match(html, 'title="S&lt;2&gt; · A&lt;b&gt;10&lt;/b&gt;"',
+  expect_match(html, 'data-blockr-tooltip="A&lt;b&gt;10&lt;/b&gt;"',
                fixed = TRUE)
   expect_false(grepl("<b>10</b>", html, fixed = TRUE))
   expect_match(html, "S&amp;3", fixed = TRUE)
