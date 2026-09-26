@@ -299,12 +299,30 @@
   opacity: 0.45;
 }
 
-.pp-add-ord.is-over {
-  box-shadow: inset 0 2px 0 var(--blockr-color-border-accent);
+/* Where it lands: a straight 2px line between two rows, from the text's
+   edge. Not a shadow on the row, which bent round its rounded corners. */
+.pp-add-ord {
+  position: relative;
 }
 
-.pp-add-ord.is-over-last {
-  box-shadow: inset 0 -2px 0 var(--blockr-color-border-accent);
+.pp-add-ord.is-over::before,
+.pp-add-ord.is-over-last::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--blockr-color-border-accent);
+  pointer-events: none;
+}
+
+.pp-add-ord.is-over::before {
+  top: -1px;
+}
+
+.pp-add-ord.is-over-last::after {
+  bottom: -1px;
 }
 
 .pp-add-ord.is-landed {
