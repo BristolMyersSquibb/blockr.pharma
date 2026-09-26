@@ -352,7 +352,7 @@
 /* The patients: a section title, then one sentence saying what the strip
    draws and how the list is ordered. */
 .pp-cohort-bandcap {
-  padding: 12px 12px 6px 14px;
+  padding: 14px 12px 10px 14px;
   flex-shrink: 0;
   min-width: 0;
 }
@@ -653,7 +653,9 @@
    on it and keep its height when there is none. */
 .pp-cohort-bandcap-title {
   align-items: center;
+  gap: 8px;
   min-height: var(--blockr-control-h-xs);
+  margin-bottom: 6px;
 }
 
 .pp-cohort-bandcap-title .pp-cohort-status {
