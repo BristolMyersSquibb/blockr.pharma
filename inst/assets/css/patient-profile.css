@@ -29,8 +29,10 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--blockr-color-text-default);
-  /* Pull layout flush against dock's accordion-body edges */
-  margin: -16px -16px -10px -16px;
+  /* Flush with the card's sides and bottom, so the sidebar's rule runs edge
+     to edge. Not pulled up at the top: the block header has no rule to meet
+     there any more, and the profile starts under it like any other block. */
+  margin: 0 -16px -10px -16px;
   width: calc(100% + 32px);
 }
 
