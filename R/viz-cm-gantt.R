@@ -331,7 +331,7 @@ cm_gantt_viz <- new_pp_viz(
         series = series_list
       )) |>
       echarts4r::e_text_style(
-        fontFamily = "system-ui, -apple-system, sans-serif"
+        fontFamily = "var(--bs-body-font-family)"
       )
   }
 )

@@ -255,7 +255,7 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       ),
       splitLine = list(
         show = TRUE,
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
     # One gridline per label, D1's included -- the readability the clinicians
@@ -281,7 +281,7 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       ),
       splitLine = list(
         show = TRUE,
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
   }
@@ -340,29 +340,22 @@ pp_compact_num_js <- function() {
   ")
 }
 
-#' Canonical axis colors used by the drill-down chart family. Kept
-#' centrally so all patient-profile vizs read consistent values.
+#' The charts' axis ink, as token references: pp-core.js resolves them
+#' against the page's tokens when a chart sets its options.
 #' @noRd
-PP_AXIS_LABEL_COLOR <- "#666"
-PP_AXIS_LINE_COLOR <- "#ccc"
-# Gridlines. Measured against the panel background (#f9fafb, L=249.9), which
-# is what decides whether these are visible at all:
-#
-#   #f3f4f6  L=243.9  dL= 6   the original: a line only in principle
-#   #e5e7eb  L=231.0  dL=19   one step darker, still read as "no gridlines"
-#   #d1d5db  L=212.8  dL=37   this
-#
-# Two steps were needed, not one. dL=19 is 7% of the range, and these lines
-# are DASHED, which spends some of that again on the gaps -- so the first
-# bump was still being reported as invisible. At dL=37 the line is present
-# and remains far quieter than the axis labels above it (#666, L=102), so
-# the data is still the loudest thing in the panel.
-#
-# The washes are NOT the cause and darkening these is not compensating for
-# them: measured inside the findings reference band the gridline holds
-# dL=17.5 against dL=19 outside it, so the area gradient and markArea cost
-# under two levels.
-PP_SPLIT_LINE_COLOR <- "#d1d5db"
+PP_AXIS_LABEL_COLOR <- "var(--blockr-color-text-muted)"
+PP_AXIS_LINE_COLOR <- "var(--blockr-color-border-strong)"
+# Gridlines: solid border-default on the white chart area (design system,
+# "Charts"). They were dashed #d1d5db on a grey area, where a lighter dashed
+# line read as no gridlines at all; solid on white, the default border step
+# is present and stays far quieter than the axis labels.
+PP_SPLIT_LINE_COLOR <- "var(--blockr-color-border-default)"
+
+# The exports (PNG, pptx) draw with ggplot and have no page to read tokens
+# from. They keep the values they always had: a dashed gridline on paper
+# needs the darker grey.
+PP_EXPORT_AXIS_LABEL_COLOR <- "#666"
+PP_EXPORT_SPLIT_LINE_COLOR <- "#d1d5db"
 
 #' Lane geometry for the patient-profile gantt charts (AE, CM).
 #'
@@ -518,9 +511,9 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
             text: label,
             x: tx,
             y: start[1] + (%d),
-            fill: '#4b5563',
-            fontSize: 10,
-            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fill: PatientProfile.ink('--blockr-color-text-muted'),
+            fontSize: 11,
+            fontFamily: PatientProfile.ink('--bs-body-font-family'),
             textVerticalAlign: 'middle',
             truncate: { outerWidth: cs.x + cs.width - tx }
           }
@@ -602,13 +595,13 @@ pp_tooltip <- function() {
   list(
     trigger = "item",
     confine = TRUE,
-    backgroundColor = "rgba(255,255,255,0.98)",
-    borderColor = "#d1d5db",
+    backgroundColor = "var(--blockr-color-bg-raised)",
+    borderColor = "var(--blockr-color-border-default)",
     borderWidth = 1,
-    textStyle = list(color = "#1f2937", fontSize = 12),
+    textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
     extraCssText = paste0(
-      "box-shadow: 0 4px 12px rgba(0,0,0,0.08);",
-      "border-radius: 6px; padding: 8px 12px;"
+      "box-shadow: var(--blockr-shadow-md);",
+      "border-radius: var(--blockr-radius-lg); padding: 8px 10px;"
     )
   )
 }
@@ -930,7 +923,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         text = param_label,
         left = PP_GRID_LEFT,
         top = grid_top - 18,
-        textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
+        textStyle = list(fontSize = 11, fontWeight = 400,
+                         color = "var(--blockr-color-text-muted)")
       )
     }
 
@@ -954,7 +948,9 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       gridIndex = grid_idx,
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
+      # The lowest label is left off: it sat on the x axis's first day.
       axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11,
+                       showMinLabel = FALSE,
                        formatter = pp_compact_num_js()),
       splitLine = list(
         show = TRUE,
@@ -962,14 +958,31 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         # already-light line to about 3% contrast and is why this panel's
         # horizontal gridlines read as absent while the gantts' verticals
         # did not. One gridline weight across the profile.
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
 
-    # Line data
-    line_data <- lapply(seq_len(nrow(p_data)), function(i) {
-      list(value = list(pp_xval(p_data$ADT[i], ref_ms, mode),
-                        p_data[[value]][i]))
+    # Line data: one point per day. A day with several readings (vitals
+    # taken lying, sitting and standing) drew a vertical spike through all of
+    # them; the line now runs through the day's mean -- the study's own
+    # derived mean where it recorded one (DTYPE), the mean of the readings
+    # where it did not -- and every reading stays a dot on the scatter.
+    line_xs <- vapply(seq_len(nrow(p_data)), function(i) {
+      as.numeric(pp_xval(p_data$ADT[i], ref_ms, mode))
+    }, numeric(1))
+    line_vals <- suppressWarnings(as.numeric(p_data[[value]]))
+    line_der <- if (has_dtype) {
+      !is.na(p_data$DTYPE) & nzchar(trimws(as.character(p_data$DTYPE)))
+    } else {
+      rep(FALSE, nrow(p_data))
+    }
+    line_keep <- which(!is.na(line_xs) & !is.na(line_vals))
+    line_days <- sort(unique(line_xs[line_keep]))
+    line_data <- lapply(line_days, function(x) {
+      at <- line_keep[line_xs[line_keep] == x]
+      der <- at[line_der[at]]
+      y <- if (length(der)) line_vals[[der[[1L]]]] else mean(line_vals[at])
+      list(value = list(x, y))
     })
 
     # Scatter data with ANRIND coloring + rich tooltips
@@ -1078,7 +1091,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         value = list(dt, val),
         symbol = if (derived) "emptyCircle" else "circle",
         itemStyle = if (derived) {
-          list(color = "#ffffff", borderColor = pt_color, borderWidth = 2)
+          list(color = "var(--blockr-color-bg-surface)", borderColor = pt_color,
+               borderWidth = 2)
         } else {
           list(color = pt_color)
         },
@@ -1138,7 +1152,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       data = scatter_data,
       symbolSize = 8,
       z = 2,
-      itemStyle = list(borderWidth = 2, borderColor = "#ffffff"),
+      itemStyle = list(borderWidth = 2,
+                       borderColor = "var(--blockr-color-bg-surface)"),
       tooltip = list(
         formatter = htmlwidgets::JS(
           "function(params) { return params.data.tooltip_text || ''; }"
@@ -1171,7 +1186,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
           # sit at 0 -- checked on a rendered card -- and a zero a reader has
           # to count gridlines to find is not stated at all. The line type
           # carries the distinction, so the colour can stay quiet.
-          lineStyle = list(color = "#9ca3af", type = "solid", width = 1),
+          lineStyle = list(color = "var(--blockr-color-border-strong)",
+                           type = "solid", width = 1),
           label = list(show = FALSE),
           data = list(list(yAxis = 0))
         )
@@ -1219,7 +1235,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       yAxis = y_axes,
       series = all_series
     )) |>
-    echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+    echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
 }
 
 

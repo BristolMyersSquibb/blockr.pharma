@@ -118,7 +118,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
           orient = "horizontal",
           left = "center", bottom = 0,
           itemWidth = 10, itemHeight = 120,
-          textStyle = list(fontSize = 10, color = "#6b7280"),
+          textStyle = list(fontSize = 11, color = "var(--blockr-color-text-muted)"),
           inRange = list(color = list("#059669", "#f9fafb", "#DC2626"))
         )
       } else {
@@ -128,7 +128,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
           orient = "horizontal",
           left = "center", bottom = 0,
           itemWidth = 10, itemHeight = 120,
-          textStyle = list(fontSize = 10, color = "#6b7280"),
+          textStyle = list(fontSize = 11, color = "var(--blockr-color-text-muted)"),
           inRange = list(color = list("#dbeafe", "#ffffff", "#fecaca"))
         )
       }
@@ -151,13 +151,13 @@ questionnaire_heatmap_viz <- new_pp_viz(
           tooltip = list(
             trigger = "item",
             confine = TRUE,
-            backgroundColor = "rgba(255,255,255,0.98)",
-            borderColor = "#d1d5db",
+            backgroundColor = "var(--blockr-color-bg-raised)",
+            borderColor = "var(--blockr-color-border-default)",
             borderWidth = 1,
-            textStyle = list(color = "#1f2937", fontSize = 12),
+            textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
             extraCssText = paste0(
-              "box-shadow: 0 4px 12px rgba(0,0,0,0.08);",
-              "border-radius: 6px; padding: 8px 12px;"
+              "box-shadow: var(--blockr-shadow-md);",
+              "border-radius: var(--blockr-radius-lg); padding: 8px 10px;"
             ),
             formatter = htmlwidgets::JS(sprintf("
               function(params) {
@@ -213,12 +213,12 @@ questionnaire_heatmap_viz <- new_pp_viz(
               )
             ),
             itemStyle = list(
-              borderColor = "#ffffff",
+              borderColor = "var(--blockr-color-bg-surface)",
               borderWidth = 2,
               borderRadius = 2
             )
           ))
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

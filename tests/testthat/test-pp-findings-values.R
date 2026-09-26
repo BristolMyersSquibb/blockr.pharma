@@ -409,3 +409,28 @@ test_that("an empty change panel names the column once", {
                                 settings = list(value = "PCHG"))
   expect_identical(chart$x$opts$title$text, "No PCHG records")
 })
+
+test_that("the line runs through each day's mean, and every reading stays a dot", {
+  # Vitals taken lying, sitting and standing are three readings on one day.
+  # Drawn through all of them, the line was a vertical spike.
+  line_of <- function(chart) {
+    s <- Filter(function(s) identical(s$type, "line") && !grepl("zero", s$name),
+                chart$x$opts$series)[[1]]
+    vapply(s$data, function(d) as.numeric(d$value[[2]]), numeric(1))
+  }
+  adlb <- neut_adlb(
+    AVAL = c(2, 4, 6),
+    ADT = as.Date(c("2024-01-05", "2024-01-05", "2024-01-05"))
+  )
+  adlb <- rbind(adlb, neut_adlb()[2, ])
+  chart <- render_findings_card(adlb)
+  expect_equal(line_of(chart), c(4, 3.1))
+  dots <- Filter(function(s) identical(s$type, "scatter"), chart$x$opts$series)[[1]]
+  expect_equal(sort(vapply(dots$data, function(d) as.numeric(d$value[[2]]), numeric(1))),
+               c(2, 3.1, 4, 6))
+
+  # Where the study derived the day's value itself, the line takes that.
+  adlb$DTYPE <- ""
+  derived <- rbind(adlb, transform(adlb[1, ], AVAL = 5, DTYPE = "AVERAGE"))
+  expect_equal(line_of(render_findings_card(derived)), c(5, 3.1))
+})

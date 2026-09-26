@@ -163,6 +163,6 @@ npix_radar_viz <- new_pp_viz(
             )
           ))
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

@@ -338,7 +338,7 @@ ae_gantt_viz <- new_pp_viz(
           ),
           series = series_list
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )
 
@@ -444,7 +444,9 @@ pp_empty_chart <- function(msg) {
       title = list(
         text = msg,
         left = "center", top = "center",
-        textStyle = list(fontSize = 13, color = "#9ca3af", fontWeight = 400)
+        textStyle = list(fontSize = 13, color = "var(--blockr-color-text-muted)",
+                         fontWeight = 400, fontStyle = "italic",
+                         fontFamily = "var(--bs-body-font-family)")
       ),
       xAxis = list(show = FALSE),
       yAxis = list(show = FALSE)

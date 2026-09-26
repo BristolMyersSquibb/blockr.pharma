@@ -171,6 +171,6 @@ adas_trajectory_viz <- new_pp_viz(
           ),
           series = all_series
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

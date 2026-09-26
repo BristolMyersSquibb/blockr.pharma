@@ -141,6 +141,10 @@ interface PpContext {
 type PpPart = (ctx: PpContext) => void;
 
 interface PatientProfileNamespace {
+  /** A token's value on this page, for ink a chart draws itself. */
+  ink(name: string): string;
+  /** Resolve every `var(--token)` string in an ECharts option, in place. */
+  resolveInk(option: any): any;
   part(fn: PpPart): void;
   mount(cfg: PpConfig): PpContext;
 }

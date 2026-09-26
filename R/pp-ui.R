@@ -35,6 +35,10 @@ pp_block_ui <- function(id) {
       src = system.file("assets", package = "blockr.pharma"),
       stylesheet = "css/patient-profile.css"
     ),
+    # ECharts before the client half: pp-core.js resolves the charts' ink
+    # tokens as every chart instance sets its options, so it wraps
+    # echarts.init once it loads.
+    htmlwidgets::getDependency("echarts4r", "echarts4r"),
     # The client half, in parts: pp-core.js first (it owns the registry
     # the others register with), then one file per region of the block.
     htmltools::htmlDependency(

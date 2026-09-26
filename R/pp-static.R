@@ -105,23 +105,23 @@ pp_static_theme <- function(base_size = pp_px_pt(11)) {
   ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(
       panel.grid.major = ggplot2::element_line(
-        color = PP_SPLIT_LINE_COLOR, linewidth = 0.4, linetype = "dashed"
+        color = PP_EXPORT_SPLIT_LINE_COLOR, linewidth = 0.4, linetype = "dashed"
       ),
       panel.grid.minor = ggplot2::element_blank(),
       # Tick labels, axis names and legend entries are all 11px on the
       # canvas, so they are all `base_size` here.
       axis.text = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size
+        color = PP_EXPORT_AXIS_LABEL_COLOR, size = base_size
       ),
       axis.title = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size
+        color = PP_EXPORT_AXIS_LABEL_COLOR, size = base_size
       ),
       strip.text = ggplot2::element_text(
         color = "#6b7280", size = base_size, hjust = 0
       ),
       legend.position = "bottom",
       legend.text = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = base_size
+        color = PP_EXPORT_AXIS_LABEL_COLOR, size = base_size
       ),
       legend.title = ggplot2::element_blank(),
       plot.title = ggplot2::element_text(
@@ -853,7 +853,7 @@ pp_static_heatmap <- function(dm_obj, time_range, settings = list(),
         hjust = if (length(visits) > 6) 0 else 0.5
       ),
       legend.title = ggplot2::element_text(
-        color = PP_AXIS_LABEL_COLOR, size = 8
+        color = PP_EXPORT_AXIS_LABEL_COLOR, size = 8
       )
     )
 

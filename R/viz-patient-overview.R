@@ -214,7 +214,7 @@ patient_overview_viz <- new_pp_viz(
                   fill: '#059669',
                   fontSize: 11,
                   fontWeight: 600,
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontFamily: PatientProfile.ink('--bs-body-font-family'),
                   textVerticalAlign: 'middle',
                   truncate: { outerWidth: barW - 16 }
                 }
@@ -450,7 +450,7 @@ patient_overview_viz <- new_pp_viz(
                     [x, y + sz], [x - sz, y]
                   ]
                 },
-                style: { fill: '#2563EB', stroke: '#fff', lineWidth: 1.5 }
+                style: { fill: '#2563EB', stroke: PatientProfile.ink('--blockr-color-bg-surface'), lineWidth: 1.5 }
               };
             } else if (kind === 'death') {
               return {
@@ -652,7 +652,7 @@ patient_overview_viz <- new_pp_viz(
                     fill: '#1e40af',
                     fontSize: 10,
                     fontWeight: 600,
-                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontFamily: PatientProfile.ink('--bs-body-font-family'),
                     textAlign: 'center',
                     textVerticalAlign: 'middle',
                     truncate: { outerWidth: barW - 8 }
@@ -727,7 +727,7 @@ patient_overview_viz <- new_pp_viz(
               return {
                 type: 'rect',
                 shape: { x: p[0] - 1, y: p[1] - h / 2, width: 2, height: h },
-                style: { fill: '#9ca3af' }
+                style: { fill: PatientProfile.ink('--blockr-color-text-muted') }
               };
             }
           "),
@@ -775,6 +775,6 @@ patient_overview_viz <- new_pp_viz(
           ),
           series = all_series
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

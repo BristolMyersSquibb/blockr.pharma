@@ -150,7 +150,7 @@ cycle_viz <- new_pp_viz(
                 fill: '#5B21B6',
                 fontSize: 11,
                 fontWeight: 600,
-                fontFamily: 'system-ui, -apple-system, sans-serif'
+                fontFamily: PatientProfile.ink('--bs-body-font-family')
               }
             });
           }
@@ -205,7 +205,7 @@ cycle_viz <- new_pp_viz(
         series = series_list
       )) |>
       echarts4r::e_text_style(
-        fontFamily = "system-ui, -apple-system, sans-serif"
+        fontFamily = "var(--bs-body-font-family)"
       )
   }
 )
