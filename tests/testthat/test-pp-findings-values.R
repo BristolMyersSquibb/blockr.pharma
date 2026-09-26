@@ -20,7 +20,7 @@ plotted_values <- function(chart) {
 # chart itself is unchanged: pp_render_findings() always drew one grid per
 # code and is handed one instead of three.
 render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_,
-                                 settings = list()) {
+                                 settings = list(), mode = "date") {
   dm_obj <- dm::dm(
     adsl = data.frame(USUBJID = "S1", TRTSDT = as.Date("2024-01-01")),
     adlb = adlb
@@ -32,13 +32,24 @@ render_findings_card <- function(adlb, id = NULL, ref_ms = NA_real_,
   }
   expect_true(id %in% names(vizs))
   vizs[[id]]$render(dm_obj, as.Date(c("2024-01-01", "2024-12-31")),
-                    settings = settings, ref_ms = ref_ms)
+                    settings = settings, ref_ms = ref_ms, mode = mode)
 }
 
-tooltips <- function(chart) {
+# The dots' tooltips (pp_tip() lists), in draw order.
+tips <- function(chart) {
   pts <- Filter(function(s) identical(s$type, "scatter"),
                 chart$x$opts$series)[[1]]$data
-  vapply(pts, function(p) p$tooltip_text, character(1))
+  lapply(pts, function(p) p$tip)
+}
+
+# One tooltip's rows as label = value, and label = meta.
+tip_values <- function(tip) {
+  stats::setNames(vapply(tip$rows, `[[`, "", "value"),
+                  vapply(tip$rows, `[[`, "", "label"))
+}
+tip_metas <- function(tip) {
+  stats::setNames(vapply(tip$rows, function(r) r$meta %||% "", ""),
+                  vapply(tip$rows, `[[`, "", "label"))
 }
 
 neut_adlb <- function(...) {
@@ -83,8 +94,9 @@ test_that("a carried-forward value is drawn, but not as a measurement", {
   pts <- Filter(function(s) identical(s$type, "scatter"), chart$x$opts$series)[[1]]$data
   expect_equal(vapply(pts, function(p) p$symbol, character(1)),
                c("circle", "circle", "circle", "emptyCircle"))
-  expect_match(pts[[4]]$tooltip_text, "LOCF")
-  expect_match(pts[[4]]$tooltip_text, "not measured")
+  expect_match(pts[[4]]$tip$note, "(locf)", fixed = TRUE)
+  expect_match(pts[[4]]$tip$note, "not measured")
+  expect_null(pts[[1]]$tip$note)
 })
 
 test_that("a character AVAL does not kill the card", {
@@ -111,42 +123,45 @@ test_that("character reference ranges do not kill the card", {
 })
 
 test_that("a findings point reports the visit its own row names", {
-  # AVISIT on a findings row describes that row's timepoint, so it belongs
-  # beside its date -- printed, not interpreted: see pp-cycle.R.
+  # AVISIT on a findings row describes that row's timepoint, so it is printed
+  # beside its day, in sentence case when the study wrote it in capitals.
   adlb <- neut_adlb(AVISIT = c("CYCLE 1 DAY 1", "Cycle 2, Day 8", "UNSCHEDULED"))
-  chart <- render_findings_card(adlb)
-  pts <- Filter(function(s) identical(s$type, "scatter"),
-                chart$x$opts$series)[[1]]$data
-  expect_match(pts[[1]]$tooltip_text, "2024-01-05 \\(CYCLE 1 DAY 1\\)")
-  expect_match(pts[[2]]$tooltip_text, "2024-02-05 \\(Cycle 2, Day 8\\)")
+  tt <- tips(render_findings_card(adlb))
+  expect_identical(tip_values(tt[[1]])[["Visit"]], "Cycle 1 day 1")
+  expect_identical(tip_values(tt[[2]])[["Visit"]], "Cycle 2, Day 8")
   # An off-protocol draw says so, which is the point of printing the label
-  expect_match(pts[[3]]$tooltip_text, "2024-03-05 \\(UNSCHEDULED\\)")
+  expect_identical(tip_values(tt[[3]])[["Visit"]], "Unscheduled")
 })
 
 test_that("a study without AVISIT keeps the date it always had", {
-  pts <- Filter(function(s) identical(s$type, "scatter"),
-                render_findings_card(neut_adlb())$x$opts$series)[[1]]$data
-  expect_match(pts[[1]]$tooltip_text, "2024-01-05<")
+  tt <- tips(render_findings_card(neut_adlb()))
+  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
+  expect_false("Visit" %in% names(tip_values(tt[[1]])))
 })
 
 test_that("a lab point reports the day on treatment its own row carries", {
   # The ask from clinical review: AE bars read "D43" - "D50" while labs read
   # a date and a visit, so the two cannot be lined up by eye. ADY is the
-  # record's own number and is printed as such.
+  # record's own number and is printed as such, after the date in date mode
+  # and in front of it in relative-day mode.
   adlb <- neut_adlb(ADY = c(5, 36, 65),
                     AVISIT = c("CYCLE 1 DAY 1", "Cycle 2, Day 8", "UNSCHEDULED"))
-  tt <- tooltips(render_findings_card(adlb))
-  expect_match(tt[1], "Day:</span> D5")
-  expect_match(tt[3], "Day:</span> D65")
-  # Added, never substituted -- the date and the visit are still there.
-  expect_match(tt[3], "2024-03-05 \\(UNSCHEDULED\\)")
+  tt <- tips(render_findings_card(adlb))
+  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
+  expect_identical(tip_metas(tt[[1]])[["Day"]], "D5")
+  expect_identical(tip_metas(tt[[3]])[["Day"]], "D65")
+  expect_identical(tip_values(tt[[3]])[["Visit"]], "Unscheduled")
+
+  tt <- tips(render_findings_card(adlb, mode = "rday"))
+  expect_identical(tip_values(tt[[3]])[["Day"]], "D65")
+  expect_identical(tip_metas(tt[[3]])[["Day"]], "2024-03-05")
 })
 
 test_that("LBDY reaches the tooltip as the day", {
   # SDTM ships the day as LBDY; pp_column_catalog() maps it onto ADY, so a
   # raw-SDTM study gets the same line an ADaM one does.
-  tt <- tooltips(render_findings_card(neut_adlb(LBDY = c(5, 36, 65))))
-  expect_match(tt[2], "Day:</span> D36")
+  tt <- tips(render_findings_card(neut_adlb(LBDY = c(5, 36, 65))))
+  expect_identical(tip_metas(tt[[2]])[["Day"]], "D36")
 })
 
 test_that("a study shipping no *DY takes the day from the axis reference", {
@@ -154,15 +169,15 @@ test_that("a study shipping no *DY takes the day from the axis reference", {
   # tooltip cannot disagree with the axis under it. Treatment starts
   # 2024-01-01, so the draw on 2024-01-05 is D5.
   ref_ms <- as.numeric(as.POSIXct(as.Date("2024-01-01"))) * 1000
-  tt <- tooltips(render_findings_card(neut_adlb(), ref_ms = ref_ms))
-  expect_match(tt[1], "Day:</span> D5")
+  tt <- tips(render_findings_card(neut_adlb(), ref_ms = ref_ms))
+  expect_identical(tip_metas(tt[[1]])[["Day"]], "D5")
 })
 
 test_that("no *DY and no reference leaves the tooltip as it was", {
-  # Nothing to report is reported as nothing: no invented day, no empty row.
-  tt <- tooltips(render_findings_card(neut_adlb()))
-  expect_false(grepl("Day:", tt[1], fixed = TRUE))
-  expect_match(tt[1], "2024-01-05<")
+  # Nothing to report is reported as nothing: no invented day.
+  tt <- tips(render_findings_card(neut_adlb()))
+  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
+  expect_identical(tip_metas(tt[[1]])[["Day"]], "")
 })
 
 # ---------------------------------------------------------------------------
@@ -283,29 +298,32 @@ test_that("ANRIND stops colouring the markers on a change scale", {
 })
 
 test_that("the tooltip names the column it drew", {
-  tt <- tooltips(render_findings_card(chg_adlb(),
-                                      settings = list(value = "PCHG")))
-  expect_match(tt[1], "PCHG:</span> <b>8%</b>")
-  expect_false(grepl("AVAL:</span> <b>", tt[1], fixed = TRUE))
+  tt <- tips(render_findings_card(chg_adlb(),
+                                  settings = list(value = "PCHG")))
+  expect_identical(tt[[1]]$rows[[1]]$label, "Percent change from baseline")
+  expect_identical(tt[[1]]$rows[[1]]$value, "+8%")
 })
 
 test_that("a change tooltip also states the value and the baseline", {
   # "How far has this moved" is answered by the chart; "from what, and to
   # what" is the reader's next question and has nowhere else to go.
-  tt <- tooltips(render_findings_card(chg_adlb(BASETYPE = "LAST"),
-                                      settings = list(value = "CHG")))
-  expect_match(tt[1], "CHG:</span> <b>0.2</b>")
-  expect_match(tt[1], "AVAL:</span> 2.7")
-  expect_match(tt[1], "Baseline:</span> 2.5")
-  # Which baseline: ADaM lets one parameter carry more than one definition,
-  # so the rule rides behind the number.
-  expect_match(tt[1], "\\(LAST\\)")
+  tt <- tips(render_findings_card(chg_adlb(BASETYPE = "LAST"),
+                                  settings = list(value = "CHG")))
+  expect_identical(
+    tip_values(tt[[1]])[c("Change from baseline", "Analysis value", "Baseline")],
+    c("Change from baseline" = "+0.2 10^9/L",
+      "Analysis value" = "2.7 10^9/L", "Baseline" = "2.5")
+  )
+  # The rule behind the baseline is left out: the number is what a reader
+  # compares against.
+  expect_false(any(grepl("LAST", unlist(tt[[1]]))))
 })
 
-test_that("an AVAL tooltip is unchanged", {
-  tt <- tooltips(render_findings_card(chg_adlb()))
-  expect_match(tt[1], "AVAL:</span> <b>2.7</b>")
-  expect_false(grepl("Baseline:", tt[1], fixed = TRUE))
+test_that("an AVAL tooltip leads with the value", {
+  tt <- tips(render_findings_card(chg_adlb()))
+  expect_identical(tt[[1]]$rows[[1]]$label, "Analysis value")
+  expect_identical(tt[[1]]$rows[[1]]$value, "2.7 10^9/L")
+  expect_false(any(grepl("change", names(tip_values(tt[[1]])))))
 })
 
 test_that("a parameter with no change records says so", {

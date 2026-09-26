@@ -89,7 +89,22 @@ questionnaire_heatmap_viz <- new_pp_viz(
       }
       if (length(visits) == 0) return(pp_empty_chart("No visits found"))
 
-      # Heatmap data: [visit_idx, param_idx, value]
+      # The tooltip's headline is the item's full name, where the axis label
+      # above is cut to fit.
+      tip_heads <- vapply(params, function(pc) {
+        if (has_param) {
+          pp_tip_param_words(tbl$PARAM[tbl$PARAMCD == pc][1])
+        } else {
+          pc
+        }
+      }, character(1))
+      value_word <- if (y_col == "CHG") {
+        "Change from baseline"
+      } else {
+        "Analysis value"
+      }
+
+      # Heatmap data: value = [visit_idx, param_idx, value]
       heat_data <- list()
       for (vi in seq_along(visits)) {
         for (pi in seq_along(params)) {
@@ -97,7 +112,15 @@ questionnaire_heatmap_viz <- new_pp_viz(
             tbl$PARAMCD == params[pi], , drop = FALSE]
           val <- if (nrow(rows) > 0) mean(rows[[y_col]], na.rm = TRUE) else NA
           if (!is.na(val)) {
-            heat_data <- c(heat_data, list(list(vi - 1L, pi - 1L, round(val, 2))))
+            val <- round(val, 2)
+            heat_data <- c(heat_data, list(list(
+              value = list(vi - 1L, pi - 1L, val),
+              tip = pp_tip(tip_heads[[pi]], rows = list(
+                pp_tip_row(value_word,
+                           pp_tip_num(val, signed = y_col == "CHG")),
+                pp_tip_row("Visit", pp_tip_case(visits[vi]))
+              ))
+            )))
           }
         }
       }
@@ -106,7 +129,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
         return(pp_empty_chart("No heatmap data"))
       }
 
-      all_vals <- vapply(heat_data, function(x) x[[3]], numeric(1))
+      all_vals <- vapply(heat_data, function(x) x$value[[3]], numeric(1))
       min_val <- min(all_vals, na.rm = TRUE)
       max_val <- max(all_vals, na.rm = TRUE)
 
@@ -133,13 +156,6 @@ questionnaire_heatmap_viz <- new_pp_viz(
         )
       }
 
-      # Tooltip needs access to axis data: embed visit and param labels as JS
-      # arrays. Both are study data (visit names, questionnaire item labels),
-      # so they are encoded, not pasted -- a quote or a line break in either
-      # would break the literal and take the whole widget down with it.
-      visits_js <- pp_js_arr(visits)
-      params_js <- pp_js_arr(param_labels)
-
       # Chrome plus a fixed 28px row, same rule as the gantt lanes: a minimum
       # height would stretch a short questionnaire's rows apart instead of
       # just drawing a short chart.
@@ -148,32 +164,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
       echarts4r::e_charts(height = chart_height) |>
         echarts4r::e_list(list(
           backgroundColor = "transparent",
-          tooltip = list(
-            trigger = "item",
-            confine = TRUE,
-            backgroundColor = "var(--blockr-color-bg-raised)",
-            borderColor = "var(--blockr-color-border-default)",
-            borderWidth = 1,
-            textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
-            extraCssText = paste0(
-              "box-shadow: var(--blockr-shadow-md);",
-              "border-radius: var(--blockr-radius-lg); padding: 8px 10px;"
-            ),
-            formatter = htmlwidgets::JS(sprintf("
-              function(params) {
-                var visits = %s;
-                var items = %s;
-                var v = params.value;
-                return '<div style=\"min-width:140px\">' +
-                  '<div style=\"font-size:12px;font-weight:600;margin-bottom:2px\">' +
-                  (items[v[1]] || '') + '</div>' +
-                  '<div style=\"font-size:11px;color:#6b7280;margin-bottom:2px\">' +
-                  (visits[v[0]] || '') + '</div>' +
-                  '<div style=\"font-size:13px;font-weight:700\">' +
-                  v[2] + '</div></div>';
-              }
-            ", visits_js, params_js))
-          ),
+          tooltip = pp_tooltip(),
           grid = list(
             left = 140, right = 20, top = PP_PLOT_TOP, bottom = 50,
             borderColor = "transparent"
@@ -206,6 +197,7 @@ questionnaire_heatmap_viz <- new_pp_viz(
           series = list(list(
             type = "heatmap",
             data = heat_data,
+            tooltip = list(formatter = PP_TIP_FORMATTER),
             emphasis = list(
               itemStyle = list(
                 borderColor = "#374151",

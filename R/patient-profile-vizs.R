@@ -601,7 +601,7 @@ pp_tooltip <- function() {
     textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
     extraCssText = paste0(
       "box-shadow: var(--blockr-shadow-md);",
-      "border-radius: var(--blockr-radius-lg); padding: 8px 10px;"
+      "border-radius: var(--blockr-radius-lg); padding: 6px 10px;"
     )
   )
 }
@@ -794,6 +794,123 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
 # Shared findings chart renderer
 # ---------------------------------------------------------------------------
 
+#' A parameter's name and unit
+#'
+#' ADaM writes the unit into PARAM ("Systolic Blood Pressure (mmHg)"). The
+#' tooltip's headline takes the name and puts the unit after the value.
+#'
+#' @param x A PARAM (or PARAMCD) value.
+#' @return `list(name, unit)`; `unit` is `""` when the name carries none.
+#' @noRd
+pp_param_parts <- function(x) {
+  x <- pp_tip_str(x)
+  m <- regmatches(x, regexec("^(.*\\S)\\s*\\(([^()]+)\\)$", x))[[1L]]
+  if (!length(m)) return(list(name = x, unit = ""))
+  list(name = m[[2L]], unit = trimws(m[[3L]]))
+}
+
+#' A tooltip number with its unit, "190 mmHg" or "+8%"
+#' @noRd
+pp_tip_unit <- function(num, unit = "") {
+  if (!nzchar(num) || !nzchar(unit)) return(num)
+  if (identical(unit, "%")) paste0(num, unit) else paste(num, unit)
+}
+
+#' ANRIND as the one-letter code the marker colours are keyed by
+#'
+#' Studies write the flag either way: "H" / "L" / "N" or "HIGH" / "LOW" /
+#' "NORMAL" (pharmaverseadam). Keyed on the letter alone, every dot of a
+#' long-form study drew in the default colour. Vectorised; anything else is
+#' returned as it came.
+#' @noRd
+pp_anrind_code <- function(x) {
+  x <- toupper(trimws(as.character(x)))
+  long <- c(HIGH = "H", LOW = "L", NORMAL = "N")
+  ifelse(!is.na(x) & x %in% names(long), long[x], x)
+}
+
+#' ANRIND as a word: "high", "low", "normal"
+#' @noRd
+pp_anrind_word <- function(x) {
+  x <- toupper(pp_tip_str(x))
+  if (!nzchar(x)) return("")
+  switch(x, H = , HIGH = "high", L = , LOW = "low", N = , NORMAL = "normal",
+         tolower(x))
+}
+
+#' The tooltip of one dot on a findings card
+#'
+#' The parameter in words with the dot's colour, then the value the card
+#' draws. On the measured value that is the value with its unit, the normal
+#' range with the flag after it, and the baseline. On a change scale the
+#' change comes first, then the measured value and the baseline it was taken
+#' from. The day and the visit close it. A record the study derived (DTYPE)
+#' says so in the note.
+#'
+#' @param r One findings row (a one-row data.frame).
+#' @param value The column the card draws (`"AVAL"`, `"CHG"`, `"PCHG"`).
+#' @param color The dot's colour, for the swatch.
+#' @param ref_ms,mode The timeline's reference and mode, for the day.
+#' @return A [pp_tip()] list.
+#' @noRd
+pp_findings_tip <- function(r, value = "AVAL", color = NULL,
+                            ref_ms = NA_real_, mode = "date") {
+  at <- function(col) if (col %in% colnames(r)) r[[col]][[1L]] else NA
+  num <- function(col) pp_as_numeric(at(col))
+  # The name in words; a study with no PARAM falls back to the code, which
+  # is not sentence-cased ("SYSBP", not "Sysbp").
+  parts <- pp_param_parts(at("PARAM"))
+  head <- if (nzchar(parts$name)) {
+    pp_tip_case(parts$name)
+  } else {
+    pp_tip_str(at("PARAMCD"))
+  }
+  unit <- parts$unit
+  is_aval <- identical(value, "AVAL")
+
+  measured <- pp_tip_unit(pp_tip_num(num("AVAL")), unit)
+  flag <- if (is_aval) pp_anrind_word(at("ANRIND")) else ""
+  lo <- num("A1LO")
+  hi <- num("A1HI")
+  # The range and the flag describe the measured value, so they stay off a
+  # change scale. The flag goes after the range, or after the value when
+  # the study gives no range.
+  range <- if (is_aval && !is.na(lo) && !is.na(hi)) {
+    paste(pp_tip_num(lo), "to", pp_tip_num(hi))
+  } else {
+    ""
+  }
+  when <- pp_tip_when(at("ADT"), num("ADY"), ref_ms, mode)
+
+  change <- if (!is_aval) {
+    pp_tip_row(
+      if (identical(value, "PCHG")) "Percent change from baseline" else
+        "Change from baseline",
+      pp_tip_unit(pp_tip_num(num(value), signed = TRUE),
+                  if (identical(value, "PCHG")) "%" else unit)
+    )
+  }
+
+  dtype <- pp_tip_str(at("DTYPE"))
+  note <- if (nzchar(dtype)) {
+    paste0("Derived by the study (", tolower(dtype), "), not measured")
+  }
+
+  pp_tip(
+    head, color = color,
+    rows = list(
+      change,
+      pp_tip_row("Analysis value", measured,
+                 if (!nzchar(range)) flag),
+      pp_tip_row("Normal range", range, flag),
+      pp_tip_row("Baseline", pp_tip_num(num("BASE"))),
+      pp_tip_row("Day", when$main, when$meta),
+      pp_tip_row("Visit", pp_tip_case(at("AVISIT")))
+    ),
+    note = note
+  )
+}
+
 #' Render a single-domain findings chart
 #'
 #' Builds a multi-PARAMCD line+scatter echarts chart for a single findings
@@ -856,27 +973,6 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   has_ref <- is_aval && all(c("A1LO", "A1HI") %in% colnames(tbl))
   has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
-  # What a change is measured against, printed beside it. BASE is the number
-  # and BASETYPE is the rule that produced it, and on a study shipping both
-  # the rule is the part a reader cannot guess -- ADaM lets a parameter carry
-  # more than one baseline definition, so "percent change" alone names more
-  # than one quantity.
-  has_base <- !is_aval && "BASE" %in% colnames(tbl)
-  has_basetype <- !is_aval && "BASETYPE" %in% colnames(tbl)
-  # The visit label of one row, for the cycle/day it may carry. Total: a study
-  # shipping no AVISIT (or an unscheduled row) simply has none to report.
-  opt_visit <- function(df, i) {
-    if (!"AVISIT" %in% colnames(df)) return(NA)
-    df$AVISIT[i]
-  }
-  # The day on treatment, so a lab value can be lined up against the AE
-  # timeline without counting calendar dates: an AE bar labels itself
-  # "D43" - "D50" (viz-ae-gantt.R) and clinical review asked for the same
-  # unit here. Added, not substituted -- the date and the visit are what an
-  # unscheduled draw has, and the ask was for the day besides.
-  has_day <- "ADY" %in% colnames(tbl)
-  opt_day <- function(df, i) if (has_day) df$ADY[i] else NA
-
   n_params <- length(params)
   # Fixed per-chart height. Splitting a total budget across the selected
   # params instead made one chart inherit the whole budget and tower over a
@@ -985,118 +1081,34 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       list(value = list(x, y))
     })
 
-    # Scatter data with ANRIND coloring + rich tooltips
+    # Scatter data: ANRIND colours, and each dot's tooltip
     scatter_data <- lapply(seq_len(nrow(p_data)), function(i) {
       val <- p_data[[value]][i]
       dt <- pp_xval(p_data$ADT[i], ref_ms, mode)
 
       pt_color <- color
       if (has_anrind && !is.na(p_data$ANRIND[i])) {
-        anr <- as.character(p_data$ANRIND[i])
+        anr <- pp_anrind_code(p_data$ANRIND[i])
         if (anr %in% names(anrind_colors)) pt_color <- anrind_colors[[anr]]
       }
 
       # A record the study derived rather than collected is drawn hollow and
-      # names its DTYPE in the tooltip. Shown, not filtered: the sponsor put
-      # it there deliberately. Marking adds provenance; it removes nothing.
+      # says so in the tooltip. Shown, not filtered: the sponsor put it there
+      # deliberately. Marking adds provenance; it removes nothing.
       derived <- has_dtype && !is.na(p_data$DTYPE[i]) &&
         nzchar(trimws(as.character(p_data$DTYPE[i])))
 
-      tt <- paste0(
-        '<div style="min-width:160px">',
-        '<div style="font-size:14px;font-weight:700;margin-bottom:2px">',
-        param, '</div>'
-      )
-      if (has_param) {
-        tt <- paste0(tt,
-          '<div style="font-size:11px;color:#888;margin-bottom:4px">',
-          p_data$PARAM[i], '</div>'
-        )
-      }
-      if (has_anrind && !is.na(p_data$ANRIND[i])) {
-        anr <- as.character(p_data$ANRIND[i])
-        pill <- switch(anr,
-          H = , HIGH = list(bg = "rgba(220,38,38,0.1)", fg = "#DC2626",
-            bd = "rgba(220,38,38,0.15)"),
-          L = , LOW = list(bg = "rgba(37,99,235,0.1)", fg = "#2563EB",
-            bd = "rgba(37,99,235,0.15)"),
-          N = , NORMAL = list(bg = "rgba(5,150,105,0.1)", fg = "#059669",
-            bd = "rgba(5,150,105,0.15)"),
-          list(bg = "rgba(107,114,128,0.1)", fg = "#6b7280",
-            bd = "rgba(107,114,128,0.15)")
-        )
-        tt <- paste0(tt,
-          '<span style="display:inline-block;background:', pill$bg,
-          ';color:', pill$fg, ';border:1px solid ', pill$bd,
-          ';padding:1px 6px;border-radius:4px;font-size:10px;',
-          'font-weight:600;margin-bottom:4px">', anr, '</span><br/>'
-        )
-      }
-      # A findings row's AVISIT describes the row's own timepoint, so it
-      # belongs beside its date -- unlike an event's collection visit, see
-      # viz-ae-gantt.R. Printed as the study wrote it, cycle vocabulary or
-      # "UNSCHEDULED" alike: to this package it is a text label, not a thing
-      # to interpret.
-      tt <- paste0(tt,
-        '<div style="font-size:12px;line-height:1.6">',
-        '<span style="color:#6b7280">Date:</span> ',
-        pp_with_visit(format(p_data$ADT[i]), opt_visit(p_data, i))
-      )
-      dy <- pp_record_day(opt_day(p_data, i), p_data$ADT[i], ref_ms)
-      if (!is.na(dy)) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Day:</span> ', pp_day_label(dy)
-        )
-      }
-      tt <- paste0(tt,
-        '<br/><span style="color:#6b7280">', value, ':</span> <b>',
-        round(val, 2), if (identical(value, "PCHG")) "%", '</b>'
-      )
-      # On a change scale the measured value and the baseline it was taken
-      # from ride behind it: the chart answers "how far has this moved", and
-      # a reader's next question is "from what, and to what".
-      if (!is_aval && "AVAL" %in% colnames(p_data) && !is.na(p_data$AVAL[i])) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">AVAL:</span> ',
-          round(p_data$AVAL[i], 2)
-        )
-      }
-      if (has_base && !is.na(p_data$BASE[i])) {
-        base_lab <- if (has_basetype && !is.na(p_data$BASETYPE[i]) &&
-                          nzchar(trimws(as.character(p_data$BASETYPE[i])))) {
-          paste0(' <span style="color:#9ca3af">(',
-                 as.character(p_data$BASETYPE[i]), ')</span>')
-        } else {
-          ""
-        }
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Baseline:</span> ',
-          round(p_data$BASE[i], 2), base_lab
-        )
-      }
-      if (has_ref && !is.na(p_data$A1LO[i]) && !is.na(p_data$A1HI[i])) {
-        tt <- paste0(tt, '<br/><span style="color:#6b7280">Ref:</span> ',
-          round(p_data$A1LO[i], 1), ' \u2013 ', round(p_data$A1HI[i], 1))
-      }
-      if (derived) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Derived:</span> ',
-          as.character(p_data$DTYPE[i]),
-          ' <span style="color:#b45309">(not measured)</span>'
-        )
-      }
-      tt <- paste0(tt, '</div></div>')
-
       list(
         value = list(dt, val),
+        tip = pp_findings_tip(p_data[i, , drop = FALSE], value,
+                              color = pt_color, ref_ms = ref_ms, mode = mode),
         symbol = if (derived) "emptyCircle" else "circle",
         itemStyle = if (derived) {
           list(color = "var(--blockr-color-bg-surface)", borderColor = pt_color,
                borderWidth = 2)
         } else {
           list(color = pt_color)
-        },
-        tooltip_text = tt
+        }
       )
     })
 
@@ -1140,6 +1152,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       symbol = "none",
       silent = TRUE,
       z = 1,
+      # No tooltip of its own: the day's mean is read off the dots under it.
       tooltip = list(show = FALSE)
     )))
 
@@ -1154,11 +1167,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       z = 2,
       itemStyle = list(borderWidth = 2,
                        borderColor = "var(--blockr-color-bg-surface)"),
-      tooltip = list(
-        formatter = htmlwidgets::JS(
-          "function(params) { return params.data.tooltip_text || ''; }"
-        )
-      )
+      tooltip = list(formatter = PP_TIP_FORMATTER)
     )))
 
     # Zero, on a change scale.

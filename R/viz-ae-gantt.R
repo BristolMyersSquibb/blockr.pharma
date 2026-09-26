@@ -239,9 +239,23 @@ ae_gantt_viz <- new_pp_viz(
         col <- sev_color(sev)
         is_ser <- identical(toupper(serious), "Y")
         lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
+        at <- function(col) if (col %in% colnames(tbl)) tbl[[col]][i] else NA
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
                        s_lab, e_lab, col, lab, is_ongoing(i)),
+          tip = pp_tip(
+            pp_tip_case(term), color = col, sub = pp_tip_case(bodsys),
+            rows = c(
+              list(pp_tip_row("Severity", pp_ae_sev_word(if (has_sev) sev)),
+                   if (is_ser) pp_tip_row("Serious", "Yes")),
+              pp_tip_span(
+                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                open = is_ongoing(i)
+              ),
+              list(pp_tip_row("Outcome", pp_tip_case(outcome)))
+            )
+          ),
           # Serious is a regulatory axis of its own, independent of severity:
           # it gets the outline, severity keeps the fill.
           itemStyle = list(
@@ -260,51 +274,7 @@ ae_gantt_viz <- new_pp_viz(
         renderItem = pp_gantt_render_item(11, ongoing_idx = 12),
         encode = list(x = list(0, 1), y = 2),
         data = bar_data,
-        tooltip = list(
-          formatter = htmlwidgets::JS("
-            function(params) {
-              var v = params.value;
-              var s = v[8] || '';
-              var e = v[9] || '';
-              var term = v[3] || '';
-              var sev = '' + (v[4] == null ? '' : v[4]);
-              // A bare CTCAE grade reads as noise in the badge.
-              var sevDisp = /^[0-9]+$/.test(sev) ? 'Grade ' + sev : sev;
-              var bodsys = v[5] || '';
-              var serious = v[6] || '';
-              var outcome = v[7] || '';
-              // v[10] always carries the color resolved in R (scale map,
-              // then built-in constants, then grey) -- the single source.
-              // A JS word-scale map here once made grade-coded studies fall
-              // through to a grey matching neither palette.
-              var col = v[10] || '#9ca3af';
-              var html = '<div style=\"min-width:180px\">';
-              html += '<div style=\"font-size:14px;font-weight:700;margin-bottom:4px\">' +
-                term + '</div>';
-              if (sev) {
-                html += '<span style=\"display:inline-block;background:' + col +
-                  ';color:#fff;padding:1px 8px;border-radius:3px;font-size:11px;' +
-                  'font-weight:600;margin-bottom:4px\">' + sevDisp + '</span><br/>';
-              }
-              if (bodsys) {
-                html += '<span style=\"color:#888;font-size:11px\">' +
-                  bodsys.toUpperCase() + '</span><br/>';
-              }
-              html += '<span style=\"font-size:12px\">' +
-                s + ' \\u2192 ' + e + '</span><br/>';
-              if (serious) {
-                html += '<span style=\"font-size:12px\">Serious: ' +
-                  serious + '</span><br/>';
-              }
-              if (outcome) {
-                html += '<span style=\"font-size:12px\">Outcome: ' +
-                  outcome + '</span>';
-              }
-              html += '</div>';
-              return html;
-            }
-          ")
-        )
+        tooltip = list(formatter = PP_TIP_FORMATTER)
       ))
 
       chart_height <- pp_gantt_height(length(terms))
@@ -433,6 +403,16 @@ pp_term_label <- function(term) {
     "",
     paste0(substr(term, 1L, 1L), tolower(substring(term, 2L)))
   )
+}
+
+#' Severity in words, for a tooltip
+#'
+#' A bare CTCAE grade reads as noise ("3"), so it says "Grade 3"; a word
+#' scale is put in sentence case.
+#' @noRd
+pp_ae_sev_word <- function(sev) {
+  sev <- pp_tip_str(sev)
+  if (grepl("^[0-9]+$", sev)) paste("Grade", sev) else pp_tip_case(sev)
 }
 
 #' A panel with nothing to draw

@@ -81,9 +81,40 @@
   }
   patchEcharts();
 
+  /* The data tooltip (design system, "Charts"; blockr.viz's tipHead and
+   * tipRow). R builds the content as the data point's `tip` (pp-tooltip.R);
+   * this draws it: the headline with a swatch in the colour of the thing
+   * pointed at, a muted line under it, then rows with the name muted on the
+   * left and the value on the right. Everything that reaches the markup is
+   * study text, so all of it is escaped. */
+  /** @param {any} s */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  /** @param {any} params */
+  function tip(params) {
+    var t = params && params.data && params.data.tip;
+    if (!t) return '';
+    var sw = t.color ?
+      '<span class="pp-tt-sw" style="background:' + esc(t.color) + '"></span>' : '';
+    var html = '<div class="pp-tt-head">' + sw + '<span>' + esc(t.head) + '</span></div>';
+    if (t.sub) html += '<div class="pp-tt-sub">' + esc(t.sub) + '</div>';
+    (t.rows || []).forEach(function(/** @type {PpTipRow} */ r) {
+      html += '<div class="pp-tt-row"><span class="pp-tt-label">' + esc(r.label) +
+        '</span><span class="pp-tt-value">' + esc(r.value) +
+        (r.meta ? '<span class="pp-tt-meta">' + esc(r.meta) + '</span>' : '') +
+        '</span></div>';
+    });
+    if (t.note) html += '<div class="pp-tt-note">' + esc(t.note) + '</div>';
+    return html;
+  }
+
   window.PatientProfile = {
     ink: ink,
     resolveInk: resolveInk,
+    tip: tip,
     part: function(fn) { parts.push(fn); },
     mount: function(cfg) {
       patchEcharts();

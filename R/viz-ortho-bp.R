@@ -92,6 +92,15 @@ ortho_bp_viz <- new_pp_viz(
 
       all_series <- list()
       param_labels <- c(SYSBP = "Systolic", DIABP = "Diastolic")
+      # The tooltip's headline: the parameter and the position in words.
+      param_words <- c(SYSBP = "Systolic blood pressure",
+                       DIABP = "Diastolic blood pressure")
+      pos_words <- c(
+        "Lying" = "lying", "Semi-recumbent" = "semi-recumbent",
+        "Sitting" = "sitting", "Standing" = "standing",
+        "Standing 1m" = "standing 1 minute",
+        "Standing 3m" = "standing 3 minutes"
+      )
 
       for (pc in c("SYSBP", "DIABP")) {
         pc_data <- bp[bp$PARAMCD == pc, , drop = FALSE]
@@ -110,11 +119,18 @@ ortho_bp_viz <- new_pp_viz(
           color <- visit_colors[((vi - 1L) %% length(visit_colors)) + 1L]
 
           # One value per position
-          vals <- vapply(positions, function(pos) {
-            rows <- v_data[v_data$position == pos, , drop = FALSE]
-            if (nrow(rows) == 0) return(NA_real_)
-            mean(rows$AVAL, na.rm = TRUE)
-          }, numeric(1))
+          pos_mean <- function(col) {
+            vapply(positions, function(pos) {
+              rows <- v_data[v_data$position == pos, , drop = FALSE]
+              if (nrow(rows) == 0 || !col %in% colnames(rows)) {
+                return(NA_real_)
+              }
+              v <- mean(rows[[col]], na.rm = TRUE)
+              if (is.nan(v)) NA_real_ else v
+            }, numeric(1))
+          }
+          vals <- pos_mean("AVAL")
+          chg <- pos_mean("CHG")
 
           # Carry the category index explicitly: dropping a missing position
           # from a scalar-valued series would slide every later value one
@@ -122,17 +138,23 @@ ortho_bp_viz <- new_pp_viz(
           data_points <- lapply(seq_along(positions), function(pi) {
             if (is.na(vals[pi])) return(NULL)
             val <- unname(vals[pi])
-            tt <- paste0(
-              '<div style="min-width:140px">',
-              '<div style="font-size:13px;font-weight:600;margin-bottom:2px">',
-              param_labels[[pc]], ' \u2014 ', visit, '</div>',
-              '<div style="font-size:12px;line-height:1.6">',
-              '<span style="color:#6b7280">Position:</span> ',
-              positions[pi],
-              '<br/><span style="color:#6b7280">Value:</span> <b>',
-              round(val, 1), '</b> mmHg</div></div>'
+            list(
+              value = list(pi - 1L, val),
+              tip = pp_tip(
+                paste0(param_words[[pc]], ", ", pos_words[[positions[pi]]]),
+                color = color,
+                rows = list(
+                  pp_tip_row("Analysis value",
+                             paste(pp_tip_num(val), "mmHg")),
+                  if (!is.na(chg[pi])) {
+                    pp_tip_row("Change from baseline",
+                               paste(pp_tip_num(unname(chg[pi]),
+                                                signed = TRUE), "mmHg"))
+                  },
+                  if (has_avisit) pp_tip_row("Visit", pp_tip_case(visit))
+                )
+              )
             )
-            list(value = list(pi - 1L, val), tooltip_text = tt)
           })
           data_points <- Filter(Negate(is.null), data_points)
 
@@ -149,11 +171,7 @@ ortho_bp_viz <- new_pp_viz(
             ),
             itemStyle = list(color = color),
             symbolSize = 8,
-            tooltip = list(
-              formatter = htmlwidgets::JS(
-                "function(params) { return params.data.tooltip_text || ''; }"
-              )
-            )
+            tooltip = list(formatter = PP_TIP_FORMATTER)
           )))
         }
       }
