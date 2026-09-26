@@ -213,7 +213,7 @@ pp_slot_list_text <- function(x, max_shown = 3L) {
 #' The panel's filter, as a word
 #'
 #' Over the values of the level the lanes show. The options are this
-#' patient's terms with their record counts; pp-slots.js adds the rest of the
+#' patient's terms; pp-slots.js adds the rest of the
 #' cohort's terms, fetched once over `find_vocab`, so a filter can be armed
 #' for a term this patient does not have before paging through the cohort.
 #'

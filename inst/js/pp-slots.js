@@ -10,8 +10,8 @@
  *   data-kind="multi"   several values (items, visits); applied when the menu
  *                        closes, because every change redraws the panel
  *   data-kind="find"    the panel's filter over the values of the level the
- *                        lanes show; this patient's terms first with their
- *                        record counts, then the rest of the cohort's, fetched
+ *                        lanes show; this patient's terms first, then the
+ *                        rest of the cohort's, fetched
  *                        once over `find_vocab`; applied when the menu closes
  *
  * An on/off control is a blockr.ui checkbox after the sentence
@@ -154,8 +154,11 @@ PatientProfile.part(function(ctx) {
       raw[shown] = v;
       options.push(meta ? { value: shown, label: meta } : { value: shown });
     };
+    // No count beside a term: Select prints an option's second text on its
+    // tag too, and "Hyperhidrosis 1" read as part of the pick. This patient's
+    // terms come first; the cohort's follow.
     own.slice().sort(function(a, b) { return termLabel(a.value) < termLabel(b.value) ? -1 : 1; })
-      .forEach(function(o) { add(o.value, String(o.n)); });
+      .forEach(function(o) { add(o.value); });
     var cohort = vocab[vizId];
     if (cohort) {
       (cohort.groups || []).forEach(function(g) {

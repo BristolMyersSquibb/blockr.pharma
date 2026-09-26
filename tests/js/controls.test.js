@@ -78,10 +78,11 @@ test('the filter asks for the cohort terms on first open and waits for them', ()
   h.send('find_vocab', VOCAB);
   assert.ok(menu(h), 'opens when the terms land');
   assert.equal(h.q('.blockr-select__menu-title').textContent, 'Show');
-  // This patient's terms first, in the panel's casing, with their counts;
-  // then the rest of the cohort's, once.
+  // This patient's terms first, in the panel's casing and with nothing after
+  // them (a count would ride onto the pick's tag); then the rest of the
+  // cohort's, once.
   const r = rows(h);
-  assert.ok(r[0].startsWith('Application site erythema'));
+  assert.equal(r[0], 'Application site erythema');
   assert.equal(r.filter((x) => x.startsWith('Diarrhoea')).length, 1);
   assert.ok(r.includes('Syncope'));
   h.close();
