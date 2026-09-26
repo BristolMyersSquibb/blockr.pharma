@@ -741,7 +741,7 @@ test_that("a part-filled day column falls back per ROW, not per column", {
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   ev <- m$subjects[["S-1"]]$events
   expect_identical(nrow(ev), 2L)
-  expect_identical(ev$sev, c("MILD", "SEVERE"))
+  expect_identical(ev$value, c("MILD", "SEVERE"))
   expect_identical(ev$start, c(5, 41))
 })
 
@@ -754,4 +754,35 @@ test_that("a study with neither days nor dates has no AE timeline", {
   expect_identical(nrow(m$subjects[["S-1"]]$events), 0L)
   # ...and every patient keeps their row
   expect_length(m$subjects, 3L)
+})
+
+test_that("the medications strip colours by indication, as the CM panel does", {
+  # The strip drew every medication grey: its band declared no colour role,
+  # so the severity resolver saw an empty value. The panel colours by
+  # indication, per patient, and falls back to one medication colour.
+  adcm <- data.frame(
+    USUBJID = c("S-1", "S-1", "S-2", "S-2"),
+    CMTRT = c("A", "B", "C", "D"),
+    ASTDY = c(2, 10, 3, 8),
+    AENDY = c(6, 14, 5, 12),
+    CMINDC = c("PAIN", "HYPERTENSION", "PAIN", "PAIN"),
+    stringsAsFactors = FALSE
+  )
+  d <- pp_normalize_dm(dm::dm(adsl = test_adsl(), adcm = adcm))
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
+  band <- cm_gantt_viz$band
+  m <- pp_cohort_marks(d, roles, band = band)
+  expect_identical(m$subjects[["S-1"]]$n_levels, 2L)
+  expect_identical(m$subjects[["S-2"]]$n_levels, 1L)
+
+  col <- pp_cohort_band_color(band, roles, NULL, d)
+  s1 <- pp_cohort_band_geom(m$subjects[["S-1"]], m, col)$fill
+  s2 <- pp_cohort_band_geom(m$subjects[["S-2"]], m, col)$fill
+
+  # S-1 carries two indications: the colours the panel resolves for S-1
+  panel <- pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-1"), "CMINDC")
+  expect_identical(s1, unname(panel[c("PAIN", "HYPERTENSION")]))
+  # S-2 carries one, so the panel draws its single medication colour
+  expect_null(pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-2"), "CMINDC"))
+  expect_true(all(s2 == PP_CM_COLOR))
 })

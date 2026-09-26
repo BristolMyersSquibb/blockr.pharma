@@ -222,7 +222,7 @@ pp_sev_rank <- function(x) {
 #' panel it opens.
 #'
 #' @param dm_obj A normalized `dm`.
-#' @param roles Resolved roles, for the severity column.
+#' @param roles Resolved roles, for the column the band's `color` names.
 #' @param prestudy_days How far before treatment start the axis may reach.
 #'   `Inf` for the full history (the block passes this when the user turns
 #'   the profile's Pre-treatment toggle on, so the two agree).
@@ -236,7 +236,10 @@ pp_sev_rank <- function(x) {
 #'   patient's records matched.
 #' @return `list(kind, day0, days, subjects, hits, ...)` -- the axis bounds in
 #'   study days and a named list, one entry per USUBJID. A `"spans"` band
-#'   gives each subject `list(events = data.frame(start, end, sev), trt_end)`;
+#'   gives each subject `list(events = data.frame(start, end, value),
+#'   n_levels, trt_end)`, `value` from the column the band's `color` role
+#'   names and `n_levels` the distinct values of it across ALL the patient's
+#'   records (the filter does not change what a colour means);
 #'   a `"series"` band gives `list(series = data.frame(day, value), trt_end)`
 #'   and the result carries the shared value scale (`vlo`, `vhi`) and the
 #'   reference limit the rows draw against.
@@ -279,8 +282,10 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
                                   prestudy_days = prestudy_days))
   }
 
-  ev <- pp_cohort_span_events(tbls, band, roles$severity, ref = src_ref,
+  color_col <- if (!is.null(band$color)) roles[[band$color]]
+  ev <- pp_cohort_span_events(tbls, band, color_col, ref = src_ref,
                               picks = picks)
+  n_levels <- pp_cohort_level_counts(tbls[[band$table]], color_col, ids)
   # How many of this patient's records the filter kept, before the axis
   # clipping below drops any -- the count answers "who had this", which is a
   # fact about the records and not about what fits on the strip.
@@ -329,9 +334,10 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
     keep <- ev$subject == ids[[i]]
     list(
       events = data.frame(
-        start = ev$start[keep], end = ev$end[keep], sev = ev$sev[keep],
+        start = ev$start[keep], end = ev$end[keep], value = ev$value[keep],
         stringsAsFactors = FALSE
       ),
+      n_levels = n_levels[[i]],
       trt_end = trt_end[[i]]
     )
   })
@@ -447,11 +453,11 @@ pp_date_to_day <- function(date, ref) {
 #' @param ref Per-row reference dates (the patient's treatment start), or
 #'   `NULL`. Only consulted when a day column is missing.
 #' @noRd
-pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
+pp_cohort_span_events <- function(tbls, band, color_col = NULL, ref = NULL,
                                   picks = NULL) {
 
   none <- list(subject = character(), start = numeric(), end = numeric(),
-               sev = character(), open = logical())
+               value = character(), open = logical())
   if (!band$table %in% names(tbls)) return(none)
 
   adae <- as.data.frame(tbls[[band$table]])
@@ -505,15 +511,40 @@ pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
   open <- is.na(end) | (!is.na(start) & end < start)
   end[open] <- start[open]
 
-  sev <- if (!is.null(sev_col) && sev_col %in% colnames(adae)) {
-    as.character(adae[[sev_col]])
+  value <- if (!is.null(color_col) && color_col %in% colnames(adae)) {
+    as.character(adae[[color_col]])
   } else {
     rep(NA_character_, nrow(adae))
   }
 
   keep <- !is.na(start)
   list(subject = as.character(adae$USUBJID)[keep], start = start[keep],
-       end = end[keep], sev = sev[keep], open = open[keep])
+       end = end[keep], value = value[keep], open = open[keep])
+}
+
+#' Distinct colour values per patient
+#'
+#' How many different values of the band's colour column each patient's
+#' records carry, counted over the whole source table: a panel search
+#' narrows what the strip draws, not what a colour means for that patient.
+#' Blank and missing values do not count, the same as in
+#' [pp_indc_scale_colors()].
+#'
+#' @param tbl The band's source table, or `NULL`.
+#' @param col The colour column, or `NULL`.
+#' @param ids Cohort USUBJIDs.
+#' @return An integer vector aligned to `ids`; all zero when there is nothing
+#'   to count.
+#' @noRd
+pp_cohort_level_counts <- function(tbl, col, ids) {
+  none <- integer(length(ids))
+  if (is.null(tbl) || is.null(col)) return(none)
+  tbl <- as.data.frame(tbl)
+  if (!all(c("USUBJID", col) %in% colnames(tbl))) return(none)
+  v <- as.character(tbl[[col]])
+  ok <- !is.na(v) & nzchar(trimws(v))
+  pairs <- unique(data.frame(s = as.character(tbl$USUBJID)[ok], v = v[ok]))
+  as.integer(tabulate(match(pairs$s, ids), nbins = length(ids)))
 }
 
 #' Per-subject value series for the cohort band
@@ -710,10 +741,11 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
 #' when it binds the severity column, the package constants otherwise.
 #' @param scale_colors Named colour vector from [pp_sev_scale_colors()], or
 #'   `NULL`.
-#' @return A function of one severity value returning a hex colour.
+#' @return A function of one severity value (and the patient's
+#'   [pp_cohort_marks()] entry, unused here) returning a hex colour.
 #' @noRd
 pp_cohort_sev_color <- function(scale_colors = NULL) {
-  function(sev) {
+  function(sev, sub = NULL) {
     s <- as.character(sev)
     if (is.na(s) || !nzchar(s)) return("#9ca3af")
     if (!is.null(scale_colors) && s %in% names(scale_colors)) {
@@ -721,6 +753,57 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
     }
     pp_sev_fallback_color(s)
   }
+}
+
+#' Indication colour resolver for the cohort band
+#'
+#' The medications strip, coloured by the rule the CM panel uses for the same
+#' patient: indication colours when [pp_indc_colorable()] says that
+#' patient's levels are worth colouring, grey for a record with no
+#' indication among them, and [PP_CM_COLOR] for every bar otherwise. The
+#' level colours come from resolving the whole cohort at once; blockr.theme
+#' keys them by the level, so they are the ones the panel resolves from one
+#' patient's subset.
+#'
+#' @param indc_colors Cohort-wide level -> colour vector from
+#'   `pp_indc_scale_colors(per_patient = FALSE)`, or `NULL`.
+#' @return A function of one indication value and the patient's
+#'   [pp_cohort_marks()] entry, returning a hex colour.
+#' @noRd
+pp_cohort_indc_color <- function(indc_colors = NULL) {
+  function(value, sub = NULL) {
+    if (is.null(indc_colors) || !length(indc_colors) ||
+          !pp_indc_colorable(sub$n_levels %||% 0L)) {
+      return(PP_CM_COLOR)
+    }
+    v <- as.character(value)
+    if (!is.na(v) && v %in% names(indc_colors)) {
+      return(unname(indc_colors[[v]]))
+    }
+    "#9ca3af"
+  }
+}
+
+#' The colour resolver a band declares
+#'
+#' Dispatches on the band's `color` role, so the strip colours by what its
+#' panel colours by.
+#'
+#' @param band The driving band, or `NULL`.
+#' @param roles Resolved roles.
+#' @param map The board scale map.
+#' @param dm_obj The cohort's normalized dm.
+#' @return A resolver for [pp_cohort_band_geom()].
+#' @noRd
+pp_cohort_band_color <- function(band, roles, map, dm_obj) {
+  switch(band$color %||% "",
+    indication = pp_cohort_indc_color(
+      pp_indc_scale_colors(map, dm_obj, roles$indication, per_patient = FALSE)
+    ),
+    pp_cohort_sev_color(
+      pp_sev_scale_colors(map, dm_obj, roles$severity)
+    )
+  )
 }
 
 #' One patient's band, drawn server-side
@@ -739,7 +822,7 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
 #'   scale. The band is NOT anchored at day zero -- a cohort with
 #'   pre-treatment records has a negative `day0`, and assuming otherwise is
 #'   what put those records in the wrong place.
-#' @param color A resolver from [pp_cohort_sev_color()].
+#' @param color A resolver from [pp_cohort_band_color()].
 #' @param width,height Band geometry in px.
 #' @param min_px Narrowest a span may draw. A same-day event is a fraction of
 #'   a pixel over a whole study and would vanish; the lane has the same floor
@@ -879,7 +962,7 @@ pp_cohort_eot_x <- function(sub, marks, width) {
 #' format.
 #'
 #' @section Merging runs of one colour:
-#' Consecutive spans of the same severity that touch or overlap are merged
+#' Consecutive spans of the same colour that touch or overlap are merged
 #' into one. This is not a simplification of the picture -- overlapping spans
 #' of one colour paint exactly the merged span -- and it is worth doing
 #' because a patient's 25 events are mostly one grade: on the measured study
@@ -919,9 +1002,10 @@ pp_cohort_band_geom <- function(sub, marks, color, width = 176,
     keep <- which(x0 < width)
     x <- round(x0[keep], 2)
     w <- round(pmin(ww[keep], width - x0[keep]), 2)
-    sev <- as.character(ev$sev)[keep]
-    lvl <- unique(sev)
-    fill <- vapply(lvl, color, character(1L), USE.NAMES = FALSE)[match(sev, lvl)]
+    value <- as.character(ev$value)[keep]
+    lvl <- unique(value)
+    fill <- vapply(lvl, color, character(1L), sub = sub,
+                   USE.NAMES = FALSE)[match(value, lvl)]
   }
 
   n <- length(x)
@@ -1212,7 +1296,7 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
 #' @param ord Row order from [pp_cohort_order()].
 #' @param disp A [pp_cohort_id_display()] result.
 #' @param marks A [pp_cohort_marks()] result.
-#' @param color A resolver from [pp_cohort_sev_color()].
+#' @param color A resolver from [pp_cohort_band_color()].
 #' @param arm_col Arm colours from [pp_cohort_arm_colors()].
 #' @param picked The selected USUBJID, or `NULL`/`character()`.
 #' @param smooth Round a series band's corners; follows the profile's

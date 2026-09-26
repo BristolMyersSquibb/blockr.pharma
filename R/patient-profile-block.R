@@ -949,10 +949,8 @@ new_patient_profile_block <- function(selected = NULL,
             }
 
             marks <- r_cohort_marks()
-            color <- pp_cohort_sev_color(
-              pp_sev_scale_colors(r_scale_map(), r_norm_dm(),
-                                  r_roles()$severity)
-            )
+            color <- pp_cohort_band_color(r_band_source()$band, r_roles(),
+                                          r_scale_map(), r_norm_dm())
             arm_col <- r_arm_colors()
 
             ord <- pp_cohort_order(frame, r_cohort_sort(), marks)

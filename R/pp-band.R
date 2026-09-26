@@ -25,7 +25,7 @@
 #'   -- see [pp_cohort_span_events()] for why a partly populated day column
 #'   must not win wholesale.
 #' @param color Role name whose resolved column colours the spans
-#'   (`"severity"`), or `NULL` for one flat colour.
+#'   (`"severity"`, `"indication"`), or `NULL` for one flat colour.
 #' @param search Columns a panel search filters the spans on, coarsest last.
 #'   `NULL` for a band no search reaches.
 #' @param open_ends Whether a missing end means "ongoing" (it runs to the

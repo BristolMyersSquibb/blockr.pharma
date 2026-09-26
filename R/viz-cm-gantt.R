@@ -53,7 +53,7 @@ cm_gantt_viz <- new_pp_viz(
   label = "Concomitant medications",
   domain = "Medications",
   icon = "capsule",
-  color = "#0891B2",
+  color = PP_CM_COLOR,
   description = "Gantt bars showing medication periods",
   tables = "adcm",
   requires = list(adcm = "CMTRT"),
@@ -80,6 +80,7 @@ cm_gantt_viz <- new_pp_viz(
     table = "adcm",
     start = c("ASTDY", "ASTDT"),
     end = c("AENDY", "AENDT"),
+    color = "indication",
     search = PP_CM_SEARCH
   ),
   uses = "indication",
@@ -206,7 +207,7 @@ cm_gantt_viz <- new_pp_viz(
     # cannot tell apart -- the panel keeps its single medication color rather
     # than greying every bar; grey is for the rows that carry no indication
     # while others do.
-    default_color <- "#0891B2"
+    default_color <- PP_CM_COLOR
     indc_hex <- if (has_indc) settings$indc_colors else NULL
     bar_color <- function(indc) {
       if (is.null(indc_hex) || !length(indc_hex)) return(default_color)

@@ -404,7 +404,7 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   # Indication colors, same precedence as the interactive bars: the injected
   # scale-map colors when they resolve, one medication color otherwise, grey
   # for rows carrying no indication while others do.
-  default_color <- "#0891B2"
+  default_color <- PP_CM_COLOR
   indc_col <- settings$roles$indication
   has_indc <- !is.null(indc_col) && indc_col %in% colnames(tbl)
   indc_hex <- if (has_indc) settings$indc_colors else NULL
