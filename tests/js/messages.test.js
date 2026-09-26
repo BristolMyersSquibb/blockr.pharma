@@ -11,47 +11,46 @@ const boot = () => {
   return h;
 };
 
-test('subject_picker fills the cohort count and hides it at zero', () => {
+test('subject_picker fills the cohort count and hides the segment at zero', () => {
   const h = boot();
+  const seg = h.el('pp_cohort_seg');
   const count = h.el('pp_cohort_count');
   h.sendRecorded('subject_picker');
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '12 patients');
-  assert.equal(count.classList.contains('is-hidden'), false);
+  assert.equal(seg.classList.contains('is-hidden'), false);
   h.send('subject_picker', { count: 254 });
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '254 patients');
   h.send('subject_picker', { count: 1 });
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '1 patient');
   h.send('subject_picker', { count: 0 });
-  assert.equal(count.classList.contains('is-hidden'), true);
+  assert.equal(seg.classList.contains('is-hidden'), true);
   h.send('subject_picker', null);
-  assert.equal(count.classList.contains('is-hidden'), true);
+  assert.equal(seg.classList.contains('is-hidden'), true);
   h.close();
 });
 
-test('a drill that matches nobody still says so, and keeps a whole reset', () => {
+test('a drill that matches nobody still says so, and keeps the reset', () => {
   const h = boot();
+  const seg = h.el('pp_cohort_seg');
   const count = h.el('pp_cohort_count');
   const reset = h.el('pp_cohort_reset');
-  // No patients and no drill: nothing loaded, so the tag stays away.
+  // No patients and no drill: nothing loaded, so the segment stays away.
   h.send('subject_picker', { count: 0 });
-  assert.equal(count.classList.contains('is-hidden'), true);
-  assert.equal(reset.classList.contains('is-hidden'), true);
-  // No patients BECAUSE of a drill: a result, not an empty profile. The tag
-  // comes back reading 0 so the pair still reads as one control, and the
-  // reset stays -- this is the state where the way back matters most.
+  assert.equal(seg.classList.contains('is-hidden'), true);
+  // No patients BECAUSE of a drill: a result, and the state where the way
+  // back matters most. The segment says 0 and the reset works.
   h.send('drill', { clause: 'SEX = M' });
-  assert.equal(count.classList.contains('is-hidden'), false);
+  assert.equal(seg.classList.contains('is-hidden'), false);
   assert.equal(count.querySelector('.pp-cohort-count-n').textContent, '0 patients');
-  assert.equal(reset.classList.contains('is-hidden'), false);
-  assert.equal(h.el('pp_cohort_seg').classList.contains('is-drilled'), true);
-  // Reset it and the tag goes away again: no patients, nothing narrowing.
+  assert.equal(reset.disabled, false);
+  assert.equal(seg.classList.contains('is-drilled'), true);
   h.send('drill', { clause: '' });
-  assert.equal(count.classList.contains('is-hidden'), true);
-  assert.equal(reset.classList.contains('is-hidden'), true);
+  assert.equal(seg.classList.contains('is-hidden'), true);
+  assert.equal(reset.disabled, true);
   h.close();
 });
 
-test('either message can land first; the control is painted from both', () => {
+test('either message can land first; the segment is painted from both', () => {
   const h = boot();
   const seg = h.el('pp_cohort_seg');
   const reset = h.el('pp_cohort_reset');
@@ -59,82 +58,143 @@ test('either message can land first; the control is painted from both', () => {
   h.send('drill', { clause: 'SEX = M' });
   h.send('subject_picker', { count: 33 });
   assert.equal(seg.classList.contains('is-drilled'), true);
-  assert.equal(reset.classList.contains('is-hidden'), false);
+  assert.equal(reset.disabled, false);
   h.close();
 });
 
-test('drill joins the segment, shows the reset, and the reset asks R to undrill', () => {
+test('the reset is disabled until a drill, names it, and asks R to undrill', () => {
   const h = boot();
   const seg = h.el('pp_cohort_seg');
   const count = h.el('pp_cohort_count');
   const reset = h.el('pp_cohort_reset');
-  assert.equal(reset.classList.contains('is-hidden'), true);
+  h.sendRecorded('subject_picker');
+  // Always there, so the segment keeps its width; disabled with nothing to undo.
+  assert.equal(reset.disabled, true);
+  assert.equal(reset.getAttribute('data-blockr-tooltip'), null);
   h.send('drill', { clause: 'SEX = M' });
   // The class lands on the SEGMENT: it is what joins the two halves.
   assert.equal(seg.classList.contains('is-drilled'), true);
-  assert.equal(reset.classList.contains('is-hidden'), false);
-  assert.match(count.getAttribute('title'), /SEX = M/);
+  assert.equal(reset.disabled, false);
   // Names what is undone, never where you land.
-  assert.equal(reset.getAttribute('title'), 'Reset drill-down: SEX = M');
-  assert.doesNotMatch(reset.getAttribute('title'), /every patient|cohort/);
-  // The reset asks R; it does not touch the sidebar the count toggles.
+  assert.equal(reset.getAttribute('data-blockr-tooltip'), 'Reset drill-down: SEX = M');
+  // The reset asks R; it does not touch the list the count toggles.
   const shutBefore = count.classList.contains('is-shut');
   h.click(reset);
   assert.equal(h.inputs('undrill').length, 1);
   assert.equal(count.classList.contains('is-shut'), shutBefore);
-  // Undrilled: the segment falls apart again and the reset goes.
   h.send('drill', { clause: '' });
   assert.equal(seg.classList.contains('is-drilled'), false);
-  assert.equal(reset.classList.contains('is-hidden'), true);
-  assert.equal(count.getAttribute('title'), 'Show or hide the patient list');
-  assert.equal(reset.getAttribute('title'), 'Reset drill-down');
+  assert.equal(reset.disabled, true);
   h.send('drill', null);
   assert.equal(seg.classList.contains('is-drilled'), false);
   h.close();
 });
 
-test('dl_menu_state labels the two download scopes and hides what does not apply', () => {
+test('dl_menu_state names the cohort and hides the section that does not apply', () => {
   const h = boot();
   const root = h.el('pp_dl_root');
-  // What R sent once a patient was picked: single, with the id and the size.
+  const shown = (scope) => h.qa(`#${h.NS}-pp_dl_root [data-scope="${scope}"]`)
+    .map((el) => !el.hidden);
+  // What R sent once a patient was picked: single, and the cohort's size.
   h.sendRecorded('dl_menu_state');
-  assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient: 01-701-1015');
-  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort (12 patients)');
-  assert.equal(root.classList.contains('is-hidden'), false);
-  assert.equal(root.querySelector('.pp-dl-scope-patient').classList.contains('is-hidden'), false);
-  assert.equal(root.querySelector('.pp-dl-scope-cohort').classList.contains('is-hidden'), false);
-
+  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort · 12 patients');
+  assert.equal(root.hidden, false);
+  assert.ok(shown('patient').every(Boolean));
+  assert.ok(shown('cohort').every(Boolean));
   // Before the pick R said: nothing single, twelve in the cohort.
   h.sendRecorded('dl_menu_state', 0);
-  assert.equal(root.classList.contains('is-hidden'), false, 'the cohort scope still applies');
-  assert.equal(root.querySelector('.pp-dl-scope-patient').classList.contains('is-hidden'), true);
+  assert.equal(root.hidden, false, 'the cohort section still applies');
+  assert.ok(shown('patient').every((x) => !x));
   // One patient upstream and none picked: nothing to download.
   h.send('dl_menu_state', { single: false, picked: '', n: 1 });
-  assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient');
-  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort (1 patient)');
-  assert.equal(root.classList.contains('is-hidden'), true);
-  assert.equal(root.querySelector('.pp-dl-scope-patient').classList.contains('is-hidden'), true);
-  assert.equal(root.querySelector('.pp-dl-scope-cohort').classList.contains('is-hidden'), true);
+  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort · 1 patient');
+  assert.equal(root.hidden, true);
   h.close();
 });
 
-test('dl_menu_state waits for the header to exist, up to three seconds', () => {
+test('dl_menu_state waits for the menu to exist, up to three seconds', () => {
   const h = boot();
-  const header = h.el('header_bar');
-  const html = header.innerHTML;
-  header.innerHTML = '';
+  const root = h.el('pp_dl_root');
+  const parent = root.parentNode;
+  const next = root.nextSibling;
+  root.remove();
   h.send('dl_menu_state', { single: true, picked: 'A', n: 2 });
   h.tick(1000);
-  header.innerHTML = html;
+  parent.insertBefore(root, next);
   h.tick(100);
-  assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient: A');
+  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort · 2 patients');
 
-  header.innerHTML = '';
-  h.send('dl_menu_state', { single: true, picked: 'B', n: 2 });
+  root.remove();
+  h.send('dl_menu_state', { single: true, picked: 'B', n: 5 });
   h.tick(3100);
-  header.innerHTML = html;
+  parent.insertBefore(root, next);
   h.tick(1000);
-  assert.equal(h.el('pp_dl_label_patient').textContent, 'This patient', 'gave up');
+  assert.equal(h.el('pp_dl_label_cohort').textContent, 'Cohort · 2 patients', 'gave up');
+  h.close();
+});
+
+test('the gear opens its tray in flow and says so', () => {
+  const h = boot();
+  const gear = h.el('pp_gear_btn');
+  const tray = h.el('pp_gear_tray');
+  assert.equal(gear.getAttribute('aria-expanded'), 'false');
+  h.click(gear);
+  assert.equal(gear.getAttribute('aria-expanded'), 'true');
+  assert.equal(tray.classList.contains('blockr-settings--open'), true);
+  // A click inside or elsewhere leaves it open; the gear closes it.
+  h.click(h.doc.body);
+  assert.equal(tray.classList.contains('blockr-settings--open'), true);
+  h.click(gear);
+  assert.equal(gear.getAttribute('aria-expanded'), 'false');
+  h.close();
+});
+
+test('gear_state builds the Display section and each control sends its input', () => {
+  const h = boot();
+  h.sendRecorded('gear_state');
+  const display = h.el('pp_gear_display');
+  const seg = display.querySelector('.blockr-segmented');
+  const boxes = Array.from(display.querySelectorAll('.blockr-checkbox'));
+  assert.ok(seg, 'the timeline is a segmented control');
+  assert.deepEqual(boxes.map((b) => b.textContent),
+    ['Hide data before day −30', 'Smooth lines']);
+  // What R sent: relative day, the axis cut at day -30, smooth lines.
+  assert.equal(seg.querySelector('.is-selected').textContent, 'Relative day');
+  assert.deepEqual(boxes.map((b) => b.querySelector('input').checked), [true, true]);
+
+  h.click(Array.from(seg.querySelectorAll('button')).find((b) => b.textContent === 'Date'));
+  assert.equal(h.lastInput('timeline_mode'), 'date');
+  const clip = boxes[0].querySelector('input');
+  clip.checked = false;
+  clip.dispatchEvent(new h.win.Event('change', { bubbles: true }));
+  assert.equal(h.lastInput('show_prestudy'), true, 'unchecked: the full history');
+  const smooth = boxes[1].querySelector('input');
+  smooth.checked = false;
+  smooth.dispatchEvent(new h.win.Event('change', { bubbles: true }));
+  assert.equal(h.lastInput('smooth_mode'), 'off');
+
+  // A study without a treatment start: no relative day, nothing to cut at.
+  h.send('gear_state', { rday: false, mode: 'date', prestudy: false, smooth: 'auto' });
+  assert.equal(display.querySelector('.blockr-segmented'), null);
+  assert.deepEqual(Array.from(display.querySelectorAll('.blockr-checkbox')).map((b) => b.textContent),
+    ['Smooth lines']);
+  h.close();
+});
+
+test('the cohort count toggles the list and turns its chevron', () => {
+  const h = boot();
+  const sidebar = h.el('pp_sidebar');
+  const layout = h.el('pp_layout');
+  const count = h.el('pp_cohort_count');
+  h.click(count);
+  assert.equal(sidebar.classList.contains('collapsed'), true);
+  assert.equal(layout.classList.contains('sidebar-collapsed'), true);
+  assert.equal(count.classList.contains('is-shut'), true);
+  assert.equal(count.getAttribute('data-blockr-tooltip'), 'Show the list of patients');
+  h.click(count);
+  assert.equal(sidebar.classList.contains('collapsed'), false);
+  assert.equal(count.classList.contains('is-shut'), false);
+  assert.equal(count.getAttribute('data-blockr-tooltip'), 'Hide the list of patients');
   h.close();
 });
 
@@ -166,71 +226,5 @@ test('sync_params accepts what R sends, a list, and nothing', () => {
   assert.doesNotThrow(() => h.sendRecorded('sync_params'));
   assert.doesNotThrow(() => h.send('sync_params', ['adlbc_all@@ALB', 'adlbc_all@@ALT']));
   assert.doesNotThrow(() => h.send('sync_params', null));
-  h.close();
-});
-
-test('the gear opens its popover and any click elsewhere closes it', () => {
-  const h = boot();
-  const btn = h.el('pp_gear_btn');
-  const pop = h.el('pp_gear_popover');
-  h.click(btn);
-  assert.equal(pop.classList.contains('is-open'), true);
-  assert.equal(btn.classList.contains('is-active'), true);
-  // Inside the popover: stays open.
-  h.click(pop);
-  assert.equal(pop.classList.contains('is-open'), true);
-  h.click(h.doc.body);
-  assert.equal(pop.classList.contains('is-open'), false);
-  assert.equal(btn.classList.contains('is-active'), false);
-  h.close();
-});
-
-test('the timeline, pre-study and smoothing toggles flip their state and send it', () => {
-  const h = boot();
-  const tl = h.q('.pp-popover-toggle[data-tl-mode]');
-  const pre = h.q('.pp-popover-toggle[data-prestudy]');
-  const smooth = h.q('.pp-popover-toggle[data-smooth]');
-  assert.ok(tl && pre && smooth, 'the header has all three');
-
-  const tl0 = tl.getAttribute('data-tl-mode');
-  h.click(tl);
-  const tl1 = tl0 === 'rday' ? 'date' : 'rday';
-  assert.equal(tl.getAttribute('data-tl-mode'), tl1);
-  assert.equal(tl.textContent, tl1 === 'rday' ? 'Relative day' : 'Date');
-  assert.equal(h.lastInput('timeline_mode'), tl1);
-  // Disabled: no change, nothing sent.
-  tl.setAttribute('data-disabled', '1');
-  h.click(tl);
-  assert.equal(tl.getAttribute('data-tl-mode'), tl1);
-  assert.equal(h.inputs('timeline_mode').length, 1);
-
-  const pre0 = pre.getAttribute('data-prestudy') === '1';
-  h.click(pre);
-  assert.equal(pre.getAttribute('data-prestudy'), pre0 ? '0' : '1');
-  assert.equal(pre.textContent, pre0 ? 'Screening only' : 'Full history');
-  assert.equal(h.lastInput('show_prestudy'), !pre0);
-
-  const s0 = smooth.getAttribute('data-smooth');
-  h.click(smooth);
-  const s1 = s0 === 'off' ? 'auto' : 'off';
-  assert.equal(smooth.getAttribute('data-smooth'), s1);
-  assert.equal(smooth.textContent, s1 === 'off' ? 'Straight' : 'Smooth');
-  assert.equal(h.lastInput('smooth_mode'), s1);
-  h.close();
-});
-
-test('the cohort count toggles the sidebar', () => {
-  const h = boot();
-  const sidebar = h.el('pp_sidebar');
-  const layout = h.el('pp_layout');
-  const count = h.el('pp_cohort_count');
-  h.click(count);
-  assert.equal(sidebar.classList.contains('collapsed'), true);
-  assert.equal(layout.classList.contains('sidebar-collapsed'), true);
-  assert.equal(count.classList.contains('is-shut'), true);
-  h.click(count);
-  assert.equal(sidebar.classList.contains('collapsed'), false);
-  assert.equal(layout.classList.contains('sidebar-collapsed'), false);
-  assert.equal(count.classList.contains('is-shut'), false);
   h.close();
 });

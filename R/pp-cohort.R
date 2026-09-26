@@ -1704,26 +1704,26 @@ pp_subject_arm <- function(dm_obj, id, arm_col = NULL) {
   as.character(adsl[[arm_col]][[at]])
 }
 
-#' The header's identity line
+#' The header's sentence
 #'
-#' The id, then the facts that are nowhere else on screen: the arm in full,
-#' sex and age, the day on treatment, and how many adverse events the patient
-#' has had with the worst grade among them.
+#' The facts about the patient on screen that are nowhere else on it, as one
+#' sentence under the subject id (design system, "The sentence and its
+#' slots"): the arm in full, sex and age, the days on treatment, and how many
+#' adverse events the patient has had with the worst grade among them, e.g.
+#' "Xanomeline Low Dose · F, 80 years · 27 days on treatment · 6 adverse
+#' events, worst Severe". It wraps rather than clipping in a narrow panel.
 #'
 #' Every fact is dropped rather than printed empty when the study lacks the
-#' column. A header reading "DAY --" tells a reader the study has no
-#' treatment duration; a header that simply does not mention days tells them
-#' nothing false.
+#' column: a sentence that does not mention days tells a reader nothing
+#' false.
 #'
 #' @param frame A [pp_cohort_frame()] result.
 #' @param at The picked patient's row in `frame`, or `NA`.
-#' @param id The picked USUBJID.
-#' @param disp A [pp_cohort_id_display()] result, for the shared prefix.
 #' @param arm The arm name, or `NA`.
 #' @param color A resolver from [pp_cohort_sev_color()], for the worst grade.
-#' @return A tag list.
+#' @return A tag, or `NULL` when there is nothing to say.
 #' @noRd
-pp_subject_facts_ui <- function(frame, at, id, disp, arm, color) {
+pp_subject_sentence_ui <- function(frame, at, arm, color) {
 
   val <- function(col) {
     if (is.na(at) || !col %in% names(frame)) return(NULL)
@@ -1731,55 +1731,56 @@ pp_subject_facts_ui <- function(frame, at, id, disp, arm, color) {
     if (is.na(v) || !nzchar(as.character(v))) return(NULL)
     v
   }
-  dot <- function() shiny::span(class = "pp-fact-dot")
-  fact <- function(key, ...) {
-    shiny::span(class = "pp-fact",
-      if (!is.null(key)) shiny::span(class = "pp-fact-k", key),
-      ...
-    )
+  count <- function(n, one, many) {
+    paste(n, if (identical(as.numeric(n), 1)) one else many)
   }
 
-  parts <- list()
-  add <- function(x) if (!is.null(x)) parts[[length(parts) + 1L]] <<- x
+  # One string, escaped piece by piece: htmltools puts a line break between
+  # the children of a tag, which a reader sees as a space before a comma.
+  esc <- htmltools::htmlEscape
+  parts <- character()
+  add <- function(x) parts[[length(parts) + 1L]] <<- x
 
-  if (!is.na(arm) && nzchar(arm)) {
-    add(fact("arm", shiny::tags$b(arm)))
-  }
+  if (!is.na(arm) && nzchar(arm)) add(esc(arm))
   sex <- val("SEX")
   age <- val("AGE")
   if (!is.null(sex) || !is.null(age)) {
-    add(fact(NULL, trimws(paste(sex %||% "", age %||% ""))))
+    add(esc(paste(c(sex, if (!is.null(age)) paste(age, "years")),
+                  collapse = ", ")))
   }
   dur <- val("TRTDURD")
-  if (!is.null(dur)) {
-    add(fact("day", shiny::tags$b(as.character(dur))))
-  }
+  if (!is.null(dur)) add(esc(count(dur, "day on treatment", "days on treatment")))
   n_ae <- val("AE_N")
   if (!is.null(n_ae)) {
     worst <- val("AE_WORST")
-    add(fact("ae", shiny::tags$b(as.character(n_ae)),
-      if (!is.null(worst)) {
-        shiny::span(class = "pp-fact-sev",
-          shiny::span(class = "pp-fact-swatch",
-                      style = paste0("background:", color(worst))),
-          pp_sev_label(worst)
-        )
-      }
-    ))
-  }
-
-  # The prefix every id in this cohort shares is lifted out in the sidebar;
-  # here the id stands alone, so it is printed whole.
-  shiny::tagList(
-    shiny::span(class = "pp-subject-who", title = id, id),
-    if (length(parts)) {
-      shiny::span(class = "pp-subject-facts",
-        do.call(shiny::tagList, unlist(
-          lapply(seq_along(parts), function(i) {
-            if (i == 1L) list(parts[[i]]) else list(dot(), parts[[i]])
-          }), recursive = FALSE
-        ))
-      )
+    if (identical(as.numeric(n_ae), 0)) {
+      add("no adverse events")
+    } else if (is.null(worst)) {
+      add(esc(count(n_ae, "adverse event", "adverse events")))
+    } else {
+      add(paste0(
+        esc(count(n_ae, "adverse event", "adverse events")), ", worst ",
+        '<span class="pp-head-swatch" style="background:',
+        esc(color(worst), attribute = TRUE), '"></span>',
+        esc(pp_sev_label(worst))
+      ))
     }
-  )
+  }
+  if (!length(parts)) return(NULL)
+
+  shiny::div(class = "pp-head-sentence",
+             shiny::HTML(paste(parts, collapse = " \u00b7 ")))
+}
+
+#' The header's title: the subject on screen
+#'
+#' The id in full, as the output title. Without a pick it says so, muted.
+#'
+#' @param id The picked USUBJID, or `NULL`.
+#' @noRd
+pp_subject_title_ui <- function(id) {
+  if (length(id) != 1L || !nzchar(id)) {
+    return(shiny::div(class = "pp-head-title is-none", "No patient selected"))
+  }
+  shiny::div(class = "pp-head-title", id)
 }

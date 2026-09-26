@@ -1,248 +1,225 @@
-#' The profile's header bar: the download menu and the gear
+# The one chevron of the design system (blockr.ui, Blockr.icons.chevron):
+# a 12px box, 1.4px stroke. It points down; CSS turns it.
+PP_ICON_CHEVRON <- paste0(
+  '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" ',
+  'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" ',
+  'stroke-linejoin="round" aria-hidden="true">',
+  '<polyline points="3 4.5 6 7.5 9 4.5"/></svg>'
+)
+
+PP_ICON_DOWNLOAD <- paste0(
+  '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" ',
+  'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ',
+  'stroke-linejoin="round" aria-hidden="true">',
+  '<path d="M8 2.5v8M4.5 7l3.5 3.5L11.5 7M3 13.5h10"/></svg>'
+)
+
+# Bootstrap's gear-fill at 14px: the design system's gear.
+PP_ICON_GEAR <- paste0(
+  '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" ',
+  'aria-hidden="true"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1',
+  '.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 ',
+  '1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 ',
+  '2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 ',
+  '1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 ',
+  '1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-',
+  '.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 ',
+  '1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-',
+  '.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a',
+  '2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>'
+)
+
+#' The profile's header row
+#'
+#' The design system's header row for an output: the subject id is the
+#' output title, the facts about them are the sentence under it, the tools
+#' sit on the right with the gear last. The count of patients and the reset
+#' of a drill-down lead the row as one segment, on the edge the list of
+#' patients slides from.
+#'
+#' Static, so nothing in it re-renders on a pick: the title and the sentence
+#' are outputs of their own, the download menu's labels and the gear tray's
+#' controls are kept in step by messages (`dl_menu_state`, `gear_state`).
 #'
 #' @param ns The module's namespace function.
-#' @param gear_disabled Whether relative-day mode is unavailable.
-#' @param mode,prestudy,smooth The current timeline mode, pre-treatment
-#'   setting and value-line smoothing, as the gear's toggles show them.
 #' @noRd
-pp_header_bar_ui <- function(ns, gear_disabled, mode, prestudy, smooth) {
-  init_mode <- mode
-  init_prestudy <- prestudy
-  init_smooth <- smooth
-
-  gear_tag <- shiny::div(
-    class = "pp-gear-wrap",
-    shiny::tags$button(
-      class = "pp-gear-btn",
-      id = ns("pp_gear_btn"),
-      type = "button",
-      title = "Block settings",
-      shiny::HTML(paste0(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" ',
-        'height="16" fill="currentColor" viewBox="0 0 16 16">',
-        '<path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 ',
-        '3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 ',
-        '0 2.246 2.246 0 0 1-4.492 0"/>',
-        '<path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 ',
-        '0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-',
-        '.892-3.433.901-2.54 2.541l.159.292a.873.873 0 0 1-.52 ',
-        '1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a',
-        '.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 ',
-        '2.541 2.541l.292-.159a.873.873 0 0 1 1.255.52l.094.319c',
-        '.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 ',
-        '1.255-.52l.292.16c1.64.893 3.434-.902 2.541-2.541l-.159',
-        '-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 ',
-        '1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255',
-        'l.16-.292c.892-1.64-.902-3.433-2.541-2.54l-.292.159a',
-        '.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-',
-        '.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l',
-        '.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 ',
-        '1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 ',
-        '1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c',
-        '.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 ',
-        '0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 ',
-        '0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-',
-        '.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 ',
-        '0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-',
-        '1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-',
-        '.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 ',
-        '1.873 0 0 0 2.692-1.115z"/></svg>'
-      ))
-    ),
-    shiny::div(
-      class = "pp-gear-popover",
-      id = ns("pp_gear_popover"),
-      shiny::div(class = "pp-popover-row",
-        shiny::span(class = "pp-popover-label", "Timeline"),
-        shiny::tags$button(
-          class = paste(
-            "pp-popover-toggle",
-            if (gear_disabled) "is-disabled"
-          ),
-          id = ns("pp_tl_toggle"),
-          `data-tl-mode` = init_mode,
-          `data-disabled` = if (gear_disabled) "1" else NULL,
-          type = "button",
-          title = if (gear_disabled) {
-            "TRTSDT not available \u2014 relative day disabled"
-          } else {
-            "Click to switch"
-          },
-          if (identical(init_mode, "rday")) {
-            "Relative day"
-          } else {
-            "Date"
-          }
-        )
-      ),
-      shiny::div(class = "pp-popover-row",
-        shiny::span(class = "pp-popover-label", "Pre-treatment"),
-        shiny::tags$button(
-          class = "pp-popover-toggle",
-          id = ns("pp_prestudy_toggle"),
-          `data-prestudy` = if (init_prestudy) "1" else "0",
-          type = "button",
-          title = paste0(
-            "Show the full pre-treatment history, or only the ",
-            "30-day screening window before treatment start"
-          ),
-          if (init_prestudy) "Full history" else "Screening only"
-        )
-      ),
-      shiny::div(class = "pp-popover-row",
-        shiny::span(class = "pp-popover-label", "Value lines"),
-        shiny::tags$button(
-          class = "pp-popover-toggle",
-          id = ns("pp_smooth_toggle"),
-          `data-smooth` = init_smooth,
-          type = "button",
-          title = paste0(
-            "Monotone-smoothed value lines (the curve stays ",
-            "inside the measured range), or straight segments"
-          ),
-          if (identical(init_smooth, "off")) "Straight" else "Smooth"
-        )
-      ),
-      # Data coverage: visuals that can't render for this data,
-      # with the reason (missing table or required column). Lets
-      # users see what's collected without each one having to be
-      # selected first. Hidden behind the gear, not permanent.
-      #
-      # Its own output, because it is the one part of the header
-      # that reads the data. Inlined here, every upstream emission
-      # rebuilt the whole header -- including the gear button, which
-      # made the gear flash and shut an open popover. Nested, the
-      # button and the popover shell stay mounted and only the
-      # coverage list re-renders.
-      shiny::uiOutput(ns("gear_coverage"))
-    )
-  )
-
-  # Block-level download menu: the WHOLE profile as one artifact,
-  # in the scope the reviewer means. Two sections -- the picked
-  # patient (interactive convenience) and the cohort (the
-  # profile's true view, one slide group per patient) -- each
-  # offering the formats whose writers are installed. Same
-  # <details> pattern as the blockr.viz blocks' download control.
-  #
-  # RENDERED ONCE, like the gear beside it. An output re-rendered
-  # per patient switch made the button visibly blink no matter how
-  # the recalculating fade was styled -- the DOM swap itself reads
-  # as a flicker next to a control that never moves. So the
-  # structure is static (both scope sections in the DOM) and a
-  # custom message updates the two labels and toggles section
-  # visibility; see the dl_menu_state handler in the UI script.
-  # The gate is per ENTRY, not per menu: the exhibit formats need
-  # ggplot2 and blockr.viz, but the cohort list is a plain xlsx and
-  # must stay reachable on a deployment without them.
-  dl_tag <- local({
-    has_exhibit <- pp_exhibit_ready()
-    has_pptx <- has_exhibit &&
-      requireNamespace("officer", quietly = TRUE)
-    entry <- function(id, label) {
-      shiny::downloadLink(ns(id), label)
-    }
-    shiny::tags$details(
-      id = ns("pp_dl_root"),
-      class = "pp-dl-menu is-hidden",
-      shiny::tags$summary(
-        class = "pp-dl-btn",
-        title = "Download profile",
-        `aria-label` = "Download profile",
-        shiny::HTML(paste0(
-          '<svg width="14" height="14" viewBox="0 0 16 16" ',
-          'fill="none" stroke="currentColor" stroke-width="1.6" ',
-          'stroke-linecap="round" stroke-linejoin="round">',
-          '<path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/>',
-          '<path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 ',
-          'A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg>'
-        ))
-      ),
-      shiny::div(
-        class = "pp-dl-menu-list", role = "menu",
-        shiny::div(
-          class = "pp-dl-scope pp-dl-scope-patient is-hidden",
-          shiny::div(class = "pp-dl-menu-label",
-                     id = ns("pp_dl_label_patient"),
-                     "This patient"),
-          if (has_pptx) {
-            entry("dl_profile_pptx", "PowerPoint (.pptx)")
-          },
-          if (has_exhibit) {
-            entry("dl_profile_html", "Web page (.html)")
-          }
-        ),
-        shiny::div(
-          class = "pp-dl-scope pp-dl-scope-cohort is-hidden",
-          shiny::div(class = "pp-dl-menu-label",
-                     id = ns("pp_dl_label_cohort"),
-                     "Cohort"),
-          # First, because it is the one people asked for: the
-          # cohort as a LIST, not as N rendered profiles.
-          entry("dl_cohort_xlsx", "Patient list (.xlsx)"),
-          if (has_pptx) {
-            entry("dl_cohort_pptx", "PowerPoint (.pptx)")
-          },
-          if (has_exhibit) {
-            entry("dl_cohort_html", "Web page (.html)")
-          }
-        )
-      )
-    )
-  })
-
-  # The header row carries the download menu and the gear. The
-  # subject picker lives in the static UI (see `ui=` below) so its
-  # Blockr.Select container is present before the mount message
-  # arrives.
+pp_head_ui <- function(ns) {
   shiny::div(
-    class = paste(
-      "pp-cohort-hint d-flex justify-content-end",
-      "align-items-center"
+    class = "pp-head",
+    pp_cohort_seg_ui(ns),
+    shiny::uiOutput(ns("subject_title"), class = "pp-head-title"),
+    shiny::div(
+      class = "pp-head-tools",
+      pp_download_menu_ui(ns),
+      shiny::tags$button(
+        class = "blockr-gear-btn",
+        id = ns("pp_gear_btn"),
+        type = "button",
+        shiny::HTML(PP_ICON_GEAR)
+      )
     ),
-    dl_tag,
-    gear_tag
+    shiny::uiOutput(ns("subject_facts"), class = "pp-head-sentence")
   )
 }
 
-#' The gear's coverage section: the study variables in use and which
-#' panels the incoming tables cannot feed.
+#' The count of patients and the drill-down reset, as one segment
+#'
+#' The count opens and shuts the list of patients; the reset beside it
+#' undoes a drill-down upstream. Two buttons, because they are two actions;
+#' the segment is what makes them read as one (design system, "Showing that a
+#' block filters"). The reset is always there and disabled while nothing is
+#' drilled, so the segment never changes width under the pointer.
+#' `pp-header.js` fills in the count, the tooltips and the drilled state.
+#'
+#' @param ns The module's namespace function.
+#' @noRd
+pp_cohort_seg_ui <- function(ns) {
+  shiny::span(
+    class = "pp-cohort-seg is-hidden",
+    id = ns("pp_cohort_seg"),
+    shiny::tags$button(
+      class = "pp-cohort-count",
+      id = ns("pp_cohort_count"),
+      type = "button",
+      `data-blockr-tooltip` = "Hide the list of patients",
+      shiny::span(class = "pp-cohort-count-car", shiny::HTML(PP_ICON_CHEVRON)),
+      shiny::span(class = "pp-cohort-count-n")
+    ),
+    shiny::tags$button(
+      class = "pp-cohort-reset",
+      id = ns("pp_cohort_reset"),
+      type = "button",
+      disabled = NA,
+      `aria-label` = "Reset drill-down",
+      shiny::HTML(PP_ICON_RESET)
+    )
+  )
+}
+
+#' The profile's download menu
+#'
+#' The whole profile as one file, for the patient on screen or for the
+#' cohort, in the formats whose writers are installed. An action menu
+#' (blockr.ui): each row is a Shiny download link. Rendered once; the
+#' `dl_menu_state` message names the cohort's size and hides the section that
+#' does not apply, so a pick never re-renders the button. The gate is per
+#' row: the exhibit formats need ggplot2 and blockr.viz, the cohort list is a
+#' plain xlsx and stays reachable without them.
+#'
+#' @param ns The module's namespace function.
+#' @noRd
+pp_download_menu_ui <- function(ns) {
+  has_exhibit <- pp_exhibit_ready()
+  has_pptx <- has_exhibit && requireNamespace("officer", quietly = TRUE)
+  row <- function(id, label, meta, scope) {
+    htmltools::tagAppendAttributes(
+      blockr.ui::menu_item(shiny::downloadLink(ns(id), label), meta = meta),
+      `data-scope` = scope
+    )
+  }
+  title <- function(id, text, scope) {
+    htmltools::tagAppendAttributes(
+      blockr.ui::menu_section(text),
+      id = ns(id),
+      `data-scope` = scope
+    )
+  }
+  menu <- blockr.ui::action_menu(
+    blockr.ui::tool_button(shiny::HTML(PP_ICON_DOWNLOAD), "Download",
+                           id = ns("pp_dl_btn")),
+    title("pp_dl_label_patient", "This patient", "patient"),
+    if (has_pptx) row("dl_profile_pptx", "PowerPoint", ".pptx", "patient"),
+    if (has_exhibit) row("dl_profile_html", "Web page", ".html", "patient"),
+    title("pp_dl_label_cohort", "Cohort", "cohort"),
+    # First, because it is the one people asked for: the cohort as a list,
+    # not as N rendered profiles.
+    row("dl_cohort_xlsx", "Patient list", ".xlsx", "cohort"),
+    if (has_pptx) row("dl_cohort_pptx", "PowerPoint", ".pptx", "cohort"),
+    if (has_exhibit) row("dl_cohort_html", "Web page", ".html", "cohort")
+  )
+  # Hidden until the first dl_menu_state says there is something to offer.
+  htmltools::tagAppendAttributes(menu, id = ns("pp_dl_root"), hidden = NA)
+}
+
+#' The profile's gear tray
+#'
+#' In flow under the header row (blockr.ui's `.blockr-settings`, opened by
+#' `Blockr.gearTray`). Its first section, Display, is built by `pp-header.js`
+#' from blockr.ui's segmented control and checkboxes when the `gear_state`
+#' message arrives; the rest is the `gear_coverage` output: the study
+#' variables in use and the panels this study cannot draw.
+#'
+#' @param ns The module's namespace function.
+#' @noRd
+pp_gear_tray_ui <- function(ns) {
+  shiny::div(
+    class = "blockr-settings blockr-settings--beak pp-gear-tray",
+    id = ns("pp_gear_tray"),
+    shiny::div(class = "pp-gear-display", id = ns("pp_gear_display")),
+    shiny::uiOutput(ns("gear_coverage"), class = "pp-gear-coverage")
+  )
+}
+
+#' The gear tray's read-only sections
+#'
+#' Study variables: the column behind each role, its name first and its
+#' label as meta, as every control that holds a column shows one. Then the
+#' panels the incoming tables cannot feed, with what they miss; no section at
+#' all when every panel can be drawn.
 #'
 #' @param cov `pp_coverage_report()` for the current dm.
 #' @param roles The resolved study roles.
+#' @param dm_obj The normalized dm, for the columns' labels.
 #' @noRd
-pp_gear_coverage_ui <- function(cov, roles) {
-  shiny::tagList(
-    shiny::div(class = "pp-popover-divider"),
-    shiny::div(class = "pp-popover-section-label",
-      "Study variables"),
-    shiny::div(class = "pp-coverage-item",
-      shiny::span(class = "pp-coverage-label", "Arm"),
-      shiny::span(class = "pp-coverage-reason",
-        roles$arm %||% "unresolved \u2014 see block error")
-    ),
-    shiny::div(class = "pp-coverage-item",
-      shiny::span(class = "pp-coverage-label", "Severity"),
-      shiny::span(class = "pp-coverage-reason",
-        roles$severity %||% "none in adae (bars uncolored)")
-    ),
-    shiny::div(class = "pp-coverage-item",
-      shiny::span(class = "pp-coverage-label", "Timeline"),
-      shiny::span(class = "pp-coverage-reason",
-        roles$timeline %||% "none (relative day off)")
-    ),
-    shiny::div(class = "pp-popover-divider"),
-    shiny::div(class = "pp-popover-section-label",
-      "Data coverage"),
-    if (length(cov) == 0L) {
-      shiny::div(class = "pp-coverage-ok", "All visuals available")
-    } else {
-      lapply(cov, function(c) {
-        shiny::div(class = "pp-coverage-item",
-          shiny::span(class = "pp-coverage-label", c$label),
-          shiny::span(class = "pp-coverage-reason", c$reason)
+pp_gear_coverage_ui <- function(cov, roles, dm_obj = NULL) {
+  label_of <- function(tbl, col) {
+    if (is.null(col) || is.null(dm_obj)) return(NULL)
+    tabs <- dm::dm_get_tables(dm_obj)
+    if (!tbl %in% names(tabs) || !col %in% names(tabs[[tbl]])) return(NULL)
+    lbl <- attr(tabs[[tbl]][[col]], "label", exact = TRUE)
+    if (is.null(lbl) || !nzchar(lbl) || identical(lbl, col)) NULL else lbl
+  }
+  role <- function(label, col, tbl, none) {
+    shiny::div(
+      class = "blockr-settings__field pp-gear-role",
+      shiny::span(class = "blockr-label", label),
+      if (is.null(col)) {
+        shiny::div(class = "pp-gear-value is-none", none)
+      } else {
+        shiny::div(
+          class = "pp-gear-value",
+          col,
+          if (!is.null(m <- label_of(tbl, col))) {
+            shiny::span(class = "pp-gear-meta", m)
+          }
         )
-      })
+      }
+    )
+  }
+  shiny::tagList(
+    shiny::div(class = "blockr-settings__title", "Study variables"),
+    shiny::div(
+      class = "blockr-settings__grid",
+      role("Arm", roles$arm, "adsl", "Not found; see the block's error"),
+      role("Severity", roles$severity, "adae", "None; the bars are not coloured"),
+      role("Treatment start", roles$timeline, "adsl",
+           "None; relative days are off")
+    ),
+    if (length(cov)) {
+      shiny::tagList(
+        shiny::div(class = "blockr-settings__title",
+                   "Not available in this study"),
+        shiny::div(
+          class = "pp-gear-cov",
+          lapply(cov, function(c) {
+            shiny::div(
+              class = "pp-gear-cov-row",
+              c$label,
+              shiny::span(class = "pp-gear-meta", c$reason)
+            )
+          })
+        )
+      )
     }
   )
 }

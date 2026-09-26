@@ -152,6 +152,231 @@
   background: var(--blockr-color-bg-surface);
 }
 
+/* --- The header row (design system, "Header row") -------------------------
+   The count of patients and the drill-down reset lead the row; the subject
+   id is the output title; download and the gear sit on the right, gear last.
+   The facts about the patient are the sentence under the row, full width, so
+   they wrap in a narrow rail instead of clipping. Left and right edges line
+   up with the panels' own headers below (4px area inset + 1px border + 12px
+   header padding). The title and the sentence are uiOutputs: the area goes
+   on the output and on what it renders, so the grid holds whether or not
+   Shiny's wrapper takes part in the layout. */
+.pp-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "seg title tools"
+    "sent sent sent";
+  align-items: center;
+  column-gap: 10px;
+  padding: 2px 12px 12px 13px;
+}
+
+.pp-head-title {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-lg);
+  font-weight: var(--blockr-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--blockr-color-text-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-head-title.is-none {
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-head-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-head-sentence {
+  grid-area: sent;
+  margin-top: 4px;
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.6;
+  color: var(--blockr-color-text-muted);
+}
+
+/* The worst severity's colour, before its word: a data colour. */
+.pp-head-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 0 1px;
+  border-radius: 2px;
+}
+
+/* The count and the reset: one 26px segment (design system, "Showing that a
+   block filters"). The count is an xs secondary button, the reset an xs main
+   button that is disabled while nothing is drilled. Drilled, the count takes
+   the reset's accent tint too, so the pair reads as the filter it is. */
+.pp-cohort-seg {
+  grid-area: seg;
+  display: inline-flex;
+}
+
+.pp-cohort-seg.is-hidden {
+  display: none;
+}
+
+.pp-cohort-count,
+.pp-cohort-reset {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--blockr-control-h-xs);
+  border: 1px solid var(--blockr-color-border-default);
+  font: inherit;
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-medium);
+  cursor: pointer;
+  transition: background-color var(--blockr-transition),
+    border-color var(--blockr-transition), color var(--blockr-transition);
+}
+
+.pp-cohort-count {
+  gap: 5px;
+  padding: 0 9px 0 6px;
+  border-radius: var(--blockr-radius-sm) 0 0 var(--blockr-radius-sm);
+  background: var(--blockr-color-bg-surface);
+  color: var(--blockr-color-text-default);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pp-cohort-count:hover {
+  z-index: 1;
+  background: var(--blockr-color-bg-hover);
+  border-color: var(--blockr-color-border-strong);
+}
+
+/* The chevron points at the edge the list slides from: left while it is
+   open, right while it is shut. */
+.pp-cohort-count-car {
+  display: inline-flex;
+  color: var(--blockr-color-text-muted);
+  transform: rotate(90deg);
+  transition: transform var(--blockr-transition), color var(--blockr-transition);
+}
+
+.pp-cohort-count.is-shut .pp-cohort-count-car {
+  transform: rotate(-90deg);
+}
+
+.pp-cohort-count:hover .pp-cohort-count-car {
+  color: var(--blockr-color-text-default);
+}
+
+.pp-cohort-reset {
+  justify-content: center;
+  margin-left: -1px;
+  padding: 0 7px;
+  border-radius: 0 var(--blockr-radius-sm) var(--blockr-radius-sm) 0;
+  background: var(--blockr-color-bg-accent-subtle);
+  border-color: var(--blockr-color-border-accent-subtle);
+  color: var(--blockr-color-text-accent);
+}
+
+.pp-cohort-reset svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pp-cohort-reset:hover:not(:disabled),
+.pp-cohort-seg.is-drilled .pp-cohort-count:hover {
+  z-index: 1;
+  background: var(--blockr-color-bg-accent-subtle-hover);
+  border-color: var(--blockr-color-border-accent);
+}
+
+.pp-cohort-reset:disabled {
+  background: transparent;
+  border-color: var(--blockr-color-border-default);
+  color: var(--blockr-color-text-disabled);
+  cursor: default;
+}
+
+.pp-cohort-seg.is-drilled .pp-cohort-count {
+  background: var(--blockr-color-bg-accent-subtle);
+  border-color: var(--blockr-color-border-accent-subtle);
+  color: var(--blockr-color-text-accent);
+}
+
+.pp-cohort-seg.is-drilled .pp-cohort-count-car {
+  color: var(--blockr-color-text-accent);
+}
+
+.pp-cohort-count:focus-visible,
+.pp-cohort-reset:focus-visible {
+  z-index: 2;
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+/* --- The gear tray (blockr.ui's .blockr-settings) ------------------------
+   Display (built by pp-header.js), then the study variables and what this
+   study cannot draw (the gear_coverage output). */
+.pp-gear-tray {
+  margin: 6px 4px 16px;
+}
+
+/* The beak points at the gear, which sits 12px in from the header's edge
+   (the tray is inset 4px). */
+.pp-gear-tray.blockr-settings--open::before {
+  right: 16px;
+}
+
+.pp-gear-tray > .pp-gear-display,
+.pp-gear-tray > .pp-gear-coverage {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.pp-gear-display:empty {
+  display: none;
+}
+
+.pp-gear-display:not(:empty) ~ .pp-gear-coverage > .blockr-settings__title:first-child {
+  margin-top: 24px;
+}
+
+/* A checkbox sits on the controls' line of its grid row. */
+.pp-gear-tray .blockr-settings__field > .blockr-checkbox {
+  min-height: var(--blockr-control-h);
+}
+
+.pp-gear-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-base);
+  line-height: var(--blockr-control-h-xs);
+  color: var(--blockr-color-text-default);
+}
+
+.pp-gear-value.is-none {
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-gear-meta {
+  margin-left: 8px;
+  font-size: var(--blockr-font-size-sm);
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-gear-cov-row {
+  font-size: var(--blockr-font-size-base);
+  line-height: 1.9;
+  color: var(--blockr-color-text-default);
+}
+
 /* --- Chart Panels -------------------------- */
 .pp-chart-panel {
   margin-bottom: 16px;
@@ -696,520 +921,6 @@
 
 .pp-chart-area::-webkit-scrollbar-thumb:hover {
   background: var(--blockr-color-border-strong);
-}
-
-/* --- Gear popover (block-level advanced settings) ------------ */
-
-.pp-gear-wrap {
-  position: relative;
-}
-
-.pp-gear-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--blockr-color-text-muted);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-}
-
-/* Block-level download: the whole profile as one file. Same 26px chrome as
-   the gear beside it, same <details> menu pattern as the blockr.viz blocks'
-   download control. */
-
-/* The menu is rendered ONCE and synced over a custom message (labels,
-   section visibility) so a patient switch never re-renders -- and never
-   blinks -- the button. is-hidden gates the whole control and each scope
-   section. */
-.pp-dl-menu {
-  position: relative;
-  margin-right: 2px;
-}
-
-.pp-dl-menu.is-hidden,
-.pp-dl-menu-list .pp-dl-scope.is-hidden {
-  display: none;
-}
-
-.pp-dl-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  color: var(--blockr-color-text-muted);
-  cursor: pointer;
-  list-style: none;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.pp-dl-btn::-webkit-details-marker {
-  display: none;
-}
-
-.pp-dl-btn:hover,
-.pp-dl-menu[open] > .pp-dl-btn {
-  background: var(--blockr-color-bg-hover);
-  color: var(--blockr-color-text-default);
-}
-
-.pp-dl-menu-list {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 30;
-  min-width: 160px;
-  padding: 4px;
-  background: var(--blockr-color-bg-raised);
-  border: 1px solid var(--blockr-color-border-default);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-/* Scope section labels: "This patient: <id>" / "Cohort (N patients)". */
-.pp-dl-menu-label {
-  padding: 6px 10px 2px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-muted);
-  white-space: nowrap;
-}
-
-.pp-dl-menu-label + a {
-  margin-top: 0;
-}
-
-.pp-dl-menu-list a {
-  display: block;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--blockr-color-text-default);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.pp-dl-menu-list a:hover {
-  background: var(--blockr-color-bg-hover);
-  color: var(--blockr-color-text-default);
-}
-
-.pp-gear-btn:hover {
-  background: var(--blockr-color-bg-hover);
-  color: var(--blockr-color-text-default);
-}
-
-.pp-gear-btn.is-active {
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--blockr-color-text-accent);
-  border-color: rgba(37, 99, 235, 0.2);
-}
-
-.pp-gear-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  min-width: 220px;
-  padding: 8px;
-  background: var(--blockr-color-bg-raised);
-  border: 1px solid var(--blockr-color-border-default);
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  z-index: 30;
-  display: none;
-}
-
-.pp-gear-popover.is-open {
-  display: block;
-}
-
-.pp-popover-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 6px;
-}
-
-.pp-popover-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--blockr-color-text-default);
-}
-
-/* Click-through pill: shows current value, flips on click. Matches the
-   blockr-pill pattern from blockr.dplyr. */
-.pp-popover-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  height: 24px;
-  min-width: 28px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--blockr-color-text-default);
-  background: var(--blockr-color-bg-subtle);
-  border: 1px solid var(--blockr-color-border-default);
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.pp-popover-toggle:hover:not(.is-disabled) {
-  background: var(--blockr-color-bg-hover);
-  border-color: var(--blockr-color-border-strong);
-  color: var(--blockr-color-text-default);
-}
-
-.pp-popover-toggle.is-disabled {
-  color: var(--blockr-color-border-strong);
-  cursor: not-allowed;
-}
-
-/* Data-coverage diagnostics (gear popover): which visuals can't render
-   for the current data, and why. */
-.pp-popover-divider {
-  height: 1px;
-  background: #f0f1f3;
-  margin: 6px 2px;
-}
-
-.pp-popover-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-muted);
-  padding: 2px 6px 4px;
-}
-
-.pp-coverage-ok {
-  font-size: 11px;
-  color: var(--blockr-color-text-muted);
-  padding: 2px 6px 4px;
-}
-
-.pp-coverage-item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 3px 6px;
-}
-
-.pp-coverage-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--blockr-color-text-default);
-}
-
-.pp-coverage-reason {
-  font-size: 11px;
-  color: var(--blockr-color-text-muted);
-}
-
-/* --- The chart toolbar -----------------------------------------------------
-   Was a Blockr.Select over the whole cohort with a stepper either side. The
-   sidebar's cohort list is the picker now; what is here says who is on
-   screen. See "Who is on screen" below.
-   ========================================================================= */
-
-.pp-chart-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  /* The add menu hangs off this, not off the button, so it has the whole
-     column's width to fit into. */
-  position: relative;
-}
-
-/* Gear row: match the identity line's height so the two sit on one baseline. */
-.pp-chart-toolbar .pp-cohort-hint {
-  height: 42px;
-}
-
-/* Cohort tag, and the sidebar's toggle.
-   
-   First thing in the toolbar, against the edge the drawer slides from -- it
-   used to sit at the far right with the download and the gear, the opposite
-   end of the screen from the thing it opens. The chevron points at the
-   sidebar and flips when it is shut, so the tag states the outcome of a
-   click rather than the current state, the rule the sort pill follows.
-   
-   Quiet while the sidebar is OPEN and tinted once it is SHUT. With the list
-   on screen the tag is reporting a number and the dock's two-tone badge is
-   the right look for that; shut, it is the only way back, so it takes the
-   house control tint. The colour is the invitation and it only appears when
-   there is something to invite.
-   ========================================================================= */
-.pp-cohort-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px 3px 7px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 6px; /* --blockr-radius-md, one step up from the badge it was */
-  background: var(--blockr-color-bg-hover);
-  color: var(--blockr-color-text-muted);
-  border: 1px solid var(--blockr-color-border-default);
-  white-space: nowrap;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease;
-}
-
-.pp-cohort-count:hover {
-  background: var(--blockr-color-bg-hover);
-  border-color: var(--blockr-color-border-strong);
-  color: var(--blockr-color-text-default);
-}
-
-/* Sidebar shut: the tag is the way back, so it says so. */
-.pp-cohort-count.is-shut {
-  background: var(--blockr-color-bg-accent-subtle);
-  color: var(--blockr-color-text-accent);
-  border-color: var(--blockr-color-border-accent-subtle);
-}
-
-.pp-cohort-count.is-shut:hover {
-  background: var(--blockr-color-bg-accent-subtle);
-  border-color: #bfdbfe;
-  color: var(--blockr-color-text-accent);
-}
-
-.pp-cohort-count:focus-visible {
-  outline: 2px solid var(--blockr-color-border-accent);
-  outline-offset: 1px;
-}
-
-.pp-cohort-count.is-hidden {
-  display: none;
-}
-
-.pp-cohort-count-car {
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0.7;
-  transition: transform 0.15s ease;
-}
-
-.pp-cohort-count.is-shut .pp-cohort-count-car {
-  transform: rotate(180deg);
-}
-
-/* Drilled: the count and the reset become ONE segmented control.
-   
-   It wears the crossfilter's "Reset all" COLOURS -- same tint, same border,
-   same hover, same glyph (blockr.dm/inst/css/crossfilter-block.css,
-   `.jscf-reset-btn`) -- and the pill's OWN geometry: 11px type, 6px radius,
-   the height it already has at rest. So it lands a size under the
-   crossfilter's 26px button, on purpose. Two reasons. A control that grew
-   when it went blue and shrank when it went grey would jump under the eye
-   of the person clicking it, which is the one moment it must not move. And
-   of the two, this is the smaller claim: the crossfilter's reset drops every
-   table on the dashboard, this one only widens a patient list.
-
-   The pair is joined rather than spaced: the count loses its right radius
-   and its right border, the reset loses its left radius, and the reset's
-   left border IS the hairline between them -- no divider element. After
-   .is-shut so it wins when both apply; a drilled list is the louder fact. */
-.pp-cohort-seg {
-  display: inline-flex;
-  /* Stretch, so the reset is exactly as tall as the count whatever the
-     count's content settles on. The two halves cannot disagree by a pixel. */
-  align-items: stretch;
-  flex: 0 0 auto;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count,
-.pp-cohort-reset {
-  color: var(--blockr-color-text-accent);
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count:hover,
-.pp-cohort-reset:hover {
-  background: rgba(37, 99, 235, 0.13);
-  border-color: var(--blockr-color-border-accent);
-  color: var(--blockr-color-text-accent);
-}
-
-/* The join. The count keeps its right border and the reset is pulled 1px
-   over it, the way a button group does it -- dropping the border instead
-   would make the count 1px narrower when drilled, and the number inside it
-   would shift under the cursor at the exact moment the control is being
-   read. */
-.pp-cohort-seg.is-drilled .pp-cohort-count {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.pp-cohort-reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  padding: 0;
-  margin-left: -1px;
-  /* The count's type, not the browser's: `font: inherit` would do it in one
-     line and is the trap -- the shorthand resets every font-* it does not
-     name, so it threw away the size and weight it was meant to carry. */
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 6px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-/* 12 in a ~23px cell is the crossfilter's 14-in-26 ratio, kept. Set here
-   rather than on the R constant, so the glyph stays the crossfilter's. */
-.pp-cohort-reset svg {
-  width: 12px;
-  height: 12px;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count:focus-visible,
-.pp-cohort-reset:focus-visible {
-  outline: 2px solid var(--blockr-color-border-accent);
-  outline-offset: 1px;
-  /* Above the neighbour, so the ring is not clipped by the shared edge. */
-  position: relative;
-  z-index: 1;
-}
-
-.pp-cohort-reset.is-hidden {
-  display: none;
-}
-
-/* --- Who is on screen ------------------------------------------------------
-   The header used to be a second patient picker. The sidebar's cohort list
-   does that job better, so this became the answer to "who am I looking at" --
-   the line you want once you have scrolled and the selected row is off
-   screen -- plus the facts the 232px row has no space for.
-   ========================================================================= */
-.pp-subject-picker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-  height: 42px;
-  /* The cohort tag is the first thing in here and provides the inset the id
-     used to need, so this only makes up the difference to where the panel
-     titles below start: .pp-chart-area insets 4px, and each panel adds a 1px
-     border and 12px of header padding. */
-  padding-left: 5px;
-  gap: 10px;
-}
-
-.pp-subject-gap {
-  flex: 1 1 auto;
-}
-
-/* The identity is a uiOutput, and `inline = TRUE` makes its wrapper a SPAN --
-   which Shiny's `div:where(.shiny-html-output)` display:contents rule does
-   not reach, so the wrapper stays a real inline box. The facts inside it are
-   a flex container, i.e. block-level, which pushed them onto a second line
-   under the id. Make the wrapper the row instead. */
-.pp-subject-picker > .shiny-html-output {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.pp-subject-who {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-default);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-/* Nothing picked. Not amber: the chart area already carries the empty state
-   in full, and two cues for one condition is one too many. */
-.pp-subject-none {
-  font-size: 13px;
-  color: var(--blockr-color-text-muted);
-}
-
-.pp-subject-facts {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  /* Facts drop off the right rather than wrapping the toolbar to two lines;
-     the arm is the widest and the first to go. */
-  overflow: hidden;
-}
-
-.pp-fact {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 11.5px;
-  color: var(--blockr-color-text-muted);
-  white-space: nowrap;
-}
-
-.pp-fact b {
-  font-weight: 600;
-  color: var(--blockr-color-text-default);
-  font-variant-numeric: tabular-nums;
-}
-
-.pp-fact-k {
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--blockr-color-text-muted);
-}
-
-.pp-fact-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--blockr-color-border-strong);
-  flex: 0 0 3px;
-  align-self: center;
-}
-
-.pp-fact-sev {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pp-fact-swatch {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  display: block;
 }
 
 /* === Cohort list ============================================================

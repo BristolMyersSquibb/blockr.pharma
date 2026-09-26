@@ -20,6 +20,10 @@ PP_ICON_RESET <- paste0(
 pp_block_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
+    # The design system first: tokens, the shared controls and their
+    # stylesheets. The profile's stylesheet reads the tokens without
+    # fallbacks and its scripts build on blockr-ui.js.
+    blockr.ui::controls_dep(),
     # As an htmlDependency, NOT a raw tags$link to the resource path: the
     # dependency's served URL embeds the package version, so a Version
     # bump busts browser caches. A bare link URL never changes, and the
@@ -40,10 +44,6 @@ pp_block_ui <- function(id) {
       script = c("pp-core.js", "pp-header.js", "pp-cohort.js",
                  "pp-picker.js", "pp-panels.js", "pp-find.js")
     ),
-    # The design system: tokens, the shared controls and their stylesheets.
-    # The profile's stylesheet reads the tokens without fallbacks, so this
-    # comes along wherever the block is drawn.
-    blockr.ui::controls_dep(),
     shiny::div(
       class = "pp-layout", id = ns("pp_layout"),
 
@@ -156,69 +156,8 @@ pp_block_ui <- function(id) {
       # is split off so flipping r_timeline_mode only invalidates
       # chart_area and the gear popover stays open.
       shiny::div(class = "pp-chart-area",
-        shiny::div(class = "pp-chart-toolbar",
-          # WHO is on screen, not a second way to choose them.
-          #
-          # This was a Blockr.Select over all 254 patients with a stepper
-          # either side. The sidebar's cohort list is also a searchable
-          # list of all 254, with a band, a sort and hit counts the
-          # dropdown never had, so the two competed and the dropdown lost.
-          # What is NOT duplicated is saying who you are looking at --
-          # the line you want once you have scrolled and the selected row
-          # is off screen -- so the control became that instead, plus the
-          # facts the sidebar row has no room for. They all come from
-          # pp_cohort_frame(), which computed them already.
-          #
-          # Stepping moved to the keyboard: arrow keys in the cohort
-          # list, which is where a reader's hand already is.
-          shiny::div(class = "pp-subject-picker", id = ns("pp_picker"),
-            # The cohort, and the drawer it lives in.
-            #
-            # This sat at the far right with the download and the gear --
-            # the opposite end of the screen from the thing it opens. On
-            # the left it is against the edge the sidebar slides from, and
-            # the chevron points at it.
-          #
-            # It says "254 patients", not "254". Shut, that is a sentence
-            # about what is behind the edge; the bare number needed you to
-            # already know what it counted. It is also the only way back
-            # once the sidebar is closed, since the floating expand button
-            # is gone.
-            # One control, two jobs, a hairline between them. The count
-            # opens the sidebar; the cell beside it undoes an upstream
-            # drill and appears only while there is one (the `drill`
-            # message, pp-header.js). Two buttons rather than one with two
-            # regions, because they are two actions and a button inside a
-            # button is not markup; `.pp-cohort-seg` is what makes them
-            # read as one -- drilled, the pair takes the crossfilter's
-            # "Reset all" colours at the pill's own size, and the divider
-            # is the reset's own left border.
-            shiny::span(
-              class = "pp-cohort-seg",
-              id = ns("pp_cohort_seg"),
-              shiny::tags$button(
-                class = "pp-cohort-count is-hidden",
-                id = ns("pp_cohort_count"),
-                type = "button",
-                title = "Show or hide the cohort",
-                shiny::span(class = "pp-cohort-count-car",
-                            shiny::HTML("&lsaquo;")),
-                shiny::span(class = "pp-cohort-count-n")
-              ),
-              shiny::tags$button(
-                class = "pp-cohort-reset is-hidden",
-                id = ns("pp_cohort_reset"),
-                type = "button",
-                title = "Reset drill-down",
-                shiny::HTML(PP_ICON_RESET)
-              )
-            ),
-            shiny::uiOutput(ns("subject_facts"), inline = TRUE),
-            shiny::span(class = "pp-subject-gap")
-          ),
-
-          shiny::uiOutput(ns("header_bar"))
-        ),
+        pp_head_ui(ns),
+        pp_gear_tray_ui(ns),
         shiny::uiOutput(ns("chart_area"))
       )
     ),

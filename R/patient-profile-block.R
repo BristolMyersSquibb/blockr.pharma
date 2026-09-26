@@ -18,13 +18,12 @@
 #'   (e.g., `list(adas_trajectory = list(items = "ACTOT"))`)
 #' @param timeline_mode Initial timeline x-axis mode: `"rday"` (relative day
 #'   from treatment start, ADaM \*DY convention; the default) or `"date"`
-#'   (calendar dates). Changeable at runtime via the gear popover in the
-#'   chart area header.
+#'   (calendar dates). Changeable at runtime in the gear tray.
 #' @param show_prestudy Show the full pre-treatment history? By default the
 #'   timeline starts 30 days before treatment start (the screening window,
 #'   so baselines stay visible) -- one medication started years earlier must
-#'   not stretch every axis to it. `TRUE` restores the full range; also a
-#'   toggle in the gear popover.
+#'   not stretch every axis to it. `TRUE` restores the full range, as
+#'   unchecking "Hide data before day -30" in the gear tray does.
 #' @param subject USUBJID to display, as a length-1 character. Only meaningful
 #'   when the incoming dm carries more than one subject; a single-subject dm
 #'   always renders its one subject. Ignored (and cleared) when the value is
@@ -33,7 +32,7 @@
 #' @param smooth Line smoothing for the findings value lines (labs, vitals):
 #'   `"auto"` (default) draws monotone-smoothed lines -- no overshoot, the
 #'   curve never implies values outside the measured range -- `"off"` draws
-#'   straight segments. Also a toggle in the gear popover ("Value lines").
+#'   straight segments. Also a checkbox in the gear tray ("Smooth lines").
 #'   Same wire values as the chart block's `smooth` option.
 #' @details
 #' The ADSL column holding the treatment / arm label is study-level
@@ -559,7 +558,7 @@ new_patient_profile_block <- function(selected = NULL,
           # Block-level timeline x-axis mode ("date" / "rday")
           r_timeline_mode <- shiny::reactiveVal(timeline_mode)
 
-          # Toggle timeline mode from the gear popover
+          # Timeline mode, from the gear tray
           shiny::observeEvent(input$timeline_mode, {
             new_mode <- input$timeline_mode
             if (isTRUE(new_mode %in% c("date", "rday"))) {
@@ -1023,22 +1022,22 @@ new_patient_profile_block <- function(selected = NULL,
           # no room for. Reads the cohort FRAME, which already carries every
           # one of them (SEX, AGE, TRTDURD, AE_N, AE_WORST) plus the arm --
           # so the header costs a lookup, not a derivation.
+          output$subject_title <- shiny::renderUI({
+            pp_subject_title_ui(r_subject())
+          })
+
           output$subject_facts <- shiny::renderUI({
             cur <- r_subject()
-            if (length(cur) != 1L || !nzchar(cur)) {
-              return(shiny::span(class = "pp-subject-none",
-                                 "No patient selected"))
-            }
+            if (length(cur) != 1L || !nzchar(cur)) return(NULL)
             frame <- r_cohort_frame()
             at <- match(cur, frame$USUBJID)
-            disp <- pp_cohort_id_display(frame$USUBJID)
             arm <- pp_subject_arm(r_norm_dm(), cur, r_roles()$arm)
-            pp_subject_facts_ui(frame, at, cur, disp, arm,
-                                pp_cohort_sev_color(
-                                  pp_sev_scale_colors(r_scale_map(),
-                                                      r_norm_dm(),
-                                                      r_roles()$severity)
-                                ))
+            pp_subject_sentence_ui(frame, at, arm,
+                                   pp_cohort_sev_color(
+                                     pp_sev_scale_colors(r_scale_map(),
+                                                         r_norm_dm(),
+                                                         r_roles()$severity)
+                                   ))
           })
 
           # The picker behind the + button.
@@ -1060,39 +1059,41 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Build per-viz control toolbar HTML
 
-          # Header bar (subject picker + gear popover) — depends on the
-          # cohort, NOT on r_timeline_mode or r_subject. This keeps either
-          # popover from being rebuilt (and closing) when the user flips the
-          # timeline toggle or picks a patient. Both button labels are kept
-          # in sync by optimistic JS plus a confirming custom message.
           # Whether relative-day mode is possible at all is a property of the
           # study (does ADSL carry a usable TRTSDT), not of the patient on
           # screen. Read from the unscoped dm: routing through `r_ref_ms()`
-          # would make the header depend on `r_subject`, and every pick would
-          # rebuild the header and slam both popovers shut. pp_has_ref() asks
-          # study-wide -- the per-patient pp_compute_ref_ms() would let one
-          # arbitrary cohort member with a missing treatment start disable the
-          # mode for everyone.
+          # would make the gear depend on `r_subject`, and every pick would
+          # rebuild its controls. pp_has_ref() asks study-wide -- the
+          # per-patient pp_compute_ref_ms() would let one arbitrary cohort
+          # member with a missing treatment start disable the mode for
+          # everyone.
           #
-          # A reactiveVal, not a read inside the header: `r_norm_dm()` is a
+          # A reactiveVal, not a read inside the observer: `r_norm_dm()` is a
           # plain reactive and so invalidates on EVERY upstream emission, even
-          # one that leaves this flag alone. The header must only rebuild when
-          # the flag actually flips, or an upstream filter rebuilds the gear
-          # (and shuts an open popover) on every keystroke.
+          # one that leaves this flag alone. The gear's controls must only be
+          # rebuilt when the flag actually flips.
           r_gear_disabled <- shiny::reactiveVal(NULL)
           shiny::observe({
             r_gear_disabled(!pp_has_ref(r_norm_dm(), r_roles()$timeline))
           })
 
-          output$header_bar <- shiny::renderUI({
+          # The gear tray's Display section is built in the client from
+          # blockr.ui's controls (pp-header.js); this says what to build and
+          # with which values. Sent when the study's relative-day support is
+          # known and whenever it flips -- never on a toggle, which the client
+          # already shows -- so the controls are not rebuilt under the pointer.
+          # Without a treatment start there is no relative day and no day -30
+          # to cut at, so those two controls are left out rather than
+          # disabled: a choice with one option is no choice.
+          shiny::observe({
             gear_disabled <- r_gear_disabled()
             shiny::req(!is.null(gear_disabled))
-            pp_header_bar_ui(
-              session$ns, gear_disabled,
-              mode = shiny::isolate(r_timeline_mode()),
-              prestudy = shiny::isolate(r_show_prestudy()),
-              smooth = shiny::isolate(r_smooth())
-            )
+            shiny::isolate(pp_send(session, "gear_state", list(
+              rday = !gear_disabled,
+              mode = r_timeline_mode(),
+              prestudy = r_show_prestudy(),
+              smooth = r_smooth()
+            )))
           })
 
           # Keep the static menu's labels and section visibility in step
@@ -1120,11 +1121,11 @@ new_patient_profile_block <- function(selected = NULL,
           output$gear_coverage <- shiny::renderUI({
             vizs <- r_cohort_vizs()  # req()s until a dm has arrived
             pp_gear_coverage_ui(pp_coverage_report(r_norm_dm(), vizs),
-                                r_roles())
+                                r_roles(), r_norm_dm())
           })
-          # The popover is display:none until the gear is clicked, so Shiny
-          # would suspend this output and leave the coverage list blank on the
-          # first open. It is a handful of divs; render it with the header.
+          # The tray is display:none until the gear is clicked, so Shiny would
+          # suspend this output and leave the sections blank on the first
+          # open. It is a handful of divs; render it with the header.
           shiny::outputOptions(output, "gear_coverage",
                                suspendWhenHidden = FALSE)
 

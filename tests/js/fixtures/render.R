@@ -76,7 +76,7 @@ render_profile <- function(prefix, selected) {
     session$setInputs(pick_subject = ids[1])
     session$flushReact()
     for (nm in c("sidebar_cohort", "panel_picker", "cohort_band_caption",
-                 "header_bar", "subject_facts", "chart_area")) {
+                 "subject_title", "subject_facts", "chart_area")) {
       put(paste0(prefix, nm), grab(output, nm))
     }
     # The slots are outputs of their own, one per panel on the profile;

@@ -32,6 +32,15 @@
     }
   },
   {
+    "channel": "gear_state",
+    "payload": {
+      "rday": true,
+      "mode": "rday",
+      "prestudy": false,
+      "smooth": "auto"
+    }
+  },
+  {
     "channel": "dl_menu_state",
     "payload": {
       "single": false,

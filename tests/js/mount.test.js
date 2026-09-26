@@ -7,8 +7,8 @@ test('the block mounts on the rendered fixtures', () => {
   const h = mount();
   assert.equal(h.rows().length, 12);
   assert.equal(h.slots().length, 5);
-  assert.deepEqual(h.handlers().sort(), ['dl_menu_state', 'drill', 'find_vocab', 'slot',
-    'subject_picker', 'sync_band', 'sync_params', 'sync_selected', 'sync_subject']);
+  assert.deepEqual(h.handlers().sort(), ['dl_menu_state', 'drill', 'find_vocab', 'gear_state',
+    'slot', 'subject_picker', 'sync_band', 'sync_params', 'sync_selected', 'sync_subject']);
   h.renderAll();
   h.tick(0);
   h.close();
@@ -21,7 +21,7 @@ test('every message R sent while rendering has a handler and the shape the clien
     h.tick(0);
     const seen = new Set();
     for (const channel of ['sync_selected', 'sync_params', 'sync_band', 'sync_subject',
-      'subject_picker', 'dl_menu_state']) {
+      'subject_picker', 'dl_menu_state', 'gear_state']) {
       const xs = h.recorded(channel);
       assert.ok(xs.length >= 1, `${profile}: R sent ${channel}`);
       xs.forEach((p) => seen.add(channel + ':' + JSON.stringify(p)));
@@ -31,6 +31,12 @@ test('every message R sent while rendering has a handler and the shape the clien
     h.recorded('sync_params').forEach((p) => assert.ok(Array.isArray(p)));
     h.recorded('sync_subject').forEach((p) => assert.equal(typeof p.id, 'string'));
     h.recorded('sync_band').forEach((p) => assert.equal(typeof p.viz_id, 'string'));
+    h.recorded('gear_state').forEach((p) => {
+      assert.equal(typeof p.rday, 'boolean');
+      assert.ok(['rday', 'date'].includes(p.mode));
+      assert.equal(typeof p.prestudy, 'boolean');
+      assert.ok(['auto', 'off'].includes(p.smooth));
+    });
     h.recorded('subject_picker').forEach((p) => assert.equal(typeof p.count, 'number'));
     h.recorded('dl_menu_state').forEach((p) => {
       assert.equal(typeof p.single, 'boolean');

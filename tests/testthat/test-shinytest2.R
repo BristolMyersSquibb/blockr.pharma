@@ -77,7 +77,7 @@ selected_id <- function() {
 }
 
 header_who <- function() {
-  js("(function(){ var e = document.querySelector('.pp-subject-who');
+  js("(function(){ var e = document.querySelector('[id$=subject_title] .pp-head-title');
        return e ? e.innerText.trim() : null; })()")
 }
 
@@ -100,7 +100,7 @@ search_value <- function() {
 wait_profile <- function(id) {
   wait_js(sprintf(
     "(function(){
-       var w = document.querySelector('.pp-subject-who');
+       var w = document.querySelector('[id$=subject_title] .pp-head-title');
        return !!w && w.innerText.trim() === '%s' &&
          !document.querySelector('.pp-chart-ghost') &&
          document.querySelectorAll('[id*=viz_slot_] canvas').length > 0;
@@ -563,6 +563,24 @@ test_that("the cohort count toggles the sidebar", {
   Sys.sleep(0.5)
   expect_false(grepl("collapsed", cls()))
   expect_false(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
+})
+
+test_that("the gear opens its tray in flow, with the Display controls", {
+  skip_if_no_app()
+
+  tray <- function() js("document.querySelector('.pp-gear-tray').classList.contains('blockr-settings--open')")
+  expect_false(tray())
+  run_js("document.querySelector('.blockr-gear-btn[id$=pp_gear_btn]').click();")
+  Sys.sleep(0.6)
+  expect_true(tray())
+  expect_true(js("!!document.querySelector('.pp-gear-display .blockr-segmented')"))
+  expect_equal(
+    unlist(js("[...document.querySelectorAll('.pp-gear-display .blockr-checkbox')].map(e => e.textContent)")),
+    c("Hide data before day \u221230", "Smooth lines")
+  )
+  run_js("document.querySelector('.blockr-gear-btn[id$=pp_gear_btn]').click();")
+  Sys.sleep(0.6)
+  expect_false(tray())
 })
 
 # ---------------------------------------------------------------------------

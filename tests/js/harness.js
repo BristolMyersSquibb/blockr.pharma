@@ -52,6 +52,18 @@ function jqueryPath() {
   ).trim();
 }
 const JQUERY = read(jqueryPath());
+
+/* blockr.ui's blockr-ui.js (the gear tray, the segmented control, the
+ * checkbox, the tooltip and the action menu), found through R the same way;
+ * PP_BLOCKR_UI_JS overrides. */
+function blockrUiPath() {
+  if (process.env.PP_BLOCKR_UI_JS) return process.env.PP_BLOCKR_UI_JS;
+  return execSync(
+    "Rscript -e \"cat(system.file('assets/js/blockr-ui.js', package = 'blockr.ui'))\"",
+    { encoding: 'utf8' }
+  ).trim();
+}
+const BLOCKR_UI = read(blockrUiPath());
 const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js',
                'pp-panels.js', 'pp-find.js'];
 const BLOCK_JS = PARTS.map((f) => read(path.join(ROOT, 'inst', 'js', f))).join('\n');
@@ -123,7 +135,7 @@ function mount(opts = {}) {
     return host;
   };
   const outputs = ['sidebar_cohort', 'panel_picker', 'cohort_band_caption',
-    'header_bar', 'subject_facts', 'chart_area'];
+    'subject_title', 'subject_facts', 'chart_area'];
   outputs.forEach(fill);
   const slotNames = Array.from(doc.querySelectorAll('[id*=viz_slot_]'))
     .map((el) => el.id.replace(`${NS}-`, ''));
@@ -172,6 +184,10 @@ function mount(opts = {}) {
     window.matchMedia = function () {
       return {matches: false, addEventListener: function () {}, addListener: function () {}};
     };
+    // No Web Animations: blockr.ui's gear tray then opens and shuts at once.
+    // happy-dom would cancel a running animation, unhandled, when the window
+    // closes.
+    Element.prototype.animate = undefined;
     window.echarts = {
       __resized: [],
       __resizeOpts: [],
@@ -203,6 +219,7 @@ function mount(opts = {}) {
   `);
 
   win.eval(JQUERY);
+  win.eval(BLOCKR_UI);
   win.eval(BLOCK_JS);
   win.eval(`window.PatientProfile.mount(${JSON.stringify({
     id: NS,

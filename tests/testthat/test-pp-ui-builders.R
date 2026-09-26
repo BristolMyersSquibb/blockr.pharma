@@ -22,12 +22,21 @@ test_that("the chart area renders both empty states and the stack", {
   expect_match(stack, 'id="t-viz_slot_ae_gantt"')
 })
 
-test_that("the header bar, sort clause and caption take their namespace as an argument", {
-  bar <- html(pp_header_bar_ui(ns, gear_disabled = FALSE, mode = "rday",
-                               prestudy = FALSE, smooth = "auto"))
-  expect_match(bar, 'id="t-pp_gear_btn"')
-  expect_match(bar, 'id="t-pp_dl_root"')
-  expect_match(bar, 'data-tl-mode="rday"')
+test_that("the header row, the tray, the sort clause and caption take their namespace", {
+  head <- html(pp_head_ui(ns))
+  expect_match(head, 'id="t-pp_cohort_seg"')
+  expect_match(head, 'id="t-subject_title"')
+  expect_match(head, 'id="t-subject_facts"')
+  # The gear is the design system's: the one framed square, last.
+  expect_match(head, 'class="blockr-gear-btn" id="t-pp_gear_btn"', fixed = TRUE)
+  # The reset is there from the start, disabled until a drill.
+  expect_match(head, '<button class="pp-cohort-reset" id="t-pp_cohort_reset" type="button" disabled',
+               fixed = TRUE)
+
+  tray <- html(pp_gear_tray_ui(ns))
+  expect_match(tray, 'blockr-settings blockr-settings--beak pp-gear-tray', fixed = TRUE)
+  expect_match(tray, 'id="t-pp_gear_display"')
+  expect_match(tray, 'id="t-gear_coverage"')
 
   sorter <- pp_cohort_sort_ui(c(id = "Patient id", worst = "Worst"), "worst", ns)
   expect_match(html(sorter), 'id="t-cohort_sort_by"')
@@ -141,4 +150,69 @@ test_that("a patient with no records in the table gets no find control", {
   # And with the lanes pill gone for the same reason (no rows, no levels to
   # group by), the header carries no controls row at all.
   expect_identical(out, "")
+})
+
+test_that("the download menu is an action menu of Shiny download links", {
+  menu <- pp_download_menu_ui(ns)
+  out <- html(menu)
+  expect_match(out, 'class="blockr-action-menu" data-align="end"', fixed = TRUE)
+  expect_match(out, 'id="t-pp_dl_root"')
+  # Hidden until dl_menu_state says there is something to offer.
+  expect_identical(htmltools::tagGetAttribute(menu, "hidden"), NA)
+  expect_match(out, 'id="t-dl_cohort_xlsx"')
+  expect_match(out, 'data-scope="cohort"')
+  expect_match(out, '<span class="blockr-menu__meta">.xlsx</span>', fixed = TRUE)
+  expect_match(out, 'id="t-pp_dl_label_cohort"')
+})
+
+test_that("the gear tray names each study variable with its label", {
+  adsl <- data.frame(USUBJID = "a", ACTARM = "X", TRTSDT = as.Date("2020-01-01"))
+  attr(adsl$ACTARM, "label") <- "Actual Arm"
+  adae <- data.frame(USUBJID = "a", ASEV = "MILD")
+  dm_obj <- dm::dm(adsl = adsl, adae = adae)
+  roles <- list(arm = "ACTARM", severity = "ASEV", timeline = NULL)
+  out <- html(pp_gear_coverage_ui(
+    list(list(id = "x", label = "NPI-X Radar", reason = "needs adqsnpix")),
+    roles, dm_obj
+  ))
+  expect_match(out, "Study variables")
+  expect_match(out, 'ACTARM\\s*<span class="pp-gear-meta">Actual Arm</span>')
+  # No label, or none that differs from the name: the name alone.
+  expect_match(out, '<div class="pp-gear-value">ASEV</div>', fixed = TRUE)
+  expect_match(out, "None; relative days are off")
+  expect_match(out, "Not available in this study")
+  expect_match(out, 'NPI-X Radar\\s*<span class="pp-gear-meta">needs adqsnpix</span>')
+
+  # Every panel drawable: no such section at all.
+  expect_no_match(html(pp_gear_coverage_ui(list(), roles, dm_obj)),
+                  "Not available")
+})
+
+test_that("the header's sentence says the facts in words and drops what is missing", {
+  red <- function(x) "#dc2626"
+  f <- data.frame(USUBJID = "a", SEX = "F", AGE = 80, TRTDURD = 27,
+                  AE_N = 6, AE_WORST = "SEVERE")
+  out <- html(pp_subject_sentence_ui(f, 1L, "Arm <x>", red))
+  expect_match(out, paste0(
+    "Arm &lt;x&gt; \u00b7 F, 80 years \u00b7 27 days on treatment \u00b7 ",
+    "6 adverse events, worst <span"
+  ))
+  expect_match(out, "background:#dc2626")
+
+  one <- f
+  one$TRTDURD <- 1
+  one$AE_N <- 1
+  expect_match(html(pp_subject_sentence_ui(one, 1L, NA, red)),
+               "1 day on treatment \u00b7 1 adverse event, worst")
+
+  none <- f
+  none$AE_N <- 0
+  expect_match(html(pp_subject_sentence_ui(none, 1L, NA, red)),
+               "no adverse events")
+
+  bare <- data.frame(USUBJID = "a")
+  expect_null(pp_subject_sentence_ui(bare, 1L, NA, red))
+
+  expect_match(html(pp_subject_title_ui("01-701-1015")), ">01-701-1015<")
+  expect_match(html(pp_subject_title_ui(NULL)), "is-none")
 })

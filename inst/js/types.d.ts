@@ -36,6 +36,16 @@ interface PpDlMenuState {
   n: number;
 }
 
+/** `gear_state`: what the gear tray's Display section shows. */
+interface PpGearState {
+  /** the study has a treatment start, so relative days and day -30 exist */
+  rday: boolean;
+  mode: 'rday' | 'date';
+  /** the full pre-treatment history (not cut at day -30) */
+  prestudy: boolean;
+  smooth: 'auto' | 'off';
+}
+
 /** `slot`: bring one panel to the current patient without rebuilding it
  *  (R: pp_slot_update()). */
 interface PpSlotUpdate {
@@ -155,7 +165,19 @@ interface EchartsStatic {
   getInstanceByDom(el: Element): EchartsInstance | null;
 }
 
+/** The slice of blockr.ui's blockr-ui.js these files use. */
+interface BlockrUiNamespace {
+  gearTray(band: HTMLElement, gear: HTMLElement, opts?: { label?: string }):
+    { set(open: boolean): void; toggle(): void; isOpen(): boolean };
+  segmented(options: { value: string; label: string }[], selected: string,
+            onChange: (value: string) => void, opts?: { size?: 'xs'; label?: string }):
+    { el: HTMLElement; set(value: string): void; get(): string };
+  checkbox(label: string, checked: boolean, onChange: (checked: boolean) => void):
+    { el: HTMLElement; input: HTMLInputElement; set(value: boolean): void; get(): boolean };
+}
+
 declare var Shiny: ShinyStatic;
+declare var Blockr: BlockrUiNamespace;
 declare var echarts: EchartsStatic | undefined;
 declare var PatientProfile: PatientProfileNamespace;
 declare var $: JQueryStatic;
@@ -163,6 +185,7 @@ declare var jQuery: JQueryStatic;
 
 interface Window {
   Shiny: ShinyStatic;
+  Blockr?: BlockrUiNamespace;
   echarts?: EchartsStatic;
   PatientProfile: PatientProfileNamespace;
 }
