@@ -356,11 +356,13 @@ pp_search_icon <- function() {
 #' keywords: on the ECG card, `qt` returned all five intervals instead of the
 #' two with QT in the name.
 #'
-#' @section Nothing until you ask:
-#' With an empty box the catalogue is not shown at all: what the sidebar
-#' shows then is the profile you have, which is the list above it. Panels and
-#' parameters appear together once something is typed, because a study's full
-#' parameter set is sixty-odd rows and that is not a menu.
+#' @section Browsing and searching:
+#' With an empty, unfocused box the catalogue is not shown: what the sidebar
+#' shows then is the profile you have, which is the list above it. Focusing
+#' the empty box opens the whole catalogue under its group headings (domains
+#' for panels, findings cards for parameters), minus what is already on the
+#' profile, so a reader who does not know a code can scroll to it. Typing
+#' turns it into a flat list of matches.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
 #' @param ns The module's namespace function.
@@ -422,10 +424,21 @@ pp_add_picker_ui <- function(avail, ns) {
     )
   }), recursive = FALSE)
 
-  # Parameter cards, hidden until something is typed. A study's whole
-  # parameter set is sixty-odd rows and that is not a menu -- the panels are
-  # what an empty box offers, as the sidebar's AVAILABLE list did.
-  param_rows <- unname(lapply(Filter(is_param, avail), viz_row, dom = ""))
+  # Parameter cards, under the findings card they came from (Chemistry,
+  # Vital Signs), in the order the catalogue first meets each card. The
+  # heading is what browsing reads; a query hides it and the row's own
+  # `pp-add-par` says the same thing.
+  params <- Filter(is_param, avail)
+  by_card <- split(params, factor(
+    vapply(params, function(v) v$group_label, character(1L)),
+    levels = unique(vapply(params, function(v) v$group_label, character(1L)))
+  ))
+  param_rows <- unlist(lapply(names(by_card), function(card) {
+    c(
+      list(shiny::div(class = "pp-add-group", `data-group` = "param", card)),
+      lapply(by_card[[card]], viz_row, dom = "")
+    )
+  }), recursive = FALSE)
 
 
   shiny::div(
@@ -441,9 +454,8 @@ pp_add_picker_ui <- function(avail, ns) {
                  shiny::span(class = "pp-add-n")),
       shiny::div(class = "pp-add-on", id = ns("pp_add_on"))
     ),
-    # The catalogue. Present but silent until the sidebar's search box has
-    # something in it: a study's whole parameter set is not a menu, and the
-    # list above already says what you have.
+    # The catalogue. Silent until the sidebar's search box is focused (the
+    # whole list, grouped) or has something in it (the matches).
     shiny::div(class = "pp-add-results", panel_rows, param_rows),
     shiny::div(class = "pp-add-none", "Nothing matches")
   )

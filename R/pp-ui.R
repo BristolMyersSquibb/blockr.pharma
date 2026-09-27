@@ -121,9 +121,9 @@ pp_block_ui <- function(id) {
         # They were a list here, then a menu behind a toolbar button,
         # and they are a list here again -- with the difference that
         # this one shows what is ON the profile rather than a catalogue
-        # of everything. The catalogue only exists while the search box
-        # has something in it, so the column costs five rows instead of
-        # the whole study's parameter set.
+        # of everything. The catalogue only opens while the search box is
+        # focused or has something in it, so the column costs five rows
+        # instead of the whole study's parameter set.
         #
         # Above rather than below the patients for two reasons that only
         # showed up on screen: the list reads top-down in the same order

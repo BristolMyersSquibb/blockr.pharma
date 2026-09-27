@@ -2108,6 +2108,11 @@
   color: var(--blockr-color-text-subtle, #9ca3af);
 }
 
+/* Browsing, the heading above a row already says where it lives. */
+.pp-panels.is-browsing .pp-add-par {
+  display: none;
+}
+
 .pp-add-tick {
   flex: 0 0 auto;
   color: #059669;
