@@ -11,13 +11,13 @@ new_ae_heatmap_block(
   group = character(),
   top_n = NULL,
   cell_numbers = TRUE,
-  drill = FALSE,
+  drill = NULL,
   download = FALSE,
   filter_column = NULL,
   filter_values = NULL,
   max_height = NULL,
-  ctrl_target = "",
-  ctrl_table = "",
+  ctrl_target = NULL,
+  ctrl_table = NULL,
   title = "Adverse events by subject",
   subtitle = ae_heatmap_subtitle(),
   caption = NULL,
@@ -43,7 +43,11 @@ own level order).}
 \item{top_n}{LEGACY. A board saved with it restores it as the script's
 \code{top_n}.}
 
-\item{cell_numbers, drill, download, filter_column, filter_values, ctrl_target, ctrl_table, caption, values}{As in \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}.}
+\item{cell_numbers, download, caption, values}{As in \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}.}
+
+\item{drill, filter_column, filter_values, ctrl_target, ctrl_table}{LEGACY. A
+row click goes to the board's drill filter, as from a composer table;
+the block no longer filters.}
 
 \item{max_height}{LEGACY. The matrix scrolls with its panel.}
 
@@ -56,7 +60,8 @@ script for \code{col}, see \code{\link[=ae_heatmap_script]{ae_heatmap_script()}}
 \item{...}{Forwarded to the engine constructor.}
 }
 \value{
-A transform block of class \code{heatmap_block}.
+A transform block of class \code{heatmap_block}, whose result is the
+subject x term matrix of counts.
 }
 \description{
 Renders long adverse-event rows (one row per AE record) as a subject x
