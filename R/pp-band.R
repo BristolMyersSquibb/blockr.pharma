@@ -356,11 +356,12 @@ pp_search_icon <- function() {
 #' keywords: on the ECG card, `qt` returned all five intervals instead of the
 #' two with QT in the name.
 #'
-#' @section Nothing until you ask:
-#' With an empty box the catalogue is not shown at all: what the sidebar
-#' shows then is the profile you have, which is the list above it. Panels and
-#' parameters appear together once something is typed, because a study's full
-#' parameter set is sixty-odd rows and that is not a menu.
+#' @section Browsing and searching:
+#' With an empty, unfocused box the catalogue is not shown: what the sidebar
+#' shows then is the profile you have, which is the list above it. Focusing
+#' the empty box opens the whole catalogue under its section titles, minus
+#' what is already on the profile, so a reader who does not know a code can
+#' scroll to it. Typing narrows it to the matches.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
 #' @param ns The module's namespace function.
@@ -433,9 +434,8 @@ pp_add_picker_ui <- function(avail, ns) {
       shiny::div(class = "pp-add-on", id = ns("pp_add_on"),
                  role = "list", `aria-label` = "On the profile")
     ),
-    # The catalogue. Present but silent until the sidebar's search box has
-    # something in it: a study's whole parameter set is not a menu, and the
-    # list above already says what you have.
+    # The catalogue. Silent until the sidebar's search box is focused (the
+    # whole list) or has something in it (the matches).
     shiny::div(class = "pp-add-results", panel_rows, param_rows),
     shiny::div(class = "pp-add-none", "Nothing matches")
   )

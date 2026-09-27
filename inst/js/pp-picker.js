@@ -38,6 +38,13 @@ PatientProfile.part(function(ctx) {
   // The sidebar's own box: there is no second search any more.
   var addInputId = ns('search');
 
+  // Browsing: the empty box was focused, so the whole catalogue is open
+  // under it. It stays open while the reader scrolls it and picks from it,
+  // which is why it is a flag and not the input's focus: a click on a row
+  // or on the list's scrollbar takes the focus away first. It closes on
+  // Escape and on a mousedown anywhere outside the box and the panels.
+  var browsing = false;
+
   function addRows(){
     return document.querySelectorAll('#' + addPopId + ' .pp-add-row');
   }
@@ -326,16 +333,18 @@ PatientProfile.part(function(ctx) {
     var inp = /** @type {HTMLInputElement | null} */ (
       document.getElementById(addInputId));
     var q = (inp ? inp.value : '').trim().toLowerCase();
+    var browse = browsing && !q;
+    pop.classList.toggle('is-browsing', browse);
     var shown = 0;
     addRows().forEach(function(r){
       var hay = r.getAttribute('data-search-text') || '';
-      // No query, no catalogue. What the sidebar shows then is the
-      // profile you have, which is the list above this one; sixty
-      // rows of everything a study measures is not a menu, and it
-      // is the reason this list left the sidebar in the first
-      // place. Searching shows every match, on the profile or not,
-      // so a hit is never missing.
-      var ok = q ? hay.indexOf(q) >= 0 : false;
+      // No query, no catalogue, unless the reader asked to browse.
+      // Browsing lists what is NOT on the profile yet: the list above
+      // is on screen at the same time and already names the rest.
+      // Searching shows every match, on the profile or not, so a hit
+      // is never missing.
+      var ok = q ? hay.indexOf(q) >= 0
+        : browse && !r.classList.contains('is-on');
       r.classList.toggle('is-hidden', !ok);
       if (ok) shown++;
     });
@@ -383,7 +392,7 @@ PatientProfile.part(function(ctx) {
       // query also filters the cohort below; x or Escape clears it.
       var box = /** @type {HTMLInputElement | null} */ (
         document.getElementById(addInputId));
-      if (box && box.value) {
+      if (box && (box.value || browsing)) {
         box.focus({preventScroll: true});
         setCursor(this);
       }
@@ -452,6 +461,29 @@ PatientProfile.part(function(ctx) {
   }
 
   $(document).on('input', '#' + searchId, applyFilter);
+
+  $(document).on('focusin', '#' + searchId, function() {
+    if (browsing || $(this).val()) return;
+    browsing = true;
+    filterAdd();
+  });
+
+  function endBrowse() {
+    if (!browsing) return;
+    browsing = false;
+    if (!String($('#' + searchId).val() || '').trim()) setCursor(null);
+    filterAdd();
+  }
+
+  // Outside means outside both the box and the panels. The cohort counts
+  // as outside: picking a patient is the end of choosing panels.
+  $(document).on('mousedown', function(e) {
+    if (!browsing) return;
+    var t = /** @type {Element} */ (e.target);
+    if (t.closest && t.closest(
+      '#' + addPopId + ', .pp-sidebar-search')) return;
+    endBrowse();
+  });
 
   // Clear (x): reset the query and hand back the full list
   $(document).on('click', '#' + clearBtnId, function(e) {
@@ -525,7 +557,12 @@ PatientProfile.part(function(ctx) {
 
   $(document).on('keydown', '#' + searchId, function(e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
-      if (!$(this).val()) return;
+      if (!$(this).val()) {
+        if (!browsing) return;
+        e.stopPropagation();
+        endBrowse();
+        return;
+      }
       e.stopPropagation();
       $(this).val('');
       applyFilter();
@@ -549,6 +586,9 @@ PatientProfile.part(function(ctx) {
     // recompute when a cursor is set: the arrows are the only thing that
     // could have moved it, and taking the first hit instead would ignore
     // them.
+    // Browsing with nothing typed, Enter takes only a row the arrows
+    // reached: the first row of a list nobody searched is not a choice.
+    if (browsing && !String($(this).val() || '').trim() && !cursor()) return;
     var row = cursor() || firstHit();
     if (!row) return;
     e.preventDefault();

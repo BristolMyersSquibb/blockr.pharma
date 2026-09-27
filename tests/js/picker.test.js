@@ -73,6 +73,54 @@ test('with no query the catalogue is hidden and patients all show', () => {
   h.close();
 });
 
+test('focusing the empty box browses everything not on the profile, grouped', () => {
+  const h = boot();
+  const pop = h.el('pp_panels');
+  search(h).focus();
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
+  const all = h.qa('.pp-add-row').map((r) => r.getAttribute('data-viz-id'));
+  assert.deepEqual(shown, all.filter((id) => !ON.includes(id)), 'everything not on the profile, in catalogue order');
+  const heads = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim());
+  assert.ok(heads.includes('Vital signs'), 'parameters under their findings card');
+  assert.ok(!heads.includes('Treatment'), 'a group whose rows are all on the profile has no heading');
+  assert.equal(h.shownIds().length, 12, 'the cohort is untouched');
+  assert.equal(h.q('.is-enter'), null);
+
+  // Enter alone takes nothing; the arrows pick a row first.
+  h.key(search(h), 'Enter');
+  assert.deepEqual(h.inputs('toggle_viz'), []);
+
+  // Typing is a search again: only the matches, under their own heading.
+  h.type(search(h), 'temp');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  assert.deepEqual(h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim()),
+    ['Vital signs']);
+  // Deleting the query goes back to browsing.
+  h.type(search(h), '');
+  assert.equal(pop.classList.contains('is-browsing'), true);
+
+  // A click in the list keeps it open; a click in the cohort closes it.
+  h.mouse('mousedown', '.pp-add-results');
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  h.mouse('mousedown', '.pp-pt');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
+  h.close();
+});
+
+test('picking while browsing moves the row up and keeps the list open; Escape closes it', () => {
+  const h = boot();
+  const pop = h.el('pp_panels');
+  search(h).focus();
+  h.click('.pp-add-row[data-viz-id="advs_all__TEMP"]');
+  assert.equal(h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]').classList.contains('is-hidden'), true);
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  h.key(search(h), 'Escape');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  h.close();
+});
+
 test('a query filters panels and patients together and marks the first hit', () => {
   const h = boot();
   h.type(search(h), 'temp');
@@ -120,6 +168,10 @@ test('Escape and the clear button empty the box and restore everything', () => {
   h.click(h.el('search_clear'));
   assert.equal(search(h).value, '');
   assert.equal(h.shownIds().length, 12);
+  // The clear button puts the focus back in the now empty box, which is
+  // browsing; Escape then closes the catalogue.
+  assert.equal(h.el('pp_panels').classList.contains('is-browsing'), true);
+  h.key(search(h), 'Escape');
   assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
   h.close();
 });
