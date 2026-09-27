@@ -85,7 +85,10 @@ pp_slot_update <- function(viz_id, header, chart) {
   js_evals <- utils::getFromNamespace("JSEvals", "htmlwidgets")
   list(
     viz_id = viz_id,
-    header = as.character(htmltools::renderTags(header)$html),
+    # Markup only: the header's dependencies (its download menu carries
+    # blockr.ui's controls) came with the slot's first render, and resolving
+    # them again on every patient switch cost more than the header itself.
+    header = as.character(htmltools::doRenderTags(header)),
     opts_json = as.character(to_json(chart$x$opts)),
     evals = as.list(js_evals(chart$x$opts)),
     height = chart$height %||% NULL
