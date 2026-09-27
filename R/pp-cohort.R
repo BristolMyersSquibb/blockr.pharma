@@ -1710,7 +1710,8 @@ pp_cohort_pick <- function(sel, ids) {
 #'
 #' So this is not truncation. Nothing that distinguishes two patients is ever
 #' hidden -- only a prefix that is byte-identical across the whole cohort is
-#' lifted out, and the caller prints it once in the section header. An
+#' lifted out; the full id is in each row's tooltip and in the profile's
+#' title once a patient is picked. An
 #' ellipsis at either end would be worse in both directions: cutting the tail
 #' hides the subject number, and cutting the head hides which site.
 #'

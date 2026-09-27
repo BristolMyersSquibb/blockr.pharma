@@ -51,12 +51,12 @@ test_that("the header row, the tray, the sort clause and caption take their name
 
   cap <- html(pp_band_caption_ui(
     list(viz_id = "ae_gantt", title = "t", caption = "Adverse events"),
-    sorter, pre = "01-701-"
+    sorter
   ))
   expect_match(cap, "<span>Patients</span>", fixed = TRUE)
   # The count is the status slot, painted by pp-header.js.
   expect_match(cap, '<span class="pp-cohort-status"></span>', fixed = TRUE)
-  expect_match(cap, "01-701-", fixed = TRUE)
+  expect_no_match(cap, "pp-cohort-prefix", fixed = TRUE)
   expect_match(cap, "Adverse events, by <button", fixed = TRUE)
   # The strip's filter is not repeated here; the panel that sets it says so.
   expect_no_match(cap, "bandcap-find")
@@ -64,7 +64,7 @@ test_that("the header row, the tray, the sort clause and caption take their name
   # A parameter's strip names the parameter after its code.
   lab <- html(pp_band_caption_ui(
     list(viz_id = "x", title = "t", caption = "ALB", sub = "Albumin (g/L)"),
-    NULL, pre = ""
+    NULL
   ))
   expect_match(lab, 'ALB<span class="pp-gear-meta">Albumin (g/L)</span>', fixed = TRUE)
 })

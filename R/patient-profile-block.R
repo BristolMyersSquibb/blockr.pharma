@@ -958,10 +958,10 @@ new_patient_profile_block <- function(selected = NULL,
             ord <- pp_cohort_order(frame, r_cohort_sort(), marks)
 
             # A prod USUBJID is ~20 characters and most of them are the study
-            # id, which is the same on every row of the board. Lift the shared
-            # prefix out to the section header; the row keeps every character
-            # that distinguishes one patient from another, and the full id
-            # stays in the tooltip, the click payload and the download.
+            # id, which is the same on every row of the board. The rows leave
+            # the shared prefix out and keep every character that
+            # distinguishes one patient from another; the full id stays in
+            # the tooltip, the click payload, the download and the title.
             disp <- pp_cohort_id_display(frame$USUBJID)
 
             # The rows are built as HTML rather than as a tag tree, and the
@@ -1019,9 +1019,7 @@ new_patient_profile_block <- function(selected = NULL,
           output$cohort_band_caption <- shiny::renderUI({
             src <- r_band_source()
             sorter <- cohort_sort_ui()
-            frame <- r_cohort_frame()
-            pre <- pp_cohort_id_display(frame$USUBJID)$prefix
-            pp_band_caption_ui(src, sorter, pre)
+            pp_band_caption_ui(src, sorter)
           })
 
           # Who is on screen, and the facts about them the sidebar row has

@@ -357,13 +357,6 @@
   min-width: 0;
 }
 
-.pp-cohort-prefix {
-  font-weight: var(--blockr-font-weight-normal);
-  letter-spacing: 0;
-  text-transform: none;
-  font-variant-numeric: tabular-nums;
-}
-
 .pp-cohort-bandcap-what {
   font-size: var(--blockr-font-size-sm);
   line-height: 1.5;
@@ -650,10 +643,13 @@
 }
 
 /* The patients' title holds the 26px status on its right: centre the row
-   on it and keep its height when there is none. */
+   on it and keep its height when there is none. A reset too wide for the
+   row (a four-digit study) drops under the title rather than out of the
+   sidebar. */
 .pp-cohort-bandcap-title {
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   min-height: var(--blockr-control-h-xs);
   margin-bottom: 6px;
 }
