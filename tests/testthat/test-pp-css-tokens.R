@@ -74,5 +74,5 @@ test_that("the stylesheet keeps no grey, blue or white literal a token covers", 
 test_that("the block draws with blockr.ui's controls and tokens", {
   deps <- htmltools::findDependencies(pp_block_ui("pp"))
   names <- vapply(deps, `[[`, character(1L), "name")
-  expect_true(all(c("blockr-theme", "blockr-ui-js", "blockr-blocks-css") %in% names))
+  expect_true(all(c("blockr-tokens", "blockr-ui-js", "blockr-blocks-css") %in% names))
 })
