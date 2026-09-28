@@ -283,14 +283,29 @@ test_that("group_by_args nests a subgroup partition by its group names", {
   expect_equal(nested$levels, c("F", "Male"))
 })
 
-test_that("overlapping subgroup pools error, naming the way out", {
+test_that("overlapping subgroup pools can be materialized as nested levels", {
+  skip_if_not_installed("composer")
+
   df <- data.frame(Group = c("A", "B", "A"))
   df$Subgroup <- stamp_group(c("M", "F", "F"), "SEX", list(
     show = c("F", "M"), pools = list(list(name = "Both", members = c("F", "M")))
   ))
-  expect_error(group_by_args(df), "Switch group and subgroup")
-  # Without a subgroup the table still builds.
+  expect_equal(group_by_args(df)[[3L]]$levels, c("F", "M", "Both"))
   expect_length(group_by_args(df, sub = NULL), 2L)
+
+  data <- add_total_group_denominator(df, col = "Subgroup", total = NULL)
+  tbl <- composer::table(
+    title = "x", population = "All", data = data,
+    denominator = composer::make_denom(data)
+  ) |>
+    composer::colgroup(do.call(composer::by, group_by_args(data))) |>
+    composer::block_count(label = "n", distinct = "Group") |>
+    composer::compose()
+
+  d <- tbl[["panes"]][[1]]$data
+  n_row <- d[trimws(d$label) == "n", ]
+  expect_equal(trimws(n_row[["A;:Both"]]), "1 (100.0%)")
+  expect_equal(trimws(n_row[["B;:Both"]]), "1 (100.0%)")
 })
 
 test_that("total adds an all-subjects pool, and a column named Total errors", {

@@ -260,10 +260,11 @@ group_definition <- function(x, groups) {
 #' one is picked), the result carries a nested `composer::by()` for it, as an
 #' unevaluated call that `do.call()` evaluates: the table gets the subgroup's
 #' columns under each group, and this package needs no composer dependency.
-#' A subgroup partition (pooled, dropped or renamed levels, none in two
-#' columns) gives its group names as the nested levels. Overlapping subgroup
-#' pools are an error: composer supports `pools =` on the outermost `by()`
-#' only.
+#' A subgroup partition gives its group names as the nested levels. Overlapping
+#' subgroup pools also use their group names as levels; callers that need those
+#' columns in composer tables should first materialize the subgroup rows with
+#' `add_total_group_denominator(..., col = "Subgroup", total = NULL)`, because
+#' composer supports `pools =` on the outermost `by()` only.
 #'
 #' `total` adds a column over every subject, as a pool of the raw group members.
 #' That is the way to a Total column once pools can overlap: composer's own
@@ -407,15 +408,6 @@ subgroup_levels <- function(x) {
   def <- attr(x, "blockr_groups", exact = TRUE)
   if (is.null(def)) {
     return(blockr.dm::crossfilter_level_order(x))
-  }
-  if (isTRUE(def$overlap)) {
-    stop(
-      "The subgroup's pools overlap (a level in two columns), and composer ",
-      "tables can pool only the outer split, so this table cannot show them. ",
-      "Switch group and subgroup in the population filter, or pool the ",
-      "subgroup without repeating a level.",
-      call. = FALSE
-    )
   }
   names(def$groups)
 }
