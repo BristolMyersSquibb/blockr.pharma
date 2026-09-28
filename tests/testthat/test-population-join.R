@@ -118,3 +118,33 @@ test_that("the events' filter trail survives the join", {
   out <- join_population(ev, pop)
   expect_equal(unname(blockr.dm::filter_trail(out)), "TRTEMFL")
 })
+
+test_that("population group pools survive the join", {
+  ev <- data.frame(
+    USUBJID = c("S1", "S2"),
+    AEDECOD = c("Nausea", "Rash"),
+    Group = c("A", "B"),
+    stringsAsFactors = FALSE
+  )
+  pop <- data.frame(
+    USUBJID = c("S1", "S2", "S3"),
+    TRT = c("A", "B", "C"),
+    stringsAsFactors = FALSE
+  )
+  pop$Group <- stamp_group(
+    pop$TRT,
+    "TRT",
+    groups = list(
+      show = c("A", "B", "C"),
+      pools = list(list(name = "A+B", members = c("A", "B")))
+    )
+  )
+
+  out <- join_population(ev, pop)
+
+  expect_true(attr(out$Group, "blockr_groups", exact = TRUE)$overlap)
+  expect_equal(
+    group_by_args(out)$levels,
+    c("A", "B", "C", "A+B")
+  )
+})

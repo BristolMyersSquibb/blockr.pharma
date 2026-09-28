@@ -71,6 +71,7 @@ join_population <- function(events, population, id = "USUBJID") {
 
   # Held before `events` is rebuilt below; see the last line.
   input <- events
+  column_attrs <- join_population_column_attrs(events, population)
 
   # Only what the events lack. Joining a column they already have would
   # produce a .x/.y pair and leave the caller to guess which one to group by --
@@ -99,11 +100,36 @@ join_population <- function(events, population, id = "USUBJID") {
   }
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
+  out <- restore_population_column_attrs(out, column_attrs)
   # merge() and rbind() drop the filter trail the events carried, and the
   # tables downstream build their "Filtered:" footnote from it. The events'
   # trail is the one to keep: it already holds the global filter's clauses,
   # which are the population's too.
   blockr.dm::add_filter_trail(out, input)
+}
+
+join_population_column_attrs <- function(events, population) {
+  cols <- union(names(events), names(population))
+  stats::setNames(lapply(cols, function(nm) {
+    event_attrs <- if (nm %in% names(events)) attributes(events[[nm]]) else NULL
+    pop_attrs <- if (nm %in% names(population)) attributes(population[[nm]]) else NULL
+
+    if (!is.null(pop_attrs$blockr_groups) || !is.null(pop_attrs$blockr_source)) {
+      return(pop_attrs)
+    }
+    event_attrs %||% pop_attrs
+  }), cols)
+}
+
+restore_population_column_attrs <- function(data, column_attrs) {
+  for (nm in intersect(names(column_attrs), names(data))) {
+    attrs <- column_attrs[[nm]]
+    if (!length(attrs)) next
+    for (attr_nm in setdiff(names(attrs), c("names", "row.names", "class", "levels"))) {
+      attr(data[[nm]], attr_nm) <- attrs[[attr_nm]]
+    }
+  }
+  data
 }
 
 #' Population join block
