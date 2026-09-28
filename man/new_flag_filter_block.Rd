@@ -7,6 +7,7 @@
 new_flag_filter_block(
   columns = character(),
   selected = character(),
+  footnotes = character(),
   table = NULL,
   ...
 )
@@ -17,6 +18,10 @@ To AND a flag against something else, chain a second filter block.}
 
 \item{selected}{Character vector of the columns whose box starts ticked.
 Defaults to none, which passes every row through.}
+
+\item{footnotes}{Named character vector (or list) of footnote text keyed
+by column name, e.g. \code{c(TRTEMFL = "Treatment-emergent (AEs ...)")}. A
+flag without an entry reads as its label in the filter trail.}
 
 \item{table}{Name of a table in an incoming \code{dm} to filter, or \code{NULL} (the
 default) to filter the data frame the block is handed. Naming a table
@@ -64,6 +69,15 @@ that leaves the dm through another table does not print it; see
 \code{\link[blockr.dm:filter_trail]{blockr.dm::filter_trail()}}.
 }
 
+\section{What the caption says}{
+The clause written to the filter trail, and printed by a \code{{filters}}
+caption, names each ticked flag by its footnote text from \code{footnotes},
+falling back to the column's \code{label} attribute and then to its name.
+Ticked flags are joined with "or". The footnote text is study-specific
+(the definition of "treatment-emergent" differs between studies), so it is
+block state, set in the gear and saved with the board.
+}
+
 \section{What a ticked box emits}{
 \itemize{
 \item a \code{logical} column: \code{col \%in\% TRUE}
@@ -82,7 +96,8 @@ if (interactive()) {
   serve(
     new_flag_filter_block(
       columns  = c("PREFL", "TRTEMFL", "FUPFL"),
-      selected = "TRTEMFL"
+      selected = "TRTEMFL",
+      footnotes = c(TRTEMFL = "Treatment-emergent")
     ),
     data = list(data = my_adae)
   )

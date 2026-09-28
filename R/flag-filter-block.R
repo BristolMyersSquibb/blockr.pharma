@@ -56,6 +56,15 @@
 #' that leaves the dm through another table does not print it; see
 #' [blockr.dm::filter_trail()].
 #'
+#' # What the caption says
+#'
+#' The clause written to the filter trail, and printed by a `{filters}`
+#' caption, names each ticked flag by its footnote text from `footnotes`,
+#' falling back to the column's `label` attribute and then to its name.
+#' Ticked flags are joined with "or". The footnote text is study-specific
+#' (the definition of "treatment-emergent" differs between studies), so it is
+#' block state, set in the gear and saved with the board.
+#'
 #' # What a ticked box emits
 #'
 #' * a `logical` column: `col %in% TRUE`
@@ -70,6 +79,9 @@
 #'   To AND a flag against something else, chain a second filter block.
 #' @param selected Character vector of the columns whose box starts ticked.
 #'   Defaults to none, which passes every row through.
+#' @param footnotes Named character vector (or list) of footnote text keyed
+#'   by column name, e.g. `c(TRTEMFL = "Treatment-emergent (AEs ...)")`. A
+#'   flag without an entry reads as its label in the filter trail.
 #' @param table Name of a table in an incoming `dm` to filter, or `NULL` (the
 #'   default) to filter the data frame the block is handed. Naming a table
 #'   makes the block dm-in, dm-out: that table is narrowed and every other
@@ -83,7 +95,8 @@
 #'   serve(
 #'     new_flag_filter_block(
 #'       columns  = c("PREFL", "TRTEMFL", "FUPFL"),
-#'       selected = "TRTEMFL"
+#'       selected = "TRTEMFL",
+#'       footnotes = c(TRTEMFL = "Treatment-emergent")
 #'     ),
 #'     data = list(data = my_adae)
 #'   )
@@ -93,10 +106,12 @@
 #' @export
 new_flag_filter_block <- function(columns = character(),
                                   selected = character(),
+                                  footnotes = character(),
                                   table = NULL,
                                   ...) {
   columns <- as.character(columns %||% character())
   selected <- intersect(as.character(selected %||% character()), columns)
+  footnotes <- flag_clean_footnotes(footnotes)
   table <- flag_validate_table(table)
 
   blockr.core::new_transform_block(
@@ -106,6 +121,7 @@ new_flag_filter_block <- function(columns = character(),
 
         r_cols <- shiny::reactiveVal(columns)
         r_sel <- shiny::reactiveVal(selected)
+        r_notes <- shiny::reactiveVal(footnotes)
 
         # Echo guard: a state change that came FROM the client must not be
         # pushed back, or the widget fights the user mid-click.
@@ -130,6 +146,7 @@ new_flag_filter_block <- function(columns = character(),
               columns   = flag_column_meta(d, r_cols()),
               choices   = flag_choice_meta(d),
               selected  = as.list(r_sel()),
+              footnotes = r_notes(),
               meta_only = meta_only
             )
           )
@@ -171,9 +188,16 @@ new_flag_filter_block <- function(columns = character(),
           incoming <- input$flags
           cols <- as.character(unlist(incoming$columns %||% list()))
           sel <- as.character(unlist(incoming$selected %||% list()))
+          # Text only, so it is not part of the echo guard below: nothing is
+          # pushed back when it changes, and the field keeps its cursor.
+          r_notes(flag_clean_footnotes(incoming$footnotes))
+          sel <- intersect(sel, cols)
+          # Arm the guard only when the observer below will fire, or a
+          # footnote-only edit leaves it armed for the next change.
+          if (identical(cols, r_cols()) && identical(sel, r_sel())) return()
           self_write$active <- TRUE
           r_cols(cols)
-          r_sel(intersect(sel, cols))
+          r_sel(sel)
         })
 
         shiny::observeEvent(list(r_cols(), r_sel()), {
@@ -211,12 +235,13 @@ new_flag_filter_block <- function(columns = character(),
             shiny::req(derived)
             if (!isTRUE(derived$ok)) stop(derived$cond)
             make_flag_filter_expr(r_sel(), derived$shape, table,
-                                  blockr.dm::trail_key(session))
+                                  blockr.dm::trail_key(session), r_notes())
           }),
           # `table` is configuration, not a control: nothing in the UI edits
           # it, but it must round-trip or a saved board comes back filtering
           # a data frame it is no longer being handed.
           state = list(columns = r_cols, selected = r_sel,
+                       footnotes = r_notes,
                        table = shiny::reactiveVal(table))
         )
       })
@@ -270,7 +295,7 @@ new_flag_filter_block <- function(columns = character(),
       c("flag_filter_block", "dm_block")
     },
     expr_type = "bquoted",
-    allow_empty_state = c("columns", "selected", "table"),
+    allow_empty_state = c("columns", "selected", "footnotes", "table"),
     ...
   )
 }
@@ -354,10 +379,19 @@ flag_condition_expr <- function(name, df) {
 
 #' 0-row template of the input, enough to read column types without touching
 #' the rows.
+#'
+#' Base `[` drops the attributes of a plain vector, so the `label` the filter
+#' trail clause falls back to is copied back onto the empty columns. See
+#' [flag_filter_clause()].
 #' @noRd
 flag_input_shape <- function(data) {
   if (!is.data.frame(data)) return(NULL)
-  as.data.frame(data)[0L, , drop = FALSE]
+  data <- as.data.frame(data)
+  shape <- data[0L, , drop = FALSE]
+  for (i in seq_along(shape)) {
+    attr(shape[[i]], "label") <- attr(data[[i]], "label", exact = TRUE)
+  }
+  shape
 }
 
 # The data SLOT, as blockr.core's `.()` placeholder.
@@ -391,7 +425,8 @@ input_slot <- function(name) {
 # blockr.core calls every block's server with `id = "expr"`, so keying on it
 # would have each filter overwrite the one upstream of it. See
 # `blockr.dm::trail_key()`.
-make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL) {
+make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL,
+                                  footnotes = NULL) {
   d <- data_slot()
   selected <- as.character(selected %||% character())
   if (!is.null(shape)) selected <- selected[selected %in% names(shape)]
@@ -403,7 +438,7 @@ make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL) {
     Reduce(function(a, b) bquote(.(a) | .(b)), conds)
   }
 
-  clause <- flag_filter_clause(selected)
+  clause <- flag_filter_clause(selected, shape, footnotes)
 
   inner <- if (is.null(table)) {
     as.call(list(quote(dplyr::filter), d, cond))
@@ -436,14 +471,46 @@ make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL) {
   blockr.dm::trail_expr(inner, key, clause, data = d, table = table)
 }
 
-# Selected flags as one clause. The flag NAME is the useful thing to print --
-# a reader of a CDEx table knows what TRTEMFL means -- and the affirmative
-# value it is tested against is implied, so it is not repeated per flag.
-flag_filter_clause <- function(selected) {
+# Selected flags as one clause, which is what a `{filters}` caption prints.
+# Each flag reads as its footnote text, then its label, then its name. The
+# footnote text is study-specific and lives in block state; this package
+# ships none. The affirmative value a flag is tested against is implied, so
+# it is not repeated.
+flag_filter_clause <- function(selected, shape = NULL, footnotes = NULL) {
   if (!length(selected)) {
     return(NULL)
   }
-  paste(selected, collapse = " or ")
+  footnotes <- flag_clean_footnotes(footnotes)
+  parts <- vapply(
+    selected,
+    function(cn) {
+      if (cn %in% names(footnotes)) return(footnotes[[cn]])
+      label <- flag_column_label(shape[[cn]])
+      if (is.na(label) || !nzchar(label)) cn else label
+    },
+    character(1L),
+    USE.NAMES = FALSE
+  )
+  paste(parts, collapse = " or ")
+}
+
+#' Footnote text as a named list of strings, blanks dropped
+#'
+#' A LIST because it is block state: a named character vector loses its
+#' names on the way to JSON, a named list saves as an object. Arrives as a
+#' named list from the client and from a restored board, and as either from
+#' R. An entry cleared in the gear is dropped here, so the flag falls back
+#' to its label.
+#' @noRd
+flag_clean_footnotes <- function(x) {
+  if (!length(x) || is.null(names(x))) {
+    return(list())
+  }
+  x <- lapply(x, function(v) {
+    v <- as.character(unlist(v, use.names = FALSE))
+    if (length(v) && !is.na(v[[1L]])) trimws(v[[1L]]) else ""
+  })
+  x[nzchar(names(x)) & nzchar(unlist(x))]
 }
 
 #' Filter one table of a dm, and only that table

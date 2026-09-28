@@ -352,3 +352,45 @@ test_that("in dm mode the clause is scoped to the table it narrowed", {
   expect_identical(blockr.dm::filter_trail(fr), c(ae_flags = "TRTEMFL"))
   expect_null(attr(blockr.dm::filter_trail(fr), "tables"))
 })
+
+test_that("the clause uses the footnote text, then the label, then the name", {
+  d <- flag_df()
+  attr(d$TRTEMFL, "label") <- "Treatment Emergent Analysis Flag"
+  attr(d$FUPFL, "label") <- "Follow-Up Analysis Flag"
+
+  # The live block builds its shape from the full frame, and base `[` drops
+  # plain-vector attributes, so the shape has to carry the label itself.
+  shape <- flag_input_shape(d)
+  expect_identical(attr(shape$TRTEMFL, "label"),
+                   "Treatment Emergent Analysis Flag")
+
+  notes <- list(TRTEMFL = "Treatment-emergent (AEs on or after the first dose)")
+  out <- ev(make_flag_filter_expr(c("TRTEMFL", "FUPFL", "PREFL"), shape, NULL,
+                                  "ae_flags", notes), d)
+  expect_identical(
+    blockr.dm::filter_trail(out),
+    c(ae_flags = paste("Treatment-emergent (AEs on or after the first dose)",
+                       "or Follow-Up Analysis Flag or PREFL"))
+  )
+
+  # A cleared field falls back to the label.
+  expect_identical(
+    flag_filter_clause("TRTEMFL", shape, list(TRTEMFL = "  ")),
+    "Treatment Emergent Analysis Flag"
+  )
+})
+
+test_that("footnotes are state that survives a save", {
+  blk <- new_flag_filter_block(
+    columns = c("PREFL", "TRTEMFL"),
+    footnotes = c(TRTEMFL = "Treatment-emergent", PREFL = "")
+  )
+  ser <- blockr.core::blockr_ser(blk)
+  back <- jsonlite::fromJSON(jsonlite::toJSON(ser, null = "null"),
+                             simplifyDataFrame = FALSE, simplifyMatrix = FALSE)
+  blk2 <- blockr.core::blockr_deser(back)
+  expect_identical(
+    flag_clean_footnotes(blockr.core::blockr_ser(blk2)$payload$footnotes),
+    list(TRTEMFL = "Treatment-emergent")
+  )
+})
