@@ -155,3 +155,50 @@
 }
 
 /* Tighter stacking for a run of flag checkboxes. */
+
+/* Footnote fields in the gear: per chosen flag, the name and under it the
+   text a `{filters}` caption prints for it. The field is a textarea grown to
+   its text by the script, with the commit chip in the bottom-right corner
+   instead of the vertical middle a one-line input uses. */
+.ffb-notes-row {
+  align-items: flex-start;
+}
+
+.ffb-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ffb-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ffb-note-name {
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  font-weight: 500;
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.ffb-note .blockr-commit-field > .ffb-note-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 10px 28px;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  line-height: 1.4;
+  resize: none;
+  overflow: hidden;
+}
+
+.ffb-note .blockr-commit-field > .blockr-expr-confirm {
+  top: auto;
+  bottom: 5px;
+  right: 6px;
+  transform: none;
+}
