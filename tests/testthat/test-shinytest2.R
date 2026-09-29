@@ -550,18 +550,18 @@ test_that("switching patients raises no ghost: nothing is torn down", {
 # 9. The sidebar collapses on the count and comes back.
 # ---------------------------------------------------------------------------
 
-test_that("the cohort count toggles the sidebar", {
+test_that("the list toggle collapses the sidebar", {
   skip_if_no_app()
 
   cls <- function() js("document.querySelector('.pp-sidebar').className")
   expect_false(grepl("collapsed", cls()))
 
-  run_js("document.querySelector('.pp-cohort-count').click();")
+  run_js("document.querySelector('.pp-list-toggle').click();")
   Sys.sleep(0.5)
   expect_true(grepl("collapsed", cls()))
   expect_true(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
 
-  run_js("document.querySelector('.pp-cohort-count').click();")
+  run_js("document.querySelector('.pp-list-toggle').click();")
   Sys.sleep(0.5)
   expect_false(grepl("collapsed", cls()))
   expect_false(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
