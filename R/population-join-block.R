@@ -99,6 +99,11 @@ join_population <- function(events, population, id = "USUBJID") {
   }
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
+  # merge() and rbind() return plain vectors, so every column lost its
+  # `label` and whatever else the data carried on it, and a title's
+  # `{label(@col)}` fell back to the name. Put back what a column lost, from
+  # the events first, then from the population for the columns it supplied.
+  out <- join_restore_col_attrs(out, input, population)
   # merge() and rbind() drop the filter trail the inputs carried, and the
   # tables downstream build their "Filtered:" footnote from it. Both trails
   # are kept. The population can be filtered on its own branch (a safety
@@ -106,6 +111,21 @@ join_population <- function(events, population, id = "USUBJID") {
   # still gets the events' filters. The trail is keyed by block, so the
   # global filter's clauses, which reach both sides, appear once.
   blockr.dm::add_filter_trail(out, join_trails(input, population))
+}
+
+# Copy onto each column of `out` the attributes its source column had and it
+# lost. Structural attributes are left to the join: they either survived or
+# were changed on purpose.
+join_restore_col_attrs <- function(out, ...) {
+  keep_off <- c("class", "levels", "names", "dim", "dimnames", "tzone")
+  for (src in list(...)) {
+    for (nm in intersect(names(out), names(src))) {
+      a <- attributes(src[[nm]])
+      a <- a[setdiff(names(a), c(keep_off, names(attributes(out[[nm]]))))]
+      for (k in names(a)) attr(out[[nm]], k) <- a[[k]]
+    }
+  }
+  out
 }
 
 # The two inputs' trails as one, events first. Returned as an object carrying
