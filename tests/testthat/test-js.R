@@ -21,7 +21,12 @@ test_that("the patient profile's client keeps its contract (node --test)", {
   skip_if(!length(files), "no JS tests found")
 
   out <- suppressWarnings(
-    system2(node, c("--test", shQuote(files)), stdout = TRUE, stderr = TRUE)
+    system2(node, c("--test", shQuote(files)), stdout = TRUE, stderr = TRUE,
+            # The harness loads blockr.ui's blockr-ui.js; this session knows
+            # where the package it runs against lives.
+            env = paste0("PP_BLOCKR_UI_JS=",
+                         system.file("assets", "js", "blockr-ui.js",
+                                     package = "blockr.ui")))
   )
   status <- attr(out, "status")
 

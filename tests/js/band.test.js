@@ -47,7 +47,7 @@ test('an events row draws one span per triplet over the track, and the end-of-tr
   assert.equal(row.getAttribute('data-eot'), '46.4');
   // A diamond centred on the end-of-treatment x at half the band height.
   assert.equal(eot.getAttribute('d'), 'M46.4 1L49.4 4L46.4 7L43.4 4Z');
-  assert.equal(eot.getAttribute('fill'), 'var(--pp-cohort-eot, #6b7280)');
+  assert.equal(eot.getAttribute('fill'), 'var(--blockr-pharma-cohort-eot)');
   h.close();
 });
 
@@ -74,11 +74,11 @@ test('a series row draws the reference range, the line, and no track', () => {
   assert.equal(parseFloat(rect.getAttribute('y')), hi);
   assert.ok(Math.abs(parseFloat(rect.getAttribute('height')) - (lo - hi)) < 1e-9);
   assert.equal(rect.getAttribute('width'), '176');
-  assert.match(rect.getAttribute('fill'), /--pp-cohort-ref/);
+  assert.match(rect.getAttribute('fill'), /--blockr-pharma-cohort-ref/);
   const path = svg.querySelector('path');
   assert.equal(path.getAttribute('d'), withBoth.getAttribute('data-band'));
   assert.equal(path.getAttribute('fill'), 'none');
-  assert.match(path.getAttribute('stroke'), /--pp-cohort-line/);
+  assert.match(path.getAttribute('stroke'), /--blockr-pharma-cohort-line/);
 
   // One limit: a dashed hairline at that edge instead.
   svg = withLo.querySelector('.pp-pt-band');

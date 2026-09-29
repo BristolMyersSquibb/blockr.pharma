@@ -280,7 +280,7 @@ test_that("a single tumour category does not title the card with itself", {
   # parameter in one group has not grouped anything -- the table is the
   # group. Same rule the split lab tables get.
   vizs <- pp_findings_vizs(dm::dm(adtr = adtr_tbl()))
-  expect_identical(vizs[["adtr_all__SDIAM"]]$group_label, "Tumor Burden")
+  expect_identical(vizs[["adtr_all__SDIAM"]]$group_label, "Tumor burden")
 })
 
 test_that("the tumour card offers change and percent change", {

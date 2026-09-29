@@ -11,7 +11,7 @@
 #' @noRd
 adas_trajectory_viz <- new_pp_viz(
   id = "adas_trajectory",
-  label = "ADAS-Cog Trajectory",
+  label = "ADAS-Cog trajectory",
   domain = "Questionnaires",
   icon = "clipboard-pulse",
   color = "#7C3AED",
@@ -23,6 +23,8 @@ adas_trajectory_viz <- new_pp_viz(
     items = list(
       type = "checkbox",
       label = "Items",
+      phrase = "items: {}",
+      all_word = "all",
       default = "ACTOT",
       choices_from = "PARAMCD"
     ),
@@ -54,7 +56,6 @@ adas_trajectory_viz <- new_pp_viz(
       if (nrow(tbl) == 0) return(pp_empty_chart("No data for selected items"))
 
       has_param <- "PARAM" %in% colnames(tbl)
-      has_avisit <- "AVISIT" %in% colnames(tbl)
       # as.character() before the colors[[pc]] lookup below: [[ on a factor
       # indexes by LEVEL CODE, so a factor PARAMCD silently mis-colors every
       # series, or errors out past the palette length.
@@ -80,39 +81,28 @@ adas_trajectory_viz <- new_pp_viz(
           param_label <- as.character(p_data$PARAM[1])
         }
 
+        tip_head <- if (is_total) {
+          "ADAS-Cog total"
+        } else {
+          pp_tip_param_words(param_label)
+        }
+        col_at <- function(nm, i) {
+          if (nm %in% colnames(p_data)) p_data[[nm]][i] else NA
+        }
+
         data_points <- lapply(seq_len(nrow(p_data)), function(i) {
           val <- p_data[[y_col]][i]
           if (is.na(val)) return(NULL)
-          visit <- if (has_avisit) as.character(p_data$AVISIT[i]) else ""
-
-          tt <- paste0(
-            '<div style="min-width:160px">',
-            '<div style="font-size:13px;font-weight:600;margin-bottom:2px">',
-            param_label, '</div>',
-            '<div style="font-size:12px;line-height:1.6">',
-            '<span style="color:#6b7280">Visit:</span> ', visit,
-            '<br/><span style="color:#6b7280">',
-            if (use_chg) "CHG" else "AVAL",
-            ':</span> <b>', round(val, 2), '</b>'
-          )
-          if (use_chg && "AVAL" %in% colnames(p_data)) {
-            tt <- paste0(tt,
-              '<br/><span style="color:#6b7280">AVAL:</span> ',
-              round(p_data$AVAL[i], 2)
-            )
-          }
-          if (!use_chg && "CHG" %in% colnames(p_data) &&
-            !is.na(p_data$CHG[i])) {
-            tt <- paste0(tt,
-              '<br/><span style="color:#6b7280">CHG:</span> ',
-              round(p_data$CHG[i], 2)
-            )
-          }
-          tt <- paste0(tt, '</div></div>')
-
+          when <- pp_tip_when(p_data$ADT[i], col_at("ADY", i), ref_ms, mode)
           list(
             value = list(pp_xval(p_data$ADT[i], ref_ms, mode), val),
-            tooltip_text = tt
+            tip = pp_tip(tip_head, color = color, rows = list(
+              pp_tip_row("Analysis value", pp_tip_num(p_data$AVAL[i])),
+              pp_tip_row("Change from baseline",
+                         pp_tip_num(col_at("CHG", i), signed = TRUE)),
+              pp_tip_row("Visit", pp_tip_case(col_at("AVISIT", i))),
+              pp_tip_row("Day", when$main, when$meta)
+            ))
           )
         })
         data_points <- Filter(Negate(is.null), data_points)
@@ -129,11 +119,7 @@ adas_trajectory_viz <- new_pp_viz(
           itemStyle = list(color = color),
           symbolSize = if (is_total) 8 else 5,
           z = if (is_total) 3 else 2,
-          tooltip = list(
-            formatter = htmlwidgets::JS(
-              "function(params) { return params.data.tooltip_text || ''; }"
-            )
-          )
+          tooltip = list(formatter = PP_TIP_FORMATTER)
         )
       })
 
@@ -169,6 +155,6 @@ adas_trajectory_viz <- new_pp_viz(
           ),
           series = all_series
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

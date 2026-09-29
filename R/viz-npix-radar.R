@@ -10,7 +10,7 @@
 #' @noRd
 npix_radar_viz <- new_pp_viz(
   id = "npix_radar",
-  label = "NPI-X Radar",
+  label = "NPI-X radar",
   domain = "Questionnaires",
   icon = "clipboard-pulse",
   color = "#E11D48",
@@ -22,6 +22,7 @@ npix_radar_viz <- new_pp_viz(
     visits = list(
       type = "checkbox",
       label = "Visits",
+      all_word = "all visits",
       default = NULL,
       choices_from = "AVISIT"
     )
@@ -95,8 +96,17 @@ npix_radar_viz <- new_pp_viz(
 
         color <- visit_colors[((vi - 1L) %% length(visit_colors)) + 1L]
 
+        # ECharts reports a hover anywhere on the polygon as this whole item,
+        # so the tooltip is the visit with every domain as a row. A domain
+        # not assessed at the visit has no row, as it has no vertex.
+        rows <- lapply(seq_along(present_codes), function(k) {
+          pp_tip_row(domain_labels[[present_codes[k]]] %||% present_codes[k],
+                     pp_tip_num(unname(values[k])))
+        })
+
         list(
           value = lapply(unname(values), function(v) if (is.na(v)) NULL else v),
+          tip = pp_tip(pp_tip_case(visit), color = color, rows = rows),
           name = visit,
           lineStyle = list(color = color, width = 2),
           itemStyle = list(color = color),
@@ -138,30 +148,9 @@ npix_radar_viz <- new_pp_viz(
           series = list(list(
             type = "radar",
             data = radar_series,
-            tooltip = list(
-              formatter = htmlwidgets::JS("
-                function(params) {
-                  var d = params.data;
-                  var html = '<div style=\"min-width:140px\">';
-                  html += '<div style=\"font-size:13px;font-weight:600;' +
-                    'margin-bottom:4px\">' + (d.name || '') + '</div>';
-                  var vals = d.value || [];
-                  var inds = params.radar && params.radar.indicator ?
-                    params.radar.indicator : [];
-                  for (var i = 0; i < vals.length; i++) {
-                    var label = (inds[i] && inds[i].name) || ('Item ' + (i+1));
-                    html += '<div style=\"font-size:11px;line-height:1.5\">' +
-                      '<span style=\"color:#6b7280\">' + label +
-                      ':</span> ' + (vals[i] != null ? vals[i].toFixed(1) : '-') +
-                      '</div>';
-                  }
-                  html += '</div>';
-                  return html;
-                }
-              ")
-            )
+            tooltip = list(formatter = PP_TIP_FORMATTER)
           ))
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

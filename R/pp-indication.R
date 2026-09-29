@@ -27,7 +27,15 @@
 #
 # pp_indc_column()        — which adcm column codes the indication, or NULL
 # pp_indc_scale_colors()  — level -> color for the patient, via blockr.theme
+# pp_indc_colorable()     — whether a patient's level count is worth coloring
 # pp_indc_legend_ui()     — the panel-header swatches
+
+#' The medication color
+#'
+#' What CM bars are drawn in when indication does not color them: the panel,
+#' its static export and the cohort strip all read it from here.
+#' @noRd
+PP_CM_COLOR <- "#0891B2"
 
 #' Resolve the ADCM column holding the medication indication
 #'
@@ -88,10 +96,14 @@ pp_indc_column <- function(cols, indc_var = NULL) {
 #' @param map The board scale map (`NULL` when the board carries none).
 #' @param dm_obj Subject-scoped, normalized dm.
 #' @param indc_col The indication role's resolved column, or `NULL`.
+#' @param per_patient Apply the level-count rule above. The cohort strip
+#'   resolves every level in the study at once and passes `FALSE`, then
+#'   applies the rule one patient at a time (see [pp_cohort_indc_color()]).
 #' @return A named character vector of hex colors keyed by level, in the
 #'   order blockr.theme resolved them (bound levels first), or `NULL`.
 #' @noRd
-pp_indc_scale_colors <- function(map, dm_obj, indc_col = NULL) {
+pp_indc_scale_colors <- function(map, dm_obj, indc_col = NULL,
+                                 per_patient = TRUE) {
   if (is.null(indc_col)) {
     return(NULL)
   }
@@ -115,8 +127,8 @@ pp_indc_scale_colors <- function(map, dm_obj, indc_col = NULL) {
   }
 
   pool <- blockr.theme::theme_palette("categorical")
-  n_levels <- length(unique(as.character(column)))
-  if (n_levels < 2L || n_levels > length(pool)) {
+  if (per_patient &&
+        !pp_indc_colorable(length(unique(as.character(column))))) {
     return(NULL)
   }
 
@@ -141,6 +153,20 @@ pp_indc_scale_colors <- function(map, dm_obj, indc_col = NULL) {
   }
   order <- intersect(res$order %||% names(cols), names(cols))
   cols[order]
+}
+
+#' Whether a patient's indications are worth coloring
+#'
+#' The level-count rule of [pp_indc_scale_colors()], on its own so the cohort
+#' strip applies the same one: two levels at least, and no more than the
+#' categorical palette holds.
+#'
+#' @param n_levels Distinct non-blank indication levels the patient carries.
+#' @return `TRUE` or `FALSE`.
+#' @noRd
+pp_indc_colorable <- function(n_levels) {
+  n_levels >= 2L &&
+    n_levels <= length(blockr.theme::theme_palette("categorical"))
 }
 
 #' Indication legend for the CM panel header

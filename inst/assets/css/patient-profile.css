@@ -6,18 +6,33 @@
    ============================================ */
 
 /* --- Layout -------------------------------- */
+/* The cohort strip's ink, as local tokens (design system, "Token grammar"):
+   the track and the end-of-treatment mark and the limits are UI and read
+   meaning tokens; the line and the reference range are data colours, the
+   findings panel's line and its normal range. */
+.pp-layout {
+  --blockr-pharma-cohort-track: var(--blockr-color-bg-hover);
+  --blockr-pharma-cohort-limit: var(--blockr-color-border-strong);
+  --blockr-pharma-cohort-eot: var(--blockr-color-text-muted);
+  --blockr-pharma-cohort-clip: var(--blockr-color-border-danger);
+  --blockr-pharma-cohort-line: #0072b2;
+  --blockr-pharma-cohort-ref: color-mix(in srgb, #059669 10%, transparent);
+}
+
 .pp-layout {
   display: flex;
   width: 100%;
   min-height: 500px;
-  background: #ffffff;
+  background: var(--blockr-color-bg-surface);
   border-radius: 0;
   overflow: hidden;
   font-family: inherit;
   font-size: 14px;
-  color: var(--blockr-color-text-primary, #111827);
-  /* Pull layout flush against dock's accordion-body edges */
-  margin: -16px -16px -10px -16px;
+  color: var(--blockr-color-text-default);
+  /* Flush with the card's sides and bottom, so the sidebar's rule runs edge
+     to edge. Not pulled up at the top: the block header has no rule to meet
+     there any more, and the profile starts under it like any other block. */
+  margin: 0 -16px -10px -16px;
   width: calc(100% + 32px);
 }
 
@@ -28,8 +43,8 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: var(--blockr-color-bg-surface);
+  border-right: 1px solid var(--blockr-color-border-default);
   transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
   overflow: hidden;
 }
@@ -42,78 +57,442 @@
   pointer-events: none;
 }
 
-/* --- Sidebar Header ------------------------ */
 
-/* --- Search -------------------------------- */
+/* --- The sidebar: search, the panels, the patients ------------------------
+   Design system: a 30px search field (the size of the crossfilter card's),
+   menu-style rows with the hover wash, section titles for "On the profile",
+   the search's groups and "Patients", and the selected tint on the patient
+   on screen. The sidebar's left edge is 14px; rows pull their hover fill
+   out by their own padding so their text keeps that edge. */
 .pp-sidebar-search {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
-  flex-shrink: 0;
+  padding: 12px 12px 10px 14px;
 }
 
 .pp-sidebar-search-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--blockr-control-h-sm);
+  padding: 0 4px 0 30px;
+  border: 1px solid var(--blockr-color-border-default);
+  border-radius: var(--blockr-radius-md);
+  background: var(--blockr-color-bg-field);
+  transition: border-color var(--blockr-transition), box-shadow var(--blockr-transition);
+}
+
+.pp-sidebar-search-wrapper:focus-within {
+  border-color: var(--blockr-color-border-accent);
+  background: var(--blockr-color-bg-surface);
+  box-shadow: var(--blockr-focus-ring);
 }
 
 .pp-sidebar-search-icon {
   position: absolute;
-  left: 10px;
+  left: 9px;
   top: 50%;
+  display: inline-flex;
   transform: translateY(-50%);
-  color: var(--blockr-color-text-subtle, #9ca3af);
+  color: var(--blockr-color-text-muted);
   pointer-events: none;
 }
 
 .pp-sidebar-search-input {
-  width: 100%;
-  padding: 6px 28px 6px 32px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--blockr-color-bg-subtle, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 8px;
-  color: var(--blockr-color-text-primary, #111827);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  box-sizing: border-box;
-}
-
-.pp-sidebar-search-input:focus {
-  outline: none;
-  border-color: var(--blockr-blue-500, #3b82f6);
-  box-shadow: 0 0 0 3px var(--blockr-blue-100, #dbeafe);
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--blockr-font-size-sm);
+  color: var(--blockr-color-text-default);
 }
 
 .pp-sidebar-search-input::placeholder {
-  color: var(--blockr-color-text-subtle, #9ca3af);
+  color: var(--blockr-color-text-muted);
 }
 
-/* Clear (x): muted until hovered, gone when the box is empty */
 .pp-sidebar-search-clear {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 22px;
   height: 22px;
   padding: 0;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
   background: transparent;
-  border: none;
-  border-radius: 5px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
+  color: var(--blockr-color-text-muted);
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
 }
 
 .pp-sidebar-search-clear:hover {
-  background: var(--blockr-grey-200, #e5e7eb);
-  color: var(--blockr-color-text-secondary, #374151);
+  background: var(--blockr-color-bg-hover);
+  color: var(--blockr-color-text-default);
 }
 
 .pp-sidebar-search-clear.is-hidden {
   display: none;
+}
+
+/* Section titles: "On the profile", the search's groups, "Patients". */
+.pp-add-title,
+.pp-add-group,
+.pp-cohort-bandcap-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-add-title {
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.pp-add-group {
+  padding: 8px 0 4px;
+}
+
+.pp-add-group.is-hidden {
+  display: none;
+}
+
+/* The count after a section title: the number, not a shout. */
+.pp-add-n,
+.pp-panels {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px 8px 14px;
+  border-bottom: 1px solid var(--blockr-color-border-default);
+}
+
+.pp-add-on-wrap.is-hidden {
+  display: none;
+}
+
+/* Five rows, then it scrolls: uncapped, twelve panels would leave the
+   patients two rows. */
+.pp-add-on {
+  max-height: 170px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+
+.pp-add-results {
+  max-height: 290px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+
+/* A row: 32px, 14px, radius 4, the hover wash. A parameter shows its code,
+   then its name as meta, which is cut first. */
+.pp-add-ord,
+.pp-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 -8px;
+  padding: 0 2px 0 8px;
+  border-radius: var(--blockr-radius-sm);
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pp-add-ord {
+  cursor: grab;
+  outline: none;
+}
+
+.pp-add-ord:hover,
+.pp-add-ord:focus-visible,
+.pp-add-row:hover,
+.pp-add-row.is-enter {
+  background: var(--blockr-color-bg-hover);
+}
+
+.pp-add-row.is-hidden {
+  display: none;
+}
+
+.pp-add-code,
+.pp-add-ord-code {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-add-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-add-code + .pp-add-name,
+.pp-add-name.is-meta {
+  font-size: var(--blockr-font-size-sm);
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-add-row:hover .pp-add-code + .pp-add-name,
+.pp-add-row.is-enter .pp-add-code + .pp-add-name,
+.pp-add-ord:hover .pp-add-name.is-meta {
+  color: var(--blockr-color-text-default);
+}
+
+/* The check of what is on the profile, in front of the row. */
+.pp-add-tick {
+  display: inline-flex;
+  flex: 0 0 14px;
+  color: var(--blockr-color-text-accent);
+  visibility: hidden;
+}
+
+.pp-add-row.is-on .pp-add-tick {
+  visibility: visible;
+}
+
+.pp-add-row mark {
+  background: none;
+  color: inherit;
+  font-weight: var(--blockr-font-weight-semibold);
+}
+
+.pp-add-none {
+  display: none;
+  padding: 10px 0 6px;
+  text-align: center;
+  font-size: var(--blockr-font-size-sm);
+  font-style: italic;
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-add-none.is-shown {
+  display: block;
+}
+
+/* Dragging a row: it dims, and a line shows where it lands. */
+.pp-add-ord.is-dragging {
+  opacity: 0.45;
+}
+
+/* Where it lands: a straight 2px line between two rows, from the text's
+   edge. Not a shadow on the row, which bent round its rounded corners. */
+.pp-add-ord {
+  position: relative;
+}
+
+.pp-add-ord.is-over::before,
+.pp-add-ord.is-over-last::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--blockr-color-border-accent);
+  pointer-events: none;
+}
+
+.pp-add-ord.is-over::before {
+  top: -1px;
+}
+
+.pp-add-ord.is-over-last::after {
+  bottom: -1px;
+}
+
+.pp-add-ord.is-landed {
+  background: var(--blockr-color-bg-accent-subtle);
+}
+
+/* Remove: a 26px tool on the row under the pointer or the keyboard. */
+.pp-add-ord-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
+  background: transparent;
+  color: var(--blockr-color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.pp-add-ord:hover .pp-add-ord-x,
+.pp-add-ord:focus-within .pp-add-ord-x {
+  opacity: 1;
+}
+
+.pp-add-ord-x:hover {
+  color: var(--blockr-color-text-danger);
+}
+
+/* The patients: a section title, then one sentence saying what the strip
+   draws and how the list is ordered. */
+.pp-cohort-bandcap {
+  padding: 14px 12px 10px 14px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pp-cohort-bandcap-what {
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.5;
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-cohort-bandcap-what .pp-gear-meta {
+  margin-left: 4px;
+}
+
+.pp-cohort-empty {
+  padding: 10px 6px 6px;
+  text-align: center;
+  font-size: var(--blockr-font-size-sm);
+  font-style: italic;
+  color: var(--blockr-color-text-muted);
+}
+
+/* A patient: the id, sex and age, the arm as a badge in its data colour,
+   the strip under them. Hover washes it; the patient on screen takes the
+   selected tint with its text in the accent, and no edge. */
+.pp-pt {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 46px;
+  padding: 4px 6px 5px;
+  border-radius: var(--blockr-radius-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pp-pt + .pp-pt {
+  margin-top: 2px;
+}
+
+.pp-pt:hover,
+.pp-pt.is-enter,
+.pp-pt.is-cursor {
+  background: var(--blockr-color-bg-hover);
+}
+
+.pp-pt.is-selected {
+  background: var(--blockr-color-bg-selected);
+}
+
+.pp-pt.is-filtered-out {
+  display: none;
+}
+
+.pp-pt-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.2;
+}
+
+.pp-pt-id {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-default);
+}
+
+.pp-pt-demo,
+.pp-pt-val,
+.pp-pt-hits {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-pt:hover .pp-pt-demo,
+.pp-pt.is-enter .pp-pt-demo,
+.pp-pt:hover .pp-pt-val,
+.pp-pt:hover .pp-pt-hits {
+  color: var(--blockr-color-text-default);
+}
+
+.pp-pt.is-selected .pp-pt-id,
+.pp-pt.is-selected .pp-pt-demo,
+.pp-pt.is-selected .pp-pt-val,
+.pp-pt.is-selected .pp-pt-hits {
+  color: var(--blockr-color-text-accent);
+}
+
+.pp-pt.is-selected .pp-pt-id {
+  font-weight: var(--blockr-font-weight-semibold);
+}
+
+.pp-pt-gap {
+  flex: 1 1 auto;
+}
+
+/* The arm: a badge in the arm's data colour (pp_cohort_chip_style() sets the
+   colour and the tint, so the arm here and on the info card agree). */
+.pp-pt-code {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: var(--blockr-radius-pill);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: var(--blockr-font-weight-medium);
+  line-height: 1;
+}
+
+.pp-pt-swatch {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  align-self: center;
+  border-radius: 2px;
+}
+
+.pp-pt-band {
+  display: block;
+  width: 100%;
 }
 
 /* --- Sidebar Content ----------------------- */
@@ -149,146 +528,347 @@
      plus 1px plus 12px is the profile's equivalent of that single 16px. Any
      more and the profile reads as indented from every other block. */
   padding: 10px 4px;
-  background: var(--blockr-color-bg-subtle, #f9fafb);
+  background: var(--blockr-color-bg-surface);
+}
+
+/* The chart area's empty states (blockr.ui's .blockr-empty) start where the
+   header's title does, so the line reads as the rest of its sentence. */
+.pp-chart-area .blockr-empty--block {
+  padding-inline: 13px 12px;
+}
+
+/* --- The header row (design system, "Header row") -------------------------
+   The count of patients and the drill-down reset lead the row; the subject
+   id is the output title; download and the gear sit on the right, gear last.
+   The facts about the patient are the sentence under the row, full width, so
+   they wrap in a narrow rail instead of clipping. Left and right edges line
+   up with the panels' own headers below (4px area inset + 1px border + 12px
+   header padding). The title and the sentence are uiOutputs: the area goes
+   on the output and on what it renders, so the grid holds whether or not
+   Shiny's wrapper takes part in the layout. */
+.pp-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "seg title tools"
+    "sent sent sent";
+  align-items: center;
+  column-gap: 10px;
+  padding: 2px 12px 12px 13px;
+}
+
+.pp-head-title {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-lg);
+  font-weight: var(--blockr-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--blockr-color-text-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-head-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-head-sentence {
+  grid-area: sent;
+  margin-top: 4px;
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.6;
+  color: var(--blockr-color-text-muted);
+}
+
+/* The worst severity's colour, before its word: a data colour. */
+.pp-head-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 0 1px;
+  border-radius: 2px;
+}
+
+/* The count and the reset: one 26px segment (design system, "Showing that a
+   block filters"). The count is an xs secondary button, the reset an xs main
+   button that is disabled while nothing is drilled. Drilled, the count takes
+   the reset's accent tint too, so the pair reads as the filter it is. */
+.pp-cohort-seg {
+  grid-area: seg;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The list toggle: the sidebar glyph, muted like the download icon beside
+   the gear. Rare, and nothing to do with filtering. */
+.pp-list-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--blockr-control-h-xs);
+  height: var(--blockr-control-h-xs);
+  padding: 0;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
+  background: transparent;
+  color: var(--blockr-color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--blockr-transition), color var(--blockr-transition);
+}
+
+.pp-list-toggle:hover {
+  background: var(--blockr-color-bg-hover);
+  color: var(--blockr-color-text-default);
+}
+
+.pp-list-toggle:focus-visible,
+.pp-drill-reset:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+/* The cohort's status, painted by pp-header.js: on the patients' header in
+   the sidebar, and in the header row only while the list is shut. */
+.pp-layout:not(.sidebar-collapsed) .pp-head .pp-cohort-status {
+  display: none;
+}
+
+.pp-cohort-status {
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* The patients' title holds the 26px status on its right: centre the row
+   on it and keep its height when there is none. A reset too wide for the
+   row (a four-digit study) drops under the title rather than out of the
+   sidebar. */
+.pp-cohort-bandcap-title {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-height: var(--blockr-control-h-xs);
+  margin-bottom: 6px;
+}
+
+.pp-cohort-bandcap-title .pp-cohort-status {
+  margin-left: auto;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pp-cohort-total {
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The drill's reset, the population filter's button (blockr.dm
+   .jscf-reset-btn): the design system's 26px main button, the icon and how
+   many patients the drill kept. */
+.pp-drill-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: var(--blockr-control-h-xs);
+  padding: 0 7px;
+  border: 1px solid var(--blockr-color-border-accent-subtle);
+  border-radius: var(--blockr-radius-sm);
+  background: var(--blockr-color-bg-accent-subtle);
+  color: var(--blockr-color-text-accent);
+  font: inherit;
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--blockr-transition),
+    border-color var(--blockr-transition);
+}
+
+.pp-drill-reset:hover {
+  background: var(--blockr-color-bg-accent-subtle-hover);
+  border-color: var(--blockr-color-border-accent);
+}
+
+.pp-drill-reset svg {
+  flex: none;
+}
+
+/* --- The gear tray (blockr.ui's .blockr-settings) ------------------------
+   Display (built by pp-header.js), then the study variables and what this
+   study cannot draw (the gear_coverage output). */
+.pp-gear-tray {
+  margin: 6px 4px 16px;
+}
+
+/* The beak points at the gear, which sits 12px in from the header's edge
+   (the tray is inset 4px). */
+.pp-gear-tray.blockr-settings--open::before {
+  right: 16px;
+}
+
+.pp-gear-tray > .pp-gear-display,
+.pp-gear-tray > .pp-gear-coverage {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.pp-gear-display:empty {
+  display: none;
+}
+
+.pp-gear-display:not(:empty) ~ .pp-gear-coverage > .blockr-settings__title:first-child {
+  margin-top: 24px;
+}
+
+/* A checkbox sits on the controls' line of its grid row. */
+.pp-gear-tray .blockr-settings__field > .blockr-checkbox {
+  min-height: var(--blockr-control-h);
+}
+
+.pp-gear-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-base);
+  line-height: var(--blockr-control-h-xs);
+  color: var(--blockr-color-text-default);
+}
+
+.pp-gear-value.is-none {
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-gear-meta {
+  margin-left: 8px;
+  font-size: var(--blockr-font-size-sm);
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-gear-cov-row {
+  font-size: var(--blockr-font-size-base);
+  line-height: 1.9;
+  color: var(--blockr-color-text-default);
 }
 
 /* --- Chart Panels -------------------------- */
-.pp-chart-panel {
-  margin-bottom: 16px;
-  background: #ffffff;
-  border-radius: 8px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  overflow: hidden;
-}
-
-.pp-chart-panel:last-child {
-  margin-bottom: 0;
-}
-
+/* A panel is its header and its chart on the white chart area, with a rule
+   between one panel and the next (not a card: the area is one surface). The
+   slot output is display:contents, so the header carries the rule. Left and
+   right edges line up with the profile's header row. */
 .pp-chart-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* 12px + the 4px on .pp-chart-area + 1px border == the 16px a standard
-     block card insets its content by. */
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--blockr-grey-100, #f3f4f6);
+  padding: 14px 12px 6px 13px;
+  cursor: grab;
 }
 
+.pp-chart-panel + .pp-chart-panel .pp-chart-header,
+.pp-chart-panel + .pp-chart-panel > .pp-chart-header {
+  border-top: 1px solid var(--blockr-color-border-default);
+}
+
+.pp-chart-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.pp-chart-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The panel's title: 14px, 600, the one heading under the output title. */
 .pp-chart-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--blockr-color-text-secondary, #374151);
-  margin: 0;
-  /* Never shrinks. It is the card's name, it has no ellipsis, and the header
-     has two other items that can give way in order: the sublabel first, then
-     the controls (which scroll). */
-  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--blockr-font-size-base);
+  font-weight: var(--blockr-font-weight-semibold);
+  line-height: var(--blockr-control-h-xs);
+  color: var(--blockr-color-text-default);
 }
 
-/* Remove (x): muted, and only fully legible once the panel is hovered --
-   it is a destructive-ish action sitting next to the chart, not a call to
-   action. Always focusable, so keyboard users are not locked out. */
-.pp-chart-remove {
+/* The panel's sentence, and a checkbox after it. */
+.pp-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  margin-top: -2px;
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.5;
+  color: var(--blockr-color-text-muted);
+  cursor: default;
+}
+
+.pp-chart-controls .blockr-checkbox {
+  min-height: 0;
+  font-size: var(--blockr-font-size-sm);
+}
+
+/* Download and remove: 26px tools, shown while the header is hovered or
+   holds focus, so a stack of panels is not a stack of icons. An open menu
+   keeps its tool. */
+.pp-chart-tools {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  /* Holds the (x) against the right edge; previously the domain label sat
-     here and carried the auto margin. */
-  margin-left: auto;
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  border-radius: 5px;
-  color: var(--blockr-grey-300, #d1d5db);
+  gap: 2px;
+  flex: 0 0 auto;
   opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+  transition: opacity var(--blockr-transition);
 }
 
-.pp-chart-panel:hover .pp-chart-remove,
-.pp-chart-remove:focus-visible {
+.pp-chart-header:hover .pp-chart-tools,
+.pp-chart-header:focus-within .pp-chart-tools,
+.pp-chart-tools:has([aria-expanded="true"]) {
   opacity: 1;
 }
 
 .pp-chart-remove:hover {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-muted, #6b7280);
+  color: var(--blockr-color-text-danger);
 }
 
-/* Download menu: same muted, hover-revealed treatment as the (x) -- an
-   export affordance, not a call to action. A native <details>, so it needs
-   no JS and closes itself on the next click elsewhere. */
-.pp-chart-download {
-  position: relative;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-/* When the download menu is present it carries the auto margin; the (x)
-   then sits right of it without doubling the gap. */
-.pp-chart-download + .pp-chart-remove {
-  margin-left: 0;
-}
-
-.pp-chart-download > summary {
+/* The legend band (design system, "Charts"): 25 x 14px swatches, 11px. */
+.pp-chart-legend {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.pp-legend-item {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  color: var(--blockr-grey-300, #d1d5db);
-  opacity: 0;
-  cursor: pointer;
-  list-style: none;
-  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+  gap: 6px;
+  font-size: var(--blockr-mark-font-size);
+  color: var(--blockr-color-text-muted);
+  white-space: nowrap;
 }
 
-.pp-chart-download > summary::-webkit-details-marker {
-  display: none;
+.pp-legend-swatch {
+  width: 25px;
+  height: 14px;
+  flex: none;
+  border-radius: var(--blockr-mark-radius);
+  background: var(--blockr-color-border-strong);
 }
 
-.pp-chart-panel:hover .pp-chart-download > summary,
-.pp-chart-download > summary:focus-visible,
-.pp-chart-download[open] > summary {
-  opacity: 1;
+.pp-legend-swatch.is-serious {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--blockr-color-text-default);
 }
 
-.pp-chart-download > summary:hover,
-.pp-chart-download[open] > summary {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-muted, #6b7280);
-}
-
-.pp-chart-download-menu {
-  position: absolute;
-  right: 0;
-  top: 24px;
-  z-index: 20;
-  min-width: 120px;
-  padding: 4px;
-  background: #fff;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.pp-chart-download-menu a {
-  display: block;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--blockr-color-text-secondary, #374151);
-  text-decoration: none;
-}
-
-.pp-chart-download-menu a:hover {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-primary, #111827);
+.pp-chart-body {
+  padding: 0 0 8px;
 }
 
 /* Patient info: the subject's facts, two to a line.
@@ -309,9 +889,8 @@
  * one fact, and at this density the rules were a second grid arguing with
  * the first.
  *
- * 30px of left inset, not 12: the panel's own title starts at 30 (12px of
- * header padding plus the drag grip), and the facts were the only thing in
- * the card hanging out to the left of its own heading. */
+ * The facts start on the panel title's edge. Pairs are at least 230px, so a
+ * subject id or an arm is never cut. */
 .pp-info-grid {
   display: grid;
   /* Two pairs to a line where the panel is wide enough for two, one where it
@@ -320,10 +899,10 @@
      and a fixed second column at 311px broke every value a character at a
      time down its own column. 132px is the widest pair the card can hold
      (a "Response" label beside a subject id). */
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  column-gap: 18px;
-  margin: 4px 12px 8px 30px;
-  font-size: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  column-gap: 24px;
+  margin: 2px 12px 10px 13px;
+  font-size: var(--blockr-font-size-sm);
 }
 
 /* One pair, one grid item: label and value fold together or not at all. */
@@ -332,8 +911,9 @@
   grid-template-columns: auto 1fr;
   column-gap: 10px;
   align-items: baseline;
-  padding: 3px 0;
+  padding: 2px 0;
   min-width: 0;
+  line-height: 20px;
 }
 
 /* A value no pair-width can hold -- the treatment period is two dates and a
@@ -343,7 +923,7 @@
 }
 
 .pp-info-k {
-  color: var(--blockr-color-text-muted, #6b7280);
+  color: var(--blockr-color-text-muted);
   white-space: nowrap;
   font-weight: 400;
   /* A floor, not a column. Each pair sizes its own label, so folded to one
@@ -353,11 +933,11 @@
      the 160px fixed column this replaced. A label wider than the floor (the
      treatment period's) simply pushes its own value; that row spans, so it
      has the room. */
-  min-width: 72px;
+  min-width: 76px;
 }
 
 .pp-info-v {
-  color: var(--blockr-color-text-primary, #111827);
+  color: var(--blockr-color-text-default);
   margin: 0;
   min-width: 0;
 }
@@ -371,313 +951,22 @@
   text-overflow: ellipsis;
 }
 
-/* The arm and the response, in the chip the cohort list draws them in --
+/* The arm and the response, as badges in their data colour, the colour the
+   cohort list draws them in --
    pp_cohort_chip_style() computes the style for both, so the arm here and
    the arm on the row this card was opened from cannot be two colours. */
 .pp-info-chip {
-  display: inline-block;
-  font-size: 10px;
-  line-height: 15px;
-  height: 15px;
-  padding: 0 5px;
-  border-radius: 4px; /* --blockr-radius-sm */
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* A panel's legend: decodes the bar colors. The header's last row (see "The
-   header's rows" below), and it wraps within it if a study carries enough
-   severity levels to run out of one. */
-.pp-chart-legend {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  order: 2;
-  flex-basis: 100%;
-  padding-left: 18px;
-}
-
-/* --- The header's rows ------------------------------------------------------
-   Three rows, in reading order: the title, what you can set, what the
-   colours mean. Both lower rows are the full width and indented 18px -- the
-   grip and its gap -- so they line up under the title's text.
-
-   Everything used to sit on the title row, and a card is 311px in the 600px
-   rail. The legend went first: it never shrinks, and on a 600px profile it
-   and the find box shared about 110px. The controls followed for the same
-   reason -- the find box was cut mid-placeholder and the gantts' Lanes pill
-   was off the panel entirely, reachable only by dragging the controls' own
-   scrollbar, which is 15px of grey with arrows under a 22px row on Windows.
-   The row cost its height anyway and gave nothing back.
-
-   Unconditionally, not under a container query at the width where the title
-   row runs out: the profile is read in the rail, so the wide sash where the
-   old single row still fitted is rare enough that making the header move
-   between the two was the more confusing half of the trade.
-
-   The download menu and the (x) come after the controls and the legend in
-   the DOM and belong on the title row, which `order` is what keeps.
-   ========================================================================= */
-.pp-chart-header {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-
-.pp-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--blockr-radius-pill);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent);
   font-size: 11px;
-  color: var(--blockr-color-text-muted, #6b7280);
+  font-weight: var(--blockr-font-weight-medium);
+  line-height: 1;
   white-space: nowrap;
-}
-
-.pp-legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--blockr-grey-400, #9ca3af);
-}
-
-.pp-legend-swatch.is-serious {
-  background: transparent;
-  border: 1.5px solid var(--blockr-grey-900, #111827);
-}
-
-.pp-chart-body {
-  padding: 0;
-}
-
-/* --- Treatment Strip ----------------------- */
-.pp-treatment-strip {
-  margin-bottom: 8px;
-}
-
-.pp-treatment-strip .pp-chart-header {
-  padding: 6px 16px;
-}
-
-.pp-treatment-strip .pp-chart-body {
-  padding: 0;
-}
-
-/* --- Chart Controls Toolbar ---------------- */
-.pp-chart-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  /* The header's middle row (see "The header's rows"): the full width, under
-     the title, indented to its text. */
-  order: 1;
-  flex-basis: 100%;
-  min-width: 0;
-  /* The last resort, for a findings card whose chips outgrow a whole row.
-     A gantt's find box and pill fit one now, and the box gives way first. */
-  overflow-x: auto;
-  /* Where the bar is drawn (Windows, or any overlay-less setup) the classic
-     one is 15px of grey with arrows under a 22px row; the thin one is half
-     that and has none. Ignored where unsupported, so nothing to fall back to. */
-  scrollbar-width: thin;
-  padding: 0 4px 0 18px;
-}
-
-.pp-ctrl-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* The one item on the controls row that can give way. The find trigger is a
-   button whose text can be clipped without losing the control; the pill
-   beside it is a fixed set of words, and shrinking it would clip a label.
-   Shrink only -- a wide panel keeps the trigger at its own width rather than
-   stretching it across the row. */
-.pp-ctrl-group--find {
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-.pp-ctrl-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-
-/* Chip controls (checkbox) */
-.pp-ctrl-chips {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
-}
-
-.pp-ctrl-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  font-weight: 400;
-  color: var(--blockr-color-text-muted, #6b7280);
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
-  line-height: 1.4;
-}
-
-.pp-ctrl-chip:hover {
-  border-color: var(--blockr-color-border-hover, #d1d5db);
-  background: var(--blockr-grey-200, #e5e7eb);
-}
-
-.pp-ctrl-chip.is-active {
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  background: var(--blockr-blue-100, #dbeafe);
-  border-color: #93c5fd;
-}
-
-/* Toggle control */
-.pp-ctrl-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.pp-ctrl-toggle-track {
-  display: inline-flex;
-  align-items: center;
-  width: 28px;
-  height: 16px;
-  background: var(--blockr-grey-300, #d1d5db);
-  border-radius: 8px;
-  padding: 2px;
-  transition: background 0.15s ease;
-}
-
-.pp-ctrl-toggle.is-on .pp-ctrl-toggle-track {
-  background: var(--blockr-blue-500, #3b82f6);
-}
-
-.pp-ctrl-toggle-thumb {
-  display: block;
-  width: 12px;
-  height: 12px;
-  background: #ffffff;
-  border-radius: 50%;
-  transition: transform 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-}
-
-.pp-ctrl-toggle.is-on .pp-ctrl-toggle-thumb {
-  transform: translateX(12px);
-}
-
-/* Radio controls */
-.pp-ctrl-radios {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.pp-ctrl-radio {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  font-weight: 400;
-  color: var(--blockr-color-text-muted, #6b7280);
-  background: var(--blockr-color-bg-subtle, #f9fafb);
-  border: none;
-  border-right: 1px solid var(--blockr-color-border, #e5e7eb);
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
-  line-height: 1.4;
-}
-
-.pp-ctrl-radio:last-child {
-  border-right: none;
-}
-
-.pp-ctrl-radio:hover {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-}
-
-.pp-ctrl-radio.is-active {
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  background: var(--blockr-blue-100, #dbeafe);
-  font-weight: 500;
-}
-
-/* Click-through pill (cycles a value in place; see blockr.docs
-   design-system/components/blockr-row.md). Geometry matches the chips and
-   radios beside it in this toolbar, tinted like an active radio because the
-   pill always shows a chosen state. */
-.pp-ctrl-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  border: 1px solid var(--blockr-blue-100, #dbeafe);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
-}
-
-.pp-ctrl-pill:hover {
-  background: var(--blockr-blue-100, #dbeafe);
-  border-color: #bfdbfe;
-}
-
-/* --- Empty state --------------------------- */
-.pp-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-empty-state-icon {
-  margin-bottom: 12px;
-  color: var(--blockr-grey-300, #d1d5db);
-}
-
-.pp-empty-state-text {
-  font-size: 14px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  margin: 0 0 4px;
-}
-
-.pp-empty-state-hint {
-  font-size: 12px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  margin: 0;
+  vertical-align: middle;
 }
 
 /* --- Scrollbar styling --------------------- */
@@ -690,526 +979,12 @@
 }
 
 .pp-chart-area::-webkit-scrollbar-thumb {
-  background: var(--blockr-grey-300, #d1d5db);
+  background: var(--blockr-color-border-strong);
   border-radius: 3px;
 }
 
 .pp-chart-area::-webkit-scrollbar-thumb:hover {
-  background: var(--blockr-grey-400, #9ca3af);
-}
-
-/* --- Gear popover (block-level advanced settings) ------------ */
-
-.pp-gear-wrap {
-  position: relative;
-}
-
-.pp-gear-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-}
-
-/* Block-level download: the whole profile as one file. Same 26px chrome as
-   the gear beside it, same <details> menu pattern as the blockr.viz blocks'
-   download control. */
-
-/* The menu is rendered ONCE and synced over a custom message (labels,
-   section visibility) so a patient switch never re-renders -- and never
-   blinks -- the button. is-hidden gates the whole control and each scope
-   section. */
-.pp-dl-menu {
-  position: relative;
-  margin-right: 2px;
-}
-
-.pp-dl-menu.is-hidden,
-.pp-dl-menu-list .pp-dl-scope.is-hidden {
-  display: none;
-}
-
-.pp-dl-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  cursor: pointer;
-  list-style: none;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.pp-dl-btn::-webkit-details-marker {
-  display: none;
-}
-
-.pp-dl-btn:hover,
-.pp-dl-menu[open] > .pp-dl-btn {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-.pp-dl-menu-list {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 30;
-  min-width: 160px;
-  padding: 4px;
-  background: #ffffff;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-/* Scope section labels: "This patient: <id>" / "Cohort (N patients)". */
-.pp-dl-menu-label {
-  padding: 6px 10px 2px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  white-space: nowrap;
-}
-
-.pp-dl-menu-label + a {
-  margin-top: 0;
-}
-
-.pp-dl-menu-list a {
-  display: block;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--blockr-color-text-secondary, #374151);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.pp-dl-menu-list a:hover {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-.pp-gear-btn:hover {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-.pp-gear-btn.is-active {
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.2);
-}
-
-.pp-gear-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  min-width: 220px;
-  padding: 8px;
-  background: #ffffff;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  z-index: 30;
-  display: none;
-}
-
-.pp-gear-popover.is-open {
-  display: block;
-}
-
-.pp-popover-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 6px;
-}
-
-.pp-popover-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-/* Click-through pill: shows current value, flips on click. Matches the
-   blockr-pill pattern from blockr.dplyr. */
-.pp-popover-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  height: 24px;
-  min-width: 28px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--blockr-color-text-secondary, #374151);
-  background: var(--blockr-color-bg-subtle, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.pp-popover-toggle:hover:not(.is-disabled) {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-  border-color: var(--blockr-color-border-hover, #d1d5db);
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-.pp-popover-toggle.is-disabled {
-  color: var(--blockr-grey-300, #d1d5db);
-  cursor: not-allowed;
-}
-
-/* Data-coverage diagnostics (gear popover): which visuals can't render
-   for the current data, and why. */
-.pp-popover-divider {
-  height: 1px;
-  background: #f0f1f3;
-  margin: 6px 2px;
-}
-
-.pp-popover-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  padding: 2px 6px 4px;
-}
-
-.pp-coverage-ok {
-  font-size: 11px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  padding: 2px 6px 4px;
-}
-
-.pp-coverage-item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 3px 6px;
-}
-
-.pp-coverage-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-.pp-coverage-reason {
-  font-size: 11px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-/* --- The chart toolbar -----------------------------------------------------
-   Was a Blockr.Select over the whole cohort with a stepper either side. The
-   sidebar's cohort list is the picker now; what is here says who is on
-   screen. See "Who is on screen" below.
-   ========================================================================= */
-
-.pp-chart-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  /* The add menu hangs off this, not off the button, so it has the whole
-     column's width to fit into. */
-  position: relative;
-}
-
-/* Gear row: match the identity line's height so the two sit on one baseline. */
-.pp-chart-toolbar .pp-cohort-hint {
-  height: 42px;
-}
-
-/* Cohort tag, and the sidebar's toggle.
-   
-   First thing in the toolbar, against the edge the drawer slides from -- it
-   used to sit at the far right with the download and the gear, the opposite
-   end of the screen from the thing it opens. The chevron points at the
-   sidebar and flips when it is shut, so the tag states the outcome of a
-   click rather than the current state, the rule the sort pill follows.
-   
-   Quiet while the sidebar is OPEN and tinted once it is SHUT. With the list
-   on screen the tag is reporting a number and the dock's two-tone badge is
-   the right look for that; shut, it is the only way back, so it takes the
-   house control tint. The colour is the invitation and it only appears when
-   there is something to invite.
-   ========================================================================= */
-.pp-cohort-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px 3px 7px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 6px; /* --blockr-radius-md, one step up from the badge it was */
-  background: var(--blockr-grey-100, #f3f4f6);
-  color: var(--blockr-color-text-muted, #6b7280);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  white-space: nowrap;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease;
-}
-
-.pp-cohort-count:hover {
-  background: var(--blockr-grey-200, #e5e7eb);
-  border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-/* Sidebar shut: the tag is the way back, so it says so. */
-.pp-cohort-count.is-shut {
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  border-color: var(--blockr-blue-100, #dbeafe);
-}
-
-.pp-cohort-count.is-shut:hover {
-  background: var(--blockr-blue-100, #dbeafe);
-  border-color: #bfdbfe;
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-}
-
-.pp-cohort-count:focus-visible {
-  outline: 2px solid var(--blockr-blue-500, #3b82f6);
-  outline-offset: 1px;
-}
-
-.pp-cohort-count.is-hidden {
-  display: none;
-}
-
-.pp-cohort-count-car {
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0.7;
-  transition: transform 0.15s ease;
-}
-
-.pp-cohort-count.is-shut .pp-cohort-count-car {
-  transform: rotate(180deg);
-}
-
-/* Drilled: the count and the reset become ONE segmented control.
-   
-   It wears the crossfilter's "Reset all" COLOURS -- same tint, same border,
-   same hover, same glyph (blockr.dm/inst/css/crossfilter-block.css,
-   `.jscf-reset-btn`) -- and the pill's OWN geometry: 11px type, 6px radius,
-   the height it already has at rest. So it lands a size under the
-   crossfilter's 26px button, on purpose. Two reasons. A control that grew
-   when it went blue and shrank when it went grey would jump under the eye
-   of the person clicking it, which is the one moment it must not move. And
-   of the two, this is the smaller claim: the crossfilter's reset drops every
-   table on the dashboard, this one only widens a patient list.
-
-   The pair is joined rather than spaced: the count loses its right radius
-   and its right border, the reset loses its left radius, and the reset's
-   left border IS the hairline between them -- no divider element. After
-   .is-shut so it wins when both apply; a drilled list is the louder fact. */
-.pp-cohort-seg {
-  display: inline-flex;
-  /* Stretch, so the reset is exactly as tall as the count whatever the
-     count's content settles on. The two halves cannot disagree by a pixel. */
-  align-items: stretch;
-  flex: 0 0 auto;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count,
-.pp-cohort-reset {
-  color: var(--blockr-color-primary, #2563eb);
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px solid rgba(37, 99, 235, 0.35);
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count:hover,
-.pp-cohort-reset:hover {
-  background: rgba(37, 99, 235, 0.13);
-  border-color: var(--blockr-color-primary, #2563eb);
-  color: var(--blockr-color-primary, #2563eb);
-}
-
-/* The join. The count keeps its right border and the reset is pulled 1px
-   over it, the way a button group does it -- dropping the border instead
-   would make the count 1px narrower when drilled, and the number inside it
-   would shift under the cursor at the exact moment the control is being
-   read. */
-.pp-cohort-seg.is-drilled .pp-cohort-count {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.pp-cohort-reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  padding: 0;
-  margin-left: -1px;
-  /* The count's type, not the browser's: `font: inherit` would do it in one
-     line and is the trap -- the shorthand resets every font-* it does not
-     name, so it threw away the size and weight it was meant to carry. */
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 6px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-/* 12 in a ~23px cell is the crossfilter's 14-in-26 ratio, kept. Set here
-   rather than on the R constant, so the glyph stays the crossfilter's. */
-.pp-cohort-reset svg {
-  width: 12px;
-  height: 12px;
-}
-
-.pp-cohort-seg.is-drilled .pp-cohort-count:focus-visible,
-.pp-cohort-reset:focus-visible {
-  outline: 2px solid var(--blockr-blue-500, #3b82f6);
-  outline-offset: 1px;
-  /* Above the neighbour, so the ring is not clipped by the shared edge. */
-  position: relative;
-  z-index: 1;
-}
-
-.pp-cohort-reset.is-hidden {
-  display: none;
-}
-
-/* --- Who is on screen ------------------------------------------------------
-   The header used to be a second patient picker. The sidebar's cohort list
-   does that job better, so this became the answer to "who am I looking at" --
-   the line you want once you have scrolled and the selected row is off
-   screen -- plus the facts the 232px row has no space for.
-   ========================================================================= */
-.pp-subject-picker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-  height: 42px;
-  /* The cohort tag is the first thing in here and provides the inset the id
-     used to need, so this only makes up the difference to where the panel
-     titles below start: .pp-chart-area insets 4px, and each panel adds a 1px
-     border and 12px of header padding. */
-  padding-left: 5px;
-  gap: 10px;
-}
-
-.pp-subject-gap {
-  flex: 1 1 auto;
-}
-
-/* The identity is a uiOutput, and `inline = TRUE` makes its wrapper a SPAN --
-   which Shiny's `div:where(.shiny-html-output)` display:contents rule does
-   not reach, so the wrapper stays a real inline box. The facts inside it are
-   a flex container, i.e. block-level, which pushed them onto a second line
-   under the id. Make the wrapper the row instead. */
-.pp-subject-picker > .shiny-html-output {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.pp-subject-who {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-primary, #111827);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-/* Nothing picked. Not amber: the chart area already carries the empty state
-   in full, and two cues for one condition is one too many. */
-.pp-subject-none {
-  font-size: 13px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-subject-facts {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  /* Facts drop off the right rather than wrapping the toolbar to two lines;
-     the arm is the widest and the first to go. */
-  overflow: hidden;
-}
-
-.pp-fact {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 11.5px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  white-space: nowrap;
-}
-
-.pp-fact b {
-  font-weight: 600;
-  color: var(--blockr-grey-700, #374151);
-  font-variant-numeric: tabular-nums;
-}
-
-.pp-fact-k {
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--blockr-grey-400, #9ca3af);
-}
-
-.pp-fact-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--blockr-grey-300, #d1d5db);
-  flex: 0 0 3px;
-  align-self: center;
-}
-
-.pp-fact-sev {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pp-fact-swatch {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  display: block;
+  background: var(--blockr-color-border-strong);
 }
 
 /* === Cohort list ============================================================
@@ -1231,19 +1006,6 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-/* The lifted id prefix, named once so nothing is hidden. */
-.pp-cohort-prefix {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  letter-spacing: 0;
-  text-transform: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 
 /* No focus ring on the list itself.
@@ -1302,7 +1064,7 @@
      sidebar is the symptom of a row that was allowed to be rigid. */
   overflow-x: hidden;
   padding: 0 5px 5px;
-  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-bottom: 1px solid var(--blockr-color-border-default);
   flex-shrink: 0;
 }
 .pp-cohort-well::-webkit-scrollbar {
@@ -1310,619 +1072,12 @@
 }
 
 .pp-cohort-well::-webkit-scrollbar-thumb {
-  background: var(--blockr-grey-300, #d1d5db);
+  background: var(--blockr-color-border-strong);
   border-radius: 4px;
 }
 
 .pp-cohort-well .recalculating {
   opacity: 1 !important;
-}
-
-.pp-cohort-empty {
-  padding: 10px 7px 12px;
-  font-size: 12px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-/* --- One patient --------------------------- */
-.pp-pt {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  /* 46px, and every pixel of it is spoken for: 13 for the id line, 30 for
-     the strip, the rest padding. The strip grew from 13 to 30 when the box
-     behind it went (see pp_cohort_band_h_series) and the row grew by two to
-     hold it -- a 700px well shows 15 patients either way. */
-  gap: 1px;
-  height: 46px;
-  padding: 1px 5px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.pp-pt:hover {
-  border-color: var(--blockr-color-border, #e5e7eb);
-  background: rgba(249, 250, 251, 0.9);
-}
-
-.pp-pt.is-selected {
-  border-color: var(--blockr-blue-500, #3b82f6);
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.pp-pt.is-filtered-out {
-  display: none;
-}
-
-.pp-pt-line {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-  overflow: hidden;
-  /* Tight, and stated rather than inherited: the row's budget is exact now,
-     and a 1.5 line-height on 11px type would spend two pixels the strip
-     needs. */
-  line-height: 1.2;
-}
-
-/* Shrink ORDER, longest-lived first. The id never gives way (it is already
-   only the part that varies), sex and age go first, and the arm chip gives
-   way before the id does. Every one of them needs `min-width: 0`, or a flex
-   child refuses to shrink below its intrinsic width and the row overflows
-   instead -- which is exactly what a 20-character prod id did. */
-.pp-pt-id {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-primary, #111827);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-.pp-pt-demo {
-  font-size: 10px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pp-pt-gap {
-  flex: 1 1 auto;
-}
-
-/* The arm. A chip when the study carries an arm code, a swatch when it does
-   not -- same information, but only the swatch needs a legend, which is what
-   makes ACTARMCD worth resolving.
-
-   The chip is LIGHT, per the house badge: a tint of the arm colour carrying
-   the same colour as text (pp_cohort_chip_style() computes both, since the
-   colour is per-arm and comes from the scale map). Solid colour with white
-   text turned a 200-row list into a wall of paint, and the chip should be
-   the quietest thing in the row after the band. */
-.pp-pt-code {
-  font-size: 10px;
-  line-height: 15px;
-  height: 15px;
-  padding: 0 5px;
-  border-radius: 4px; /* --blockr-radius-sm */
-  font-weight: 500;
-  white-space: nowrap;
-  /* Shrinks, but last, and only after sex and age have gone. An arm code
-     differs at its END (CMPA20-B100 against CMPB-200BID), so an ellipsis
-     here loses the distinguishing part -- the same failure as truncating an
-     id, which is why the row would rather drop other things first. */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pp-pt-swatch {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  flex: 0 0 9px;
-  align-self: center;
-}
-
-/* Stretched to whatever width the sidebar has. The element carries
-   preserveAspectRatio="none" (set in pp_cohort_band_svg(), not here -- it is
-   an SVG attribute, and the CSS property of that name is not reliably
-   supported): without it the default uniform scale is capped by the 7px
-   height and the band letterboxes, leaving a gap at both ends. A density
-   strip has no aspect ratio to preserve -- x is study days, y is nothing. */
-.pp-pt-band {
-  display: block;
-  width: 100%;
-}
-
-/* --- What the band is drawing -----------------------------------------------
-   The strip follows the panels now (pp_cohort_band_source()), so it has to
-   say which one. A severity strip explains itself; a line of unlabelled
-   numbers does not, and the parameter behind it is the part a reader cannot
-   guess. Ten pixels of type, directly above the bands it explains.
-   ========================================================================= */
-.pp-cohort-bandcap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* It sits directly under the search box, which has a border of its own,
-     and 0 on top put the caption against that line. */
-  padding: 9px 10px 7px;
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-/* The same ring, in front of the caption. Tinted like the one on the panel
-   rather than muted like the words after it: the pairing is the only thing
-   that teaches either of them. */
-.pp-cohort-bandcap .pp-band-glyph {
-  flex: 0 0 auto;
-  color: var(--blockr-color-primary, #2563eb);
-}
-
-/* The code, and it never shrinks. The row holds four things in 216px now
-   that the sort rides on it, and this is the one a reader matches against
-   the cards -- an ellipsis here (A..) makes the row point at nothing. The
-   full name beside it is what yields, because the card it names is on
-   screen and prints it whole. */
-.pp-cohort-bandcap-what {
-  color: var(--blockr-color-text-muted, #6b7280);
-  font-weight: 600;
-  white-space: nowrap;
-  /* Gives way before the filter chip beside it: the panel's name is printed
-     again in that panel's own header a few pixels to the right, and the chip
-     is not printed anywhere else. */
-  flex: 0 40 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The parameter's full name behind its code, in the caption. Same relation
-   the cards use -- ALB in the readable colour, Albumin (g/L) muted after it.
-   It yields its width first, because the code is the half that identifies. */
-.pp-cohort-bandcap-sub {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-/* The panel's search term, echoed. Without it the bands go sparse for no
-   visible reason, which is the sidebar quietly lying about the cohort. It
-   clears the search, so it is a control and looks like one. */
-.pp-cohort-bandcap-find {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 4px; /* --blockr-radius-sm */
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  border: 1px solid var(--blockr-blue-100, #dbeafe);
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  /* Never squeezed to an initial: "2 filte..." says less than "2 filters"
-     does. The panel's name beside it gives way instead -- that name is
-     printed again in the panel's own header a few pixels to the right, and
-     this chip is the only thing on screen that says why the bands went
-     sparse. A long single term is bounded by the span's max-width below. */
-  flex: 0 0 auto;
-}
-
-.pp-cohort-bandcap-find:hover {
-  background: var(--blockr-blue-100, #dbeafe);
-  border-color: #bfdbfe;
-}
-
-.pp-cohort-bandcap-find > span {
-  max-width: 132px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* How many of this patient's records the search matched. Printed even when
-   it is zero (as an en dash), because an empty band with no number beside it
-   reads as "no data" rather than as "none of what you asked for". */
-/* What the list was sorted by, per row. Same slot, same type and colour as
-   the search hit count, because they are the same kind of thing: a small
-   number that explains the shape of the list you are looking at. */
-.pp-pt-val {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-.pp-pt-hits {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-/* --- The panel's find control ------------------------------------------------
-   A trigger in the chart header, in the same 22px band as the LANES pill
-   beside it, so the toolbar keeps one baseline. The picking happens in
-   .pp-find-pop, which is parented to <body>: see pp-find.js.
-   ========================================================================= */
-.pp-ctrl-find {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 7px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px; /* --blockr-radius-sm */
-  background: var(--blockr-color-bg-subtle, #f9fafb);
-  /* Never a font-family of its own: see the design system's typography
-     rules, and css-font-shorthand-inherit-drops for why this is not `font:`. */
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--blockr-color-text-secondary, #374151);
-  cursor: pointer;
-  white-space: nowrap;
-  min-width: 0;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.pp-ctrl-find:hover,
-.pp-ctrl-find.is-open {
-  border-color: #93c5fd;
-}
-
-.pp-ctrl-find.is-active {
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  border-color: var(--blockr-blue-100, #dbeafe);
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-}
-
-.pp-ctrl-find .pp-search-icon {
-  flex: 0 0 auto;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-ctrl-find.is-active .pp-search-icon {
-  color: currentColor;
-}
-
-/* How many filters are on. The trigger cannot show the terms at this width,
-   so it shows the count and puts the terms in the tooltip, the caption above
-   the cohort list and the panel's own empty state. */
-.pp-ctrl-find-badge {
-  font-size: 10px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 14px;
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--blockr-color-primary-hover, #1d4ed8);
-  color: #fff;
-  flex: 0 0 auto;
-}
-
-/* How many of this patient's records survived, the count the find box printed
-   before it: an empty chart is never mistaken for a patient with no records. */
-.pp-ctrl-find-hits {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-.pp-ctrl-find-caret {
-  font-size: 9px;
-  opacity: 0.5;
-  flex: 0 0 auto;
-}
-
-.pp-ctrl-find-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 2px;
-  border: none;
-  background: none;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.pp-ctrl-find-clear:hover {
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-/* --- The picker ------------------------------------------------------------
-   FIXED and parented to <body>, for the two reasons the chart ghost is:
-   Shiny styles its output wrappers `div:where(.shiny-html-output):has(> *)
-   { display: contents }` (blockr.ui#41), so nothing between the panel and the
-   body generates a box to be positioned against; and the panel header is
-   REPLACED on every settings change, which would destroy a popover inside it.
-   ========================================================================= */
-.pp-find-pop {
-  position: fixed;
-  z-index: 1080;
-  display: none;
-  width: 320px;
-  max-width: 92vw;
-  background: #fff;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 7px; /* --blockr-radius-md */
-  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.14);
-  overflow: hidden;
-}
-
-.pp-find-pop.is-open {
-  display: block;
-}
-
-.pp-find-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--blockr-grey-100, #f3f4f6);
-}
-
-.pp-find-input {
-  border: none;
-  outline: none;
-  background: none;
-  font: inherit;
-  font-size: 12px;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-.pp-find-input::placeholder {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-/* The picks, pinned above the list. The list shows them ticked in place as
-   well; this row is what makes a pick the current patient does not have
-   reachable without scrolling to the bottom of its group. */
-.pp-find-picked {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 7px 10px;
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  border-bottom: 1px solid var(--blockr-blue-100, #dbeafe);
-}
-
-.pp-find-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 100%;
-  height: 17px;
-  padding: 0 3px 0 6px;
-  border-radius: 3px;
-  background: #fff;
-  border: 1px solid var(--blockr-blue-100, #dbeafe);
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-  font-size: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.pp-find-tag > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pp-find-drop {
-  border: none;
-  background: none;
-  padding: 0 1px;
-  cursor: pointer;
-  color: inherit;
-  opacity: 0.6;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.pp-find-drop:hover {
-  opacity: 1;
-}
-
-.pp-find-list {
-  max-height: 250px;
-  overflow-y: auto;
-  padding: 4px 0;
-  scrollbar-width: thin;
-}
-
-/* Which coding level a row came from. Picking a body system is a different
-   act from picking a preferred term, and the heading is what says so. */
-.pp-find-group {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  padding: 7px 10px 3px;
-}
-
-/* Where this patient's terms end and the rest of the cohort's begin. The
-   split is the honest way to offer a term the patient has none of: without
-   it a row reading zero looks like a bug, and with it the reader is arming a
-   filter on purpose. Only drawn while something is typed -- the cohort's
-   vocabulary runs to several hundred rows and would bury the patient's
-   eight. */
-.pp-find-split {
-  padding: 8px 10px 4px;
-  margin-top: 4px;
-  border-top: 1px solid var(--blockr-grey-100, #f3f4f6);
-  font-size: 10px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-find-group--elsewhere {
-  padding-top: 4px;
-}
-
-/* Quieter than this patient's own rows, and its count is a different unit
-   (patients in the cohort, not records here), which is why it is spelled
-   out rather than left as a bare number beside them. */
-.pp-find-opt.is-elsewhere {
-  color: var(--blockr-color-text-muted, #6b7280);
-}
-
-.pp-find-opt.is-elsewhere .pp-find-n {
-  font-variant-numeric: normal;
-}
-
-.pp-find-opt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-.pp-find-opt:hover,
-.pp-find-opt.is-cursor {
-  background: var(--blockr-color-bg-hover, #f3f4f6);
-}
-
-.pp-find-opt.is-picked {
-  background: var(--blockr-color-primary-bg, #eff6ff);
-}
-
-/* A picked term this patient has none of. Dimmed, never hidden: picks survive
-   a patient switch on purpose, and the control that would let you take one
-   off again is the one place that must not lose it. */
-.pp-find-opt.is-zero {
-  opacity: 0.45;
-}
-
-.pp-find-box {
-  flex: 0 0 13px;
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  border: 1px solid var(--blockr-grey-300, #d1d5db);
-  background: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  color: #fff;
-}
-
-.pp-find-opt.is-picked .pp-find-box {
-  background: var(--blockr-color-primary, #2563eb);
-  border-color: var(--blockr-color-primary, #2563eb);
-}
-
-.pp-find-text {
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pp-find-text mark {
-  background: #fef08a;
-  color: inherit;
-  padding: 0;
-}
-
-/* This patient's record count for the term. It is what answers "which of my
-   events are cardiac" before anything is picked and before the panel redraws. */
-.pp-find-n {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-find-empty,
-.pp-find-more {
-  padding: 12px 10px;
-  font-size: 12px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  text-align: center;
-}
-
-.pp-find-more {
-  padding: 6px 10px;
-  font-size: 10px;
-}
-
-.pp-find-empty b {
-  color: var(--blockr-color-text-secondary, #374151);
-  font-weight: 500;
-}
-
-.pp-find-free {
-  margin-top: 8px;
-  font: inherit;
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 5px;
-  cursor: pointer;
-  border: 1px solid var(--blockr-blue-100, #dbeafe);
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  color: var(--blockr-color-primary-hover, #1d4ed8);
-}
-
-.pp-find-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 10px;
-  border-top: 1px solid var(--blockr-grey-100, #f3f4f6);
-  font-size: 11px;
-  color: var(--blockr-color-text-muted, #6b7280);
-  background: var(--blockr-color-bg-subtle, #f9fafb);
-}
-
-.pp-find-acts {
-  display: flex;
-  gap: 6px;
-}
-
-.pp-find-foot button {
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 9px;
-  border-radius: 5px;
-  cursor: pointer;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  background: #fff;
-  color: var(--blockr-color-text-secondary, #374151);
-}
-
-.pp-find-done {
-  background: var(--blockr-color-primary, #2563eb) !important;
-  border-color: var(--blockr-color-primary, #2563eb) !important;
-  color: #fff !important;
 }
 
 /* --- Holding the last frame -------------------------------------------------
@@ -1951,7 +1106,7 @@
      shows up under a slow render. */
   pointer-events: none;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--blockr-color-bg-surface);
   opacity: 1;
   transition: opacity 0.16s ease;
 }
@@ -1979,205 +1134,6 @@
   opacity: 1;
 }
 
-/* What Enter would take: the first hit, in either list.
-   
-   A ring rather than a fill, because in the cohort the fill already means
-   "this is the patient on screen" and the two would be indistinguishable
-   at a glance. It only ever appears while the box has something in it. */
-/* What Enter would take: the first hit until the arrows move it, in either
-   list.
-
-   A ring rather than a fill, because in the cohort the fill already means
-   "this is the patient on screen" and the two would be indistinguishable
-   at a glance. It only ever appears while the box has something in it. */
-.pp-pt.is-enter,
-.pp-add-row.is-enter {
-  box-shadow: inset 0 0 0 1px #93c5fd;
-  border-radius: 5px;
-}
-
-/* How many panels are on the profile, on the section's own heading. Blank
-   rather than "0": an empty profile already says so in the chart area. */
-.pp-add-n {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.6;
-}
-
-.pp-add-n:empty {
-  display: none;
-}
-
-/* The picker. Anchored to the button rather than portalled: it is inside the
-   chart area, which does not clip it, and portalling is reserved for the
-   dropdowns that have to escape a dock panel. */
-/* The panels, in the sidebar, above the patients.
-   
-   This was a 340px menu anchored to a toolbar button, and before that a
-   catalogue of everything under the cohort. It is the profile you have --
-   five rows, capped, scrolling past that -- with the catalogue appearing
-   under it only while the search box has something in it. The column costs
-   the cohort five rows instead of the whole study's parameter set.
-   ========================================================================= */
-.pp-panels {
-  flex: 0 0 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 5px 6px;
-  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
-}
-
-/* Five rows, then it scrolls. Uncapped, a profile of twelve panels is a
-   312px list and the cohort under it is down to two patients -- which is
-   the failure the old sidebar had, and the reason this list left it. */
-.pp-add-on {
-  max-height: 145px;
-  overflow-y: auto;
-}
-
-/* The list is what gives way when the menu is capped to the room below the
-   toolbar: the search box and the footer keep their height, this takes what
-   is left. The max-height is the ceiling on a tall screen. */
-.pp-add-results {
-  max-height: 290px;
-  overflow-y: auto;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.pp-add-group {
-  font-size: 10px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  padding: 8px 7px 3px;
-}
-
-.pp-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 7px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--blockr-color-text-secondary, #374151);
-  cursor: pointer;
-}
-
-.pp-add-row:hover {
-  background: rgba(249, 250, 251, 0.9);
-}
-
-.pp-add-group.is-hidden,
-.pp-add-row.is-hidden {
-  display: none;
-}
-
-.pp-add-dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 4px;
-  flex: 0 0 13px;
-  display: block;
-  opacity: 0.85;
-}
-
-/* The code column. Fixed width so the names line up: a list of parameters is
-   read down the names, not down the codes. */
-.pp-add-code {
-  flex: 0 0 46px;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-add-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Where it lives: the domain for a panel, the panel for a parameter. This is
-   the whole answer to "ALB, but where is that?". */
-.pp-add-par {
-  flex: 0 0 auto;
-  font-size: 10.5px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-add-tick {
-  flex: 0 0 auto;
-  color: #059669;
-  font-size: 11px;
-  font-weight: 700;
-  visibility: hidden;
-}
-
-.pp-add-row.is-on .pp-add-tick {
-  visibility: visible;
-}
-
-.pp-add-row.is-on .pp-add-name {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-add-none {
-  display: none;
-  padding: 16px;
-  text-align: center;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  font-size: 12px;
-}
-
-.pp-add-none.is-shown {
-  display: block;
-}
-
-/* --- Dragging a panel ------------------------------------------------------
-   The handle is in the panel's own header, and the whole header is the drag
-   surface; the controls inside it keep their clicks. Six dots because it is
-   the convention and the only handle that is discoverable at rest -- quiet
-   enough at this weight to repeat down a stack of eight.
-   ========================================================================= */
-.pp-chart-grip {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  color: var(--blockr-grey-300, #d1d5db);
-  cursor: grab;
-  user-select: none;
-  transition: color 0.12s ease;
-}
-
-.pp-chart-header:hover .pp-chart-grip {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-chart-header {
-  cursor: grab;
-}
-
-/* Anything you can actually click keeps a normal cursor, or the header lies
-   about what a press will do. */
-.pp-chart-header button,
-.pp-chart-header a,
-.pp-chart-header input,
-.pp-chart-header summary,
-.pp-chart-header .pp-ctrl-chip,
-.pp-chart-header .pp-ctrl-pill,
-.pp-chart-header .pp-ctrl-radio,
-.pp-chart-header .pp-ctrl-find,
-.pp-chart-header .pp-ctrl-toggle {
-  cursor: pointer;
-}
-
-.pp-find-input {
-  cursor: text;
-}
-
 /* While a drag is in flight. The grab cursor has to be forced onto the whole
    document: the pointer leaves the header almost immediately and would
    otherwise flicker through every cursor it passes over. */
@@ -2197,194 +1153,70 @@ body.pp-dragging * {
 .pp-drop-line {
   position: fixed;
   height: 2px;
-  background: var(--blockr-blue-500, #3b82f6);
+  background: var(--blockr-color-bg-accent);
   border-radius: 1px;
   z-index: 40;
   pointer-events: none;
 }
 
-/* Which panel the cohort strip draws.
-   
-   The sidebar's caption names it, but naming it is not the same as pointing
-   at it: with the strip following the first drawable panel, "which one is
-   first?" has to be answerable where the panels are. Rendered in every
-   header and shown in one, so moving the mark is a class rather than two
-   re-renders. */
-.pp-band-tag {
-  display: none;
-  align-items: center;
-  flex: 0 0 auto;
-  /* Bare: no chip, no border, no words. A tinted pill around a 9px mark
-     reads as an empty button, and this header already carries two real
-     ones. The colour is what says "marked" rather than "decoration". */
-  color: var(--blockr-color-primary, #2563eb);
-}
 
-.pp-chart-panel.pp-is-band .pp-band-tag {
-  display: inline-flex;
-}
-
-/* --- Ordering inside the picker --------------------------------------------
-   The panels themselves are the primary way to reorder -- the card you are
-   looking at is the card you drag. This is the same gesture over 28px rows
-   instead of 400px charts, which is what makes it worth having twice: moving
-   a panel past two tall ones is a long drag, and here it is a short one.
-   ========================================================================= */
-.pp-add-on-wrap.is-hidden {
-  display: none;
-}
-
-.pp-add-on {
-  margin-bottom: 2px;
-}
-
-.pp-add-on::-webkit-scrollbar {
-  width: 7px;
-}
-
-.pp-add-on::-webkit-scrollbar-thumb {
-  background: var(--blockr-grey-300, #d1d5db);
-  border-radius: 4px;
-}
-
-.pp-add-ord {
+/* --- Data tooltip ------------------------------------------------------------
+   The content PatientProfile.tip() draws (pp-core.js); the card around it is
+   pp_tooltip()'s. blockr.viz's rules (chart.css .dd-tt-*, design system
+   "Charts"): headline 13px/600 with a swatch, rows 12px with the name muted
+   and the value at 500 in tabular figures. The line under the headline and
+   the meta after a value are muted. */
+.pp-tt-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 4px 0 3px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--blockr-color-text-secondary, #374151);
-  cursor: grab;
-  border-top: 1px solid transparent;
-  border-bottom: 1px solid transparent;
-}
-
-.pp-add-ord:hover {
-  background: rgba(249, 250, 251, 0.9);
-}
-
-.pp-add-ord.is-dragging {
-  opacity: 0.45;
-}
-
-/* Where it will land. A border rather than the fixed line the panels use:
-   inside a scrolling popover a fixed overlay would sit still while the list
-   moved under it. */
-.pp-add-ord.is-over {
-  border-top-color: var(--blockr-blue-500, #3b82f6);
-}
-
-.pp-add-ord.is-over-last {
-  border-bottom-color: var(--blockr-blue-500, #3b82f6);
-}
-
-/* A parameter's code, in the list above. Same column and same width as the
-   catalogue's, so the two lists line up while a row travels between them. */
-.pp-add-ord-code {
-  flex: 0 0 46px;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-/* Where it landed. The move itself says what happened; this is for the case
-   where the landing is scrolled out of the visible part of the list. */
-.pp-add-ord.is-landed {
-  background: var(--blockr-color-primary-bg, #eff6ff);
-  transition: background 420ms ease;
-}
-
-.pp-add-ord-grip {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  color: var(--blockr-grey-300, #d1d5db);
-}
-
-.pp-add-ord:hover .pp-add-ord-grip {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-add-ord-x {
-  flex: 0 0 auto;
-  padding: 0 3px;
-  border: none;
-  background: none;
-  font: inherit;
+  gap: 6px;
+  margin-bottom: 3px;
   font-size: 13px;
-  line-height: 1;
-  color: var(--blockr-grey-300, #d1d5db);
-  cursor: pointer;
+  font-weight: var(--blockr-font-weight-semibold);
+  color: var(--blockr-color-text-default);
 }
 
-.pp-add-ord:hover .pp-add-ord-x {
-  color: var(--blockr-color-text-subtle, #9ca3af);
-}
-
-.pp-add-ord-x:hover {
-  color: var(--blockr-color-text-primary, #111827);
-}
-
-/* The full parameter name, after a card's title.
-   
-   A parameter card titles itself "Chemistry · ALT" because that is the form
-   you scan a stack of twelve by; the name is what you read once you have
-   found it, so it is here and muted rather than in the title competing with
-   it. */
-.pp-chart-sublabel {
-  font-size: 11.5px;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  /* The header's elastic item, and deliberately the ONLY one that gives way.
-     A card panel is 311px in the 600px rail (the rail gives the profile
-     551px and the two lists take 232 of it), so a header with a parameter
-     name in it is always short of room, and something has to shrink. This is
-     the only child with an ellipsis, i.e. the only one whose loss degrades
-     rather than breaks: `.pp-chart-controls` was absorbing the whole deficit
-     instead, collapsing to 8px around a 45px pill and clipping it to a
-     sliver at the panel edge -- a control you cannot click, to save four
-     characters of a name that was truncated anyway.
-
-     A shrink factor rather than `flex-shrink: 0` on the controls: the AE
-     card's chips and find box legitimately outgrow any header, and they keep
-     their existing scroll behaviour once this has given everything it has. */
-  flex: 0 40 auto;
-}
-
-/* How the list is ordered, as a clause at the end of the caption row rather
-   than a labelled control on a row of its own. Grey and 10px like the
-   caption it sits on: a once-a-session control that reads as part of the
-   sentence, not as a button parked above the list. */
-.pp-cohort-sortby {
+.pp-tt-sw {
   flex: 0 0 auto;
-  border: 0;
-  background: none;
-  padding: 0 0 0 6px;
-  font: inherit;
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  cursor: pointer;
-  white-space: nowrap;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
 }
 
-.pp-cohort-sortby b {
-  color: var(--blockr-color-text-muted, #6b7280);
-  font-weight: 600;
+.pp-tt-sub {
+  margin: -2px 0 3px;
+  font-size: 12px;
+  color: var(--blockr-color-text-muted);
 }
 
-.pp-cohort-sortby:hover,
-.pp-cohort-sortby:hover b {
-  color: var(--blockr-color-text-primary, #111827);
+.pp-tt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 20px;
 }
 
-/* Everything before this yields; the sort and the prefix sit at the edge. */
-.pp-cohort-bandcap-gap {
-  flex: 1 1 auto;
-  min-width: 4px;
+.pp-tt-label {
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-tt-value {
+  margin-left: auto;
+  padding-left: 16px;
+  font-weight: var(--blockr-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-default);
+}
+
+.pp-tt-meta {
+  margin-left: 6px;
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-muted);
+}
+
+.pp-tt-note {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--blockr-color-text-muted);
 }

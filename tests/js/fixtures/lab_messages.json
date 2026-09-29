@@ -20,13 +20,23 @@
   {
     "channel": "drill",
     "payload": {
-      "clause": ""
+      "clause": "",
+      "before": null
     }
   },
   {
     "channel": "sync_band",
     "payload": {
       "viz_id": ""
+    }
+  },
+  {
+    "channel": "gear_state",
+    "payload": {
+      "rday": true,
+      "mode": "rday",
+      "prestudy": false,
+      "smooth": "auto"
     }
   },
   {

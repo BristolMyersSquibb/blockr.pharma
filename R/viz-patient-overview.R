@@ -27,7 +27,7 @@
 #' @noRd
 patient_overview_viz <- new_pp_viz(
   id = "patient_overview",
-  label = "Patient Overview",
+  label = "Patient overview",
   domain = "Treatment",
   icon = "capsule",
   color = "#059669",
@@ -172,8 +172,6 @@ patient_overview_viz <- new_pp_viz(
 
       # A study's arm label is data, not a literal: encode it, never paste it.
       arm_js <- pp_js_str(arm_label)
-      start_str <- pp_xlabel(sl$TRTSDT[1], ref_ms, mode)
-      end_str <- pp_xlabel(sl$TRTEDT[1], ref_ms, mode)
 
       # ---------------------------------------------------------------
       # Treatment envelope — FALLBACK ONLY (no adex). Carries the arm label,
@@ -214,7 +212,7 @@ patient_overview_viz <- new_pp_viz(
                   fill: '#059669',
                   fontSize: 11,
                   fontWeight: 600,
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontFamily: PatientProfile.ink('--bs-body-font-family'),
                   textVerticalAlign: 'middle',
                   truncate: { outerWidth: barW - 16 }
                 }
@@ -223,20 +221,17 @@ patient_overview_viz <- new_pp_viz(
           }
         ", arm_js)),
         data = list(list(
-          value = list(trt_start, trt_end, trt_lane)
+          value = list(trt_start, trt_end, trt_lane),
+          tip = pp_tip(
+            arm_label, color = "#059669",
+            rows = pp_tip_span(
+              pp_tip_when(sl$TRTSDT[1], NA, ref_ms, mode),
+              pp_tip_when(sl$TRTEDT[1], NA, ref_ms, mode)
+            )
+          )
         )),
         encode = list(x = list(0, 1), y = 2),
-        tooltip = list(
-          formatter = htmlwidgets::JS(sprintf("
-            function(params) {
-              return '<div style=\"min-width:160px\">' +
-                '<div style=\"font-size:13px;font-weight:600;margin-bottom:4px\">' +
-                %s + '</div>' +
-                '<div style=\"font-size:12px;color:#6b7280\">' +
-                %s + ' \\u2192 ' + %s + '</div></div>';
-            }
-          ", arm_js, pp_js_str(start_str), pp_js_str(end_str)))
-        )
+        tooltip = list(formatter = PP_TIP_FORMATTER)
       )
 
       all_series <- if (has_adex) list() else list(trt_series)
@@ -283,7 +278,6 @@ patient_overview_viz <- new_pp_viz(
         }
         sev_fill_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.7"))
         sev_stroke_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.9"))
-        sev_hex_js <- js_color_map(sev_hex)
 
         ae_end <- function(i) if (ae_use_day) adae$AENDY[i] else adae$AENDT[i]
         ae_x <- function(v) {
@@ -320,7 +314,27 @@ patient_overview_viz <- new_pp_viz(
           } else {
             PP_ONGOING_LABEL
           }
-          list(value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab))
+          at <- function(nm) if (nm %in% colnames(adae)) adae[[nm]][i] else NA
+          # Severity and seriousness only: the AE panel carries the rest.
+          list(
+            value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab),
+            tip = pp_tip(
+              pp_tip_case(term),
+              color = if (sev %in% names(sev_hex)) sev_hex[[sev]] else "#9ca3af",
+              rows = c(
+                list(
+                  pp_tip_row("Severity",
+                             pp_ae_sev_word(if (has_sev) adae[[sev_col]][i])),
+                  if (identical(ser, "Y")) pp_tip_row("Serious", "Yes")
+                ),
+                pp_tip_span(
+                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                  open = !(has_end && !is.na(ae_end(i)))
+                )
+              )
+            )
+          )
         })
 
         ae_series <- list(
@@ -364,39 +378,7 @@ patient_overview_viz <- new_pp_viz(
           ", sev_fill_js, sev_stroke_js)),
           data = ae_data,
           encode = list(x = list(0, 1), y = 2),
-          tooltip = list(
-            formatter = htmlwidgets::JS(sprintf("
-              function(params) {
-                var v = params.value;
-                var s = v[6] || '';
-                var e = v[7] || '';
-                var term = v[3] || '';
-                var sev  = '' + (v[4] == null ? '' : v[4]);
-                // A bare CTCAE grade reads as noise in the badge.
-                var sevDisp = /^[0-9]+$/.test(sev) ? 'Grade ' + sev : sev;
-                var ser  = v[5] || '';
-                var sevColors = %s;
-                var col = sevColors[sev] || '#9ca3af';
-                var html = '<div style=\"min-width:160px\">';
-                html += '<div style=\"font-size:13px;font-weight:600;' +
-                  'margin-bottom:2px\">' + term + '</div>';
-                if (sev) {
-                  html += '<span style=\"display:inline-block;background:' +
-                    col + ';color:#fff;padding:1px 6px;border-radius:3px;' +
-                    'font-size:10px;font-weight:600;margin-bottom:3px\">' +
-                    sevDisp + '</span>';
-                  if (ser === 'Y') {
-                    html += ' <span style=\"color:#DC2626;font-size:10px;' +
-                      'font-weight:600\">SERIOUS</span>';
-                  }
-                  html += '<br/>';
-                }
-                html += '<div style=\"font-size:12px;color:#6b7280\">' +
-                  s + ' \\u2192 ' + e + '</div></div>';
-                return html;
-              }
-            ", sev_hex_js))
-          )
+          tooltip = list(formatter = PP_TIP_FORMATTER)
         )
 
         all_series <- c(all_series, list(ae_series))
@@ -413,22 +395,32 @@ patient_overview_viz <- new_pp_viz(
 
       # End of study (blue diamond) — RFENDT is canonical, EOSDT aliased
       if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
+        eos <- pp_tip_when(sl$RFENDT[1], NA, ref_ms, mode)
         milestone_data <- c(milestone_data, list(list(
           value = list(pp_xval(sl$RFENDT[1], ref_ms, mode), ms_lane,
-                       "eos", pp_xlabel(sl$RFENDT[1], ref_ms, mode))
+                       "eos", pp_xlabel(sl$RFENDT[1], ref_ms, mode)),
+          tip = pp_tip("End of study", color = "#2563EB",
+                       rows = list(pp_tip_row("Day", eos$main, eos$meta)))
         )))
       }
 
       # Death (red X) — DTHDT is canonical, DTHDTC aliased
       if ("DTHDT" %in% colnames(sl) && !is.na(sl$DTHDT[1])) {
+        dth <- pp_tip_when(sl$DTHDT[1], NA, ref_ms, mode)
         milestone_data <- c(milestone_data, list(list(
           value = list(pp_xval(sl$DTHDT[1], ref_ms, mode), ms_lane,
-                       "death", pp_xlabel(sl$DTHDT[1], ref_ms, mode))
+                       "death", pp_xlabel(sl$DTHDT[1], ref_ms, mode)),
+          tip = pp_tip("Death", color = "#DC2626",
+                       rows = list(pp_tip_row("Day", dth$main, dth$meta)))
         )))
       } else if ("DTHFL" %in% colnames(sl) &&
                   !is.na(sl$DTHFL[1]) && sl$DTHFL[1] == "Y") {
+        # Flagged without a date, so the marker sits at the end of
+        # treatment; the tooltip says so.
         milestone_data <- c(milestone_data, list(list(
-          value = list(trt_end, ms_lane, "death", "Date unknown")
+          value = list(trt_end, ms_lane, "death", "Date unknown"),
+          tip = pp_tip("Death", color = "#DC2626",
+                       note = "Date not recorded; drawn at the end of treatment")
         )))
       }
 
@@ -450,7 +442,7 @@ patient_overview_viz <- new_pp_viz(
                     [x, y + sz], [x - sz, y]
                   ]
                 },
-                style: { fill: '#2563EB', stroke: '#fff', lineWidth: 1.5 }
+                style: { fill: '#2563EB', stroke: PatientProfile.ink('--blockr-color-bg-surface'), lineWidth: 1.5 }
               };
             } else if (kind === 'death') {
               return {
@@ -470,30 +462,7 @@ patient_overview_viz <- new_pp_viz(
         "),
         data = milestone_data,
         encode = list(x = 0, y = 1),
-        tooltip = list(
-          formatter = htmlwidgets::JS("
-            function(params) {
-              var v = params.value;
-              var kind = v[2];
-              var date = v[3] || '';
-              var labels = {
-                'eos':   'End of Study',
-                'death': 'Death'
-              };
-              var colors = {
-                'eos':   '#2563EB',
-                'death': '#DC2626'
-              };
-              var label = labels[kind] || kind;
-              var col = colors[kind] || '#6b7280';
-              return '<div style=\"min-width:120px\">' +
-                '<div style=\"font-size:13px;font-weight:600;color:' +
-                col + '\">' + label + '</div>' +
-                '<div style=\"font-size:12px;color:#6b7280\">' +
-                date + '</div></div>';
-            }
-          ")
-        )
+        tooltip = list(formatter = PP_TIP_FORMATTER)
       )
 
       # Appended AFTER exposure, below -- the milestones now share a lane with
@@ -592,12 +561,29 @@ patient_overview_viz <- new_pp_viz(
           # "what did this patient get".
           doses <- unique(vapply(rows, dose_of, character(1L)))
           doses <- doses[nzchar(doses)]
-          list(value = list(
-            x0, x1, ex_lane, if (length(doses)) doses[[1L]] else "",
-            drug_of(i), s_lab, e_lab,
-            n_slot, slot_of(drug_of(i)),
-            paste(doses, collapse = " \u00b7 ")
-          ))
+          at <- function(nm) if (nm %in% colnames(adex)) adex[[nm]][i] else NA
+          ex_open <- !(ex_has_end && !is.na(ex_end(i)))
+          list(
+            value = list(
+              x0, x1, ex_lane, if (length(doses)) doses[[1L]] else "",
+              drug_of(i), s_lab, e_lab,
+              n_slot, slot_of(drug_of(i)),
+              paste(doses, collapse = " \u00b7 ")
+            ),
+            tip = pp_tip(
+              if (nzchar(drug_of(i))) pp_tip_case(drug_of(i)) else "Exposure",
+              color = "#2563EB",
+              rows = c(
+                list(pp_tip_row("Dose", paste(doses, collapse = " \u00b7 "))),
+                pp_tip_span(
+                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                  open = ex_open
+                ),
+                list(pp_tip_row("Visit", pp_tip_case(at("AVISIT"))))
+              )
+            )
+          )
         })
         names(ex_data) <- NULL
 
@@ -652,7 +638,7 @@ patient_overview_viz <- new_pp_viz(
                     fill: '#1e40af',
                     fontSize: 10,
                     fontWeight: 600,
-                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontFamily: PatientProfile.ink('--bs-body-font-family'),
                     textAlign: 'center',
                     textVerticalAlign: 'middle',
                     truncate: { outerWidth: barW - 8 }
@@ -664,27 +650,7 @@ patient_overview_viz <- new_pp_viz(
           "),
           data = ex_data,
           encode = list(x = list(0, 1), y = 2),
-          tooltip = list(
-            formatter = htmlwidgets::JS("
-              function(params) {
-                var v = params.value;
-                var dose = '' + (v[9] == null ? '' : v[9]);
-                var trt = v[4] || '';
-                var s = v[5] || '';
-                var e = v[6] || '';
-                var html = '<div style=\"min-width:160px\">';
-                html += '<div style=\"font-size:13px;font-weight:600;' +
-                  'margin-bottom:2px\">' + (trt || 'Exposure') + '</div>';
-                if (dose) {
-                  html += '<div style=\"font-size:12px\">Dose: <b>' +
-                    dose + '</b></div>';
-                }
-                html += '<div style=\"font-size:12px;color:#6b7280\">' +
-                  s + ' \u2192 ' + e + '</div></div>';
-                return html;
-              }
-            ")
-          )
+          tooltip = list(formatter = PP_TIP_FORMATTER)
         )
 
         all_series <- c(all_series, list(ex_series))
@@ -714,7 +680,18 @@ patient_overview_viz <- new_pp_viz(
           } else {
             pp_xlabel(visits$date[i], ref_ms, mode)
           }
-          list(value = list(x, vis_lane, visits$visit[i], x_lab))
+          when <- pp_tip_when(visits$date[i], visits$day[i], ref_ms, mode)
+          list(
+            value = list(x, vis_lane, visits$visit[i], x_lab),
+            tip = pp_tip(
+              if (nzchar(pp_tip_str(visits$visit[i]))) {
+                pp_tip_case(visits$visit[i])
+              } else {
+                "Visit"
+              },
+              rows = list(pp_tip_row("Day", when$main, when$meta))
+            )
+          )
         })
 
         vis_series <- list(
@@ -727,24 +704,13 @@ patient_overview_viz <- new_pp_viz(
               return {
                 type: 'rect',
                 shape: { x: p[0] - 1, y: p[1] - h / 2, width: 2, height: h },
-                style: { fill: '#9ca3af' }
+                style: { fill: PatientProfile.ink('--blockr-color-text-muted') }
               };
             }
           "),
           data = vis_data,
           encode = list(x = 0, y = 1),
-          tooltip = list(
-            formatter = htmlwidgets::JS("
-              function(params) {
-                var v = params.value;
-                return '<div style=\"min-width:120px\">' +
-                  '<div style=\"font-size:13px;font-weight:600\">' +
-                  (v[2] || 'Visit') + '</div>' +
-                  '<div style=\"font-size:12px;color:#6b7280\">' +
-                  (v[3] || '') + '</div></div>';
-              }
-            ")
-          )
+          tooltip = list(formatter = PP_TIP_FORMATTER)
         )
 
         all_series <- c(all_series, list(vis_series))
@@ -775,6 +741,6 @@ patient_overview_viz <- new_pp_viz(
           ),
           series = all_series
         )) |>
-        echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+        echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
     }
 )

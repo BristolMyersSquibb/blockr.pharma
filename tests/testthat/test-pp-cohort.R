@@ -232,10 +232,10 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
       marks, color)
     tint <- unname(arm_col[[arm]] %||% "#9ca3af")
     badge <- if (nzchar(code)) {
-      shiny::span(class = "pp-pt-code", title = arm,
+      shiny::span(class = "pp-pt-code", `data-blockr-tooltip` = arm,
                   style = pp_cohort_chip_style(tint), code)
     } else if (nzchar(arm)) {
-      shiny::span(class = "pp-pt-swatch", title = arm,
+      shiny::span(class = "pp-pt-swatch", `data-blockr-tooltip` = arm,
                   style = paste0("background:", tint))
     }
     shiny::div(
@@ -243,7 +243,6 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
       `data-usubjid` = id,
       `data-search-text` = tolower(paste(id, demo, arm, code)),
       `data-band` = band$band, `data-eot` = band$eot,
-      title = if (nzchar(arm)) paste0(id, " · ", arm) else id,
       shiny::div(class = "pp-pt-line",
         shiny::span(class = "pp-pt-id", disp$short[[i]]),
         if (nzchar(demo)) shiny::span(class = "pp-pt-demo", demo),
@@ -255,7 +254,7 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
         `aria-hidden` = "true",
         shiny::tags$rect(x = 0, y = 0, width = 176,
                          height = pp_cohort_band_h, rx = 2,
-                         fill = "var(--pp-cohort-track, #f3f4f6)")))
+                         fill = "var(--blockr-color-bg-hover)")))
   })
   as.character(htmltools::renderTags(shiny::tagList(rows))$html)
 }
@@ -334,7 +333,7 @@ test_that("study text is escaped, in attributes and in content alike", {
 
   # Nothing a study wrote closes an attribute or opens a tag
   expect_match(html, 'data-usubjid="S&quot;1"', fixed = TRUE)
-  expect_match(html, 'title="S&lt;2&gt; · A&lt;b&gt;10&lt;/b&gt;"',
+  expect_match(html, 'data-blockr-tooltip="A&lt;b&gt;10&lt;/b&gt;"',
                fixed = TRUE)
   expect_false(grepl("<b>10</b>", html, fixed = TRUE))
   expect_match(html, "S&amp;3", fixed = TRUE)
@@ -742,7 +741,7 @@ test_that("a part-filled day column falls back per ROW, not per column", {
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   ev <- m$subjects[["S-1"]]$events
   expect_identical(nrow(ev), 2L)
-  expect_identical(ev$sev, c("MILD", "SEVERE"))
+  expect_identical(ev$value, c("MILD", "SEVERE"))
   expect_identical(ev$start, c(5, 41))
 })
 
@@ -755,4 +754,35 @@ test_that("a study with neither days nor dates has no AE timeline", {
   expect_identical(nrow(m$subjects[["S-1"]]$events), 0L)
   # ...and every patient keeps their row
   expect_length(m$subjects, 3L)
+})
+
+test_that("the medications strip colours by indication, as the CM panel does", {
+  # The strip drew every medication grey: its band declared no colour role,
+  # so the severity resolver saw an empty value. The panel colours by
+  # indication, per patient, and falls back to one medication colour.
+  adcm <- data.frame(
+    USUBJID = c("S-1", "S-1", "S-2", "S-2"),
+    CMTRT = c("A", "B", "C", "D"),
+    ASTDY = c(2, 10, 3, 8),
+    AENDY = c(6, 14, 5, 12),
+    CMINDC = c("PAIN", "HYPERTENSION", "PAIN", "PAIN"),
+    stringsAsFactors = FALSE
+  )
+  d <- pp_normalize_dm(dm::dm(adsl = test_adsl(), adcm = adcm))
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
+  band <- cm_gantt_viz$band
+  m <- pp_cohort_marks(d, roles, band = band)
+  expect_identical(m$subjects[["S-1"]]$n_levels, 2L)
+  expect_identical(m$subjects[["S-2"]]$n_levels, 1L)
+
+  col <- pp_cohort_band_color(band, roles, NULL, d)
+  s1 <- pp_cohort_band_geom(m$subjects[["S-1"]], m, col)$fill
+  s2 <- pp_cohort_band_geom(m$subjects[["S-2"]], m, col)$fill
+
+  # S-1 carries two indications: the colours the panel resolves for S-1
+  panel <- pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-1"), "CMINDC")
+  expect_identical(s1, unname(panel[c("PAIN", "HYPERTENSION")]))
+  # S-2 carries one, so the panel draws its single medication colour
+  expect_null(pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-2"), "CMINDC"))
+  expect_true(all(s2 == PP_CM_COLOR))
 })

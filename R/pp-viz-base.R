@@ -209,7 +209,7 @@ pp_coverage_report <- function(dm_obj, vizs) {
   for (v in vizs) {
     missing_tbls <- setdiff(v$tables, tbl_names)
     if (length(missing_tbls)) {
-      add(v, paste0("needs table ", paste(missing_tbls, collapse = ", ")))
+      add(v, paste0("needs ", paste(missing_tbls, collapse = ", ")))
       next
     }
     res <- pp_resolve_requires(dm_obj, v)

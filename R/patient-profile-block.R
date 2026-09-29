@@ -18,13 +18,12 @@
 #'   (e.g., `list(adas_trajectory = list(items = "ACTOT"))`)
 #' @param timeline_mode Initial timeline x-axis mode: `"rday"` (relative day
 #'   from treatment start, ADaM \*DY convention; the default) or `"date"`
-#'   (calendar dates). Changeable at runtime via the gear popover in the
-#'   chart area header.
+#'   (calendar dates). Changeable at runtime in the gear tray.
 #' @param show_prestudy Show the full pre-treatment history? By default the
 #'   timeline starts 30 days before treatment start (the screening window,
 #'   so baselines stay visible) -- one medication started years earlier must
-#'   not stretch every axis to it. `TRUE` restores the full range; also a
-#'   toggle in the gear popover.
+#'   not stretch every axis to it. `TRUE` restores the full range, as
+#'   unchecking "Hide data before day -30" in the gear tray does.
 #' @param subject USUBJID to display, as a length-1 character. Only meaningful
 #'   when the incoming dm carries more than one subject; a single-subject dm
 #'   always renders its one subject. Ignored (and cleared) when the value is
@@ -33,7 +32,7 @@
 #' @param smooth Line smoothing for the findings value lines (labs, vitals):
 #'   `"auto"` (default) draws monotone-smoothed lines -- no overshoot, the
 #'   curve never implies values outside the measured range -- `"off"` draws
-#'   straight segments. Also a toggle in the gear popover ("Value lines").
+#'   straight segments. Also a checkbox in the gear tray ("Smooth lines").
 #'   Same wire values as the chart block's `smooth` option.
 #' @details
 #' The ADSL column holding the treatment / arm label is study-level
@@ -559,7 +558,7 @@ new_patient_profile_block <- function(selected = NULL,
           # Block-level timeline x-axis mode ("date" / "rday")
           r_timeline_mode <- shiny::reactiveVal(timeline_mode)
 
-          # Toggle timeline mode from the gear popover
+          # Timeline mode, from the gear tray
           shiny::observeEvent(input$timeline_mode, {
             new_mode <- input$timeline_mode
             if (isTRUE(new_mode %in% c("date", "rday"))) {
@@ -769,7 +768,9 @@ new_patient_profile_block <- function(selected = NULL,
           })
 
           shiny::observe({
-            pp_send(session, "drill", list(clause = r_drill()$clause %||% ""))
+            d <- r_drill()
+            pp_send(session, "drill", list(clause = d$clause %||% "",
+                                           before = d$before))
           })
 
           # The reset: tell the drill filter to forget its claim, over the
@@ -795,6 +796,13 @@ new_patient_profile_block <- function(selected = NULL,
 
             settings <- r_viz_settings()
             if (is.null(settings[[viz_id]])) settings[[viz_id]] <- list()
+            # The filter picks values of the level the lanes show, so a new
+            # level starts unfiltered rather than keeping picks it cannot
+            # offer.
+            if (identical(param, "lanes") &&
+                !identical(settings[[viz_id]]$lanes, value)) {
+              settings[[viz_id]]$find <- NULL
+            }
             settings[[viz_id]][[param]] <- value
             r_viz_settings(settings)
           })
@@ -943,19 +951,17 @@ new_patient_profile_block <- function(selected = NULL,
             }
 
             marks <- r_cohort_marks()
-            color <- pp_cohort_sev_color(
-              pp_sev_scale_colors(r_scale_map(), r_norm_dm(),
-                                  r_roles()$severity)
-            )
+            color <- pp_cohort_band_color(r_band_source()$band, r_roles(),
+                                          r_scale_map(), r_norm_dm())
             arm_col <- r_arm_colors()
 
             ord <- pp_cohort_order(frame, r_cohort_sort(), marks)
 
             # A prod USUBJID is ~20 characters and most of them are the study
-            # id, which is the same on every row of the board. Lift the shared
-            # prefix out to the section header; the row keeps every character
-            # that distinguishes one patient from another, and the full id
-            # stays in the tooltip, the click payload and the download.
+            # id, which is the same on every row of the board. The rows leave
+            # the shared prefix out and keep every character that
+            # distinguishes one patient from another; the full id stays in
+            # the tooltip, the click payload, the download and the title.
             disp <- pp_cohort_id_display(frame$USUBJID)
 
             # The rows are built as HTML rather than as a tag tree, and the
@@ -993,16 +999,15 @@ new_patient_profile_block <- function(selected = NULL,
           # Sort keys follow the data: a study with no adae is not offered a
           # sort by event count.
           #
-          # It reads as a clause on the caption row -- "Chemistry . ALT ...
-          # by peak" -- rather than as a labelled control on a row of its
-          # own. The caption says what the strip draws and the sort says how
-          # those are ordered, which is one sentence, and putting it on one
-          # line gave the well back a row of the sidebar. A click walks to
-          # the next rung, as the pill did.
+          # It is a word in the caption's sentence -- "Adverse events, by
+          # patient id" -- which says what the strip draws and how the list is
+          # ordered in one line. A click opens the keys as a menu.
           cohort_sort_ui <- function() {
+            # Not isolated: the word names the key, so a new key redraws the
+            # caption (a line of text) with it.
             pp_cohort_sort_ui(
               pp_cohort_sort_choices(r_cohort_frame(), r_cohort_marks()$kind),
-              shiny::isolate(r_cohort_sort()),
+              r_cohort_sort(),
               session$ns
             )
           }
@@ -1014,31 +1019,29 @@ new_patient_profile_block <- function(selected = NULL,
           output$cohort_band_caption <- shiny::renderUI({
             src <- r_band_source()
             sorter <- cohort_sort_ui()
-            pre <- pp_cohort_id_display(r_cohort_frame()$USUBJID)$prefix
-            if (is.null(src) && is.null(sorter) && !nzchar(pre)) return(NULL)
-            pp_band_caption_ui(src, sorter, pre, r_band_picks())
+            pp_band_caption_ui(src, sorter)
           })
 
           # Who is on screen, and the facts about them the sidebar row has
           # no room for. Reads the cohort FRAME, which already carries every
           # one of them (SEX, AGE, TRTDURD, AE_N, AE_WORST) plus the arm --
           # so the header costs a lookup, not a derivation.
+          output$subject_title <- shiny::renderUI({
+            pp_subject_title_ui(r_subject())
+          })
+
           output$subject_facts <- shiny::renderUI({
             cur <- r_subject()
-            if (length(cur) != 1L || !nzchar(cur)) {
-              return(shiny::span(class = "pp-subject-none",
-                                 "No patient selected"))
-            }
+            if (length(cur) != 1L || !nzchar(cur)) return(NULL)
             frame <- r_cohort_frame()
             at <- match(cur, frame$USUBJID)
-            disp <- pp_cohort_id_display(frame$USUBJID)
             arm <- pp_subject_arm(r_norm_dm(), cur, r_roles()$arm)
-            pp_subject_facts_ui(frame, at, cur, disp, arm,
-                                pp_cohort_sev_color(
-                                  pp_sev_scale_colors(r_scale_map(),
-                                                      r_norm_dm(),
-                                                      r_roles()$severity)
-                                ))
+            pp_subject_sentence_ui(frame, at, arm,
+                                   pp_cohort_sev_color(
+                                     pp_sev_scale_colors(r_scale_map(),
+                                                         r_norm_dm(),
+                                                         r_roles()$severity)
+                                   ))
           })
 
           # The picker behind the + button.
@@ -1060,39 +1063,41 @@ new_patient_profile_block <- function(selected = NULL,
 
           # Build per-viz control toolbar HTML
 
-          # Header bar (subject picker + gear popover) — depends on the
-          # cohort, NOT on r_timeline_mode or r_subject. This keeps either
-          # popover from being rebuilt (and closing) when the user flips the
-          # timeline toggle or picks a patient. Both button labels are kept
-          # in sync by optimistic JS plus a confirming custom message.
           # Whether relative-day mode is possible at all is a property of the
           # study (does ADSL carry a usable TRTSDT), not of the patient on
           # screen. Read from the unscoped dm: routing through `r_ref_ms()`
-          # would make the header depend on `r_subject`, and every pick would
-          # rebuild the header and slam both popovers shut. pp_has_ref() asks
-          # study-wide -- the per-patient pp_compute_ref_ms() would let one
-          # arbitrary cohort member with a missing treatment start disable the
-          # mode for everyone.
+          # would make the gear depend on `r_subject`, and every pick would
+          # rebuild its controls. pp_has_ref() asks study-wide -- the
+          # per-patient pp_compute_ref_ms() would let one arbitrary cohort
+          # member with a missing treatment start disable the mode for
+          # everyone.
           #
-          # A reactiveVal, not a read inside the header: `r_norm_dm()` is a
+          # A reactiveVal, not a read inside the observer: `r_norm_dm()` is a
           # plain reactive and so invalidates on EVERY upstream emission, even
-          # one that leaves this flag alone. The header must only rebuild when
-          # the flag actually flips, or an upstream filter rebuilds the gear
-          # (and shuts an open popover) on every keystroke.
+          # one that leaves this flag alone. The gear's controls must only be
+          # rebuilt when the flag actually flips.
           r_gear_disabled <- shiny::reactiveVal(NULL)
           shiny::observe({
             r_gear_disabled(!pp_has_ref(r_norm_dm(), r_roles()$timeline))
           })
 
-          output$header_bar <- shiny::renderUI({
+          # The gear tray's Display section is built in the client from
+          # blockr.ui's controls (pp-header.js); this says what to build and
+          # with which values. Sent when the study's relative-day support is
+          # known and whenever it flips -- never on a toggle, which the client
+          # already shows -- so the controls are not rebuilt under the pointer.
+          # Without a treatment start there is no relative day and no day -30
+          # to cut at, so those two controls are left out rather than
+          # disabled: a choice with one option is no choice.
+          shiny::observe({
             gear_disabled <- r_gear_disabled()
             shiny::req(!is.null(gear_disabled))
-            pp_header_bar_ui(
-              session$ns, gear_disabled,
-              mode = shiny::isolate(r_timeline_mode()),
-              prestudy = shiny::isolate(r_show_prestudy()),
-              smooth = shiny::isolate(r_smooth())
-            )
+            shiny::isolate(pp_send(session, "gear_state", list(
+              rday = !gear_disabled,
+              mode = r_timeline_mode(),
+              prestudy = r_show_prestudy(),
+              smooth = r_smooth()
+            )))
           })
 
           # Keep the static menu's labels and section visibility in step
@@ -1120,11 +1125,11 @@ new_patient_profile_block <- function(selected = NULL,
           output$gear_coverage <- shiny::renderUI({
             vizs <- r_cohort_vizs()  # req()s until a dm has arrived
             pp_gear_coverage_ui(pp_coverage_report(r_norm_dm(), vizs),
-                                r_roles())
+                                r_roles(), r_norm_dm())
           })
-          # The popover is display:none until the gear is clicked, so Shiny
-          # would suspend this output and leave the coverage list blank on the
-          # first open. It is a handful of divs; render it with the header.
+          # The tray is display:none until the gear is clicked, so Shiny would
+          # suspend this output and leave the sections blank on the first
+          # open. It is a handful of divs; render it with the header.
           shiny::outputOptions(output, "gear_coverage",
                                suspendWhenHidden = FALSE)
 
@@ -1135,10 +1140,14 @@ new_patient_profile_block <- function(selected = NULL,
             total <- r_cohort_total()
             shiny::req(!is.null(total))
             if (isTRUE(total > 1L)) {
-              paste0("Pick one of ", total,
-                     " patients above, or drill down on a chart")
+              shiny::tagList(
+                "No patient selected. ",
+                shiny::tags$button(type = "button",
+                                   class = "blockr-slot pp-open-search",
+                                   "Search for one")
+              )
             } else {
-              "No patient data in the incoming tables"
+              "No patients in the incoming tables."
             }
           })
 
@@ -1167,8 +1176,10 @@ new_patient_profile_block <- function(selected = NULL,
             shiny::req(inherits(dm_obj, "dm"), isTRUE(scoped$single))
             viz <- r_available()[[viz_id]]
             shiny::req(!is.null(viz))
+            # NULL when the patient has no dated record at all (a screen
+            # failure): the panels still draw, and say so, rather than the
+            # whole stack staying blank.
             time_range <- r_time_range()
-            shiny::req(time_range)
             ref_ms <- r_ref_ms()
             tl_mode <- r_timeline_mode()
             # Relative-day mode requires a reference timestamp; if TRTSDT
@@ -1210,6 +1221,10 @@ new_patient_profile_block <- function(selected = NULL,
               # this particular patient has no rows in any of its tables;
               # say so instead of drawing an empty axis.
               pp_empty_chart("No data for this patient")
+            } else if (is.null(time_range) && !identical(viz$tables, "adsl")) {
+              # Rows, but none of them dated: there is no axis to put them
+              # on. A panel reading only ADSL has no axis and draws.
+              pp_empty_chart("No dated records for this patient")
             } else {
               tryCatch(
                 viz$render(dm_obj, time_range, viz_settings,

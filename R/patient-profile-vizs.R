@@ -255,7 +255,7 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       ),
       splitLine = list(
         show = TRUE,
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
     # One gridline per label, D1's included -- the readability the clinicians
@@ -281,7 +281,7 @@ pp_time_axis <- function(time_range, ref_ms = NA_real_, mode = "date",
       ),
       splitLine = list(
         show = TRUE,
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
   }
@@ -340,29 +340,22 @@ pp_compact_num_js <- function() {
   ")
 }
 
-#' Canonical axis colors used by the drill-down chart family. Kept
-#' centrally so all patient-profile vizs read consistent values.
+#' The charts' axis ink, as token references: pp-core.js resolves them
+#' against the page's tokens when a chart sets its options.
 #' @noRd
-PP_AXIS_LABEL_COLOR <- "#666"
-PP_AXIS_LINE_COLOR <- "#ccc"
-# Gridlines. Measured against the panel background (#f9fafb, L=249.9), which
-# is what decides whether these are visible at all:
-#
-#   #f3f4f6  L=243.9  dL= 6   the original: a line only in principle
-#   #e5e7eb  L=231.0  dL=19   one step darker, still read as "no gridlines"
-#   #d1d5db  L=212.8  dL=37   this
-#
-# Two steps were needed, not one. dL=19 is 7% of the range, and these lines
-# are DASHED, which spends some of that again on the gaps -- so the first
-# bump was still being reported as invisible. At dL=37 the line is present
-# and remains far quieter than the axis labels above it (#666, L=102), so
-# the data is still the loudest thing in the panel.
-#
-# The washes are NOT the cause and darkening these is not compensating for
-# them: measured inside the findings reference band the gridline holds
-# dL=17.5 against dL=19 outside it, so the area gradient and markArea cost
-# under two levels.
-PP_SPLIT_LINE_COLOR <- "#d1d5db"
+PP_AXIS_LABEL_COLOR <- "var(--blockr-color-text-muted)"
+PP_AXIS_LINE_COLOR <- "var(--blockr-color-border-strong)"
+# Gridlines: solid border-default on the white chart area (design system,
+# "Charts"). They were dashed #d1d5db on a grey area, where a lighter dashed
+# line read as no gridlines at all; solid on white, the default border step
+# is present and stays far quieter than the axis labels.
+PP_SPLIT_LINE_COLOR <- "var(--blockr-color-border-default)"
+
+# The exports (PNG, pptx) draw with ggplot and have no page to read tokens
+# from. They keep the values they always had: a dashed gridline on paper
+# needs the darker grey.
+PP_EXPORT_AXIS_LABEL_COLOR <- "#666"
+PP_EXPORT_SPLIT_LINE_COLOR <- "#d1d5db"
 
 #' Lane geometry for the patient-profile gantt charts (AE, CM).
 #'
@@ -518,9 +511,9 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
             text: label,
             x: tx,
             y: start[1] + (%d),
-            fill: '#4b5563',
-            fontSize: 10,
-            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fill: PatientProfile.ink('--blockr-color-text-muted'),
+            fontSize: 11,
+            fontFamily: PatientProfile.ink('--bs-body-font-family'),
             textVerticalAlign: 'middle',
             truncate: { outerWidth: cs.x + cs.width - tx }
           }
@@ -602,132 +595,14 @@ pp_tooltip <- function() {
   list(
     trigger = "item",
     confine = TRUE,
-    backgroundColor = "rgba(255,255,255,0.98)",
-    borderColor = "#d1d5db",
+    backgroundColor = "var(--blockr-color-bg-raised)",
+    borderColor = "var(--blockr-color-border-default)",
     borderWidth = 1,
-    textStyle = list(color = "#1f2937", fontSize = 12),
+    textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
     extraCssText = paste0(
-      "box-shadow: 0 4px 12px rgba(0,0,0,0.08);",
-      "border-radius: 6px; padding: 8px 12px;"
+      "box-shadow: var(--blockr-shadow-md);",
+      "border-radius: var(--blockr-radius-lg); padding: 6px 10px;"
     )
-  )
-}
-
-#' Generate colored square icon HTML for sidebar cards
-#'
-#' Creates a 40x40 colored square with a Bootstrap Icon SVG inside,
-#' similar to blockr.dock's blk_icon_data_uri() but self-contained.
-#'
-#' @param icon_name Icon identifier (maps to Bootstrap Icons SVG paths)
-#' @param color Hex color for icon fill and background tint
-#' @noRd
-pp_icon_html <- function(icon_name, color) {
-  icons <- list(
-    `exclamation-triangle` = paste0(
-      '<path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016',
-      '.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163',
-      '.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-',
-      '.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 ',
-      '2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 ',
-      '0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-',
-      '.99.98-1.767z"/>',
-      '<path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905',
-      '.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>'
-    ),
-    droplet = paste0(
-      '<path fill-rule="evenodd" d="M7.21.8C7.69.295 8 0 8 0q.164.544',
-      '.371 1.038c.812 1.946 2.073 3.35 3.197 4.6C12.878 7.096 14 ',
-      '8.345 14 10a6 6 0 0 1-12 0C2 6.668 5.58 2.517 7.21.8m.413 ',
-      '1.021A31 31 0 0 0 5.171 4.9C3.806 6.583 3 8.29 3 10a5 5 0 0 ',
-      '0 10 0c0-1.382-.87-2.501-2.029-3.769-.133-.145-.27-.296-.41-',
-      '.449a29 29 0 0 1-3.349-4.045 25 25 0 0 1-.413-.916"/>'
-    ),
-    `droplet-half` = paste0(
-      '<path fill-rule="evenodd" d="M7.21.8C7.69.295 8 0 8 0q.164.544',
-      '.371 1.038c.812 1.946 2.073 3.35 3.197 4.6C12.878 7.096 14 ',
-      '8.345 14 10a6 6 0 0 1-12 0C2 6.668 5.58 2.517 7.21.8M8 ',
-      '1.632A30 30 0 0 0 5.252 4.82C3.86 6.532 3 8.266 3 10a5 5 0 0 ',
-      '0 5 5zm0 0A30 30 0 0 1 10.748 4.82C12.14 6.532 13 8.266 13 ',
-      '10a5 5 0 0 1-5 5z"/>'
-    ),
-    `heart-pulse` = paste0(
-      '<path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 ',
-      '1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 ',
-      '3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-',
-      '4.385C13.486.878 10.4.28 8.717 2.01zM8 15C-7.333 4.868 ',
-      '3.279-3.04 7.824 1.143q.09.083.176.171a3 3 0 0 1 .176-.17C12.72',
-      '-3.042 23.333 4.867 8 15"/>',
-      '<path d="M5.966 9.463a.5.5 0 0 0-.416.222l-.98 1.373L3.084 ',
-      '8.66a.5.5 0 0 0-.864.504l1.81 3.163a.5.5 0 0 0 .863.01l1.347-',
-      '1.886 1.28 1.553a.5.5 0 0 0 .76.02l1.56-1.769 1.378 1.126a.5.5',
-      ' 0 1 0 .634-.776L10.34 9.27a.5.5 0 0 0-.712.02L8.13 10.94l-',
-      '1.385-1.681a.5.5 0 0 0-.344-.213z"/>'
-    ),
-    `graph-up` = paste0(
-      '<path fill-rule="evenodd" d="M0 0h1v15h15v1H0zm14.817 3.113a.5',
-      '.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656',
-      ' 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 ',
-      '2.61 4.15-5.073a.5.5 0 0 1 .704-.07"/>'
-    ),
-    `clipboard-pulse` = paste0(
-      '<path fill-rule="evenodd" d="M10 .5a.5.5 0 0 0-.5-.5h-3a.5.5 ',
-      '0 0 0-.5.5.5.5 0 0 1-.5.5.5.5 0 0 0-.5.5V2a.5.5 0 0 0 .5.5',
-      'h5A.5.5 0 0 0 11 2v-.5a.5.5 0 0 0-.5-.5.5.5 0 0 1-.5-.5"/>',
-      '<path d="M4.085 1H3.5A1.5 1.5 0 0 0 2 2.5v12A1.5 1.5 0 0 0 ',
-      '3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 12.5 1h-',
-      '.585q.084.236.085.5V2a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 ',
-      '1 4 2v-.5q.001-.264.085-.5M9.98 5.356 11.372 7h.128a.5.5 0 0 ',
-      '1 0 1h-2a.5.5 0 0 1 0-1h.5L8.933 5.574 7.956 9.5a.5.5 0 0 ',
-      '1-.956.044l-.5-3L5.275 8H4.5a.5.5 0 0 1 0-1h1.218a.5.5 0 0 ',
-      '1 .38.173l.882 1.01 1.063-4.139a.5.5 0 0 1 .937.012"/>'
-    ),
-    capsule = paste0(
-      '<path d="M1.828 8.9 8.9 1.827a4 4 0 1 1 5.657 5.657l-7.07 ',
-      '7.071A4 4 0 1 1 1.827 8.9Zm9.128.771 2.893-2.893a3 3 0 1 0-',
-      '4.243-4.242L6.713 5.429z"/>'
-    ),
-    `grid-3x3` = paste0(
-      '<path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 ',
-      '1.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5zM1.5 ',
-      '1a.5.5 0 0 0-.5.5V5h4V1zM5 6H1v4h4zm1 4h4V6H6zm-1 1H1v3.5a',
-      '.5.5 0 0 0 .5.5H5zm1 0v4h4v-4zm5 0v4h3.5a.5.5 0 0 0 .5-.5V11',
-      'zm0-1h4V6h-4zm0-5h4V1.5a.5.5 0 0 0-.5-.5H11zm-1 0V1H6v4z"/>'
-    ),
-    `arrows-vertical` = paste0(
-      '<path d="M8.354 14.854a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 ',
-      '.708-.708L7.5 13.293V2.707L6.354 3.854a.5.5 0 1 1-.708-.708',
-      'l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 2.707v',
-      '10.586l1.146-1.147a.5.5 0 0 1 .708.708z"/>'
-    ),
-    `person-vcard` = paste0(
-      '<path d="M5 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m4-2.5a.5.5 0 0 ',
-      '1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5M9 8a.5.5 0 0 ',
-      '1 .5-.5h4a.5.5 0 0 1 0 1h-4A.5.5 0 0 1 9 8m1 2.5a.5.5 0 0 ',
-      '1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5"/>',
-      '<path d="M2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 ',
-      '2-2V4a2 2 0 0 0-2-2zM1 4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v8a',
-      '1 1 0 0 1-1 1H8.96q.04-.245.04-.5C9 10.567 7.21 9 5 9c-',
-      '2.086 0-3.8 1.398-3.984 3.181A1 1 0 0 1 1 12z"/>'
-    )
-  )
-
-  svg_path <- icons[[icon_name]]
-  if (is.null(svg_path)) svg_path <- icons[["graph-up"]]
-
-  hex <- sub("^#", "", color)
-  r <- strtoi(substr(hex, 1, 2), 16L)
-  g <- strtoi(substr(hex, 3, 4), 16L)
-  b <- strtoi(substr(hex, 5, 6), 16L)
-  bg_rgba <- sprintf("rgba(%d,%d,%d,0.15)", r, g, b)
-
-  sprintf(
-    paste0(
-      '<div style="width:22px;height:22px;border-radius:5px;background:%s;',
-      'display:flex;align-items:center;justify-content:center;flex-shrink:0">',
-      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" ',
-      'fill="%s" viewBox="0 0 16 16">%s</svg></div>'
-    ),
-    bg_rgba, color, svg_path
   )
 }
 
@@ -919,6 +794,123 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
 # Shared findings chart renderer
 # ---------------------------------------------------------------------------
 
+#' A parameter's name and unit
+#'
+#' ADaM writes the unit into PARAM ("Systolic Blood Pressure (mmHg)"). The
+#' tooltip's headline takes the name and puts the unit after the value.
+#'
+#' @param x A PARAM (or PARAMCD) value.
+#' @return `list(name, unit)`; `unit` is `""` when the name carries none.
+#' @noRd
+pp_param_parts <- function(x) {
+  x <- pp_tip_str(x)
+  m <- regmatches(x, regexec("^(.*\\S)\\s*\\(([^()]+)\\)$", x))[[1L]]
+  if (!length(m)) return(list(name = x, unit = ""))
+  list(name = m[[2L]], unit = trimws(m[[3L]]))
+}
+
+#' A tooltip number with its unit, "190 mmHg" or "+8%"
+#' @noRd
+pp_tip_unit <- function(num, unit = "") {
+  if (!nzchar(num) || !nzchar(unit)) return(num)
+  if (identical(unit, "%")) paste0(num, unit) else paste(num, unit)
+}
+
+#' ANRIND as the one-letter code the marker colours are keyed by
+#'
+#' Studies write the flag either way: "H" / "L" / "N" or "HIGH" / "LOW" /
+#' "NORMAL" (pharmaverseadam). Keyed on the letter alone, every dot of a
+#' long-form study drew in the default colour. Vectorised; anything else is
+#' returned as it came.
+#' @noRd
+pp_anrind_code <- function(x) {
+  x <- toupper(trimws(as.character(x)))
+  long <- c(HIGH = "H", LOW = "L", NORMAL = "N")
+  ifelse(!is.na(x) & x %in% names(long), long[x], x)
+}
+
+#' ANRIND as a word: "high", "low", "normal"
+#' @noRd
+pp_anrind_word <- function(x) {
+  x <- toupper(pp_tip_str(x))
+  if (!nzchar(x)) return("")
+  switch(x, H = , HIGH = "high", L = , LOW = "low", N = , NORMAL = "normal",
+         tolower(x))
+}
+
+#' The tooltip of one dot on a findings card
+#'
+#' The parameter in words with the dot's colour, then the value the card
+#' draws. On the measured value that is the value with its unit, the normal
+#' range with the flag after it, and the baseline. On a change scale the
+#' change comes first, then the measured value and the baseline it was taken
+#' from. The day and the visit close it. A record the study derived (DTYPE)
+#' says so in the note.
+#'
+#' @param r One findings row (a one-row data.frame).
+#' @param value The column the card draws (`"AVAL"`, `"CHG"`, `"PCHG"`).
+#' @param color The dot's colour, for the swatch.
+#' @param ref_ms,mode The timeline's reference and mode, for the day.
+#' @return A [pp_tip()] list.
+#' @noRd
+pp_findings_tip <- function(r, value = "AVAL", color = NULL,
+                            ref_ms = NA_real_, mode = "date") {
+  at <- function(col) if (col %in% colnames(r)) r[[col]][[1L]] else NA
+  num <- function(col) pp_as_numeric(at(col))
+  # The name in words; a study with no PARAM falls back to the code, which
+  # is not sentence-cased ("SYSBP", not "Sysbp").
+  parts <- pp_param_parts(at("PARAM"))
+  head <- if (nzchar(parts$name)) {
+    pp_tip_case(parts$name)
+  } else {
+    pp_tip_str(at("PARAMCD"))
+  }
+  unit <- parts$unit
+  is_aval <- identical(value, "AVAL")
+
+  measured <- pp_tip_unit(pp_tip_num(num("AVAL")), unit)
+  flag <- if (is_aval) pp_anrind_word(at("ANRIND")) else ""
+  lo <- num("A1LO")
+  hi <- num("A1HI")
+  # The range and the flag describe the measured value, so they stay off a
+  # change scale. The flag goes after the range, or after the value when
+  # the study gives no range.
+  range <- if (is_aval && !is.na(lo) && !is.na(hi)) {
+    paste(pp_tip_num(lo), "to", pp_tip_num(hi))
+  } else {
+    ""
+  }
+  when <- pp_tip_when(at("ADT"), num("ADY"), ref_ms, mode)
+
+  change <- if (!is_aval) {
+    pp_tip_row(
+      if (identical(value, "PCHG")) "Percent change from baseline" else
+        "Change from baseline",
+      pp_tip_unit(pp_tip_num(num(value), signed = TRUE),
+                  if (identical(value, "PCHG")) "%" else unit)
+    )
+  }
+
+  dtype <- pp_tip_str(at("DTYPE"))
+  note <- if (nzchar(dtype)) {
+    paste0("Derived by the study (", tolower(dtype), "), not measured")
+  }
+
+  pp_tip(
+    head, color = color,
+    rows = list(
+      change,
+      pp_tip_row("Analysis value", measured,
+                 if (!nzchar(range)) flag),
+      pp_tip_row("Normal range", range, flag),
+      pp_tip_row("Baseline", pp_tip_num(num("BASE"))),
+      pp_tip_row("Day", when$main, when$meta),
+      pp_tip_row("Visit", pp_tip_case(at("AVISIT")))
+    ),
+    note = note
+  )
+}
+
 #' Render a single-domain findings chart
 #'
 #' Builds a multi-PARAMCD line+scatter echarts chart for a single findings
@@ -981,27 +973,6 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   has_ref <- is_aval && all(c("A1LO", "A1HI") %in% colnames(tbl))
   has_dtype <- "DTYPE" %in% colnames(tbl)
   has_param <- "PARAM" %in% colnames(tbl)
-  # What a change is measured against, printed beside it. BASE is the number
-  # and BASETYPE is the rule that produced it, and on a study shipping both
-  # the rule is the part a reader cannot guess -- ADaM lets a parameter carry
-  # more than one baseline definition, so "percent change" alone names more
-  # than one quantity.
-  has_base <- !is_aval && "BASE" %in% colnames(tbl)
-  has_basetype <- !is_aval && "BASETYPE" %in% colnames(tbl)
-  # The visit label of one row, for the cycle/day it may carry. Total: a study
-  # shipping no AVISIT (or an unscheduled row) simply has none to report.
-  opt_visit <- function(df, i) {
-    if (!"AVISIT" %in% colnames(df)) return(NA)
-    df$AVISIT[i]
-  }
-  # The day on treatment, so a lab value can be lined up against the AE
-  # timeline without counting calendar dates: an AE bar labels itself
-  # "D43" - "D50" (viz-ae-gantt.R) and clinical review asked for the same
-  # unit here. Added, not substituted -- the date and the visit are what an
-  # unscheduled draw has, and the ask was for the day besides.
-  has_day <- "ADY" %in% colnames(tbl)
-  opt_day <- function(df, i) if (has_day) df$ADY[i] else NA
-
   n_params <- length(params)
   # Fixed per-chart height. Splitting a total budget across the selected
   # params instead made one chart inherit the whole budget and tower over a
@@ -1048,7 +1019,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         text = param_label,
         left = PP_GRID_LEFT,
         top = grid_top - 18,
-        textStyle = list(fontSize = 11, fontWeight = 400, color = "#6b7280")
+        textStyle = list(fontSize = 11, fontWeight = 400,
+                         color = "var(--blockr-color-text-muted)")
       )
     }
 
@@ -1072,7 +1044,9 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       gridIndex = grid_idx,
       axisLine = list(show = FALSE),
       axisTick = list(show = FALSE),
+      # The lowest label is left off: it sat on the x axis's first day.
       axisLabel = list(color = PP_AXIS_LABEL_COLOR, fontSize = 11,
+                       showMinLabel = FALSE,
                        formatter = pp_compact_num_js()),
       splitLine = list(
         show = TRUE,
@@ -1080,127 +1054,61 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
         # already-light line to about 3% contrast and is why this panel's
         # horizontal gridlines read as absent while the gantts' verticals
         # did not. One gridline weight across the profile.
-        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "dashed")
+        lineStyle = list(color = PP_SPLIT_LINE_COLOR, type = "solid")
       )
     )
 
-    # Line data
-    line_data <- lapply(seq_len(nrow(p_data)), function(i) {
-      list(value = list(pp_xval(p_data$ADT[i], ref_ms, mode),
-                        p_data[[value]][i]))
+    # Line data: one point per day. A day with several readings (vitals
+    # taken lying, sitting and standing) drew a vertical spike through all of
+    # them; the line now runs through the day's mean -- the study's own
+    # derived mean where it recorded one (DTYPE), the mean of the readings
+    # where it did not -- and every reading stays a dot on the scatter.
+    line_xs <- vapply(seq_len(nrow(p_data)), function(i) {
+      as.numeric(pp_xval(p_data$ADT[i], ref_ms, mode))
+    }, numeric(1))
+    line_vals <- suppressWarnings(as.numeric(p_data[[value]]))
+    line_der <- if (has_dtype) {
+      !is.na(p_data$DTYPE) & nzchar(trimws(as.character(p_data$DTYPE)))
+    } else {
+      rep(FALSE, nrow(p_data))
+    }
+    line_keep <- which(!is.na(line_xs) & !is.na(line_vals))
+    line_days <- sort(unique(line_xs[line_keep]))
+    line_data <- lapply(line_days, function(x) {
+      at <- line_keep[line_xs[line_keep] == x]
+      der <- at[line_der[at]]
+      y <- if (length(der)) line_vals[[der[[1L]]]] else mean(line_vals[at])
+      list(value = list(x, y))
     })
 
-    # Scatter data with ANRIND coloring + rich tooltips
+    # Scatter data: ANRIND colours, and each dot's tooltip
     scatter_data <- lapply(seq_len(nrow(p_data)), function(i) {
       val <- p_data[[value]][i]
       dt <- pp_xval(p_data$ADT[i], ref_ms, mode)
 
       pt_color <- color
       if (has_anrind && !is.na(p_data$ANRIND[i])) {
-        anr <- as.character(p_data$ANRIND[i])
+        anr <- pp_anrind_code(p_data$ANRIND[i])
         if (anr %in% names(anrind_colors)) pt_color <- anrind_colors[[anr]]
       }
 
       # A record the study derived rather than collected is drawn hollow and
-      # names its DTYPE in the tooltip. Shown, not filtered: the sponsor put
-      # it there deliberately. Marking adds provenance; it removes nothing.
+      # says so in the tooltip. Shown, not filtered: the sponsor put it there
+      # deliberately. Marking adds provenance; it removes nothing.
       derived <- has_dtype && !is.na(p_data$DTYPE[i]) &&
         nzchar(trimws(as.character(p_data$DTYPE[i])))
 
-      tt <- paste0(
-        '<div style="min-width:160px">',
-        '<div style="font-size:14px;font-weight:700;margin-bottom:2px">',
-        param, '</div>'
-      )
-      if (has_param) {
-        tt <- paste0(tt,
-          '<div style="font-size:11px;color:#888;margin-bottom:4px">',
-          p_data$PARAM[i], '</div>'
-        )
-      }
-      if (has_anrind && !is.na(p_data$ANRIND[i])) {
-        anr <- as.character(p_data$ANRIND[i])
-        pill <- switch(anr,
-          H = , HIGH = list(bg = "rgba(220,38,38,0.1)", fg = "#DC2626",
-            bd = "rgba(220,38,38,0.15)"),
-          L = , LOW = list(bg = "rgba(37,99,235,0.1)", fg = "#2563EB",
-            bd = "rgba(37,99,235,0.15)"),
-          N = , NORMAL = list(bg = "rgba(5,150,105,0.1)", fg = "#059669",
-            bd = "rgba(5,150,105,0.15)"),
-          list(bg = "rgba(107,114,128,0.1)", fg = "#6b7280",
-            bd = "rgba(107,114,128,0.15)")
-        )
-        tt <- paste0(tt,
-          '<span style="display:inline-block;background:', pill$bg,
-          ';color:', pill$fg, ';border:1px solid ', pill$bd,
-          ';padding:1px 6px;border-radius:4px;font-size:10px;',
-          'font-weight:600;margin-bottom:4px">', anr, '</span><br/>'
-        )
-      }
-      # A findings row's AVISIT describes the row's own timepoint, so it
-      # belongs beside its date -- unlike an event's collection visit, see
-      # viz-ae-gantt.R. Printed as the study wrote it, cycle vocabulary or
-      # "UNSCHEDULED" alike: to this package it is a text label, not a thing
-      # to interpret.
-      tt <- paste0(tt,
-        '<div style="font-size:12px;line-height:1.6">',
-        '<span style="color:#6b7280">Date:</span> ',
-        pp_with_visit(format(p_data$ADT[i]), opt_visit(p_data, i))
-      )
-      dy <- pp_record_day(opt_day(p_data, i), p_data$ADT[i], ref_ms)
-      if (!is.na(dy)) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Day:</span> ', pp_day_label(dy)
-        )
-      }
-      tt <- paste0(tt,
-        '<br/><span style="color:#6b7280">', value, ':</span> <b>',
-        round(val, 2), if (identical(value, "PCHG")) "%", '</b>'
-      )
-      # On a change scale the measured value and the baseline it was taken
-      # from ride behind it: the chart answers "how far has this moved", and
-      # a reader's next question is "from what, and to what".
-      if (!is_aval && "AVAL" %in% colnames(p_data) && !is.na(p_data$AVAL[i])) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">AVAL:</span> ',
-          round(p_data$AVAL[i], 2)
-        )
-      }
-      if (has_base && !is.na(p_data$BASE[i])) {
-        base_lab <- if (has_basetype && !is.na(p_data$BASETYPE[i]) &&
-                          nzchar(trimws(as.character(p_data$BASETYPE[i])))) {
-          paste0(' <span style="color:#9ca3af">(',
-                 as.character(p_data$BASETYPE[i]), ')</span>')
-        } else {
-          ""
-        }
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Baseline:</span> ',
-          round(p_data$BASE[i], 2), base_lab
-        )
-      }
-      if (has_ref && !is.na(p_data$A1LO[i]) && !is.na(p_data$A1HI[i])) {
-        tt <- paste0(tt, '<br/><span style="color:#6b7280">Ref:</span> ',
-          round(p_data$A1LO[i], 1), ' \u2013 ', round(p_data$A1HI[i], 1))
-      }
-      if (derived) {
-        tt <- paste0(tt,
-          '<br/><span style="color:#6b7280">Derived:</span> ',
-          as.character(p_data$DTYPE[i]),
-          ' <span style="color:#b45309">(not measured)</span>'
-        )
-      }
-      tt <- paste0(tt, '</div></div>')
-
       list(
         value = list(dt, val),
+        tip = pp_findings_tip(p_data[i, , drop = FALSE], value,
+                              color = pt_color, ref_ms = ref_ms, mode = mode),
         symbol = if (derived) "emptyCircle" else "circle",
         itemStyle = if (derived) {
-          list(color = "#ffffff", borderColor = pt_color, borderWidth = 2)
+          list(color = "var(--blockr-color-bg-surface)", borderColor = pt_color,
+               borderWidth = 2)
         } else {
           list(color = pt_color)
-        },
-        tooltip_text = tt
+        }
       )
     })
 
@@ -1244,6 +1152,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       symbol = "none",
       silent = TRUE,
       z = 1,
+      # No tooltip of its own: the day's mean is read off the dots under it.
       tooltip = list(show = FALSE)
     )))
 
@@ -1256,12 +1165,9 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       data = scatter_data,
       symbolSize = 8,
       z = 2,
-      itemStyle = list(borderWidth = 2, borderColor = "#ffffff"),
-      tooltip = list(
-        formatter = htmlwidgets::JS(
-          "function(params) { return params.data.tooltip_text || ''; }"
-        )
-      )
+      itemStyle = list(borderWidth = 2,
+                       borderColor = "var(--blockr-color-bg-surface)"),
+      tooltip = list(formatter = PP_TIP_FORMATTER)
     )))
 
     # Zero, on a change scale.
@@ -1289,7 +1195,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
           # sit at 0 -- checked on a rendered card -- and a zero a reader has
           # to count gridlines to find is not stated at all. The line type
           # carries the distinction, so the colour can stay quiet.
-          lineStyle = list(color = "#9ca3af", type = "solid", width = 1),
+          lineStyle = list(color = "var(--blockr-color-border-strong)",
+                           type = "solid", width = 1),
           label = list(show = FALSE),
           data = list(list(yAxis = 0))
         )
@@ -1337,7 +1244,7 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       yAxis = y_axes,
       series = all_series
     )) |>
-    echarts4r::e_text_style(fontFamily = "system-ui, -apple-system, sans-serif")
+    echarts4r::e_text_style(fontFamily = "var(--bs-body-font-family)")
 }
 
 
@@ -1422,7 +1329,7 @@ pp_param_cat_cols <- function() {
 pp_findings_table_meta <- function() {
   list(
     advs  = list(domain = "Vitals", icon = "heart-pulse", color = "#D97706",
-                 label = "Vital Signs"),
+                 label = "Vital signs"),
     adlbc = list(domain = "Laboratory", icon = "droplet", color = "#2563EB",
                  label = "Chemistry"),
     adlbh = list(domain = "Laboratory", icon = "droplet-half",
@@ -1447,7 +1354,7 @@ pp_findings_table_meta <- function() {
     # to say which anchor each number uses, and one anchor per pill is the
     # smaller claim.
     adtr  = list(domain = "Efficacy", icon = "bullseye", color = "#DB2777",
-                 label = "Tumor Burden")
+                 label = "Tumor burden")
   )
 }
 

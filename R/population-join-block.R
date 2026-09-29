@@ -99,11 +99,27 @@ join_population <- function(events, population, id = "USUBJID") {
   }
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
-  # merge() and rbind() drop the filter trail the events carried, and the
-  # tables downstream build their "Filtered:" footnote from it. The events'
-  # trail is the one to keep: it already holds the global filter's clauses,
-  # which are the population's too.
-  blockr.dm::add_filter_trail(out, input)
+  # merge() and rbind() drop the filter trail the inputs carried, and the
+  # tables downstream build their "Filtered:" footnote from it. Both trails
+  # are kept. The population can be filtered on its own branch (a safety
+  # flag on ADSL), and a board that wires the two inputs the other way round
+  # still gets the events' filters. The trail is keyed by block, so the
+  # global filter's clauses, which reach both sides, appear once.
+  blockr.dm::add_filter_trail(out, join_trails(input, population))
+}
+
+# The two inputs' trails as one, events first. Returned as an object carrying
+# the trail, the form add_filter_trail() reads its input in. Entries arrive
+# without table scope, both inputs being data frames.
+join_trails <- function(events, population) {
+  # `[` would keep the scope attribute of one side; rebuilt bare instead.
+  bare <- function(x) {
+    t <- blockr.dm::filter_trail(x)
+    if (length(t)) stats::setNames(as.vector(t, "character"), names(t))
+  }
+  trail <- c(bare(events), bare(population))
+  trail <- trail[!duplicated(names(trail))]
+  structure(list(), blockr_filters = if (length(trail)) trail)
 }
 
 #' Population join block

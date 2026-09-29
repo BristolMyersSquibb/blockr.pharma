@@ -27,14 +27,17 @@ test('sync_selected paints the On list in order, ticks the catalogue, counts', (
   assert.deepEqual(on.sort(), ON.slice().sort());
   assert.equal(h.q('.pp-add-on-wrap').classList.contains('is-hidden'), false);
 
-  // A parameter row carries its code, a panel row its colour.
+  // A parameter row carries its code, then its name as meta; a panel row
+  // its name. No grip and no colour dot: the whole row drags.
   const alb = h.q('.pp-add-ord[data-viz-id="adlbc_all__ALB"]');
   assert.equal(alb.querySelector('.pp-add-ord-code').textContent, 'ALB');
-  assert.equal(alb.querySelector('.pp-add-name').textContent, 'Albumin (g/L)');
+  assert.equal(alb.querySelector('.pp-add-name.is-meta').textContent, 'Albumin (g/L)');
   const ae = h.q('.pp-add-ord[data-viz-id="ae_gantt"]');
-  assert.ok(ae.querySelector('.pp-add-dot'));
-  assert.ok(ae.querySelector('.pp-add-ord-grip .grip'), 'the grip glyph from the mount config');
-  assert.ok(ae.querySelector('button.pp-add-ord-x'));
+  assert.equal(ae.querySelector('.pp-add-ord-code'), null);
+  assert.equal(ae.querySelector('.pp-add-dot, .pp-add-ord-grip'), null);
+  assert.equal(ae.tabIndex, 0, 'focusable, for Alt+Up and Alt+Down');
+  assert.equal(ae.querySelector('button.pp-add-ord-x').getAttribute('data-blockr-tooltip'),
+    'Remove from the profile');
 
   // Nothing selected: the block hides the whole On section and says nothing.
   h.send('sync_selected', []);
@@ -70,13 +73,62 @@ test('with no query the catalogue is hidden and patients all show', () => {
   h.close();
 });
 
+test('focusing the empty box browses everything not on the profile, grouped', () => {
+  const h = boot();
+  const pop = h.el('pp_panels');
+  search(h).focus();
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
+  const all = h.qa('.pp-add-row').map((r) => r.getAttribute('data-viz-id'));
+  assert.deepEqual(shown, all.filter((id) => !ON.includes(id)), 'everything not on the profile, in catalogue order');
+  const heads = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim());
+  assert.ok(heads.includes('Vital signs'), 'parameters under their findings card');
+  assert.ok(!heads.includes('Treatment'), 'a group whose rows are all on the profile has no heading');
+  assert.equal(h.shownIds().length, 12, 'the cohort is untouched');
+  assert.equal(h.q('.is-enter'), null);
+
+  // Enter alone takes nothing; the arrows pick a row first.
+  h.key(search(h), 'Enter');
+  assert.deepEqual(h.inputs('toggle_viz'), []);
+
+  // Typing is a search again: only the matches, under their own heading.
+  h.type(search(h), 'temp');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  assert.deepEqual(h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim()),
+    ['Vital signs']);
+  // Deleting the query goes back to browsing.
+  h.type(search(h), '');
+  assert.equal(pop.classList.contains('is-browsing'), true);
+
+  // A click in the list keeps it open; a click in the cohort closes it.
+  h.mouse('mousedown', '.pp-add-results');
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  h.mouse('mousedown', '.pp-pt');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
+  h.close();
+});
+
+test('picking while browsing moves the row up and keeps the list open; Escape closes it', () => {
+  const h = boot();
+  const pop = h.el('pp_panels');
+  search(h).focus();
+  h.click('.pp-add-row[data-viz-id="advs_all__TEMP"]');
+  assert.equal(h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]').classList.contains('is-hidden'), true);
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  h.key(search(h), 'Escape');
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  h.close();
+});
+
 test('a query filters panels and patients together and marks the first hit', () => {
   const h = boot();
   h.type(search(h), 'temp');
   const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
   assert.deepEqual(shown, ['advs_all__TEMP']);
-  assert.ok(h.qa('.pp-add-results .pp-add-group').every((g) => g.classList.contains('is-hidden')),
-    'group headings never show during a query');
+  // The hit's section title shows; the others, with nothing under them, do not.
+  const titles = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent);
+  assert.deepEqual(titles, ['Vital signs']);
   assert.equal(h.shownIds().length, 0, 'no patient matches "temp"');
   assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false, 'one panel matched');
   assert.equal(h.q('.is-enter').getAttribute('data-viz-id'), 'advs_all__TEMP');
@@ -116,6 +168,10 @@ test('Escape and the clear button empty the box and restore everything', () => {
   h.click(h.el('search_clear'));
   assert.equal(search(h).value, '');
   assert.equal(h.shownIds().length, 12);
+  // The clear button puts the focus back in the now empty box, which is
+  // browsing; Escape then closes the catalogue.
+  assert.equal(h.el('pp_panels').classList.contains('is-browsing'), true);
+  h.key(search(h), 'Escape');
   assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
   h.close();
 });
@@ -368,5 +424,21 @@ test('the arrows never move the caret in the box', () => {
   h.resetInputs();
   assert.equal(h.key(search(h), 'Enter').defaultPrevented, false);
   assert.equal(h.inputs().length, 0);
+  h.close();
+});
+
+test('Alt+Up and Alt+Down move the focused row and send the new order', () => {
+  const h = boot();
+  const second = h.onProfile()[1];
+  const row = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
+  h.key(row, 'ArrowUp', { altKey: true });
+  assert.equal(h.onProfile()[0], second);
+  assert.equal(h.lastInput('reorder_viz')[0], second);
+  const moved = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
+  assert.equal(h.doc.activeElement, moved, 'focus stays with the row');
+  // At the top it goes no further.
+  const n = h.inputs('reorder_viz').length;
+  h.key(moved, 'ArrowUp', { altKey: true });
+  assert.equal(h.inputs('reorder_viz').length, n);
   h.close();
 });
