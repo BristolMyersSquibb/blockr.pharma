@@ -46,10 +46,10 @@ columns) gives its group names as the nested levels. Overlapping subgroup
 pools are an error: composer supports \verb{pools =} on the outermost \code{by()}
 only.
 
-\code{total} adds a column over every subject, as a pool with no members listed.
+\code{total} adds a column over every subject, as a pool of the raw group members.
 That is the way to a Total column once pools can overlap: composer's own
 \code{total_col} is computed over the pooled rows and counts a subject in two
-pools twice, a pool is built from the raw rows. For the same reason no
-column may be called "Total": composer computes a column of that name its
-own way, whatever it is defined as, so the name is refused with an error.
+pools twice. For the same reason no column may be called "Total": composer
+computes a column of that name its own way, whatever it is defined as, so the
+name is refused with an error.
 }

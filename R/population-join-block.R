@@ -71,6 +71,7 @@ join_population <- function(events, population, id = "USUBJID") {
 
   # Held before `events` is rebuilt below; see the last line.
   input <- events
+  column_attrs <- join_population_column_attrs(events, population)
 
   # Only what the events lack. Joining a column they already have would
   # produce a .x/.y pair and leave the caller to guess which one to group by --
@@ -100,10 +101,10 @@ join_population <- function(events, population, id = "USUBJID") {
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
   # merge() and rbind() return plain vectors, so every column lost its
-  # `label` and whatever else the data carried on it, and a title's
-  # `{label(@col)}` fell back to the name. Put back what a column lost, from
-  # the events first, then from the population for the columns it supplied.
-  out <- join_restore_col_attrs(out, input, population)
+  # `label` and any blockr grouping metadata. Put those attributes back,
+  # preferring population attributes for stamped group columns because that is
+  # where custom pool definitions live.
+  out <- restore_population_column_attrs(out, column_attrs)
   # merge() and rbind() drop the filter trail the inputs carried, and the
   # tables downstream build their "Filtered:" footnote from it. Both trails
   # are kept. The population can be filtered on its own branch (a safety
@@ -111,21 +112,6 @@ join_population <- function(events, population, id = "USUBJID") {
   # still gets the events' filters. The trail is keyed by block, so the
   # global filter's clauses, which reach both sides, appear once.
   blockr.dm::add_filter_trail(out, join_trails(input, population))
-}
-
-# Copy onto each column of `out` the attributes its source column had and it
-# lost. Structural attributes are left to the join: they either survived or
-# were changed on purpose.
-join_restore_col_attrs <- function(out, ...) {
-  keep_off <- c("class", "levels", "names", "dim", "dimnames", "tzone")
-  for (src in list(...)) {
-    for (nm in intersect(names(out), names(src))) {
-      a <- attributes(src[[nm]])
-      a <- a[setdiff(names(a), c(keep_off, names(attributes(out[[nm]]))))]
-      for (k in names(a)) attr(out[[nm]], k) <- a[[k]]
-    }
-  }
-  out
 }
 
 # The two inputs' trails as one, events first. Returned as an object carrying
@@ -140,6 +126,30 @@ join_trails <- function(events, population) {
   trail <- c(bare(events), bare(population))
   trail <- trail[!duplicated(names(trail))]
   structure(list(), blockr_filters = if (length(trail)) trail)
+}
+
+join_population_column_attrs <- function(events, population) {
+  cols <- union(names(events), names(population))
+  stats::setNames(lapply(cols, function(nm) {
+    event_attrs <- if (nm %in% names(events)) attributes(events[[nm]]) else NULL
+    pop_attrs <- if (nm %in% names(population)) attributes(population[[nm]]) else NULL
+
+    if (!is.null(pop_attrs$blockr_groups) || !is.null(pop_attrs$blockr_source)) {
+      return(pop_attrs)
+    }
+    event_attrs %||% pop_attrs
+  }), cols)
+}
+
+restore_population_column_attrs <- function(data, column_attrs) {
+  for (nm in intersect(names(column_attrs), names(data))) {
+    attrs <- column_attrs[[nm]]
+    if (!length(attrs)) next
+    for (attr_nm in setdiff(names(attrs), c("names", "row.names", "class", "levels"))) {
+      attr(data[[nm]], attr_nm) <- attrs[[attr_nm]]
+    }
+  }
+  data
 }
 
 #' Population join block
