@@ -100,6 +100,10 @@ join_population <- function(events, population, id = "USUBJID") {
   }
   out <- rbind(fill(events), fill(missing))
   rownames(out) <- NULL
+  # merge() and rbind() return plain vectors, so every column lost its
+  # `label` and any blockr grouping metadata. Put those attributes back,
+  # preferring population attributes for stamped group columns because that is
+  # where custom pool definitions live.
   out <- restore_population_column_attrs(out, column_attrs)
   # merge() and rbind() drop the filter trail the inputs carried, and the
   # tables downstream build their "Filtered:" footnote from it. Both trails

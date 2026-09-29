@@ -170,3 +170,21 @@ test_that("the population's filter trail survives the join too", {
     join_population(data.frame(USUBJID = "S1"), data.frame(USUBJID = "S1"))
   ))
 })
+
+test_that("column labels survive the join", {
+  ev <- tibble::tibble(USUBJID = c("S1", "S1", "S2"),
+                       AEDECOD = c("Nausea", "Rash", "Rash"))
+  attr(ev$AEDECOD, "label") <- "Dictionary-Derived Term"
+  attr(ev$USUBJID, "label") <- "Unique Subject Identifier"
+  pop <- tibble::tibble(USUBJID = c("S1", "S2", "S3"),
+                        TRT = factor(c("A", "B", "A")))
+  attr(pop$TRT, "label") <- "Actual Treatment"
+
+  out <- join_population(ev, pop)
+  expect_identical(attr(out$AEDECOD, "label"), "Dictionary-Derived Term")
+  expect_identical(attr(out$USUBJID, "label"), "Unique Subject Identifier")
+  # A column the population supplied takes the population's label, and
+  # keeps its structure.
+  expect_identical(attr(out$TRT, "label"), "Actual Treatment")
+  expect_identical(levels(out$TRT), c("A", "B"))
+})
