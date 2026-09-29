@@ -25,7 +25,7 @@
 #'   -- see [pp_cohort_span_events()] for why a partly populated day column
 #'   must not win wholesale.
 #' @param color Role name whose resolved column colours the spans
-#'   (`"severity"`), or `NULL` for one flat colour.
+#'   (`"severity"`, `"indication"`), or `NULL` for one flat colour.
 #' @param search Columns a panel search filters the spans on, coarsest last.
 #'   `NULL` for a band no search reaches.
 #' @param open_ends Whether a missing end means "ongoing" (it runs to the
@@ -356,11 +356,12 @@ pp_search_icon <- function() {
 #' keywords: on the ECG card, `qt` returned all five intervals instead of the
 #' two with QT in the name.
 #'
-#' @section Nothing until you ask:
-#' With an empty box the catalogue is not shown at all: what the sidebar
-#' shows then is the profile you have, which is the list above it. Panels and
-#' parameters appear together once something is typed, because a study's full
-#' parameter set is sixty-odd rows and that is not a menu.
+#' @section Browsing and searching:
+#' With an empty, unfocused box the catalogue is not shown: what the sidebar
+#' shows then is the profile you have, which is the list above it. Focusing
+#' the empty box opens the whole catalogue under its section titles, minus
+#' what is already on the profile, so a reader who does not know a code can
+#' scroll to it. Typing narrows it to the matches.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
 #' @param ns The module's namespace function.
@@ -379,54 +380,45 @@ pp_add_picker_ui <- function(avail, ns) {
     )
   }
 
-  # Two row styles, one kind of thing. A parameter card carries its code on
-  # the left and the findings card it came from on the right, so `ALB` reads
-  # as "Albumin, and it is in Chemistry"; anything else is a plain panel row
-  # with its domain. Both add exactly the same way, because since parameters
-  # became cards there is only one kind of thing on the profile.
+  # A parameter shows its code and then its name as meta, as every picking
+  # surface shows a code and its decode (design system, "Column names and
+  # their labels"); any other panel shows its name. The check in front marks
+  # what is already on the profile.
   is_param <- function(v) !is.null(v$group_label)
+  tick <- shiny::span(class = "pp-add-tick", shiny::HTML(PP_ICON_CHECK))
 
-  viz_row <- function(v, dom) {
+  viz_row <- function(v) {
     if (is_param(v)) {
       code <- names(v$params)[[1L]]
       row(
+        tick,
         shiny::span(class = "pp-add-code", code),
         shiny::span(class = "pp-add-name", v$sublabel %||% v$label),
-        shiny::span(class = "pp-add-par", v$group_label),
-        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
         search = paste(code, v$sublabel %||% "", v$group_label),
         kind = "panel", viz_id = v$id, hidden = TRUE
       )
     } else {
       row(
-        shiny::span(class = "pp-add-dot",
-                    style = paste0("background:", v$color %||% "#9ca3af")),
+        tick,
         shiny::span(class = "pp-add-name", v$label),
-        shiny::span(class = "pp-add-par", dom),
-        shiny::span(class = "pp-add-tick", shiny::HTML("&#10003;")),
-        search = paste(v$label, dom, v$search %||% ""),
+        search = paste(v$label, v$domain %||% "", v$search %||% ""),
         kind = "panel", viz_id = v$id
       )
     }
   }
 
-  by_dom <- split(avail, vapply(avail, function(v) v$domain %||% "",
-                                character(1L)))
-  panel_rows <- unlist(lapply(names(by_dom), function(dom) {
-    vizs <- by_dom[[dom]]
-    plain <- Filter(Negate(is_param), vizs)
-    if (!length(plain)) return(NULL)
-    c(
-      list(shiny::div(class = "pp-add-group", `data-group` = "panel", dom)),
-      lapply(plain, viz_row, dom = dom)
-    )
-  }), recursive = FALSE)
-
-  # Parameter cards, hidden until something is typed. A study's whole
-  # parameter set is sixty-odd rows and that is not a menu -- the panels are
-  # what an empty box offers, as the sidebar's AVAILABLE list did.
-  param_rows <- unname(lapply(Filter(is_param, avail), viz_row, dom = ""))
-
+  # The catalogue under section titles: the panels by domain, then the
+  # parameters by the findings group they come from.
+  grouped <- function(vizs, key) {
+    by <- split(vizs, vapply(vizs, key, character(1L)))
+    unlist(lapply(names(by), function(g) {
+      c(list(shiny::div(class = "pp-add-group", g)), lapply(by[[g]], viz_row))
+    }), recursive = FALSE)
+  }
+  panel_rows <- grouped(Filter(Negate(is_param), avail),
+                        function(v) v$domain %||% "")
+  param_rows <- grouped(Filter(is_param, avail),
+                        function(v) v$group_label %||% "")
 
   shiny::div(
     class = "pp-panels", id = ns("pp_panels"),
@@ -437,32 +429,15 @@ pp_add_picker_ui <- function(avail, ns) {
     # section that has to follow the order cannot be part of it.
     shiny::div(
       class = "pp-add-on-wrap",
-      shiny::div(class = "pp-add-group", "On the profile",
+      shiny::div(class = "pp-add-title", "On the profile",
                  shiny::span(class = "pp-add-n")),
-      shiny::div(class = "pp-add-on", id = ns("pp_add_on"))
+      shiny::div(class = "pp-add-on", id = ns("pp_add_on"),
+                 role = "list", `aria-label` = "On the profile")
     ),
-    # The catalogue. Present but silent until the sidebar's search box has
-    # something in it: a study's whole parameter set is not a menu, and the
-    # list above already says what you have.
+    # The catalogue. Silent until the sidebar's search box is focused (the
+    # whole list) or has something in it (the matches).
     shiny::div(class = "pp-add-results", panel_rows, param_rows),
     shiny::div(class = "pp-add-none", "Nothing matches")
-  )
-}
-
-#' The six-dot drag handle
-#'
-#' The convention everywhere else, and the only handle a reader finds without
-#' hovering first. Quiet at rest (it repeats down a stack of eight panels) and
-#' it darkens on hover.
-#' @noRd
-pp_grip_glyph <- function() {
-  dots <- expand.grid(x = c(3, 7), y = c(4, 8, 12))
-  paste0(
-    '<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" ',
-    'aria-hidden="true">',
-    paste0(sprintf('<circle cx="%d" cy="%d" r="1.35"/>', dots$x, dots$y),
-           collapse = ""),
-    "</svg>"
   )
 }
 

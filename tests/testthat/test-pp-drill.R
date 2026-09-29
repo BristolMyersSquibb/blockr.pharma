@@ -5,7 +5,7 @@ test_that("pp_drill_state finds the drill filter's clause by its board id", {
   )
   expect_identical(
     pp_drill_state(trail, "pt_drill"),
-    list(id = "pt_drill", clause = "USUBJID = 01-701-1015")
+    list(id = "pt_drill", clause = "USUBJID = 01-701-1015", before = NULL)
   )
   # The global filter's clause is not a drill.
   expect_null(pp_drill_state(trail[1L], "pt_drill"))
@@ -23,4 +23,15 @@ test_that("pp_drill_state reports nothing without exactly one target or a trail"
   # Two blocks whose ids share a suffix do not collide: the match is on the
   # whole `block_<id>` segment.
   expect_null(pp_drill_state(c("board-block_xpt_drill-expr-" = "A = 1"), "pt_drill"))
+})
+
+test_that("pp_drill_state carries how many patients the drill started from", {
+  trail <- c(
+    "board-block_global_filter-expr-" = "SEX = F",
+    "board-block_pt_drill-expr-" = "AESEV = SEVERE"
+  )
+  attr(trail, "counts") <- list(
+    "board-block_pt_drill-expr-" = c(before = 179L, after = 6L)
+  )
+  expect_identical(pp_drill_state(trail, "pt_drill")$before, 179L)
 })

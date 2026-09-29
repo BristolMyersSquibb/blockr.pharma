@@ -17,9 +17,127 @@
  */
 (function() {
   var parts = [];
+
+  /* The charts' ink (design system, "Charts": canvas ink is read from the
+   * tokens at render). The options R builds name a token wherever they mean
+   * UI ink -- `"var(--blockr-color-text-muted)"` for axis labels,
+   * `"var(--blockr-color-border-default)"` for split lines, the body face as
+   * `"var(--bs-body-font-family)"` -- because a canvas cannot resolve a CSS
+   * variable. Every setOption on this page resolves them first; a
+   * renderItem function asks PatientProfile.ink() for the same values.
+   * Data colours are hex and pass through untouched. */
+  /** @type {Record<string, string>} */
+  var inkCache = {};
+  /** @param {string} name */
+  function ink(name) {
+    if (!(name in inkCache)) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      if (!v && name === '--bs-body-font-family' && document.body) {
+        v = getComputedStyle(document.body).fontFamily;
+      }
+      inkCache[name] = v;
+    }
+    return inkCache[name];
+  }
+  // The dark scheme is an attribute on <html>: its values are other values.
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function() { inkCache = {}; }).observe(
+      document.documentElement,
+      { attributes: true, attributeFilter: ['data-bs-theme', 'class', 'style'] });
+  }
+  var TOKEN = /^var\((--[A-Za-z0-9-]+)\)$/;
+  /** Replace every `var(--token)` string in an option object, in place.
+   * @param {any} o */
+  function resolveInk(o) {
+    if (!o || typeof o !== 'object') return o;
+    var keys = Array.isArray(o) ? o.map(function(_, i) { return i; }) : Object.keys(o);
+    keys.forEach(function(k) {
+      var v = o[k];
+      if (typeof v === 'string') {
+        var m = TOKEN.exec(v);
+        if (m) o[k] = ink(m[1]) || v;
+      } else if (v && typeof v === 'object') {
+        resolveInk(v);
+      }
+    });
+    return o;
+  }
+  /* No mark in the profile does anything on click, so none shows the hand
+   * (design system: what looks clickable is clickable). ECharts has no option
+   * that reaches every mark: a custom series' elements keep zrender's
+   * default `pointer` whatever the series or the element says. So the
+   * instance's DOM proxy, which writes the cursor onto the canvas, is told
+   * to write the plain one, whatever is hovered. A panel that one day takes
+   * a click has to undo this for its chart. */
+  /** @param {any} inst */
+  function plainCursor(inst) {
+    var h = inst.getZr && inst.getZr().handler;
+    var proxy = h && h.proxy;
+    if (!proxy || !proxy.setCursor || proxy.__ppCursor) return;
+    var set = proxy.setCursor;
+    proxy.setCursor = function() { return set.call(this, 'default'); };
+    proxy.__ppCursor = true;
+  }
+  /* Every chart instance resolves its options on the way in, whichever path
+   * sets them: htmlwidgets' first render or pp_slot_update()'s setOption. */
+  function patchEcharts() {
+    var ec = /** @type {any} */ (window).echarts;
+    if (!ec || ec.__ppInk) return;
+    var init = ec.init;
+    ec.init = function() {
+      var inst = init.apply(this, arguments);
+      // echarts.init is the page's: blockr.viz charts on the same board
+      // drill on click and keep their hand.
+      var dom = /** @type {any} */ (arguments[0]);
+      if (dom && dom.closest && dom.closest('.pp-layout')) plainCursor(inst);
+      var set = inst.setOption;
+      inst.setOption = function(/** @type {any} */ opt) {
+        resolveInk(opt);
+        return set.apply(this, arguments);
+      };
+      return inst;
+    };
+    ec.__ppInk = true;
+  }
+  patchEcharts();
+
+  /* The data tooltip (design system, "Charts"; blockr.viz's tipHead and
+   * tipRow). R builds the content as the data point's `tip` (pp-tooltip.R);
+   * this draws it: the headline with a swatch in the colour of the thing
+   * pointed at, a muted line under it, then rows with the name muted on the
+   * left and the value on the right. Everything that reaches the markup is
+   * study text, so all of it is escaped. */
+  /** @param {any} s */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  /** @param {any} params */
+  function tip(params) {
+    var t = params && params.data && params.data.tip;
+    if (!t) return '';
+    var sw = t.color ?
+      '<span class="pp-tt-sw" style="background:' + esc(t.color) + '"></span>' : '';
+    var html = '<div class="pp-tt-head">' + sw + '<span>' + esc(t.head) + '</span></div>';
+    if (t.sub) html += '<div class="pp-tt-sub">' + esc(t.sub) + '</div>';
+    (t.rows || []).forEach(function(/** @type {PpTipRow} */ r) {
+      html += '<div class="pp-tt-row"><span class="pp-tt-label">' + esc(r.label) +
+        '</span><span class="pp-tt-value">' + esc(r.value) +
+        (r.meta ? '<span class="pp-tt-meta">' + esc(r.meta) + '</span>' : '') +
+        '</span></div>';
+    });
+    if (t.note) html += '<div class="pp-tt-note">' + esc(t.note) + '</div>';
+    return html;
+  }
+
   window.PatientProfile = {
+    ink: ink,
+    resolveInk: resolveInk,
+    tip: tip,
     part: function(fn) { parts.push(fn); },
     mount: function(cfg) {
+      patchEcharts();
       var ctx = {
         cfg: cfg,
         ns: function(name) { return cfg.id + '-' + name; }

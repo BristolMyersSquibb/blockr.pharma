@@ -91,7 +91,7 @@ test_that("pp_patient_exhibit renders selected vizs as ggplots", {
     expect_true(is.numeric(attr(p, "pptx_width")))
     expect_true(is.numeric(attr(p, "pptx_height")))
   }
-  expect_identical(unname(patient$labels[["ae_gantt"]]), "Adverse Events")
+  expect_identical(unname(patient$labels[["ae_gantt"]]), "Adverse events")
 })
 
 test_that("pp_patient_exhibit works in both timeline modes", {
@@ -192,8 +192,8 @@ test_that("a cohort deck gets patient-per-slide titles", {
     s <- officer::slide_summary(doc, i)
     paste(s$text[!is.na(s$text)], collapse = " ")
   }, character(1L))
-  expect_match(titles[1], "Patient S1: Adverse Events")
-  expect_match(titles[2], "Patient S2: Adverse Events")
+  expect_match(titles[1], "Patient S1: Adverse events")
+  expect_match(titles[2], "Patient S2: Adverse events")
 })
 
 test_that("html_exhibit.pp_exhibit returns labelled image sections", {
@@ -202,7 +202,7 @@ test_that("html_exhibit.pp_exhibit returns labelled image sections", {
                                             selected = "ae_gantt"))
   html <- blockr.viz::html_exhibit(ex)
   txt <- paste(as.character(htmltools::tagList(html)), collapse = "")
-  expect_true(grepl("Adverse Events", txt))
+  expect_true(grepl("Adverse events", txt))
   expect_true(grepl("blockr-exhibit-img", txt))
 
   # Multi-patient output carries the subject headings.
@@ -345,7 +345,7 @@ test_that("patient_info exports as a table exhibit", {
   patient <- ex$patients[["S1"]]
   expect_true(is.data.frame(patient$plots[["patient_info"]]))
   expect_identical(unname(patient$labels[["patient_info"]]),
-                   "Patient Info")
+                   "Patient info")
 
   # The container method routes the data frame through blockr.viz's
   # DEFAULT pptx method: a native table slide, beside the plot slide.

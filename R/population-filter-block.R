@@ -481,6 +481,12 @@ new_population_filter_block <- function(featured = character(),
   if (!"class" %in% names(args)) {
     args$class <- c("population_filter_block", "crossfilter_block")
   }
+  # The header counts patients, not rows across the tables: the subject table
+  # is ADSL, one row a patient. A clinical word, so it is set here and not in
+  # blockr.dm's generic block.
+  if (!"subject_unit" %in% names(args)) {
+    args$subject_unit <- "patients"
+  }
   if (!"stamp_as" %in% names(args)) {
     args$stamp_as <- "Group"
   } else if (is.null(args$stamp_as)) {

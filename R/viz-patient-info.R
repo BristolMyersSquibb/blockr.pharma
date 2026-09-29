@@ -175,7 +175,7 @@ pp_info_tint <- function(colors, level) {
 #' @noRd
 patient_info_viz <- new_pp_viz(
   id = "patient_info",
-  label = "Patient Info",
+  label = "Patient info",
   domain = "Patient",
   icon = "person-vcard",
   color = "#374151",

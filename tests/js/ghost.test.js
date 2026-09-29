@@ -125,3 +125,26 @@ test('a render after a scroll-drop does not throw or leave anything behind', () 
   assert.equal(h.qa('.pp-chart-ghost').length, 0);
   h.close();
 });
+
+test('a panel in a tab that is not in front is not photographed', () => {
+  // dockview hides a background tab with visibility:hidden, so its panels
+  // keep their boxes; a photograph parented to <body> would not be hidden.
+  const { h, slot, body } = boot();
+  h.el('pp_layout').style.visibility = 'hidden';
+  recalculating(h, slot);
+  assert.equal(h.q('.pp-chart-ghost'), null);
+  h.close();
+});
+
+test('a photograph whose value never comes is dropped at a deadline', () => {
+  // A suspended output sends no value, so nothing else would take it down.
+  const { h, slot } = boot();
+  recalculating(h, slot);
+  assert.ok(h.q('.pp-chart-ghost'));
+  h.tick(3000);
+  assert.equal(h.q('.pp-chart-ghost'), null);
+  // and the panel can be photographed again
+  recalculating(h, slot);
+  assert.ok(h.q('.pp-chart-ghost'));
+  h.close();
+});

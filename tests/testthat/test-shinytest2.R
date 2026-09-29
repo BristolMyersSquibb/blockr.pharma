@@ -77,7 +77,7 @@ selected_id <- function() {
 }
 
 header_who <- function() {
-  js("(function(){ var e = document.querySelector('.pp-subject-who');
+  js("(function(){ var e = document.querySelector('[id$=subject_title] .pp-head-title');
        return e ? e.innerText.trim() : null; })()")
 }
 
@@ -100,7 +100,7 @@ search_value <- function() {
 wait_profile <- function(id) {
   wait_js(sprintf(
     "(function(){
-       var w = document.querySelector('.pp-subject-who');
+       var w = document.querySelector('[id$=subject_title] .pp-head-title');
        return !!w && w.innerText.trim() === '%s' &&
          !document.querySelector('.pp-chart-ghost') &&
          document.querySelectorAll('[id*=viz_slot_] canvas').length > 0;
@@ -216,8 +216,8 @@ test_that("the cohort lists every subject and a click picks one", {
   expect_equal(js("document.querySelectorAll('[id*=viz_slot_] canvas').length"), 0)
   # Before any pick the chart area explains itself, and nothing in the
   # block has errored.
-  expect_true(js("!!document.querySelector('.pp-chart-area .pp-empty-state')"))
-  expect_match(js("document.querySelector('.pp-empty-state-hint').innerText"), "Pick one of 254")
+  expect_identical(js("document.querySelector('.pp-head-title').innerText"), "")
+  expect_match(js("document.querySelector('.pp-chart-area .blockr-empty').innerText"), "No patient selected")
   expect_equal(js("document.querySelectorAll('.pp-layout .shiny-output-error').length"), 0)
 
   pick_patient(ids[1])
@@ -316,7 +316,7 @@ test_that("arrow keys walk the list in DOM order without a focus ring", {
 # 4. Picking a panel moves its row onto the profile and resets the search.
 # ---------------------------------------------------------------------------
 
-test_that("a picked panel moves to the On list and the search resets", {
+test_that("a picked panel moves to the On list and the search stays", {
   skip_if_no_app()
 
   search_clear()
@@ -337,7 +337,6 @@ test_that("a picked panel moves to the On list and the search resets", {
   run_js("[...document.querySelectorAll('.pp-add-row[data-viz-id*=\"TEMP\"]')]
             .filter(r => r.offsetParent)[0].click();")
   wait_js(sprintf("document.querySelectorAll('.pp-add-ord').length === %d", n0 + 1))
-  wait_js("document.querySelector('input[id$=\"-search\"]').value === ''")
   app$wait_for_idle()
 
   after <- on_profile()
@@ -346,6 +345,9 @@ test_that("a picked panel moves to the On list and the search resets", {
   expect_identical(after[seq_len(n0)], before)
   expect_identical(js("document.querySelector('.pp-add-n').innerText.trim()"),
                    as.character(n0 + 1))
+  # The query stays, so a second match is one click away (0e616b1); x clears it.
+  expect_identical(search_value(), "TEMP")
+  search_clear()
   expect_length(shown_ids(), 254)
   wait_js(sprintf("document.querySelectorAll('[id*=viz_slot_]').length === %d", slots0 + 1))
 
@@ -379,7 +381,7 @@ test_that("Enter picks the first hit and Escape clears the search", {
   cdp_key("Enter")
   wait_profile(target)
   expect_identical(selected_id(), target)
-  # Only a PANEL pick resets the box; a patient pick keeps the query.
+  # A pick keeps the query, a patient's or a panel's (0e616b1).
   expect_identical(search_value(), "1130")
 
   search_clear()
@@ -388,7 +390,7 @@ test_that("Enter picks the first hit and Escape clears the search", {
   cdp_key("Enter")
   wait_js(sprintf("document.querySelectorAll('.pp-add-ord').length === %d", n0 + 1))
   expect_true(any(grepl("TEMP", on_profile())))
-  expect_identical(search_value(), "")
+  expect_identical(search_value(), "TEMP")
 
   search_type("zzzz")
   wait_js("!!document.querySelector('.pp-add-none.is-shown')")
@@ -565,36 +567,57 @@ test_that("the cohort count toggles the sidebar", {
   expect_false(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
 })
 
+test_that("the gear opens its tray in flow, with the Display controls", {
+  skip_if_no_app()
+
+  tray <- function() js("document.querySelector('.pp-gear-tray').classList.contains('blockr-settings--open')")
+  expect_false(tray())
+  run_js("document.querySelector('.blockr-gear-btn[id$=pp_gear_btn]').click();")
+  Sys.sleep(0.6)
+  expect_true(tray())
+  expect_true(js("!!document.querySelector('.pp-gear-display .blockr-segmented')"))
+  expect_equal(
+    unlist(js("[...document.querySelectorAll('.pp-gear-display .blockr-checkbox')].map(e => e.textContent)")),
+    c("Hide data before day \u221230", "Smooth lines")
+  )
+  run_js("document.querySelector('.blockr-gear-btn[id$=pp_gear_btn]').click();")
+  Sys.sleep(0.6)
+  expect_false(tray())
+})
+
 # ---------------------------------------------------------------------------
 # 10. Sorting: the clause names the key and the rows reorder.
 # ---------------------------------------------------------------------------
 
-test_that("the sort clause cycles and reorders the cohort", {
+sort_text <- function() js("document.querySelector('[id$=cohort_sort_by]').innerText.trim()")
+
+# Open the sort word's menu and pick a key by its name.
+sort_by <- function(name) {
+  prev <- sort_text()
+  run_js("document.querySelector('[id$=cohort_sort_by]').click();")
+  wait_js("document.querySelector('.blockr-select__dropdown') !== null")
+  run_js(sprintf(
+    "[...document.querySelectorAll('.blockr-select__option')]
+       .find(e => e.innerText.trim() === '%s').click();", name))
+  wait_js(sprintf(
+    "document.querySelector('[id$=cohort_sort_by]').innerText.trim() !== '%s'", prev))
+  app$wait_for_idle()
+}
+
+test_that("the sort word opens its keys and reorders the cohort", {
   skip_if_no_app()
 
   search_clear()
-  sort_text <- function() js("document.querySelector('.pp-cohort-sortby').innerText.trim()")
   ids0 <- shown_ids()
   expect_length(ids0, 254)
-  t0 <- sort_text()
-  expect_match(t0, "patient id")
+  expect_match(sort_text(), "patient id")
 
-  run_js("document.querySelector('.pp-cohort-sortby').click();")
-  wait_js(sprintf("document.querySelector('.pp-cohort-sortby').innerText.trim() !== '%s'", t0))
-  app$wait_for_idle()
-  t1 <- sort_text()
+  sort_by("Worst severity")
   expect_false(identical(shown_ids(), ids0))
   expect_gt(js("document.querySelectorAll('.pp-pt .pp-pt-val').length"), 200)
 
-  # Cycle back round to the id order.
-  for (i in 1:3) {
-    if (identical(sort_text(), t0)) break
-    prev <- sort_text()
-    run_js("document.querySelector('.pp-cohort-sortby').click();")
-    wait_js(sprintf("document.querySelector('.pp-cohort-sortby').innerText.trim() !== '%s'", prev))
-    app$wait_for_idle()
-  }
-  expect_identical(sort_text(), t0)
+  sort_by("Patient id")
+  expect_identical(sort_text(), "patient id")
   expect_identical(shown_ids(), ids0)
 })
 
@@ -649,10 +672,10 @@ test_that("dragging an On row reorders the profile", {
 # 12. The find control: ticking terms in the popover filters the panel.
 # ---------------------------------------------------------------------------
 
-test_that("the find popover filters the panel and the cohort strip", {
+test_that("the filter word lists the patient's terms, then the cohort's, and filters", {
   skip_if_no_app()
+  skip_if_not_installed("safetyData")
 
-  # A patient with adverse events to filter.
   pick_patient(js("document.querySelector('.pp-pt').getAttribute('data-usubjid')"))
   lanes <- function() {
     js("(function(){
@@ -666,37 +689,41 @@ test_that("the find popover filters the panel and the cohort strip", {
   before <- lanes()
   expect_gt(before, 1)
 
-  # The header carries the options, so the popover has its list without a
-  # round trip: it is drawn before anything reaches the server.
+  word <- "[id*=viz_slot_ae_gantt] .pp-slot[data-kind=find]"
+  expect_identical(js(sprintf("document.querySelector('%s').innerText.trim()", word)), "all")
+
+  # The first open asks for the cohort's terms once and opens when they land.
   spy_install()
   spy_reset()
-  run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find').click();")
-  wait_js("document.querySelector('.pp-find-pop.is-open') !== null")
-  expect_gt(js("document.querySelectorAll('.pp-find-opt').length"), 1)
-  expect_length(spy_inputs("-viz_ctrl"), 0)
-
-  # The popover is parented to <body>, not to the panel it belongs to: the
-  # header is replaced on every settings change and would take it with it.
+  run_js(sprintf("document.querySelector('%s').click();", word))
+  wait_js("document.querySelector('.blockr-select__dropdown') !== null")
+  expect_length(spy_inputs("-find_vocab"), 1)
   expect_identical(
-    js("document.querySelector('.pp-find-pop').parentElement.tagName"), "BODY")
+    js("document.querySelector('.blockr-select__menu-title').innerText.trim().toLowerCase()"),
+    "show")
 
-  # Tick the first body system. Nothing is sent yet: one change here redraws
-  # the panel AND re-derives 254 cohort bands.
-  term <- js("document.querySelector('.pp-find-opt .pp-find-text').innerText.trim()")
-  run_js("document.querySelector('.pp-find-opt').click();")
-  wait_js("document.querySelectorAll('.pp-find-tag').length === 1")
+  # A term this patient has none of is offered too, so a filter can be armed
+  # before paging through the cohort.
+  adae <- safetyData::adam_adae
+  who <- selected_id()
+  mine <- unique(as.character(adae$AEDECOD[adae$USUBJID == who]))
+  others <- setdiff(unique(as.character(adae$AEDECOD)), mine)
+  shown <- unlist(js("[...document.querySelectorAll('.blockr-select__option')]
+                       .map(e => e.innerText.trim().toLowerCase())"))
+  expect_true(any(tolower(others) %in% shown))
+
+  # A pick is sent once, when the menu closes.
+  run_js("document.querySelector('.blockr-select__option').click();")
+  Sys.sleep(0.3)
   expect_length(spy_inputs("-viz_ctrl"), 0)
-
-  # Closing applies it, once.
-  run_js("document.querySelector('.pp-find-done').click();")
-  wait_js("document.querySelector('.pp-find-pop.is-open') === null")
+  run_js("document.body.click();")
+  wait_js("document.querySelector('.blockr-select__dropdown') === null")
   app$wait_for_idle()
   sent <- spy_inputs("-viz_ctrl")
   expect_length(sent, 1)
   expect_identical(sent[[1]]$param, "find")
 
-  # The panel is narrower, the trigger says how many filters are on, and the
-  # cohort caption echoes the term so the sparse bands are explained.
+  # The panel is narrower and the word names the pick.
   wait_js(sprintf(
     "(function(){
        var el = document.querySelector('[id*=viz_slot_ae_gantt] .echarts4r');
@@ -704,102 +731,18 @@ test_that("the find popover filters the panel and the cohort strip", {
        var y = i && i.getOption().yAxis;
        return y && y[0] && y[0].data && y[0].data.length < %d;
      })()", before))
-  expect_identical(
-    js("document.querySelector('.pp-ctrl-find-badge').innerText.trim()"), "1")
-  expect_true(js("document.querySelector('.pp-cohort-bandcap-find') !== null"))
-  expect_match(
-    js("document.querySelector('.pp-cohort-bandcap-find').innerText"),
-    substr(term, 1L, 8L), fixed = TRUE
-  )
+  expect_false(identical(
+    js(sprintf("document.querySelector('%s').innerText.trim()", word)), "all"))
 
-  # The caption chip is the way back out, and it clears every pick.
-  run_js("document.querySelector('.pp-cohort-bandcap-find').click();")
-  wait_js("document.querySelector('.pp-cohort-bandcap-find') === null")
+  # Back to everything, for the tests after this one.
+  run_js("(function(){
+    var w = document.querySelector('[id*=viz_slot_ae_gantt] .pp-slot[data-kind=find]');
+    var id = w.closest('.pp-layout').id.replace(/-pp_layout$/, '');
+    Shiny.setInputValue(id + '-viz_ctrl',
+      {viz_id: 'ae_gantt', param: 'find', value: []}, {priority: 'event'});
+  })()")
   app$wait_for_idle()
-  expect_equal(lanes(), before)
-  expect_true(js("document.querySelector('.pp-ctrl-find-badge') === null"))
-})
-
-test_that("typing reaches terms the cohort has and this patient does not", {
-  skip_if_no_app()
-  skip_if_not_installed("safetyData")
-
-  # A term this patient has none of, and a query that reaches it without
-  # reaching anything they DO have -- so a hit under the split can only have
-  # come from the cohort's vocabulary.
-  adae <- safetyData::adam_adae
-  who <- selected_id()
-  mine <- unique(as.character(adae$AEDECOD[adae$USUBJID == who]))
-  others <- setdiff(unique(as.character(adae$AEDECOD)), mine)
-  q <- NULL
-  for (term in others) {
-    cand <- tolower(substr(term, 1L, 6L))
-    if (nchar(cand) < 4L) next
-    if (!any(grepl(cand, tolower(mine), fixed = TRUE))) {
-      q <- cand
-      break
-    }
-  }
-  expect_false(is.null(q))
-
-  spy_install()
-  spy_reset()
-  run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find').click();")
-  wait_js("document.querySelector('.pp-find-pop.is-open') !== null")
-  # Opening asks for nothing: the cohort's vocabulary is about 16kB and is
-  # only wanted by a reader who is looking past this patient.
-  expect_length(spy_inputs("-find_vocab"), 0)
-
-  run_js(sprintf("(function(){
-      var el = document.querySelector('.pp-find-input');
-      el.value = '%s';
-      el.dispatchEvent(new Event('input', {bubbles: true}));
-    })()", q))
-  wait_js("document.querySelectorAll('.pp-find-opt.is-elsewhere').length > 0")
-
-  # One request, and the rows are counted in PATIENTS: for a term this
-  # patient has none of, the useful number is how much of the cohort does.
-  expect_length(spy_inputs("-find_vocab"), 1)
-  expect_match(
-    js("document.querySelector('.pp-find-opt.is-elsewhere .pp-find-n').innerText"),
-    "patient"
-  )
-  expect_true(js("document.querySelector('.pp-find-split') !== null"))
-
-  # Picking one applies like any other pick, and the panel says plainly that
-  # this patient has none of it rather than going blank.
-  run_js("document.querySelector('.pp-find-opt.is-elsewhere').click();")
-  run_js("document.querySelector('.pp-find-done').click();")
-  app$wait_for_idle()
-  wait_js("document.querySelector('.pp-ctrl-find-badge') !== null")
-  expect_match(
-    js("(function(){
-          var el = document.querySelector('[id*=viz_slot_ae_gantt] .echarts4r');
-          var i = echarts.getInstanceByDom(el);
-          var t = i.getOption().title;
-          return (t && t[0] && t[0].text) || '';
-        })()"),
-    "None of this patient"
-  )
-
-  # A second search session asks again, with the token it already holds, and
-  # is told the list has not moved.
-  run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find-clear').click();")
-  app$wait_for_idle()
-  spy_reset()
-  run_js("document.querySelector('[id*=viz_slot_ae_gantt] .pp-ctrl-find').click();")
-  wait_js("document.querySelector('.pp-find-pop.is-open') !== null")
-  run_js(sprintf("(function(){
-      var el = document.querySelector('.pp-find-input');
-      el.value = '%s';
-      el.dispatchEvent(new Event('input', {bubbles: true}));
-    })()", q))
-  wait_js("document.querySelectorAll('.pp-find-opt.is-elsewhere').length > 0")
-  sent <- spy_inputs("-find_vocab")
-  expect_length(sent, 1)
-  expect_true(nzchar(sent[[1]]$have))
-  run_js("document.querySelector('.pp-find-done').click();")
-  app$wait_for_idle()
+  wait_js(sprintf("document.querySelector('%s').innerText.trim() === 'all'", word))
 })
 
 # ---------------------------------------------------------------------------
@@ -853,7 +796,7 @@ test_that("a lab band draws the reference range and sorts by peak", {
   expect_equal(band$h, 30)
   expect_lt(band$hi, band$lo)
   expect_length(band$rects, 1)
-  expect_match(band$rects[[1]]$fill, "pp-cohort-ref")
+  expect_match(band$rects[[1]]$fill, "blockr-pharma-cohort-ref")
   expect_equal(band$rects[[1]]$y, band$hi)
   expect_equal(band$rects[[1]]$h, band$lo - band$hi, tolerance = 0.01)
   expect_equal(band$undrawn, 0)
@@ -863,8 +806,7 @@ test_that("a lab band draws the reference range and sorts by peak", {
   expect_gt(band$median, 3)
   expect_lte(band$median, 30)
 
-  run_js("document.querySelector('.pp-cohort-sortby').click();")
-  wait_js("document.querySelector('.pp-cohort-sortby').innerText.indexOf('peak') >= 0")
-  app$wait_for_idle()
+  sort_by("Peak value")
+  expect_match(sort_text(), "peak")
   expect_gt(js("document.querySelectorAll('.pp-pt .pp-pt-val').length"), 200)
 })

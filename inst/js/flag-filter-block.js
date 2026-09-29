@@ -9,7 +9,8 @@
  *
  * The gear holds one multi-select over EVERY upstream column (no filtering to
  * flag-shaped ones: that would need reading values, and the picker would go
- * empty whenever the upstream did).
+ * empty whenever the upstream did), and one footnote field per chosen column:
+ * the text a `{filters}` caption prints for that flag. Empty uses the label.
  *
  * Depends on: blockr-core.js, blockr-select.js, blockr-blocks.css
  */
@@ -25,6 +26,9 @@
       this.matched = null;    // rows kept by the current tick set (server)
       this.total = null;      // rows in the upstream
       this.choices = [];      // every upstream column as {value, label}
+      this.footnotes = {};    // name -> footnote text, non-empty only
+      this._fnFields = {};    // name -> {input, commit}
+      this._fnKey = null;     // column set the footnote rows were built for
       this._submitted = false;
       this._callback = null;
       this._popoverOpen = false;
@@ -66,6 +70,17 @@
       this.pickWrap.className = 'blockr-popover-select-wrap';
       row.appendChild(this.pickWrap);
       this.band.appendChild(row);
+
+      this.notesRow = document.createElement('div');
+      this.notesRow.className = 'blockr-popover-row ffb-notes-row';
+      const nlab = document.createElement('label');
+      nlab.className = 'blockr-popover-label';
+      nlab.textContent = 'Footnote';
+      this.notesRow.appendChild(nlab);
+      this.notesWrap = document.createElement('div');
+      this.notesWrap.className = 'ffb-notes';
+      this.notesRow.appendChild(this.notesWrap);
+      this.band.appendChild(this.notesRow);
       this.card.appendChild(this.band);
 
       this.body = document.createElement('div');
@@ -81,6 +96,7 @@
       this._popoverOpen = !this._popoverOpen;
       this.band.style.display = this._popoverOpen ? 'block' : 'none';
       this.gearBtn.classList.toggle('blockr-gear-active', this._popoverOpen);
+      Object.values(this._fnFields).forEach((f) => this._fitNote(f.input));
     }
 
     _rebuildPicker() {
@@ -99,6 +115,7 @@
           this.selected = sel;
           this.matched = null;
           this._renderBody();
+          this._renderFootnotes();
           this._submit();
         }
       });
@@ -180,6 +197,71 @@
       this._renderReadout();
     }
 
+    // One commit field per chosen column. Rebuilt only when the column set
+    // changes: a metadata push that merely brings labels updates the
+    // placeholders in place, so a field being typed in keeps its cursor.
+    _renderFootnotes() {
+      const key = this.columns.join('\u0001');
+      if (key !== this._fnKey) {
+        this._fnKey = key;
+        this._fnFields = {};
+        this.notesWrap.innerHTML = '';
+        this.columns.forEach((name) => {
+          const line = document.createElement('div');
+          line.className = 'ffb-note';
+          const nm = document.createElement('span');
+          nm.className = 'ffb-note-name';
+          nm.textContent = name;
+          line.appendChild(nm);
+          const field = document.createElement('div');
+          field.className = 'blockr-commit-field';
+          // A textarea, because the text is a sentence and the panel is
+          // narrow. textCommit takes Enter as the commit, so it never holds
+          // a line break.
+          const input = document.createElement('textarea');
+          input.rows = 1;
+          input.className = 'blockr-text-input ffb-note-input';
+          input.value = this.footnotes[name] || '';
+          input.addEventListener('input', () => this._fitNote(input));
+          field.appendChild(input);
+          const commit = Blockr.textCommit(input, {
+            onCommit: (value) => {
+              const v = value.trim();
+              if (v) this.footnotes[name] = v;
+              else delete this.footnotes[name];
+              this._submit();
+            }
+          });
+          line.appendChild(field);
+          this.notesWrap.appendChild(line);
+          this._fnFields[name] = { input, commit };
+        });
+      } else {
+        this.columns.forEach((name) => {
+          const f = this._fnFields[name];
+          if (f && document.activeElement !== f.input) {
+            f.commit.sync(this.footnotes[name] || '');
+          }
+        });
+      }
+      this.notesRow.style.display = this.columns.length ? '' : 'none';
+      this.columns.forEach((name) => {
+        const f = this._fnFields[name];
+        if (f) {
+          f.input.placeholder = (this.meta[name] || {}).label || name;
+          this._fitNote(f.input);
+        }
+      });
+    }
+
+    // Grow the field to its text. A closed band has no layout, so this runs
+    // again when the gear opens.
+    _fitNote(input) {
+      if (!input.offsetParent) return;
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 2 + 'px';
+    }
+
     // The readout is what makes "unticked means everything" self-evident:
     // clearing the boxes visibly returns the row count to the total.
     //
@@ -229,6 +311,7 @@
       // the picker or the ticks here would fight the click that caused it.
       if (payload && payload.meta_only) {
         this._renderBody();
+        this._renderFootnotes();
         return;
       }
       this.columns = names;
@@ -241,14 +324,27 @@
       const sel = {};
       ((payload && payload.selected) || []).forEach((n) => { sel[String(n)] = true; });
       this.selected = sel;
+      // An empty R list arrives as [], a named one as an object.
+      const notes = {};
+      const fn = payload && payload.footnotes;
+      if (fn && !Array.isArray(fn) && typeof fn === 'object') {
+        Object.keys(fn).forEach((k) => { if (fn[k]) notes[k] = String(fn[k]); });
+      }
+      this.footnotes = notes;
       this._rebuildPicker();
       this._renderBody();
+      this._renderFootnotes();
     }
 
     _compose() {
+      const footnotes = {};
+      this.columns.forEach((n) => {
+        if (this.footnotes[n]) footnotes[n] = this.footnotes[n];
+      });
       return {
         columns: this.columns.slice(),
-        selected: this.columns.filter((n) => this.selected[n])
+        selected: this.columns.filter((n) => this.selected[n]),
+        footnotes: footnotes
       };
     }
 

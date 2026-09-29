@@ -68,7 +68,7 @@ pp_cycle_vizs <- function(dm_obj) {
 #' @noRd
 cycle_viz <- new_pp_viz(
   id = "cycle_lane",
-  label = "Treatment Cycles",
+  label = "Treatment cycles",
   domain = "Treatment",
   icon = "arrow-repeat",
   color = "#7C3AED",
@@ -101,6 +101,16 @@ cycle_viz <- new_pp_viz(
       list(
         value = list(x0, x1, paste0("C", anchors$cycle[i]),
                      start_lab, len, if (est) 1L else 0L),
+        tip = pp_tip(
+          paste("Cycle", anchors$cycle[i]), color = "#7C3AED",
+          rows = pp_tip_span(
+            pp_tip_when(anchors$cycle_start[i], NA, ref_ms, mode),
+            pp_tip_when(anchors$cycle_end[i], NA, ref_ms, mode)
+          ),
+          note = if (est) {
+            "The Day 1 visit is missing: the start is inferred"
+          }
+        ),
         itemStyle = list(
           color = band_fill[[(anchors$cycle[i] %% 2L) + 1L]],
           borderColor = "rgba(124,58,237,0.55)",
@@ -150,7 +160,7 @@ cycle_viz <- new_pp_viz(
                 fill: '#5B21B6',
                 fontSize: 11,
                 fontWeight: 600,
-                fontFamily: 'system-ui, -apple-system, sans-serif'
+                fontFamily: PatientProfile.ink('--bs-body-font-family')
               }
             });
           }
@@ -159,30 +169,7 @@ cycle_viz <- new_pp_viz(
       "),
       encode = list(x = list(0, 1), y = 2),
       data = band_data,
-      tooltip = list(
-        formatter = htmlwidgets::JS("
-          function(params) {
-            var v = params.value;
-            var cyc = v[2] || '';
-            var start = v[3] || '';
-            var len = v[4];
-            var est = v[5];
-            var html = '<div style=\"min-width:170px\">';
-            html += '<div style=\"font-size:14px;font-weight:700;' +
-              'margin-bottom:4px\">Cycle ' + cyc.replace('C', '') + '</div>';
-            html += '<span style=\"font-size:12px\">Starts ' + start +
-              '</span><br/>';
-            html += '<span style=\"font-size:12px\">Length: ' + len +
-              ' days</span>';
-            if (est) {
-              html += '<br/><span style=\"color:#888;font-size:11px\">' +
-                'Day 1 visit missing \\u2014 start inferred</span>';
-            }
-            html += '</div>';
-            return html;
-          }
-        ")
-      )
+      tooltip = list(formatter = PP_TIP_FORMATTER)
     ))
 
     echarts4r::e_charts(height = 110) |>
@@ -205,7 +192,7 @@ cycle_viz <- new_pp_viz(
         series = series_list
       )) |>
       echarts4r::e_text_style(
-        fontFamily = "system-ui, -apple-system, sans-serif"
+        fontFamily = "var(--bs-body-font-family)"
       )
   }
 )

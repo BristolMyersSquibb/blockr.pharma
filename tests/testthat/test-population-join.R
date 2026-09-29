@@ -148,3 +148,25 @@ test_that("population group pools survive the join", {
     c("A", "B", "C", "A+B")
   )
 })
+
+test_that("the population's filter trail survives the join too", {
+  ev <- data.frame(USUBJID = c("S1", "S2"), AEDECOD = c("Nausea", "Rash"))
+  attr(ev, "blockr_filters") <- c(global = "SEX = F", ae_flags = "TRTEMFL")
+  pop <- data.frame(USUBJID = c("S1", "S2", "S3"), TRT01A = "A")
+  attr(pop, "blockr_filters") <- c(global = "SEX = F", saf = "SAFFL")
+  out <- join_population(ev, pop)
+  expect_identical(
+    as.vector(blockr.dm::filter_trail(out)),
+    c("SEX = F", "TRTEMFL", "SAFFL")
+  )
+
+  # Wired the other way round, the events' filters still arrive.
+  back <- join_population(pop, ev)
+  expect_setequal(as.vector(blockr.dm::filter_trail(back)),
+                  c("SEX = F", "TRTEMFL", "SAFFL"))
+
+  # No trail on either side, no attribute.
+  expect_null(blockr.dm::filter_trail(
+    join_population(data.frame(USUBJID = "S1"), data.frame(USUBJID = "S1"))
+  ))
+})

@@ -36,6 +36,16 @@ interface PpDlMenuState {
   n: number;
 }
 
+/** `gear_state`: what the gear tray's Display section shows. */
+interface PpGearState {
+  /** the study has a treatment start, so relative days and day -30 exist */
+  rday: boolean;
+  mode: 'rday' | 'date';
+  /** the full pre-treatment history (not cut at day -30) */
+  prestudy: boolean;
+  smooth: 'auto' | 'off';
+}
+
 /** `slot`: bring one panel to the current patient without rebuilding it
  *  (R: pp_slot_update()). */
 interface PpSlotUpdate {
@@ -113,14 +123,31 @@ interface PpInputs {
   smooth_mode: 'off' | 'auto';
 }
 
+/* --- The data tooltip (R/pp-tooltip.R) --- */
+
+interface PpTipRow {
+  label: string;
+  value: string;
+  /** muted text after the value: the date after a day, a span's length */
+  meta?: string;
+}
+
+interface PpTip {
+  head: string;
+  /** the swatch before the headline */
+  color?: string;
+  /** a muted line under the headline */
+  sub?: string;
+  rows: PpTipRow[];
+  note?: string;
+}
+
 /* --- The mount --- */
 
 /** What R hands PatientProfile.mount() (R/patient-profile-block.R). */
 interface PpConfig {
   /** the module's namespace; every id is `id + '-' + name` */
   id: string;
-  /** the drag-handle glyph the On rows reuse (pp_grip_glyph()) */
-  grip: string;
   /** height of a spans band (pp_cohort_band_h_spans) */
   bandH: number;
 }
@@ -133,6 +160,12 @@ interface PpContext {
 type PpPart = (ctx: PpContext) => void;
 
 interface PatientProfileNamespace {
+  /** A token's value on this page, for ink a chart draws itself. */
+  ink(name: string): string;
+  /** Resolve every `var(--token)` string in an ECharts option, in place. */
+  resolveInk(option: any): any;
+  /** Draw a data point's tooltip from its `tip` (R/pp-tooltip.R). */
+  tip(params: any): string;
   part(fn: PpPart): void;
   mount(cfg: PpConfig): PpContext;
 }
@@ -155,7 +188,20 @@ interface EchartsStatic {
   getInstanceByDom(el: Element): EchartsInstance | null;
 }
 
+/** The slice of blockr.ui's blockr-ui.js these files use. */
+interface BlockrUiNamespace {
+  gearTray(band: HTMLElement, gear: HTMLElement, opts?: { label?: string }):
+    { set(open: boolean): void; toggle(): void; isOpen(): boolean };
+  segmented(options: { value: string; label: string }[], selected: string,
+            onChange: (value: string) => void, opts?: { size?: 'xs'; label?: string }):
+    { el: HTMLElement; set(value: string): void; get(): string };
+  checkbox(label: string, checked: boolean, onChange: (checked: boolean) => void):
+    { el: HTMLElement; input: HTMLInputElement; set(value: boolean): void; get(): boolean };
+  Select?: { menu?: (anchor: HTMLElement, config: object) => { close(): void } };
+}
+
 declare var Shiny: ShinyStatic;
+declare var Blockr: BlockrUiNamespace;
 declare var echarts: EchartsStatic | undefined;
 declare var PatientProfile: PatientProfileNamespace;
 declare var $: JQueryStatic;
@@ -163,6 +209,7 @@ declare var jQuery: JQueryStatic;
 
 interface Window {
   Shiny: ShinyStatic;
+  Blockr?: BlockrUiNamespace;
   echarts?: EchartsStatic;
   PatientProfile: PatientProfileNamespace;
 }

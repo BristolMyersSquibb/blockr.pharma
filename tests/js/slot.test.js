@@ -99,32 +99,6 @@ test('a message for a panel that is not on the profile does nothing', () => {
   h.close();
 });
 
-test('a swapped header leaves an open find popover standing', () => {
-  // The header is replaced wholesale on every settings change, which is why
-  // the popover is parented to <body> instead of living in the control. A
-  // reader mid-pick must not lose their list because the panel redrew.
-  const h = boot();
-  const slot = h.el('viz_slot_ae_gantt');
-  widgetOf(h, 'ae_gantt').__echarts = true;
-  const trigger = slot.querySelector('.pp-ctrl-find');
-  h.click(trigger);
-  const popover = h.q('.pp-find-pop.is-open');
-  assert.ok(popover);
-  h.click(popover.querySelectorAll('.pp-find-opt')[0]);
-
-  h.send('slot', msg({
-    header: '<div class="pp-chart-header">' +
-      '<button class="pp-ctrl-find" type="button" data-viz-id="ae_gantt" ' +
-      'data-param="find" data-picks="[]" data-options="[]"></button></div>'
-  }));
-  const fresh = slot.querySelector('.pp-ctrl-find');
-  assert.notEqual(fresh, trigger, 'the trigger was replaced');
-  assert.equal(h.q('.pp-find-pop.is-open'), popover, 'the popover was not');
-  assert.equal(popover.querySelectorAll('.pp-find-tag').length, 1,
-    'and it still holds the pick that has not been sent yet');
-  h.close();
-});
-
 test('a swapped header takes the class of the one that came, so a legend row can come and go', () => {
   const h = boot();
   const slot = h.el('viz_slot_ae_gantt');

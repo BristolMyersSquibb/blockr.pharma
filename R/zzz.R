@@ -80,6 +80,14 @@ register_pharma_blocks <- function() {
             "view that should open filtered must name one."
           ),
           example = list("TRTEMFL")
+        ),
+        footnotes = new_arg_spec(
+          paste0(
+            "Text a {filters} caption prints for each flag, keyed by column. ",
+            "Study-specific wording, e.g. the definition of the period. A ",
+            "flag without an entry prints its label."
+          ),
+          example = list(TRTEMFL = "Treatment-emergent")
         )
       )
     ),
@@ -95,7 +103,8 @@ register_pharma_blocks <- function() {
     uid = "ae_heatmap_block",
     description = paste0(
       "Subject x term AE matrix: cell = occurrence count, color = worst ",
-      "grade; top-N cap, arm rail, click-to-filter drill."
+      "grade; top-N terms, rows grouped by arm, a click drills to the ",
+      "patient."
     ),
     category = "plot",
     icon = "grid-3x3",

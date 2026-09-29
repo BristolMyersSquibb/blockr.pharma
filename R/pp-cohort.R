@@ -222,7 +222,7 @@ pp_sev_rank <- function(x) {
 #' panel it opens.
 #'
 #' @param dm_obj A normalized `dm`.
-#' @param roles Resolved roles, for the severity column.
+#' @param roles Resolved roles, for the column the band's `color` names.
 #' @param prestudy_days How far before treatment start the axis may reach.
 #'   `Inf` for the full history (the block passes this when the user turns
 #'   the profile's Pre-treatment toggle on, so the two agree).
@@ -236,7 +236,10 @@ pp_sev_rank <- function(x) {
 #'   patient's records matched.
 #' @return `list(kind, day0, days, subjects, hits, ...)` -- the axis bounds in
 #'   study days and a named list, one entry per USUBJID. A `"spans"` band
-#'   gives each subject `list(events = data.frame(start, end, sev), trt_end)`;
+#'   gives each subject `list(events = data.frame(start, end, value),
+#'   n_levels, trt_end)`, `value` from the column the band's `color` role
+#'   names and `n_levels` the distinct values of it across ALL the patient's
+#'   records (the filter does not change what a colour means);
 #'   a `"series"` band gives `list(series = data.frame(day, value), trt_end)`
 #'   and the result carries the shared value scale (`vlo`, `vhi`) and the
 #'   reference limit the rows draw against.
@@ -279,8 +282,10 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
                                   prestudy_days = prestudy_days))
   }
 
-  ev <- pp_cohort_span_events(tbls, band, roles$severity, ref = src_ref,
+  color_col <- if (!is.null(band$color)) roles[[band$color]]
+  ev <- pp_cohort_span_events(tbls, band, color_col, ref = src_ref,
                               picks = picks)
+  n_levels <- pp_cohort_level_counts(tbls[[band$table]], color_col, ids)
   # How many of this patient's records the filter kept, before the axis
   # clipping below drops any -- the count answers "who had this", which is a
   # fact about the records and not about what fits on the strip.
@@ -329,9 +334,10 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
     keep <- ev$subject == ids[[i]]
     list(
       events = data.frame(
-        start = ev$start[keep], end = ev$end[keep], sev = ev$sev[keep],
+        start = ev$start[keep], end = ev$end[keep], value = ev$value[keep],
         stringsAsFactors = FALSE
       ),
+      n_levels = n_levels[[i]],
       trt_end = trt_end[[i]]
     )
   })
@@ -447,11 +453,11 @@ pp_date_to_day <- function(date, ref) {
 #' @param ref Per-row reference dates (the patient's treatment start), or
 #'   `NULL`. Only consulted when a day column is missing.
 #' @noRd
-pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
+pp_cohort_span_events <- function(tbls, band, color_col = NULL, ref = NULL,
                                   picks = NULL) {
 
   none <- list(subject = character(), start = numeric(), end = numeric(),
-               sev = character(), open = logical())
+               value = character(), open = logical())
   if (!band$table %in% names(tbls)) return(none)
 
   adae <- as.data.frame(tbls[[band$table]])
@@ -505,15 +511,40 @@ pp_cohort_span_events <- function(tbls, band, sev_col = NULL, ref = NULL,
   open <- is.na(end) | (!is.na(start) & end < start)
   end[open] <- start[open]
 
-  sev <- if (!is.null(sev_col) && sev_col %in% colnames(adae)) {
-    as.character(adae[[sev_col]])
+  value <- if (!is.null(color_col) && color_col %in% colnames(adae)) {
+    as.character(adae[[color_col]])
   } else {
     rep(NA_character_, nrow(adae))
   }
 
   keep <- !is.na(start)
   list(subject = as.character(adae$USUBJID)[keep], start = start[keep],
-       end = end[keep], sev = sev[keep], open = open[keep])
+       end = end[keep], value = value[keep], open = open[keep])
+}
+
+#' Distinct colour values per patient
+#'
+#' How many different values of the band's colour column each patient's
+#' records carry, counted over the whole source table: a panel search
+#' narrows what the strip draws, not what a colour means for that patient.
+#' Blank and missing values do not count, the same as in
+#' [pp_indc_scale_colors()].
+#'
+#' @param tbl The band's source table, or `NULL`.
+#' @param col The colour column, or `NULL`.
+#' @param ids Cohort USUBJIDs.
+#' @return An integer vector aligned to `ids`; all zero when there is nothing
+#'   to count.
+#' @noRd
+pp_cohort_level_counts <- function(tbl, col, ids) {
+  none <- integer(length(ids))
+  if (is.null(tbl) || is.null(col)) return(none)
+  tbl <- as.data.frame(tbl)
+  if (!all(c("USUBJID", col) %in% colnames(tbl))) return(none)
+  v <- as.character(tbl[[col]])
+  ok <- !is.na(v) & nzchar(trimws(v))
+  pairs <- unique(data.frame(s = as.character(tbl$USUBJID)[ok], v = v[ok]))
+  as.integer(tabulate(match(pairs$s, ids), nbins = length(ids)))
 }
 
 #' Per-subject value series for the cohort band
@@ -710,10 +741,11 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
 #' when it binds the severity column, the package constants otherwise.
 #' @param scale_colors Named colour vector from [pp_sev_scale_colors()], or
 #'   `NULL`.
-#' @return A function of one severity value returning a hex colour.
+#' @return A function of one severity value (and the patient's
+#'   [pp_cohort_marks()] entry, unused here) returning a hex colour.
 #' @noRd
 pp_cohort_sev_color <- function(scale_colors = NULL) {
-  function(sev) {
+  function(sev, sub = NULL) {
     s <- as.character(sev)
     if (is.na(s) || !nzchar(s)) return("#9ca3af")
     if (!is.null(scale_colors) && s %in% names(scale_colors)) {
@@ -721,6 +753,57 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
     }
     pp_sev_fallback_color(s)
   }
+}
+
+#' Indication colour resolver for the cohort band
+#'
+#' The medications strip, coloured by the rule the CM panel uses for the same
+#' patient: indication colours when [pp_indc_colorable()] says that
+#' patient's levels are worth colouring, grey for a record with no
+#' indication among them, and [PP_CM_COLOR] for every bar otherwise. The
+#' level colours come from resolving the whole cohort at once; blockr.theme
+#' keys them by the level, so they are the ones the panel resolves from one
+#' patient's subset.
+#'
+#' @param indc_colors Cohort-wide level -> colour vector from
+#'   `pp_indc_scale_colors(per_patient = FALSE)`, or `NULL`.
+#' @return A function of one indication value and the patient's
+#'   [pp_cohort_marks()] entry, returning a hex colour.
+#' @noRd
+pp_cohort_indc_color <- function(indc_colors = NULL) {
+  function(value, sub = NULL) {
+    if (is.null(indc_colors) || !length(indc_colors) ||
+          !pp_indc_colorable(sub$n_levels %||% 0L)) {
+      return(PP_CM_COLOR)
+    }
+    v <- as.character(value)
+    if (!is.na(v) && v %in% names(indc_colors)) {
+      return(unname(indc_colors[[v]]))
+    }
+    "#9ca3af"
+  }
+}
+
+#' The colour resolver a band declares
+#'
+#' Dispatches on the band's `color` role, so the strip colours by what its
+#' panel colours by.
+#'
+#' @param band The driving band, or `NULL`.
+#' @param roles Resolved roles.
+#' @param map The board scale map.
+#' @param dm_obj The cohort's normalized dm.
+#' @return A resolver for [pp_cohort_band_geom()].
+#' @noRd
+pp_cohort_band_color <- function(band, roles, map, dm_obj) {
+  switch(band$color %||% "",
+    indication = pp_cohort_indc_color(
+      pp_indc_scale_colors(map, dm_obj, roles$indication, per_patient = FALSE)
+    ),
+    pp_cohort_sev_color(
+      pp_sev_scale_colors(map, dm_obj, roles$severity)
+    )
+  )
 }
 
 #' One patient's band, drawn server-side
@@ -739,7 +822,7 @@ pp_cohort_sev_color <- function(scale_colors = NULL) {
 #'   scale. The band is NOT anchored at day zero -- a cohort with
 #'   pre-treatment records has a negative `day0`, and assuming otherwise is
 #'   what put those records in the wrong place.
-#' @param color A resolver from [pp_cohort_sev_color()].
+#' @param color A resolver from [pp_cohort_band_color()].
 #' @param width,height Band geometry in px.
 #' @param min_px Narrowest a span may draw. A same-day event is a fraction of
 #'   a pixel over a whole study and would vanish; the lane has the same floor
@@ -757,7 +840,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
 
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
-           'fill="var(--pp-cohort-track, #f3f4f6)"/>'),
+           'fill="var(--blockr-pharma-cohort-track)"/>'),
     width, h
   ))
 
@@ -769,14 +852,14 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     if (!is.na(geom$limit) && !is.na(geom$limit_lo)) {
       parts <- c(parts, sprintf(
         paste0('<rect x="0" y="%s" width="%s" height="%s" ',
-               'fill="var(--pp-cohort-ref, rgba(5, 150, 105, 0.10))"/>'),
+               'fill="var(--blockr-pharma-cohort-ref)"/>'),
         geom$limit, width, max(0, geom$limit_lo - geom$limit)
       ))
     } else if (!is.na(geom$limit) || !is.na(geom$limit_lo)) {
       one <- if (is.na(geom$limit)) geom$limit_lo else geom$limit
       parts <- c(parts, sprintf(
         paste0('<line x1="0" y1="%s" x2="%s" y2="%s" ',
-               'stroke="var(--pp-cohort-limit, #9ca3af)" stroke-width="0.75" ',
+               'stroke="var(--blockr-pharma-cohort-limit)" stroke-width="0.75" ',
                'stroke-dasharray="2 2" opacity="0.75"/>'),
         one, width, one
       ))
@@ -784,7 +867,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     if (nzchar(geom$path)) {
       parts <- c(parts, sprintf(
         paste0('<path d="%s" fill="none" ',
-               'stroke="var(--pp-cohort-line, #2563eb)" stroke-width="1.1" ',
+               'stroke="var(--blockr-pharma-cohort-line)" stroke-width="1.1" ',
                'stroke-linejoin="round" stroke-linecap="round"/>'),
         geom$path
       ))
@@ -793,7 +876,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     # "no data", which is a different fact.
     if (length(geom$dot)) {
       parts <- c(parts, sprintf(
-        '<circle cx="%s" cy="%s" r="1.6" fill="var(--pp-cohort-line, #2563eb)"/>',
+        '<circle cx="%s" cy="%s" r="1.6" fill="var(--blockr-pharma-cohort-line)"/>',
         geom$dot[[1L]], geom$dot[[2L]]
       ))
     }
@@ -804,14 +887,14 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     for (cx in geom$clip) {
       parts <- c(parts, sprintf(
         paste0('<line x1="%s" y1="0" x2="%s" y2="2.5" ',
-               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+               'stroke="var(--blockr-pharma-cohort-clip)" stroke-width="1.2"/>'),
         cx, cx
       ))
     }
     for (cx in geom$clip_lo) {
       parts <- c(parts, sprintf(
         paste0('<line x1="%s" y1="%s" x2="%s" y2="%s" ',
-               'stroke="var(--pp-cohort-clip, #dc2626)" stroke-width="1.2"/>'),
+               'stroke="var(--blockr-pharma-cohort-clip)" stroke-width="1.2"/>'),
         cx, h - 2.5, cx, h
       ))
     }
@@ -834,7 +917,7 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
     cy <- h / 2
     r <- min(3, h / 2 + 1)
     parts <- c(parts, sprintf(
-      '<path d="M%s %sL%s %sL%s %sL%s %sZ" fill="var(--pp-cohort-eot, #6b7280)"/>',
+      '<path d="M%s %sL%s %sL%s %sL%s %sZ" fill="var(--blockr-pharma-cohort-eot)"/>',
       cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy
     ))
   }
@@ -879,7 +962,7 @@ pp_cohort_eot_x <- function(sub, marks, width) {
 #' format.
 #'
 #' @section Merging runs of one colour:
-#' Consecutive spans of the same severity that touch or overlap are merged
+#' Consecutive spans of the same colour that touch or overlap are merged
 #' into one. This is not a simplification of the picture -- overlapping spans
 #' of one colour paint exactly the merged span -- and it is worth doing
 #' because a patient's 25 events are mostly one grade: on the measured study
@@ -919,9 +1002,10 @@ pp_cohort_band_geom <- function(sub, marks, color, width = 176,
     keep <- which(x0 < width)
     x <- round(x0[keep], 2)
     w <- round(pmin(ww[keep], width - x0[keep]), 2)
-    sev <- as.character(ev$sev)[keep]
-    lvl <- unique(sev)
-    fill <- vapply(lvl, color, character(1L), USE.NAMES = FALSE)[match(sev, lvl)]
+    value <- as.character(ev$value)[keep]
+    lvl <- unique(value)
+    fill <- vapply(lvl, color, character(1L), sub = sub,
+                   USE.NAMES = FALSE)[match(value, lvl)]
   }
 
   n <- length(x)
@@ -1212,7 +1296,7 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
 #' @param ord Row order from [pp_cohort_order()].
 #' @param disp A [pp_cohort_id_display()] result.
 #' @param marks A [pp_cohort_marks()] result.
-#' @param color A resolver from [pp_cohort_sev_color()].
+#' @param color A resolver from [pp_cohort_band_color()].
 #' @param arm_col Arm colours from [pp_cohort_arm_colors()].
 #' @param picked The selected USUBJID, or `NULL`/`character()`.
 #' @param smooth Round a series band's corners; follows the profile's
@@ -1293,12 +1377,12 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
 
   badge <- ifelse(
     nzchar(code),
-    sprintf('<span class="pp-pt-code" title="%s" style="%s">%s</span>',
+    sprintf('<span class="pp-pt-code" data-blockr-tooltip="%s" style="%s">%s</span>',
             esca(arm), esca(chip), esc(code)),
     ifelse(
       nzchar(arm),
       sprintf(
-        '<span class="pp-pt-swatch" title="%s" style="background:%s"></span>',
+        '<span class="pp-pt-swatch" data-blockr-tooltip="%s" style="background:%s"></span>',
         esca(arm), esca(tint)
       ),
       ""
@@ -1318,7 +1402,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     ""
   } else {
     paste0('<rect x="0" y="0" width="176" height="', h, '" rx="2"',
-           ' fill="var(--pp-cohort-track, #f3f4f6)"/>')
+           ' fill="var(--blockr-color-bg-hover)"/>')
   }
 
   html <- sprintf(
@@ -1329,9 +1413,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       # Search matches the same text a reader sees, plus the arm, which is
       # not printed in full anywhere in the row.
       ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s', kind,
-      # The tooltip carries the id in full, always: the row shows the part
-      # that varies, never the whole thing.
-      ' title="%s">',
+      '>',
       '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
       '<span class="pp-pt-gap"></span>%s%s</div>',
       # The empty track, always: the row keeps its height whether or not its
@@ -1353,7 +1435,6 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
            sprintf(' data-limit-lo="%s"', esca(limit_lo)), ""),
     ifelse(nzchar(clip), sprintf(' data-clip="%s"', esca(clip)), ""),
     ifelse(nzchar(clip_lo), sprintf(' data-clip-lo="%s"', esca(clip_lo)), ""),
-    esca(ifelse(nzchar(arm), paste0(id, " \u00b7 ", arm), id)),
     esc(shown),
     ifelse(nzchar(demo),
            sprintf('<span class="pp-pt-demo">%s</span>', esc(demo)), ""),
@@ -1629,7 +1710,8 @@ pp_cohort_pick <- function(sel, ids) {
 #'
 #' So this is not truncation. Nothing that distinguishes two patients is ever
 #' hidden -- only a prefix that is byte-identical across the whole cohort is
-#' lifted out, and the caller prints it once in the section header. An
+#' lifted out; the full id is in each row's tooltip and in the profile's
+#' title once a patient is picked. An
 #' ellipsis at either end would be worse in both directions: cutting the tail
 #' hides the subject number, and cutting the head hides which site.
 #'
@@ -1704,26 +1786,26 @@ pp_subject_arm <- function(dm_obj, id, arm_col = NULL) {
   as.character(adsl[[arm_col]][[at]])
 }
 
-#' The header's identity line
+#' The header's sentence
 #'
-#' The id, then the facts that are nowhere else on screen: the arm in full,
-#' sex and age, the day on treatment, and how many adverse events the patient
-#' has had with the worst grade among them.
+#' The facts about the patient on screen that are nowhere else on it, as one
+#' sentence under the subject id (design system, "The sentence and its
+#' slots"): the arm in full, sex and age, the days on treatment, and how many
+#' adverse events the patient has had with the worst grade among them, e.g.
+#' "Xanomeline Low Dose · F, 80 years · 27 days on treatment · 6 adverse
+#' events, worst Severe". It wraps rather than clipping in a narrow panel.
 #'
 #' Every fact is dropped rather than printed empty when the study lacks the
-#' column. A header reading "DAY --" tells a reader the study has no
-#' treatment duration; a header that simply does not mention days tells them
-#' nothing false.
+#' column: a sentence that does not mention days tells a reader nothing
+#' false.
 #'
 #' @param frame A [pp_cohort_frame()] result.
 #' @param at The picked patient's row in `frame`, or `NA`.
-#' @param id The picked USUBJID.
-#' @param disp A [pp_cohort_id_display()] result, for the shared prefix.
 #' @param arm The arm name, or `NA`.
 #' @param color A resolver from [pp_cohort_sev_color()], for the worst grade.
-#' @return A tag list.
+#' @return A tag, or `NULL` when there is nothing to say.
 #' @noRd
-pp_subject_facts_ui <- function(frame, at, id, disp, arm, color) {
+pp_subject_sentence_ui <- function(frame, at, arm, color) {
 
   val <- function(col) {
     if (is.na(at) || !col %in% names(frame)) return(NULL)
@@ -1731,55 +1813,57 @@ pp_subject_facts_ui <- function(frame, at, id, disp, arm, color) {
     if (is.na(v) || !nzchar(as.character(v))) return(NULL)
     v
   }
-  dot <- function() shiny::span(class = "pp-fact-dot")
-  fact <- function(key, ...) {
-    shiny::span(class = "pp-fact",
-      if (!is.null(key)) shiny::span(class = "pp-fact-k", key),
-      ...
-    )
+  count <- function(n, one, many) {
+    paste(n, if (identical(as.numeric(n), 1)) one else many)
   }
 
-  parts <- list()
-  add <- function(x) if (!is.null(x)) parts[[length(parts) + 1L]] <<- x
+  # One string, escaped piece by piece: htmltools puts a line break between
+  # the children of a tag, which a reader sees as a space before a comma.
+  esc <- htmltools::htmlEscape
+  parts <- character()
+  add <- function(x) parts[[length(parts) + 1L]] <<- x
 
-  if (!is.na(arm) && nzchar(arm)) {
-    add(fact("arm", shiny::tags$b(arm)))
-  }
+  if (!is.na(arm) && nzchar(arm)) add(esc(arm))
   sex <- val("SEX")
   age <- val("AGE")
   if (!is.null(sex) || !is.null(age)) {
-    add(fact(NULL, trimws(paste(sex %||% "", age %||% ""))))
+    add(esc(paste(c(sex, if (!is.null(age)) paste(age, "years")),
+                  collapse = ", ")))
   }
   dur <- val("TRTDURD")
-  if (!is.null(dur)) {
-    add(fact("day", shiny::tags$b(as.character(dur))))
-  }
+  if (!is.null(dur)) add(esc(count(dur, "day on treatment", "days on treatment")))
   n_ae <- val("AE_N")
   if (!is.null(n_ae)) {
     worst <- val("AE_WORST")
-    add(fact("ae", shiny::tags$b(as.character(n_ae)),
-      if (!is.null(worst)) {
-        shiny::span(class = "pp-fact-sev",
-          shiny::span(class = "pp-fact-swatch",
-                      style = paste0("background:", color(worst))),
-          pp_sev_label(worst)
-        )
-      }
-    ))
-  }
-
-  # The prefix every id in this cohort shares is lifted out in the sidebar;
-  # here the id stands alone, so it is printed whole.
-  shiny::tagList(
-    shiny::span(class = "pp-subject-who", title = id, id),
-    if (length(parts)) {
-      shiny::span(class = "pp-subject-facts",
-        do.call(shiny::tagList, unlist(
-          lapply(seq_along(parts), function(i) {
-            if (i == 1L) list(parts[[i]]) else list(dot(), parts[[i]])
-          }), recursive = FALSE
-        ))
-      )
+    if (identical(as.numeric(n_ae), 0)) {
+      add("no adverse events")
+    } else if (is.null(worst)) {
+      add(esc(count(n_ae, "adverse event", "adverse events")))
+    } else {
+      add(paste0(
+        esc(count(n_ae, "adverse event", "adverse events")), ", worst ",
+        '<span class="pp-head-swatch" style="background:',
+        esc(color(worst), attribute = TRUE), '"></span>',
+        esc(pp_sev_label(worst))
+      ))
     }
-  )
+  }
+  if (!length(parts)) return(NULL)
+
+  shiny::div(class = "pp-head-sentence",
+             shiny::HTML(paste(parts, collapse = " \u00b7 ")))
+}
+
+#' The header's title: the subject on screen
+#'
+#' The id in full, as the output title. Without a pick there is no title;
+#' the chart area below says that nobody is picked.
+#'
+#' @param id The picked USUBJID, or `NULL`.
+#' @noRd
+pp_subject_title_ui <- function(id) {
+  if (length(id) != 1L || !nzchar(id)) {
+    return(NULL)
+  }
+  shiny::div(class = "pp-head-title", id)
 }
