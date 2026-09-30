@@ -95,6 +95,55 @@ register_pharma_blocks <- function() {
     overwrite = TRUE
   )
   register_blocks(
+    "new_optional_post_filter_block",
+    name = "Optional Post-Filter",
+    uid = "optional_post_filter_block",
+    description = paste0(
+      "One checkbox that optionally applies a named data-frame transform ",
+      "after upstream filters."
+    ),
+    category = "transform",
+    icon = "funnel",
+    guidance = paste0(
+      "Use when a branch needs a visible, persisted on/off switch for a ",
+      "study-specific transform that belongs after filters. Keep the ",
+      "`transform` as a namespaced string such as \"pkg::fun\" so saved ",
+      "workflows restore on another session. With `note_col` set, the block ",
+      "writes a display note column for downstream titles or captions: the ",
+      "note while enabled, and blank text while disabled."
+    ),
+    arguments = list(
+      new_arg_specs(
+        enabled = new_arg_spec(
+          "Whether the transform starts enabled.",
+          example = FALSE
+        ),
+        label = new_arg_spec(
+          "Checkbox label shown in the block.",
+          example = "Pool AEDECOD terms",
+          type = arg_string()
+        ),
+        transform = new_arg_spec(
+          "Namespaced transform function string.",
+          example = "blockr.cdex::cdex_pool_aedecod",
+          type = arg_string()
+        ),
+        note_col = new_arg_spec(
+          "Optional column for a downstream caption note.",
+          example = "pool_aedecod_note",
+          type = arg_string()
+        ),
+        note = new_arg_spec(
+          "Optional note written when the transform is enabled.",
+          example = "AEDECOD Pooled: ...",
+          type = arg_string()
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
     "new_ae_heatmap_block",
     name = "AE Heatmap",
     # uid matches the block's own leading class (the ctor prepends
