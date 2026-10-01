@@ -29,8 +29,7 @@ first available)}
 
 \item{timeline_mode}{Initial timeline x-axis mode: \code{"rday"} (relative day
 from treatment start, ADaM \*DY convention; the default) or \code{"date"}
-(calendar dates). Changeable at runtime via the gear popover in the
-chart area header.}
+(calendar dates). Changeable at runtime in the gear tray.}
 
 \item{subject}{USUBJID to display, as a length-1 character. Only meaningful
 when the incoming dm carries more than one subject; a single-subject dm
@@ -41,13 +40,13 @@ chosen.}
 \item{show_prestudy}{Show the full pre-treatment history? By default the
 timeline starts 30 days before treatment start (the screening window,
 so baselines stay visible) -- one medication started years earlier must
-not stretch every axis to it. \code{TRUE} restores the full range; also a
-toggle in the gear popover.}
+not stretch every axis to it. \code{TRUE} restores the full range, as
+unchecking "Hide data before day -30" in the gear tray does.}
 
 \item{smooth}{Line smoothing for the findings value lines (labs, vitals):
 \code{"auto"} (default) draws monotone-smoothed lines -- no overshoot, the
 curve never implies values outside the measured range -- \code{"off"} draws
-straight segments. Also a toggle in the gear popover ("Value lines").
+straight segments. Also a checkbox in the gear tray ("Smooth lines").
 Same wire values as the chart block's \code{smooth} option.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}}

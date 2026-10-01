@@ -14,7 +14,6 @@ Description: Open, pharma-specific blocks for blockr. Provides a no-code
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     blockr.core,
     blockr.dm (>= 0.0.73),
@@ -56,3 +55,4 @@ Remotes:
     BristolMyersSquibb/blockr.viz
 Config/testthat/edition: 3
 Config/Needs/website: DiagrammeR, DiagrammeRsvg
+Config/roxygen2/version: 8.0.0

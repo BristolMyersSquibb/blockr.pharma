@@ -330,11 +330,19 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
   if (length(sub_levels)) {
     args <- c(
       args,
-      list(bquote(composer::by(variable = .(sub), levels = .(sub_levels))))
+      list(composer_by_call(variable = sub, levels = sub_levels))
     )
   }
 
   args
+}
+
+composer_by_call <- function(variable, levels) {
+  as.call(list(
+    as.call(list(as.name("::"), as.name("composer"), as.name("by"))),
+    variable = variable,
+    levels = levels
+  ))
 }
 
 #' Add explicit group-pool rows to a composer denominator
@@ -343,7 +351,7 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
 #' table-level denominator, but a denominator passed directly to a block is
 #' validated as-is. This helper makes synthetic group levels explicit there.
 #'
-#' @param denominator A data frame, typically from [composer::make_denom()].
+#' @param denominator A data frame, typically from `composer::make_denom()`.
 #' @param col Grouping column to overwrite in the duplicated rows.
 #' @param total Total level name. `NULL` returns `denominator` unchanged.
 #'

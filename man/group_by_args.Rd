@@ -41,10 +41,11 @@ When the board also has a subgroup (a \code{Subgroup} column, stamped only when
 one is picked), the result carries a nested \code{composer::by()} for it, as an
 unevaluated call that \code{do.call()} evaluates: the table gets the subgroup's
 columns under each group, and this package needs no composer dependency.
-A subgroup partition (pooled, dropped or renamed levels, none in two
-columns) gives its group names as the nested levels. Overlapping subgroup
-pools are an error: composer supports \verb{pools =} on the outermost \code{by()}
-only.
+A subgroup partition gives its group names as the nested levels. Overlapping
+subgroup pools also use their group names as levels; callers that need those
+columns in composer tables should first materialize the subgroup rows with
+\code{add_total_group_denominator(..., col = "Subgroup", total = NULL)}, because
+composer supports \verb{pools =} on the outermost \code{by()} only.
 
 \code{total} adds a column over every subject, as a pool of the raw group members.
 That is the way to a Total column once pools can overlap: composer's own

@@ -4,11 +4,7 @@
 \alias{add_total_group_denominator}
 \title{Add explicit group-pool rows to a composer denominator}
 \usage{
-add_total_group_denominator(
-  denominator,
-  col = "Group",
-  total = "All Patients"
-)
+add_total_group_denominator(denominator, col = "Group", total = "All Patients")
 }
 \arguments{
 \item{denominator}{A data frame, typically from \code{composer::make_denom()}.}

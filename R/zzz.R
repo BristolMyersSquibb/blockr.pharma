@@ -19,8 +19,7 @@ utils::globalVariables("USUBJID")
   invisible(NULL)
 }
 
-#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec
-#'   arg_array arg_string
+#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec arg_array arg_string
 register_pharma_blocks <- function() {
   register_blocks(
     "new_patient_profile_block",
