@@ -19,8 +19,7 @@ utils::globalVariables("USUBJID")
   invisible(NULL)
 }
 
-#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec
-#'   arg_array arg_string
+#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec arg_array arg_string
 register_pharma_blocks <- function() {
   register_blocks(
     "new_patient_profile_block",
@@ -88,6 +87,95 @@ register_pharma_blocks <- function() {
             "flag without an entry prints its label."
           ),
           example = list(TRTEMFL = "Treatment-emergent")
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
+    "new_optional_post_filter_block",
+    name = "Optional Post-Filter",
+    uid = "optional_post_filter_block",
+    description = paste0(
+      "One checkbox that optionally applies a named data-frame transform ",
+      "after upstream filters."
+    ),
+    category = "transform",
+    icon = "funnel",
+    guidance = paste0(
+      "Use when a branch needs a visible, persisted on/off switch for a ",
+      "study-specific transform that belongs after filters. Keep the ",
+      "`transform` as a namespaced string such as \"pkg::fun\" so saved ",
+      "workflows restore on another session. With `note_col` set, the block ",
+      "writes a display note column for downstream titles or captions: the ",
+      "note while enabled, and blank text while disabled."
+    ),
+    arguments = list(
+      new_arg_specs(
+        enabled = new_arg_spec(
+          "Whether the transform starts enabled.",
+          example = FALSE
+        ),
+        label = new_arg_spec(
+          "Checkbox label shown in the block.",
+          example = "Pool AEDECOD terms",
+          type = arg_string()
+        ),
+        transform = new_arg_spec(
+          "Namespaced transform function string.",
+          example = "blockr.cdex::cdex_pool_aedecod",
+          type = arg_string()
+        ),
+        note_col = new_arg_spec(
+          "Optional column for a downstream caption note.",
+          example = "pool_aedecod_note",
+          type = arg_string()
+        ),
+        note = new_arg_spec(
+          "Optional note written when the transform is enabled.",
+          example = "AEDECOD Pooled: ...",
+          type = arg_string()
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
+    "new_ae_parameters_block",
+    name = "AE Parameters",
+    uid = "ae_parameters_block",
+    description = "AE flags and AEDECOD pooling in one post-filter panel",
+    category = "transform",
+    icon = "sliders",
+    guidance = paste0(
+      "Use when AE branches need one compact settings block for period or ",
+      "analysis flags plus an optional AEDECOD pooling transform. The flags ",
+      "reuse the ADaM flag filter semantics: ticked flags union, unticked flags ",
+      "add no negative constraint. Configure `pool_transform` as a namespaced ",
+      "function string supplied by the study or deployment package, and set ",
+      "`pool_note_col` / `pool_note` when downstream captions should mention ",
+      "the pooling."
+    ),
+    arguments = list(
+      new_arg_specs(
+        columns = new_arg_spec(
+          "Character vector of AE flag column names.",
+          example = list("PREFL", "TRTEMFL", "FUPFL")
+        ),
+        selected = new_arg_spec(
+          "Which flags start ticked.",
+          example = list("TRTEMFL")
+        ),
+        pool_aedecod = new_arg_spec(
+          "Whether AEDECOD pooling starts enabled.",
+          example = FALSE
+        ),
+        pool_transform = new_arg_spec(
+          "Namespaced transform function string.",
+          example = "blockr.cdex::cdex_pool_aedecod",
+          type = arg_string()
         )
       )
     ),
