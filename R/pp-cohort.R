@@ -1820,8 +1820,11 @@ pp_subject_sentence_ui <- function(frame, at, arm, color) {
   # One string, escaped piece by piece: htmltools puts a line break between
   # the children of a tag, which a reader sees as a space before a comma.
   esc <- htmltools::htmlEscape
-  parts <- character()
-  add <- function(x) parts[[length(parts) + 1L]] <<- x
+  parts <- new.env(parent = emptyenv())
+  parts$values <- character()
+  add <- function(x) {
+    parts$values <- c(parts$values, x)
+  }
 
   if (!is.na(arm) && nzchar(arm)) add(esc(arm))
   sex <- val("SEX")
@@ -1848,10 +1851,10 @@ pp_subject_sentence_ui <- function(frame, at, arm, color) {
       ))
     }
   }
-  if (!length(parts)) return(NULL)
+  if (!length(parts$values)) return(NULL)
 
   shiny::div(class = "pp-head-sentence",
-             shiny::HTML(paste(parts, collapse = " \u00b7 ")))
+             shiny::HTML(paste(parts$values, collapse = " \u00b7 ")))
 }
 
 #' The header's title: the subject on screen
