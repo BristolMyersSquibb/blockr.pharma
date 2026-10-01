@@ -144,6 +144,46 @@ register_pharma_blocks <- function() {
     overwrite = TRUE
   )
   register_blocks(
+    "new_ae_parameters_block",
+    name = "AE Parameters",
+    uid = "ae_parameters_block",
+    description = "AE flags and AEDECOD pooling in one post-filter panel",
+    category = "transform",
+    icon = "sliders",
+    guidance = paste0(
+      "Use when AE branches need one compact settings block for period or ",
+      "analysis flags plus an optional AEDECOD pooling transform. The flags ",
+      "reuse the ADaM flag filter semantics: ticked flags union, unticked flags ",
+      "add no negative constraint. Configure `pool_transform` as a namespaced ",
+      "function string supplied by the study or deployment package, and set ",
+      "`pool_note_col` / `pool_note` when downstream captions should mention ",
+      "the pooling."
+    ),
+    arguments = list(
+      new_arg_specs(
+        columns = new_arg_spec(
+          "Character vector of AE flag column names.",
+          example = list("PREFL", "TRTEMFL", "FUPFL")
+        ),
+        selected = new_arg_spec(
+          "Which flags start ticked.",
+          example = list("TRTEMFL")
+        ),
+        pool_aedecod = new_arg_spec(
+          "Whether AEDECOD pooling starts enabled.",
+          example = FALSE
+        ),
+        pool_transform = new_arg_spec(
+          "Namespaced transform function string.",
+          example = "blockr.cdex::cdex_pool_aedecod",
+          type = arg_string()
+        )
+      )
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
     "new_ae_heatmap_block",
     name = "AE Heatmap",
     # uid matches the block's own leading class (the ctor prepends
