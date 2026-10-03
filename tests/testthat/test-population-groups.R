@@ -48,6 +48,50 @@ test_that("a partition writes the group name, NA for a dropped level", {
   expect_equal(as.vector(dropped), c("Placebo", NA, "High", NA))
 })
 
+test_that("columns keep the order they are given, pools among levels", {
+  x <- c("Placebo", "Low", "High")
+  cols <- list(columns = list(
+    list(members = "Placebo"),
+    list(name = "All active", members = c("Low", "High")),
+    list(name = "", members = "High")
+  ))
+  out <- stamp_group(x, "TRT", cols)
+  def <- attr(out, "blockr_groups")
+  expect_true(def$overlap)
+  expect_equal(
+    def$groups,
+    list(Placebo = "Placebo", "All active" = c("Low", "High"), High = "High")
+  )
+
+  # Every level on its own, in level order (sorted, for a character
+  # column): the same as no definition.
+  plain <- stamp_group(x, "TRT", list(columns = lapply(
+    sort(arms), function(v) list(name = "", members = v)
+  )))
+  expect_null(attr(plain, "blockr_groups"))
+
+  # The same levels in another order change the table, so they count.
+  moved <- stamp_group(x, "TRT", list(columns = lapply(
+    c("High", "Placebo", "Low"), function(v) list(name = "", members = v)
+  )))
+  expect_equal(names(attr(moved, "blockr_groups")$groups),
+               c("High", "Placebo", "Low"))
+})
+
+test_that("the expression carries the columns shape, levels by name only", {
+  entry <- list(columns = list(
+    list(name = "", members = "Placebo", custom = FALSE),
+    list(name = "All active", members = c("Low", "High"), custom = TRUE)
+  ))
+  expect_equal(
+    stamp_groups_arg(entry),
+    list(columns = list(
+      list(members = "Placebo"),
+      list(name = "All active", members = c("Low", "High"))
+    ))
+  )
+})
+
 test_that("overlapping groups keep the raw level and carry the definition", {
   x <- c("Placebo", "Low", "High")
   out <- stamp_group(x, "TRT", overlapping)

@@ -162,8 +162,10 @@ mark_group_kind <- function(data, col) {
 #'
 #' @param x The column the board is split by.
 #' @param col Its name, kept as the `blockr_source` attribute.
-#' @param groups `list(show = , pools = list(list(name = , members = ), ...))`
-#'   or `NULL`.
+#' @param groups `list(columns = list(list(name = , members = ), ...))`, the
+#'   columns in table order, an empty name meaning one level under its own
+#'   name; the older `list(show = , pools = )`, read as its levels followed by
+#'   its pools; or `NULL`.
 #'
 #' @return The group column: character, carrying `blockr_source` and, for a
 #'   definition that changes anything, `blockr_groups` =
@@ -197,49 +199,62 @@ group_definition <- function(x, groups) {
   }
   levels <- blockr.dm::crossfilter_level_order(x)
 
-  # A missing `show` is the default, every level. An empty one is a reader who
-  # removed them all and kept only the pools.
-  show <- if (is.null(groups$show)) {
-    levels
-  } else {
-    intersect(as.character(unlist(groups$show)), levels)
-  }
-
-  pools <- lapply(groups$pools %||% list(), function(p) {
-    list(
-      name = as.character(p$name)[1L],
-      members = intersect(as.character(unlist(p$members)), levels)
-    )
+  cols <- lapply(group_columns(groups, levels), function(p) {
+    list(name = p$name, members = intersect(p$members, levels))
   })
-  pools <- Filter(function(p) length(p$members) > 0L, pools)
+  cols <- Filter(function(p) length(p$members) > 0L, cols)
 
-  if (identical(show, levels) && !length(pools)) {
+  singles <- !nzchar(vapply(cols, `[[`, character(1), "name"))
+  if (all(singles) &&
+      identical(unlist(lapply(cols, `[[`, "members")) %||% character(),
+                levels)) {
     return(NULL)
   }
 
-  # The editor refuses a typed name another column has, but a level added back
-  # to `show` can still meet a pool that took its name meanwhile. The board
+  # The editor refuses a typed name another column has, but a level put back
+  # on its own can still meet a pool that took its name meanwhile. The board
   # splits on these names, so the later one gets a number rather than the
   # whole board failing on a name.
-  names <- show
-  for (p in pools) {
-    name <- p$name
+  names <- character()
+  for (p in cols) {
+    base <- if (nzchar(p$name)) p$name else paste(p$members, collapse = " + ")
+    name <- base
     k <- 2L
     while (name %in% names) {
-      name <- paste(p$name, k)
+      name <- paste(base, k)
       k <- k + 1L
     }
     names <- c(names, name)
   }
 
-  cols <- stats::setNames(
-    c(as.list(show), lapply(pools, `[[`, "members")),
-    names
-  )
+  cols <- stats::setNames(lapply(cols, `[[`, "members"), names)
 
   list(
     groups = cols,
     overlap = anyDuplicated(unlist(cols, use.names = FALSE)) > 0L
+  )
+}
+
+# A definition's columns, in table order, as list(name, members): an empty
+# name is one level under its own name. The older shape is `show` (missing:
+# every level) followed by `pools`, which is how it always came out.
+group_columns <- function(groups, levels) {
+  chr <- function(x) as.character(unlist(x, use.names = FALSE))
+  name_of <- function(p) {
+    n <- chr(p$name)
+    if (length(n) && !is.na(n[[1L]])) n[[1L]] else ""
+  }
+  if (!is.null(groups$columns)) {
+    return(lapply(groups$columns, function(p) {
+      list(name = name_of(p), members = chr(p$members))
+    }))
+  }
+  show <- if (is.null(groups$show)) levels else chr(groups$show)
+  c(
+    lapply(show, function(v) list(name = "", members = v)),
+    lapply(groups$pools %||% list(), function(p) {
+      list(name = name_of(p), members = chr(p$members))
+    })
   )
 }
 
@@ -583,6 +598,15 @@ stamp_groups_arg <- function(entry) {
   if (is.null(entry)) {
     return(NULL)
   }
+  # A level on its own is just its name in the code; a pool names itself.
+  if (!is.null(entry$columns)) {
+    return(list(columns = lapply(entry$columns, function(p) {
+      name <- as.character(p$name)[1L]
+      members <- as.character(unlist(p$members))
+      if (is.na(name) || !nzchar(name)) list(members = members)
+      else list(name = name, members = members)
+    })))
+  }
   list(
     show = as.character(unlist(entry$show)),
     pools = lapply(entry$pools %||% list(), function(p) {
@@ -628,20 +652,23 @@ population_filter_arguments <- function() {
       paste0(
         "How the levels of the pinned column and the subgroup become the ",
         "board's groups and subgroups. Object: ",
-        "column name -> {show: levels that keep a column of their own, in ",
-        "order; pools: array of {name, members: levels pooled into one ",
-        "column, custom: true once the name was typed}}. A level may be shown ",
-        "and pooled at once (both doses pooled, and the high dose again on ",
-        "its own). A column with no entry shows every level."
+        "column name -> {columns: array of {name, members, custom}, in the ",
+        "order the table shows them}. An empty name is one level on its own; ",
+        "a named column pools its members (custom: true once the name was ",
+        "typed). A level may be in two columns (both doses pooled, and the ",
+        "high dose again on its own). A level in no column is not shown. A ",
+        "column with no entry shows every level on its own."
       ),
-      example = list(TRT = list(
-        show = list("Placebo", "Xanomeline High Dose"),
-        pools = list(list(
+      example = list(TRT = list(columns = list(
+        list(name = "", members = list("Placebo"), custom = FALSE),
+        list(
           name = "All Xanomeline",
           members = list("Xanomeline Low Dose", "Xanomeline High Dose"),
           custom = FALSE
-        ))
-      ))
+        ),
+        list(name = "", members = list("Xanomeline High Dose"),
+             custom = FALSE)
+      )))
     )
   )
 }

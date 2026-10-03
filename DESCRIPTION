@@ -1,6 +1,6 @@
 Package: blockr.pharma
 Title: Pharma Blocks for Blockr
-Version: 0.0.0.9106
+Version: 0.0.0.9107
 Authors@R:
     person(given = "Christoph",
            family = "Sax",
@@ -56,3 +56,4 @@ Remotes:
 Config/testthat/edition: 3
 Config/Needs/website: DiagrammeR, DiagrammeRsvg
 Config/roxygen2/version: 8.0.0
+RoxygenNote: 7.3.3

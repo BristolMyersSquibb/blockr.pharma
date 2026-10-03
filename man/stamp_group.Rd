@@ -11,8 +11,10 @@ stamp_group(x, col, groups = NULL)
 
 \item{col}{Its name, kept as the \code{blockr_source} attribute.}
 
-\item{groups}{\code{list(show = , pools = list(list(name = , members = ), ...))}
-or \code{NULL}.}
+\item{groups}{\code{list(columns = list(list(name = , members = ), ...))}, the
+columns in table order, an empty name meaning one level under its own
+name; the older \code{list(show = , pools = )}, read as its levels followed by
+its pools; or \code{NULL}.}
 }
 \value{
 The group column: character, carrying \code{blockr_source} and, for a
