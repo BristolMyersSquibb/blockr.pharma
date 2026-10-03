@@ -93,10 +93,9 @@ pp_viz_full_label <- function(viz) {
 #'   the viz's printed form (or `NULL` when there is nothing to draw). This
 #'   is what the per-viz download buttons and the deck export
 #'   ([pp_patient_exhibit()]) render -- the export pipeline re-derives every
-#'   picture server-side rather than capturing the echarts canvas, the same
-#'   split blockr.viz's chart block draws between its live view and
-#'   `static_chart()`. A viz without one simply is not exportable (skipped
-#'   with a message; no download button).
+#'   picture server-side rather than capturing the echarts canvas. A viz
+#'   without one simply is not exportable (skipped with a message; no
+#'   download button).
 #' @param exhibit_kind What the exhibit function returns: `"plot"` (a
 #'   ggplot; downloads offer PNG + PowerPoint) or `"table"` (an
 #'   [blockr.viz::as_annotated_df()]-coercible data frame, typeset by

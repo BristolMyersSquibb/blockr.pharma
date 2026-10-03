@@ -101,8 +101,7 @@ pp_viz_exhibit_settings <- function(viz, viz_settings, roles, dm_obj,
 #' block serializes (`selected`, `viz_settings`, `timeline_mode`, ...). This
 #' is what the block's download buttons write and what a blockr.outline deck
 #' places on slides: the export pipeline never captures the live echarts
-#' canvases, it re-renders from state, exactly as the chart block's
-#' [blockr.viz::static_chart()] path does.
+#' canvases, it re-renders from state.
 #'
 #' Handed a single-subject dm (the block's result once a patient is
 #' picked), it renders that patient. Handed a cohort, it renders EVERY
