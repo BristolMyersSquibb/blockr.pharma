@@ -63,8 +63,7 @@ ggplots -- the printed form of the block, built from the same state the
 block serializes (\code{selected}, \code{viz_settings}, \code{timeline_mode}, ...). This
 is what the block's download buttons write and what a blockr.outline deck
 places on slides: the export pipeline never captures the live echarts
-canvases, it re-renders from state, exactly as the chart block's
-\code{\link[blockr.viz:static_chart]{blockr.viz::static_chart()}} path does.
+canvases, it re-renders from state.
 }
 \details{
 Handed a single-subject dm (the block's result once a patient is

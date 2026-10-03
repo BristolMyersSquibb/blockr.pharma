@@ -3,8 +3,7 @@
 # The interactive panels are echarts htmlwidgets, which exist only in a
 # browser: the export pipeline (blockr.viz exhibits, blockr.outline decks)
 # re-derives every picture server-side from the same state instead of
-# screenshotting the canvas -- the same split the chart block draws between
-# its live ECharts view and static_chart(). Each viz that can be exported
+# screenshotting the canvas. Each viz that can be exported
 # declares an `exhibit` function with the SAME signature as its `render`
 # (see new_pp_viz()), returning a ggplot instead of a widget. This file
 # holds those twins plus the shared scaffolding (axis scales, theme, lane
@@ -88,8 +87,8 @@ pp_static_x_scale <- function(time_range, ref_ms = NA_real_, mode = "date") {
 
 # The echarts panels draw in CSS pixels and ggplot in points: 1px = 0.75pt.
 # Every static twin authors at the size its interactive sibling uses -- 11px
-# tick labels, the same constant chart.js and blockr.viz's static_chart()
-# work from -- and declares that on the plot as `gg_base_pt`. A target
+# tick labels, the same constant chart.js works from -- and declares that on
+# the plot as `gg_base_pt`. A target
 # printing for a reader further away than a monitor then scales the whole
 # design by the ratio it wants (blockr.viz's gg_type_scale()), rather than
 # each twin guessing at a slide-sized number.
