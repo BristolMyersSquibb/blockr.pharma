@@ -415,23 +415,6 @@ test_that("Enter picks the first hit and Escape clears the search", {
 test_that("the cohort well fits its host when the host shrinks", {
   skip_if_no_app()
 
-  fit <- function() {
-    js("(function(){
-      var well = document.querySelector('.pp-cohort-well');
-      var n = well.parentElement, host = null;
-      while (n && n !== document.body) {
-        var cs = getComputedStyle(n);
-        if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') { host = n; break; }
-        n = n.parentElement;
-      }
-      var w = well.getBoundingClientRect();
-      var limit = host ? host.getBoundingClientRect().bottom : window.innerHeight;
-      return {maxH: parseFloat(well.style.maxHeight) || null,
-              bottom: w.bottom, limit: limit, height: w.height,
-              inner: window.innerHeight, host: host ? host.className : null};
-    })()")
-  }
-
   # The first scrolling ancestor is what the well measures against: on this
   # board that is the block's card body, in a dock it is the panel.
   host_js <- "(function(){
@@ -443,23 +426,43 @@ test_that("the cohort well fits its host when the host shrinks", {
     }
     return null; })()"
 
-  tall <- fit()
-  expect_false(is.null(tall$host))
-  expect_false(is.null(tall$maxH))
+  fit <- function() {
+    js(sprintf("(function(){
+      var well = document.querySelector('.pp-cohort-well');
+      var host = %s;
+      var w = well.getBoundingClientRect();
+      var h = host.getBoundingClientRect();
+      return {maxH: parseFloat(well.style.maxHeight) || null,
+              bottom: w.bottom, limit: h.bottom, height: w.height,
+              above: w.top - h.top + host.scrollTop};
+    })()", host_js))
+  }
+
+  # Sized from what sits above the well (search, the panels, the caption),
+  # so the test does not depend on how many rows those take: 400px of room
+  # under it, then 200px, as a dock panel gives when a divider is dragged.
+  set_room <- function(px) {
+    run_js(sprintf("%s.style.height = '%dpx';", host_js,
+                   round(fit()$above + 16 + px)))
+    Sys.sleep(0.8)
+    fit()
+  }
+
+  start <- fit()
+  expect_false(is.null(start$maxH))
+
+  tall <- set_room(400)
+  expect_equal(tall$maxH, 400, tolerance = 2)
   expect_lte(tall$bottom, tall$limit)
 
-  # Shrink the host, as a dock panel does when the user drags a divider.
-  run_js(sprintf("%s.style.height = '420px';", host_js))
-  Sys.sleep(0.8)
-  short <- fit()
-  expect_lt(short$maxH, tall$maxH)
+  short <- set_room(200)
+  expect_equal(short$maxH, 200, tolerance = 2)
   expect_lte(short$bottom, short$limit)
-  expect_gte(short$height, 132)
 
   run_js(sprintf("%s.style.height = '';", host_js))
   Sys.sleep(0.8)
   back <- fit()
-  expect_equal(back$maxH, tall$maxH, tolerance = 2)
+  expect_equal(back$maxH, start$maxH, tolerance = 2)
 })
 
 # ---------------------------------------------------------------------------
@@ -556,12 +559,12 @@ test_that("the cohort count toggles the sidebar", {
   cls <- function() js("document.querySelector('.pp-sidebar').className")
   expect_false(grepl("collapsed", cls()))
 
-  run_js("document.querySelector('.pp-cohort-count').click();")
+  run_js("document.querySelector('.pp-list-toggle').click();")
   Sys.sleep(0.5)
   expect_true(grepl("collapsed", cls()))
   expect_true(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
 
-  run_js("document.querySelector('.pp-cohort-count').click();")
+  run_js("document.querySelector('.pp-list-toggle').click();")
   Sys.sleep(0.5)
   expect_false(grepl("collapsed", cls()))
   expect_false(js("document.querySelector('.pp-layout').classList.contains('sidebar-collapsed')"))
@@ -716,7 +719,8 @@ test_that("the filter word lists the patient's terms, then the cohort's, and fil
   run_js("document.querySelector('.blockr-select__option').click();")
   Sys.sleep(0.3)
   expect_length(spy_inputs("-viz_ctrl"), 0)
-  run_js("document.body.click();")
+  # A press outside closes it: blockr.ui's layers listen for pointerdown.
+  run_js("document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));")
   wait_js("document.querySelector('.blockr-select__dropdown') === null")
   app$wait_for_idle()
   sent <- spy_inputs("-viz_ctrl")

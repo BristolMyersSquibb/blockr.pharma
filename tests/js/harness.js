@@ -64,6 +64,21 @@ function blockrUiPath() {
   ).trim();
 }
 const BLOCKR_UI = read(blockrUiPath());
+/* Blockr.icons is not in blockr-ui.js: controls_dep() writes it into the
+ * page from assets/icons, one SVG file per icon. Built here the way
+ * blockr.ui's read_icon() does: the file without its comment and without
+ * the whitespace between tags. */
+const BLOCKR_ICONS = (() => {
+  const dir = path.join(path.dirname(blockrUiPath()), '..', 'icons');
+  const icons = {};
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.svg'))) {
+    icons[f.slice(0, -4)] = read(path.join(dir, f))
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/>\s+</g, '><')
+      .trim();
+  }
+  return `(window.Blockr = window.Blockr || {}).icons = ${JSON.stringify(icons)};`;
+})();
 const BLOCKR_SELECT = read(path.join(path.dirname(blockrUiPath()), 'blockr-select.js'));
 const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js',
                'pp-panels.js', 'pp-slots.js'];
@@ -220,6 +235,7 @@ function mount(opts = {}) {
   `);
 
   win.eval(JQUERY);
+  win.eval(BLOCKR_ICONS);
   win.eval(BLOCKR_UI);
   win.eval(BLOCKR_SELECT);
   win.eval(BLOCK_JS);

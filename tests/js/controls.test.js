@@ -20,7 +20,8 @@ const pick = (h, text) => {
   const opt = h.qa('.blockr-select__option').find((e) => e.textContent.startsWith(text));
   opt.dispatchEvent(new h.win.Event('click', { bubbles: true }));
 };
-const closeMenu = (h) => h.doc.body.dispatchEvent(new h.win.Event('click', { bubbles: true }));
+// A press outside: blockr.ui's layers close on pointerdown, not on click.
+const closeMenu = (h) => h.doc.body.dispatchEvent(new h.win.Event('pointerdown', { bubbles: true }));
 
 test('the sentence names what the panel draws, each setting a live word', () => {
   const h = boot();
