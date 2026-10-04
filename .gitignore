@@ -5,3 +5,4 @@
 docs
 *.tar.gz
 node_modules/
+tests/testthat/_problems/
