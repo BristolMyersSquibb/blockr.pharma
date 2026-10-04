@@ -25,7 +25,14 @@ test('subject_picker writes the cohort in grey, in both places', () => {
   assert.equal(resets(h).length, 0, 'no reset while nothing is drilled');
   h.send('subject_picker', { count: 1 });
   assert.deepEqual(statusText(h), ['1 patient', '1 patient']);
+  // Zero is a count: an empty cohort says so rather than going blank.
   h.send('subject_picker', { count: 0 });
+  assert.deepEqual(statusText(h), ['0 patients', '0 patients']);
+  h.close();
+});
+
+test('nothing is written before R has counted a cohort', () => {
+  const h = boot();
   assert.deepEqual(statusText(h), ['', '']);
   h.close();
 });

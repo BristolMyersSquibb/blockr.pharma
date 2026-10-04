@@ -750,7 +750,10 @@ new_patient_profile_block <- function(selected = NULL,
           # picker now, so the message carries a count -- 2000 options no
           # longer cross the wire on every cohort change, and the tag it
           # fills is the sidebar's toggle.
+          # Only once there is data: an empty cohort reads "0 patients",
+          # which is wrong for a dm that has not arrived yet.
           shiny::observe({
+            if (is.null(r_norm_dm())) return()
             pp_send(session, "subject_picker", list(count = length(r_cohort()$ids))
             )
           })

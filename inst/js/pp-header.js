@@ -42,7 +42,10 @@ PatientProfile.part(function(ctx) {
   // drill that lands first be undone by the count that follows it. The
   // sidebar's copy is re-rendered with the caption, so it is painted again
   // whenever that output arrives.
-  var cohortN = 0;
+  // null until R has counted a cohort: before that there is nothing to say,
+  // and once it has, zero is a count like any other.
+  /** @type {number | null} */
+  var cohortN = null;
   var drillClause = '';
   /** @type {number | null} */
   var drillBefore = null;
@@ -61,15 +64,16 @@ PatientProfile.part(function(ctx) {
       // The reset names what it undoes. The drill filter sits below the
       // population filter, so what comes back is the population, never
       // "every patient": the count it started from says how many.
+      var n = cohortN || 0;
       var label = drillBefore != null ?
-        cohortN.toLocaleString() + ' of ' + patients(drillBefore) :
-        patients(cohortN);
+        n.toLocaleString() + ' of ' + patients(drillBefore) :
+        patients(n);
       var tip = (drillBefore != null ?
         'Show all ' + patients(drillBefore) : 'Show all patients') +
         ', clearing ' + drillClause;
       html = '<button type="button" class="pp-drill-reset" data-blockr-tooltip="' +
         esc(tip) + '">' + ICON_RESET + '<span>' + esc(label) + '</span></button>';
-    } else if (cohortN) {
+    } else if (cohortN != null) {
       html = '<span class="pp-cohort-total">' + esc(patients(cohortN)) + '</span>';
     }
     layout.querySelectorAll('.pp-cohort-status').forEach(function(el) {
