@@ -39,11 +39,51 @@ test('a scrolling ancestor is the host, measured from its top and scroll', () =>
   h.tick(16);
   assert.equal(wellOf(h).style.maxHeight, '184px');
 
-  // Scrolled down inside the host, the well has less room still.
+  // Measured from where the well IS: scrolled down inside the host, it
+  // sits 50px lower in the host's view and has 50px less.
   h.layout(host, { top: 100, left: 0, width: 240, height: 300 }, { clientHeight: 300, scrollTop: 50 });
+  h.layout(wellOf(h), { top: 250, left: 0, width: 240, height: 100 });
   h.resize(host);
   h.tick(16);
   assert.equal(wellOf(h).style.maxHeight, '134px');
+  h.close();
+});
+
+test('the host scrolling refits the well once a frame', () => {
+  const h = mount();
+  const host = h.el('pp_layout');
+  host.style.overflowY = 'auto';
+  h.layout(host, { top: 100, left: 0, width: 900, height: 500 }, { clientHeight: 500 });
+  h.layout(h.el('pp_sidebar'), { top: 160, left: 0, width: 240, height: 400 });
+  h.layout(wellOf(h), { top: 300, left: 0, width: 240, height: 100 });
+  h.renderAll();
+  h.tick(0);
+  assert.equal(wellOf(h).style.maxHeight, '284px', '600 - 300 - 16');
+
+  // Scrolled 60px: the sidebar has reached the host's top and sticks.
+  h.layout(h.el('pp_sidebar'), { top: 100, left: 0, width: 240, height: 400 });
+  h.layout(wellOf(h), { top: 240, left: 0, width: 240, height: 100 });
+  host.dispatchEvent(new h.win.Event('scroll'));
+  host.dispatchEvent(new h.win.Event('scroll'));
+  assert.equal(wellOf(h).style.maxHeight, '284px', 'not before the frame');
+  h.tick(16);
+  assert.equal(wellOf(h).style.maxHeight, '344px', '600 - 240 - 16');
+  h.close();
+});
+
+test('a sidebar pushed above the host top is measured as stuck', () => {
+  // At the end of the scroll the layout's bottom pushes the sticky
+  // sidebar up. Measuring from there would grow the list, grow the
+  // layout and push again.
+  const h = mount();
+  const host = h.el('pp_layout');
+  host.style.overflowY = 'auto';
+  h.layout(host, { top: 100, left: 0, width: 900, height: 500 }, { clientHeight: 500 });
+  h.layout(h.el('pp_sidebar'), { top: 70, left: 0, width: 240, height: 400 });
+  h.layout(wellOf(h), { top: 210, left: 0, width: 240, height: 100 });
+  h.renderAll();
+  h.tick(0);
+  assert.equal(wellOf(h).style.maxHeight, '344px', '600 - (100 + 140) - 16');
   h.close();
 });
 

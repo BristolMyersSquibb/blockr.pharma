@@ -25,7 +25,10 @@
   min-height: 500px;
   background: var(--blockr-color-bg-surface);
   border-radius: 0;
-  overflow: hidden;
+  /* clip, not hidden: `hidden` makes the layout a scroll container, and the
+     sticky sidebar would then stick to this box, which never scrolls,
+     instead of to the dock panel, which does. */
+  overflow: clip;
   font-family: inherit;
   font-size: 14px;
   color: var(--blockr-color-text-default);
@@ -44,9 +47,23 @@
   display: flex;
   flex-direction: column;
   background: var(--blockr-color-bg-surface);
-  border-right: 1px solid var(--blockr-color-border-default);
   transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
   overflow: hidden;
+  /* The panels scroll, the sidebar stays. The dock panel scrolls the whole
+     profile, and a sidebar scrolling with it took the patient list out of
+     view with the charts it picks for; sizeWell() (pp-cohort.js) then fits
+     the list to the panel's visible height. Not stretched to the layout's
+     height, which would hand the list the height of every chart below. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+}
+
+/* The rule between the sidebar and the panels. On the panels' side because
+   the sidebar now ends where its list does, and the rule has to run the
+   full height of the profile. */
+.pp-layout:not(.sidebar-collapsed) > .pp-chart-area {
+  border-left: 1px solid var(--blockr-color-border-default);
 }
 
 .pp-sidebar.collapsed {

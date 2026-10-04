@@ -86,6 +86,13 @@ PatientProfile.part(function(ctx) {
   // header, search, caption -- is measured rather than assumed,
   // so a caption that wraps to two lines takes its room out of
   // the list instead of pushing it through the bottom.
+  //
+  // Measured to the bottom of what the host SHOWS, from where the
+  // well is now. The sidebar is sticky (patient-profile.css), so
+  // once the panel scrolls past the block header the well sits
+  // higher and gets that room. Measuring from the top of the
+  // content instead sized the list for an unscrolled panel, and
+  // scrolling down to the lower charts left empty sidebar under it.
   var WELL_GAP = 16;     // breathing room under the last row
   var WELL_FLOOR = 132;  // 3 rows; below this nothing useful fits
 
@@ -108,8 +115,18 @@ PatientProfile.part(function(ctx) {
     var wellTop = well.getBoundingClientRect().top;
     var avail;
     if (host) {
+      // Where the well would sit with the sidebar at or below its
+      // sticking point. At the end of the scroll the layout's bottom
+      // pushes the sidebar above that point, and measuring from there
+      // grew the list, which grew the layout, which pushed it again.
       var hostTop = host.getBoundingClientRect().top;
-      avail = host.clientHeight - (wellTop - hostTop + host.scrollTop);
+      var sidebar = well.closest('.pp-sidebar');
+      var top = wellTop;
+      if (sidebar) {
+        var sideTop = sidebar.getBoundingClientRect().top;
+        top = Math.max(sideTop, hostTop) + (wellTop - sideTop);
+      }
+      avail = hostTop + host.clientHeight - top;
     } else {
       avail = window.innerHeight - wellTop;
     }
@@ -126,11 +143,27 @@ PatientProfile.part(function(ctx) {
     var wellRO = new ResizeObserver(function() {
       window.requestAnimationFrame(sizeWell);
     });
+    // The host scrolling moves the well until the sidebar sticks.
+    var scrollHost = null;
+    var sizeQueued = false;
+    var onHostScroll = function() {
+      if (sizeQueued) return;
+      sizeQueued = true;
+      window.requestAnimationFrame(function() {
+        sizeQueued = false;
+        sizeWell();
+      });
+    };
     var wellWatch = function() {
       var well = document.getElementById(cohortWellId);
       if (!well) return;
       wellRO.disconnect();
       var host = wellHost(well);
+      if (scrollHost !== host) {
+        if (scrollHost) scrollHost.removeEventListener('scroll', onHostScroll);
+        if (host) host.addEventListener('scroll', onHostScroll, {passive: true});
+        scrollHost = host;
+      }
       if (host) wellRO.observe(host);
       if (well.parentElement) wellRO.observe(well.parentElement);
       sizeWell();
