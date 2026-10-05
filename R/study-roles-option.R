@@ -5,7 +5,7 @@
 # start with"). Structural sibling of blockr.theme's scale map; it lives
 # here because the roles are clinical.
 #
-# Four fields, uniform semantics (undeclared = the package convention;
+# Six fields, uniform semantics (undeclared = the package convention;
 # declared-but-missing = a named error, never a fallback):
 #
 #   arm        -- ADSL treatment/arm label column. Default ACTARM.
@@ -20,6 +20,10 @@
 #   indication -- ADCM medication indication column. Default CMINDC; a study
 #                 carrying the reason for treatment elsewhere declares it
 #                 here, and the CM gantt colors its bars by it.
+#   subject    -- the column that identifies a patient. Default USUBJID.
+#                 Read by blockr.viz's drill senders by option id (they do
+#                 not depend on this package): a click claims the subjects
+#                 behind the clicked mark rather than the mark's column.
 #
 # Deliberately NOT fields:
 #   - table aliases: the SDTM domain names (ae, vs, lb, cm, dm, ...) resolve
@@ -62,6 +66,10 @@
 #'   undeclared (convention: `TRTSDT`).
 #' @param indication ADCM medication indication column; `""` = undeclared
 #'   (convention: `CMINDC`).
+#' @param subject Column identifying a patient in every table; `""` =
+#'   undeclared (convention: `USUBJID`). A drill click on any exhibit claims
+#'   the values of this column behind the clicked mark, so the drill filter
+#'   receives exactly the patients the exhibit counted.
 #' @param category Settings sidebar category
 #' @param ... Forwarded to [blockr.core::new_board_option()]
 #'
@@ -70,10 +78,10 @@
 #' @export
 new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
                                    timeline = "", indication = "",
-                                   category = "Study", ...) {
+                                   subject = "", category = "Study", ...) {
   value <- study_roles_normalize(list(
     arm = arm, arm_code = arm_code, severity = severity, timeline = timeline,
-    indication = indication
+    indication = indication, subject = subject
   ))
 
   # The placeholder names the convention; no helper text below the field
@@ -100,7 +108,8 @@ new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
         field(id, "study_timeline", "Timeline reference",
               "TRTSDT (default)"),
         field(id, "study_indication", "Indication column",
-              "CMINDC (default)")
+              "CMINDC (default)"),
+        field(id, "study_subject", "Subject column", "USUBJID (default)")
       )
     },
     server = function(board, ..., session) {
@@ -122,11 +131,14 @@ new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
                                  value = val$timeline)
           shiny::updateTextInput(session, "study_indication",
                                  value = val$indication)
+          shiny::updateTextInput(session, "study_subject",
+                                 value = val$subject)
         }
       )
     },
     update_trigger = c("study_arm", "study_arm_code", "study_severity",
-                       "study_timeline", "study_indication"),
+                       "study_timeline", "study_indication",
+                       "study_subject"),
     transform = function(x) study_roles_normalize(x),
     category = category,
     ...
@@ -143,7 +155,7 @@ new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
 #' resolution instead.
 #'
 #' @param x Raw value.
-#' @return `list(arm, arm_code, severity, timeline, indication)`.
+#' @return `list(arm, arm_code, severity, timeline, indication, subject)`.
 #' @noRd
 study_roles_normalize <- function(x) {
   if (is.null(x)) x <- list()
@@ -163,7 +175,8 @@ study_roles_normalize <- function(x) {
     arm_code = scalar(key("arm_code")),
     severity = scalar(key("severity")),
     timeline = scalar(key("timeline")),
-    indication = scalar(key("indication"))
+    indication = scalar(key("indication")),
+    subject = scalar(key("subject"))
   )
 }
 
@@ -175,8 +188,8 @@ study_roles_normalize <- function(x) {
 #' their conventions, or `NULL` when the board carries no "study_roles"
 #' option at all.
 #'
-#' @return A reactive yielding `list(arm, severity, timeline, indication)` or
-#'   `NULL`.
+#' @return A reactive yielding `list(arm, severity, timeline, indication,
+#'   subject)` or `NULL`.
 #' @noRd
 board_study_roles <- function() {
   shiny::reactive({
@@ -189,7 +202,8 @@ board_study_roles <- function() {
       arm = if (nzchar(val$arm)) val$arm,
       severity = if (nzchar(val$severity)) val$severity,
       timeline = if (nzchar(val$timeline)) val$timeline,
-      indication = if (nzchar(val$indication)) val$indication
+      indication = if (nzchar(val$indication)) val$indication,
+      subject = if (nzchar(val$subject)) val$subject
     )
   })
 }

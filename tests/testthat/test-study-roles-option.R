@@ -1,5 +1,5 @@
-# The "study_roles" board option: five fields (arm, arm_code, severity,
-# timeline, indication),
+# The "study_roles" board option: six fields (arm, arm_code, severity,
+# timeline, indication, subject),
 # uniform semantics -- undeclared = the package convention,
 # declared-but-missing = a named error, never a fallback. Table aliases are
 # NOT a field: SDTM domain names resolve through pp_table_catalog() with no
@@ -15,17 +15,17 @@ test_that("the option normalizes, serializes and restores", {
   expect_identical(
     blockr.core::board_option_value(opt),
     list(arm = "", arm_code = "", severity = "", timeline = "",
-         indication = "")
+         indication = "", subject = "")
   )
 
   # normalization: ctor keys, the editor's study_* input keys, whitespace
   expect_identical(
     blockr.core::board_option_value(opt, list(
       study_arm = " TRT ", study_severity = "", study_timeline = "RANDDT",
-      study_indication = " CMINDC "
+      study_indication = " CMINDC ", study_subject = " SUBJID "
     )),
     list(arm = "TRT", arm_code = "", severity = "", timeline = "RANDDT",
-         indication = "CMINDC")
+         indication = "CMINDC", subject = "SUBJID")
   )
 
   # TOTAL over anything a text field can hold: never an error mid-keystroke
@@ -41,13 +41,14 @@ test_that("the option normalizes, serializes and restores", {
 
   # a declared value round-trips through ser/deser (the saved-board path)
   declared <- new_study_roles_option(arm = "TRT", arm_code = "ACTARMCD",
-                                     severity = "AETOXGR")
+                                     severity = "AETOXGR", subject = "SUBJID")
   restored <- blockr.core::blockr_deser(blockr.core::blockr_ser(declared))
   expect_s3_class(restored, "board_option")
   val <- blockr.core::board_option_value(restored)
   expect_identical(val$arm, "TRT")
   expect_identical(val$arm_code, "ACTARMCD")
   expect_identical(val$severity, "AETOXGR")
+  expect_identical(val$subject, "SUBJID")
 })
 
 # The arm CODE is the one role where absent is legitimate: the label column

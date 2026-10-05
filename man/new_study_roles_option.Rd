@@ -10,6 +10,7 @@ new_study_roles_option(
   severity = "",
   timeline = "",
   indication = "",
+  subject = "",
   category = "Study",
   ...
 )
@@ -32,9 +33,14 @@ undeclared (convention: \code{TRTSDT}).}
 \item{indication}{ADCM medication indication column; \code{""} = undeclared
 (convention: \code{CMINDC}).}
 
+\item{subject}{Column identifying a patient in every table; \code{""} =
+undeclared (convention: \code{USUBJID}). A drill click on any exhibit claims
+the values of this column behind the clicked mark, so the drill filter
+receives exactly the patients the exhibit counted.}
+
 \item{category}{Settings sidebar category}
 
-\item{...}{Forwarded to \code{\link[blockr.core:new_board_option]{blockr.core::new_board_option()}}}
+\item{...}{Forwarded to \code{\link[blockr.core:new_board_options]{blockr.core::new_board_option()}}}
 }
 \value{
 A \code{board_option} with id \code{"study_roles"}.
