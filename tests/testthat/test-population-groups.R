@@ -131,6 +131,29 @@ test_that("the definition lands on the parent table and survives a flatten", {
   expect_true(attr(filtered$Group, "blockr_groups")$overlap)
 })
 
+test_that("pools are written into the filter trail, levels are not", {
+  d <- dm_stamp_group(make_arm_dm(), "TRT", groups = overlapping)
+  expect_equal(blockr.dm::filter_trail(d), c(Group = "All active = Low + High"))
+
+  flat <- dm::dm_flatten_to_tbl(d, ae)
+  flat <- blockr.dm::add_filter_trail(flat, d)
+  expect_equal(unname(blockr.dm::filter_trail(flat)), "All active = Low + High")
+
+  # Two pools, one of them unnamed: only the named one needs saying.
+  two <- list(columns = list(
+    list(members = "Placebo"),
+    list(name = "Pool1", members = c("Low", "High")),
+    list(members = c("Placebo", "High"))
+  ))
+  df <- dm_stamp_group(data.frame(TRT = arms), "TRT", groups = two)
+  expect_equal(blockr.dm::filter_trail(df), c(Group = "Pool1 = Low + High"))
+
+  expect_null(blockr.dm::filter_trail(dm_stamp_group(make_arm_dm(), "TRT")))
+  dropped <- dm_stamp_group(make_arm_dm(), "TRT",
+                            groups = list(show = c("Placebo", "High")))
+  expect_null(blockr.dm::filter_trail(dropped))
+})
+
 test_that("group_by_args follows the definition", {
   plain <- data.frame(Group = c("B", "A", NA, "B"))
   expect_equal(group_by_args(plain), list(variable = "Group", levels = c("A", "B")))

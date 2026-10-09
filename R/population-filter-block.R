@@ -24,6 +24,10 @@
 #' every exhibit downstream can bind one name (`Group`) instead of the name of
 #' whichever column the board is currently split by.
 #'
+#' A pool in `groups` is also written into the filter trail, keyed by `as`, as
+#' "Pool1 = A + B", so every `{filters}` caption and every download made from
+#' it says what the pooled column holds. See `blockr.dm::filter_trail()`.
+#'
 #' Only the parent table is stamped. Event tables reach the same value through
 #' the join a flatten performs anyway, and stamping them too would give
 #' `dm_flatten_to_tbl()` the same column twice: it renames the pair to
@@ -48,8 +52,10 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
 
   if (is.data.frame(data)) {
     if (col %in% names(data)) {
+      clause <- pool_clause(data[[col]], groups)
       data[[as]] <- stamp_group(data[[col]], col, groups)
       data <- mark_group_kind(data, as)
+      data <- blockr.dm::add_filter_trail(data, data, key = as, clause = clause)
     }
     return(data)
   }
@@ -100,8 +106,28 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
   # population filter block loses the trail here, and every caption and table
   # footnote downstream goes silent while the filter is plainly applied. See
   # `blockr.dm::filter_trail()`.
-  out <- blockr.dm::add_filter_trail(dm::dm_update_zoomed(zoomed), data)
+  out <- blockr.dm::add_filter_trail(
+    dm::dm_update_zoomed(zoomed), data,
+    key = as, clause = pool_clause(data[[target]][[col]], groups)
+  )
   mark_group_kind(out, as)
+}
+
+# The pools of a definition as one trail clause: "Pool1 = A + B; Pool2 = C".
+# A column named after what it holds (a level under its own name, an unnamed
+# pool) is left out, since its header already says it. NULL when nothing is
+# left, which adds nothing to the trail.
+pool_clause <- function(x, groups) {
+  def <- group_definition(x, groups)
+  if (is.null(def)) {
+    return(NULL)
+  }
+  members <- vapply(def$groups, paste, character(1), collapse = " + ")
+  named <- names(def$groups) != members
+  if (!any(named)) {
+    return(NULL)
+  }
+  paste(names(def$groups)[named], members[named], sep = " = ", collapse = "; ")
 }
 
 # The chart's role dropdowns offer the columns a board marks as the "group"

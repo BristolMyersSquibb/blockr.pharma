@@ -27,6 +27,10 @@ every exhibit downstream can bind one name (\code{Group}) instead of the name of
 whichever column the board is currently split by.
 }
 \details{
+A pool in \code{groups} is also written into the filter trail, keyed by \code{as}, as
+"Pool1 = A + B", so every \code{{filters}} caption and every download made from
+it says what the pooled column holds. See \code{blockr.dm::filter_trail()}.
+
 Only the parent table is stamped. Event tables reach the same value through
 the join a flatten performs anyway, and stamping them too would give
 \code{dm_flatten_to_tbl()} the same column twice: it renames the pair to
