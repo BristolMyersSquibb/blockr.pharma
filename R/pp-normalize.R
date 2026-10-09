@@ -248,7 +248,9 @@ pp_scope_subject <- function(dm_obj, subject) {
   scoped <- lapply(tbls, function(tbl) {
     df <- as.data.frame(tbl)
     if (!"USUBJID" %in% colnames(df)) return(df)
-    df[as.character(df$USUBJID) %in% subject, , drop = FALSE]
+    # dplyr_row_slice(), not `[`: base subsetting strips every column's
+    # attributes, and the labels name the columns in the tooltips.
+    dplyr::dplyr_row_slice(df, which(as.character(df$USUBJID) %in% subject))
   })
   do.call(dm::dm, scoped)
 }

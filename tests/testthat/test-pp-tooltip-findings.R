@@ -113,3 +113,24 @@ test_that("the long ANRIND spelling colours the dots like the short one", {
   expect_identical(pp_anrind_code(c("HIGH", "low", "Normal", "H", NA, "X")),
                    c("H", "L", "N", "H", NA, "X"))
 })
+
+test_that("a column with a label is named by it, read off the whole table", {
+  src <- sysbp_row()
+  attr(src$AVAL, "label") <- "Analysis Value"
+  attr(src$AVISIT, "label") <- "Analysis Visit"
+  # The slice the renderer passes has lost the labels; `src` still has them.
+  r <- as.data.frame(lapply(src, as.vector), stringsAsFactors = FALSE)
+  tip <- pp_findings_tip(r, "AVAL", mode = "rday", src = src)
+  labels <- vapply(tip$rows, function(x) x$label, "")
+  expect_true(all(c("Analysis Value", "Analysis Visit", "Baseline") %in% labels))
+  expect_false("Analysis value" %in% labels)
+})
+
+test_that("the severity row takes the grade column's label and its value", {
+  d <- data.frame(AETOXGR = "3")
+  expect_identical(pp_tip_sev(d, "AETOXGR", "3"),
+                   list(label = "Severity", value = "Grade 3"))
+  attr(d$AETOXGR, "label") <- "Standard Toxicity Grade"
+  expect_identical(pp_tip_sev(d, "AETOXGR", "3"),
+                   list(label = "Standard Toxicity Grade", value = "3"))
+})

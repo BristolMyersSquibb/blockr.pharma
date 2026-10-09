@@ -37,6 +37,9 @@ ortho_bp_viz <- new_pp_viz(
   render = function(dm_obj, time_range, settings = list(), ...) {
     tbl <- pp_prepare_findings(dm_obj, "advs")
     if (is.null(tbl)) return(pp_empty_chart("No vital sign records"))
+    # The tooltip names columns by their labels, which row subsets drop from
+    # a data.frame: read them off the table as it came.
+    lab_src <- tbl
 
     # Filter to BP params with ATPT
       bp <- tbl[tbl$PARAMCD %in% c("SYSBP", "DIABP") &
@@ -106,6 +109,14 @@ ortho_bp_viz <- new_pp_viz(
         pc_data <- bp[bp$PARAMCD == pc, , drop = FALSE]
         if (nrow(pc_data) == 0) next
         is_systolic <- pc == "SYSBP"
+        # The tooltip's name for the parameter: the study's PARAM without its
+        # unit, the fixed word only when the study gives none.
+        pc_name <- if ("PARAM" %in% colnames(pc_data)) {
+          pp_param_parts(pc_data$PARAM[1])$name
+        } else {
+          ""
+        }
+        pc_words <- if (nzchar(pc_name)) pp_tip_case(pc_name) else param_words[[pc]]
 
         for (vi in seq_along(sel_visits)) {
           visit <- sel_visits[vi]
@@ -141,17 +152,20 @@ ortho_bp_viz <- new_pp_viz(
             list(
               value = list(pi - 1L, val),
               tip = pp_tip(
-                paste0(param_words[[pc]], ", ", pos_words[[positions[pi]]]),
+                paste0(pc_words, ", ", pos_words[[positions[pi]]]),
                 color = color,
                 rows = list(
-                  pp_tip_row("Analysis value",
+                  pp_tip_row(pp_tip_name(lab_src, "AVAL", "Analysis value"),
                              paste(pp_tip_num(val), "mmHg")),
                   if (!is.na(chg[pi])) {
-                    pp_tip_row("Change from baseline",
+                    pp_tip_row(pp_tip_name(lab_src, "CHG", "Change from baseline"),
                                paste(pp_tip_num(unname(chg[pi]),
                                                 signed = TRUE), "mmHg"))
                   },
-                  if (has_avisit) pp_tip_row("Visit", pp_tip_case(visit))
+                  if (has_avisit) {
+                    pp_tip_row(pp_tip_name(lab_src, "AVISIT", "Visit"),
+                               pp_tip_case(visit))
+                  }
                 )
               )
             )

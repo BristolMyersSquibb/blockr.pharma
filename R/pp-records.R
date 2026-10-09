@@ -47,7 +47,11 @@ pp_prepare_findings <- function(dm_obj, table_name,
 
   tbl <- as.data.frame(tbls[[table_name]])
   for (nm in intersect(num_cols, colnames(tbl))) {
+    # The conversion drops attributes; the label names the column in the
+    # tooltips (pp_tip_name()), so it is put back.
+    lbl <- attr(tbl[[nm]], "label", exact = TRUE)
     tbl[[nm]] <- pp_as_numeric(tbl[[nm]])
+    if (!is.null(lbl)) attr(tbl[[nm]], "label") <- lbl
   }
   tbl
 }

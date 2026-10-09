@@ -21,14 +21,16 @@ test('a tooltip is the headline with its swatch, the line under it, then rows', 
       { label: 'To', value: 'ongoing' }
     ]
   });
-  assert.equal(box.querySelector('.pp-tt-head').textContent, 'Agitation');
-  assert.match(box.querySelector('.pp-tt-sw').getAttribute('style'), /#dc2626/);
-  assert.equal(box.querySelector('.pp-tt-sub').textContent, 'Psychiatric disorders');
-  const rows = [...box.querySelectorAll('.pp-tt-row')];
-  assert.deepEqual(rows.map((r) => r.querySelector('.pp-tt-label').textContent),
+  // blockr.viz's card classes (tooltip.css), so it looks like every chart's.
+  assert.equal(box.querySelector('.dd-tt-head').textContent, 'Agitation');
+  assert.match(box.querySelector('.dd-tt-sw').getAttribute('style'), /#dc2626/);
+  assert.equal(box.querySelector('.dd-tt-row.dd-tt-label').textContent,
+    'Psychiatric disorders');
+  const rows = [...box.querySelectorAll('.dd-tt-row:not(.dd-tt-label)')];
+  assert.deepEqual(rows.map((r) => r.querySelector('.dd-tt-label').textContent),
     ['Severity', 'From', 'To']);
-  assert.equal(rows[1].querySelector('.pp-tt-meta').textContent, '2013-10-17');
-  assert.equal(rows[2].querySelector('.pp-tt-meta'), null);
+  assert.equal(rows[1].querySelector('.dd-tt-meta').textContent, '2013-10-17');
+  assert.equal(rows[2].querySelector('.dd-tt-meta'), null);
   h.close();
 });
 
@@ -41,7 +43,7 @@ test('study text is escaped, never markup', () => {
   assert.equal(box.querySelector('img'), null);
   assert.equal(box.querySelector('b'), null);
   assert.equal(box.querySelector('i'), null);
-  assert.equal(box.querySelector('.pp-tt-head').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(box.querySelector('.dd-tt-head').textContent, '<img src=x onerror=alert(1)>');
   h.close();
 });
 

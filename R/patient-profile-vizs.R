@@ -851,10 +851,13 @@ pp_anrind_word <- function(x) {
 #' @param value The column the card draws (`"AVAL"`, `"CHG"`, `"PCHG"`).
 #' @param color The dot's colour, for the swatch.
 #' @param ref_ms,mode The timeline's reference and mode, for the day.
+#' @param src The table `r` was sliced from, whose columns carry the labels
+#'   the rows are named by ([pp_tip_name()]); `r` itself by default.
 #' @return A [pp_tip()] list.
 #' @noRd
 pp_findings_tip <- function(r, value = "AVAL", color = NULL,
-                            ref_ms = NA_real_, mode = "date") {
+                            ref_ms = NA_real_, mode = "date", src = r) {
+  nm <- function(col, word) pp_tip_name(src, col, word)
   at <- function(col) if (col %in% colnames(r)) r[[col]][[1L]] else NA
   num <- function(col) pp_as_numeric(at(col))
   # The name in words; a study with no PARAM falls back to the code, which
@@ -884,8 +887,11 @@ pp_findings_tip <- function(r, value = "AVAL", color = NULL,
 
   change <- if (!is_aval) {
     pp_tip_row(
-      if (identical(value, "PCHG")) "Percent change from baseline" else
-        "Change from baseline",
+      if (identical(value, "PCHG")) {
+        nm("PCHG", "Percent change from baseline")
+      } else {
+        nm(value, "Change from baseline")
+      },
       pp_tip_unit(pp_tip_num(num(value), signed = TRUE),
                   if (identical(value, "PCHG")) "%" else unit)
     )
@@ -900,12 +906,12 @@ pp_findings_tip <- function(r, value = "AVAL", color = NULL,
     head, color = color,
     rows = list(
       change,
-      pp_tip_row("Analysis value", measured,
+      pp_tip_row(nm("AVAL", "Analysis value"), measured,
                  if (!nzchar(range)) flag),
       pp_tip_row("Normal range", range, flag),
-      pp_tip_row("Baseline", pp_tip_num(num("BASE"))),
+      pp_tip_row(nm("BASE", "Baseline"), pp_tip_num(num("BASE"))),
       pp_tip_row("Day", when$main, when$meta),
-      pp_tip_row("Visit", pp_tip_case(at("AVISIT")))
+      pp_tip_row(nm("AVISIT", "Visit"), pp_tip_case(at("AVISIT")))
     ),
     note = note
   )
@@ -933,6 +939,9 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
   # dispatcher via pp_resolve_requires(). This function only handles row
   # emptiness and value filtering.
   tbl <- pp_prepare_findings(dm_obj, table_name)
+  # The tooltip names columns by their labels, which row subsets drop from
+  # a data.frame: read them off the table as it came.
+  lab_src <- tbl
   if (is.null(tbl)) return(pp_empty_chart(paste("No", label, "records")))
 
   # Which analysis value is on screen (the card's "Value" pill). Everything
@@ -1101,7 +1110,8 @@ pp_render_findings <- function(dm_obj, time_range, table_name, label,
       list(
         value = list(dt, val),
         tip = pp_findings_tip(p_data[i, , drop = FALSE], value,
-                              color = pt_color, ref_ms = ref_ms, mode = mode),
+                              color = pt_color, ref_ms = ref_ms, mode = mode,
+                              src = lab_src),
         symbol = if (derived) "emptyCircle" else "circle",
         itemStyle = if (derived) {
           list(color = "var(--blockr-color-bg-surface)", borderColor = pt_color,

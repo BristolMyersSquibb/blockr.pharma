@@ -323,9 +323,11 @@ patient_overview_viz <- new_pp_viz(
               color = if (sev %in% names(sev_hex)) sev_hex[[sev]] else "#9ca3af",
               rows = c(
                 list(
-                  pp_tip_row("Severity",
-                             pp_ae_sev_word(if (has_sev) adae[[sev_col]][i])),
-                  if (identical(ser, "Y")) pp_tip_row("Serious", "Yes")
+                  pp_tip_sev(adae_raw, sev_col,
+                             if (has_sev) adae[[sev_col]][i]),
+                  if (identical(ser, "Y")) {
+                    pp_tip_row(pp_tip_name(adae_raw, "AESER", "Serious"), "Yes")
+                  }
                 ),
                 pp_tip_span(
                   pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
@@ -574,13 +576,15 @@ patient_overview_viz <- new_pp_viz(
               if (nzchar(drug_of(i))) pp_tip_case(drug_of(i)) else "Exposure",
               color = "#2563EB",
               rows = c(
-                list(pp_tip_row("Dose", paste(doses, collapse = " \u00b7 "))),
+                list(pp_tip_row(pp_tip_name(adex_raw, "EXDOSE", "Dose"),
+                                paste(doses, collapse = " \u00b7 "))),
                 pp_tip_span(
                   pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
                   pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
                   open = ex_open
                 ),
-                list(pp_tip_row("Visit", pp_tip_case(at("AVISIT"))))
+                list(pp_tip_row(pp_tip_name(adex_raw, "AVISIT", "Visit"),
+                                pp_tip_case(at("AVISIT"))))
               )
             )
           )

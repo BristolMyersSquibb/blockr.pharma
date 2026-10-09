@@ -41,6 +41,9 @@ adas_trajectory_viz <- new_pp_viz(
   render = function(dm_obj, time_range, settings = list(),
                    ref_ms = NA_real_, mode = "date") {
     tbl <- pp_prepare_findings(dm_obj, "adqsadas")
+    # The tooltip names columns by their labels, which row subsets drop from
+    # a data.frame: read them off the table as it came.
+    lab_src <- tbl
     if (is.null(tbl)) return(pp_empty_chart("No ADAS-Cog records"))
 
     tbl <- tbl[!is.na(tbl$ADT) & !is.na(tbl$AVAL), , drop = FALSE]
@@ -97,10 +100,12 @@ adas_trajectory_viz <- new_pp_viz(
           list(
             value = list(pp_xval(p_data$ADT[i], ref_ms, mode), val),
             tip = pp_tip(tip_head, color = color, rows = list(
-              pp_tip_row("Analysis value", pp_tip_num(p_data$AVAL[i])),
-              pp_tip_row("Change from baseline",
+              pp_tip_row(pp_tip_name(lab_src, "AVAL", "Analysis value"),
+                         pp_tip_num(p_data$AVAL[i])),
+              pp_tip_row(pp_tip_name(lab_src, "CHG", "Change from baseline"),
                          pp_tip_num(col_at("CHG", i), signed = TRUE)),
-              pp_tip_row("Visit", pp_tip_case(col_at("AVISIT", i))),
+              pp_tip_row(pp_tip_name(lab_src, "AVISIT", "Visit"),
+                         pp_tip_case(col_at("AVISIT", i))),
               pp_tip_row("Day", when$main, when$meta)
             ))
           )

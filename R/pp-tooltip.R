@@ -18,6 +18,7 @@
 # pp_tip_span()     -- the From / To (or Day) rows of an interval
 # pp_tip_case()     -- sentence case for a study's capitals
 # pp_tip_num()      -- a measured value, three significant figures
+# pp_tip_name()     -- a column's label, else the tooltip's word for it
 # PP_TIP_FORMATTER  -- the ECharts formatter that draws them
 
 #' One data tooltip
@@ -164,6 +165,43 @@ pp_tip_num <- function(x, signed = FALSE) {
            drop0trailing = TRUE)
   }
   if (signed && x > 0) paste0("+", out) else out
+}
+
+#' What a tooltip row calls a column
+#'
+#' The column's variable label when the study gave one ("Analysis Value",
+#' "Standard Toxicity Grade"), else the tooltip's own word for it. Read off
+#' the panel's whole table: a one-row slice of a data.frame has lost its
+#' labels.
+#'
+#' @param data The table the column is in, or `NULL`.
+#' @param col The column name.
+#' @param word The word to use without a label.
+#' @noRd
+pp_tip_name <- function(data, col, word) {
+  pp_tip_label(data, col) %||% word
+}
+
+#' The severity row: the column's label and the study's value ("Standard
+#' Toxicity Grade" 3), else "Severity" and the value in words ("Grade 3").
+#' @noRd
+pp_tip_sev <- function(data, col, sev) {
+  lbl <- pp_tip_label(data, col)
+  if (!is.null(lbl)) {
+    pp_tip_row(lbl, pp_tip_case(sev))
+  } else {
+    pp_tip_row("Severity", pp_ae_sev_word(sev))
+  }
+}
+
+#' A column's variable label, or `NULL`
+#' @noRd
+pp_tip_label <- function(data, col) {
+  if (is.null(data) || is.null(col) || !col %in% names(data)) return(NULL)
+  lbl <- attr(data[[col]], "label", exact = TRUE)
+  if (!is.character(lbl) || length(lbl) != 1L || is.na(lbl)) return(NULL)
+  lbl <- trimws(lbl)
+  if (!nzchar(lbl) || identical(lbl, col)) NULL else lbl
 }
 
 #' One string, or ""

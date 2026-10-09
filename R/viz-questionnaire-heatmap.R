@@ -51,6 +51,9 @@ questionnaire_heatmap_viz <- new_pp_viz(
 
     tbl <- pp_prepare_findings(dm_obj, domain)
     if (is.null(tbl)) return(pp_empty_chart("No records"))
+    # The tooltip names columns by their labels, which row subsets drop from
+    # a data.frame: read them off the table as it came.
+    lab_src <- tbl
     if (!(y_col %in% colnames(tbl))) {
       return(pp_empty_chart(paste("No", y_col, "values in", domain)))
     }
@@ -98,11 +101,11 @@ questionnaire_heatmap_viz <- new_pp_viz(
           pc
         }
       }, character(1))
-      value_word <- if (y_col == "CHG") {
+      value_word <- pp_tip_name(lab_src, y_col, if (y_col == "CHG") {
         "Change from baseline"
       } else {
         "Analysis value"
-      }
+      })
 
       # Heatmap data: value = [visit_idx, param_idx, value]
       heat_data <- list()
@@ -118,7 +121,8 @@ questionnaire_heatmap_viz <- new_pp_viz(
               tip = pp_tip(tip_heads[[pi]], rows = list(
                 pp_tip_row(value_word,
                            pp_tip_num(val, signed = y_col == "CHG")),
-                pp_tip_row("Visit", pp_tip_case(visits[vi]))
+                pp_tip_row(pp_tip_name(lab_src, "AVISIT", "Visit"),
+                           pp_tip_case(visits[vi]))
               ))
             )))
           }

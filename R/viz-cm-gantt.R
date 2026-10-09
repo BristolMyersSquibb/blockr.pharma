@@ -95,6 +95,9 @@ cm_gantt_viz <- new_pp_viz(
                     ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
     tbl <- as.data.frame(tbls[["adcm"]])
+    # The tooltip names columns by their labels, which the row subsets below
+    # drop from a data.frame: read them off the table as it came.
+    lab_src <- tbls[["adcm"]]
 
     # Prefer the study day the data already carries; fall back to the date.
     # Date mode has no day-based fallback, so it needs ASTDT outright.
@@ -261,12 +264,14 @@ cm_gantt_viz <- new_pp_viz(
           pp_tip_case(head), color = col, sub = pp_tip_case(klass),
           rows = c(
             list(
-              pp_tip_row("Indication", pp_tip_case(indc)),
-              pp_tip_row("Dose", pp_cm_tip_dose(
+              pp_tip_row(pp_tip_name(lab_src, indc_col, "Indication"),
+                         pp_tip_case(indc)),
+              pp_tip_row(pp_tip_name(lab_src, "CMDOSE", "Dose"), pp_cm_tip_dose(
                 at("CMDOSE"), opt_chr(tbl, "CMDOSU", i),
                 opt_chr(tbl, "CMROUTE", i)
               )),
-              pp_tip_row("Reported as", pp_tip_case(reported))
+              pp_tip_row(pp_tip_name(lab_src, "CMTRT", "Reported as"),
+                         pp_tip_case(reported))
             ),
             pp_tip_span(
               pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
