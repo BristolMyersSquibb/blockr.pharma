@@ -23,6 +23,7 @@ new_ae_heatmap_block(
   caption = NULL,
   script = NULL,
   values = list(),
+  locked_roles = c("color", "group"),
   ...
 )
 }
@@ -56,6 +57,10 @@ sentence; its \verb{\{@top_n\}} word is the control for the cap.}
 
 \item{script}{The prepare script. \code{NULL} (the default) builds the top-n
 script for \code{col}, see \code{\link[=ae_heatmap_script]{ae_heatmap_script()}}; \code{""} means none.}
+
+\item{locked_roles}{Character vector of mapping roles whose values are
+authored elsewhere and hidden from the block UI. AE heatmaps always lock
+\code{color} and \code{group}.}
 
 \item{...}{Forwarded to the engine constructor.}
 }

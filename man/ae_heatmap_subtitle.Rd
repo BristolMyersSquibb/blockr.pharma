@@ -10,7 +10,7 @@ ae_heatmap_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-"Top 25 Dictionary-Derived Term, painted by worst Standard Toxicity Grade,
-by Actual Treatment": each \verb{\{@...\}} word opens its setting, and a bracketed
+"Top 25 Dictionary-Derived Term, painted by Standard Toxicity Grade, by
+Actual Treatment": each \verb{\{@...\}} word opens its setting, and a bracketed
 clause leaves when its setting is empty.
 }
