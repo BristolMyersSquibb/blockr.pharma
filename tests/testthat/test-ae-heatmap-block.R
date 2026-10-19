@@ -14,9 +14,12 @@ test_that("the block carries pharma identity and its own class", {
 })
 
 test_that("a serialized block restores through the pharma constructor", {
-  b <- new_ae_heatmap_block(col = "AESOC", top_n = 10)
+  b <- new_ae_heatmap_block(col = "AESOC", top_n = 10,
+                            locked_roles = "row")
   b2 <- blockr.core::blockr_deser(blockr.core::blockr_ser(b))
   expect_identical(class(b2), class(b))
+  payload <- blockr.core::blockr_ser(b2)$payload
+  expect_identical(payload$locked_roles, c("color", "group", "row"))
 })
 
 test_that("construction is warning-free (registry metadata resolves)", {
@@ -44,6 +47,9 @@ test_that("the default script keeps the top_n values of the block's column", {
 
 test_that("the surface ships its title, sentence and script as state", {
   b <- new_ae_heatmap_block(col = "CMDECOD", top_n = 10)
+  expect_no_match(ae_heatmap_subtitle(), "painted by worst", fixed = TRUE)
+  expect_match(ae_heatmap_subtitle(), "painted by {label(@color)}",
+               fixed = TRUE)
   shiny::testServer(
     blockr.core:::get_s3_method("block_server", b),
     {
@@ -51,6 +57,7 @@ test_that("the surface ships its title, sentence and script as state", {
       expect_identical(st$title(), "Adverse events by subject")
       expect_identical(st$subtitle(), ae_heatmap_subtitle())
       expect_match(st$script(), "count(data, CMDECOD", fixed = TRUE)
+      expect_identical(st$locked_roles(), c("color", "group"))
       # the legacy argument lands as the script's value
       expect_identical(st$values()$top_n, 10L)
     },

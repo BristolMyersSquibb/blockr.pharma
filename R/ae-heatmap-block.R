@@ -43,6 +43,9 @@
 #'   script for `col`, see [ae_heatmap_script()]; `""` means none.
 #' @param cell_numbers,download,caption,values
 #'   As in [blockr.viz::new_heatmap_block()].
+#' @param locked_roles Character vector of mapping roles whose values are
+#'   authored elsewhere and hidden from the block UI. AE heatmaps always lock
+#'   `color` and `group`.
 #' @param ... Forwarded to the engine constructor.
 #' @return A transform block of class `heatmap_block`, whose result is the
 #'   subject x term matrix of counts.
@@ -67,6 +70,7 @@ new_ae_heatmap_block <- function(row = "USUBJID",
                                  caption = NULL,
                                  script = NULL,
                                  values = list(),
+                                 locked_roles = c("color", "group"),
                                  ...) {
   # Serialization identity. NOT formals: the framework injects ctor /
   # ctor_pkg itself when it calls a constructor (registry harvest, board
@@ -91,9 +95,11 @@ new_ae_heatmap_block <- function(row = "USUBJID",
   if (is.null(script)) {
     script <- ae_heatmap_script(col)
   }
+  locked_roles <- unique(c("color", "group", locked_roles))
   do.call(blockr.viz::new_heatmap_block, c(
     list(
       row = row, col = col, color = color, group = group,
+      locked_roles = locked_roles,
       top_n = top_n, cell_numbers = cell_numbers,
       drill = drill, download = download,
       filter_column = filter_column, filter_values = filter_values,
@@ -108,8 +114,8 @@ new_ae_heatmap_block <- function(row = "USUBJID",
 
 #' The AE heatmap's default sentence
 #'
-#' "Top 25 Dictionary-Derived Term, painted by worst Standard Toxicity Grade,
-#' by Actual Treatment": each `{@...}` word opens its setting, and a bracketed
+#' "Top 25 Dictionary-Derived Term, painted by Standard Toxicity Grade, by
+#' Actual Treatment": each `{@...}` word opens its setting, and a bracketed
 #' clause leaves when its setting is empty.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
@@ -117,7 +123,7 @@ new_ae_heatmap_block <- function(row = "USUBJID",
 ae_heatmap_subtitle <- function() {
   paste0(
     "[Top {@top_n} ]{label(@col)}",
-    "[, painted by worst {label(@color)}]",
+    "[, painted by {label(@color)}]",
     "[, by {label(@group)}]"
   )
 }
