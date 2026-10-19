@@ -101,7 +101,7 @@ test_that("the block stamps Group into its expression", {
       expect_equal(as.vector(result$adsl$Group), result$adsl$TRT)
 
       # Moving the pin re-points the stamp: this is what re-splits the board.
-      session$setInputs(`expr-set_pinned` = "SEX")
+      session$returned$state$pinned("SEX")
       session$flushReact()
       result <- eval(session$returned$expr(), list(data = make_study_dm()))
       expect_equal(as.vector(result$adsl$Group), result$adsl$SEX)

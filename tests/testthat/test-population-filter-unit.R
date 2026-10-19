@@ -12,21 +12,27 @@ test_that("the population filter's header counts patients", {
     active_dims = list(adsl = "SEX", adae = "AESEV")
   )
 
+  # the unit is an option of the block; the client passes it on with the
+  # payload request
   shiny::testServer(
     blockr.core:::get_s3_method("block_server", blk),
     args = list(x = blk, data = list(data = function() d)),
     {
       sent <- list()
       root <- session$rootScope()
-      root$sendCustomMessage <- function(type, message) {
-        sent[[length(sent) + 1L]] <<- list(type = type, message = message)
+      root$sendInputMessage <- function(inputId, message) {
+        sent[[length(sent) + 1L]] <<- message
         invisible()
       }
+      session$setInputs(`expr-block` = list(messages = list(list(type = "ready"))))
       session$flushReact()
-      msgs <- Filter(function(m) m$type == "js-crossfilter-data", sent)
-      msg <- msgs[[length(msgs)]]$message
-      expect_identical(msg$subject_unit, "patients")
-      expect_identical(msg$parent_n, 3L)
+      expect_identical(sent[[1L]]$context$options$subject_unit, "patients")
     }
   )
+  msg <- blockr.dm::crossfilter_payload(
+    d, list(active_dims = list(adsl = "SEX", adae = "AESEV")),
+    subject_unit = "patients"
+  )
+  expect_identical(msg$subject_unit, "patients")
+  expect_identical(msg$parent_n, 3L)
 })

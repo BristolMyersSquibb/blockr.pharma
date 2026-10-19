@@ -303,7 +303,7 @@ test_that("the block stamps Subgroup only when one is picked", {
       expect_equal(as.vector(result$adsl$Subgroup), result$adsl$SEX)
       expect_equal(attr(result$adsl$Subgroup, "blockr_source"), "SEX")
 
-      session$setInputs(`expr-set_subgroup` = "")
+      session$returned$state$subgroup(NULL)
       session$flushReact()
       result <- eval(session$returned$expr(), list(data = make_sub_dm()))
       expect_false("Subgroup" %in% colnames(result$adsl))
@@ -332,7 +332,8 @@ test_that("the subgroup is pooled from its own entry in groups", {
       expect_equal(as.vector(result$adsl$Group), result$adsl$TRT)
 
       # Swapped: TRT is the subgroup, SEX the group, and SEX keeps its pool.
-      session$setInputs(`expr-swap_split` = 1)
+      session$returned$state$pinned("SEX")
+      session$returned$state$subgroup("TRT")
       session$flushReact()
       result <- eval(session$returned$expr(), list(data = make_sub_dm()))
       expect_equal(unique(as.vector(result$adsl$Group)), "Both")
