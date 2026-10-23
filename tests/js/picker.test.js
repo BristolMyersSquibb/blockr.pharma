@@ -109,6 +109,28 @@ test('focusing the empty box browses everything not on the profile, grouped', ()
   h.close();
 });
 
+test('"Search for one" focuses the box with the catalogue closed; "Add one" opens it', () => {
+  const h = boot();
+  const pop = h.el('pp_panels');
+  const link = (target) => {
+    const b = h.doc.createElement('button');
+    b.className = 'blockr-slot pp-open-search';
+    if (target) b.setAttribute('data-target', target);
+    h.el('pp_layout').appendChild(b);
+    return b;
+  };
+  h.click(link('patients'));
+  assert.equal(h.doc.activeElement, search(h));
+  assert.equal(pop.classList.contains('is-browsing'), false);
+  assert.equal(search(h).hasAttribute('data-no-browse'), false, 'the mark is cleared');
+
+  search(h).blur();
+  h.click(link());
+  assert.equal(h.doc.activeElement, search(h));
+  assert.equal(pop.classList.contains('is-browsing'), true);
+  h.close();
+});
+
 test('picking while browsing moves the row up and keeps the list open; Escape closes it', () => {
   const h = boot();
   const pop = h.el('pp_panels');
