@@ -1145,8 +1145,11 @@ new_patient_profile_block <- function(selected = NULL,
             if (isTRUE(total > 1L)) {
               shiny::tagList(
                 "No patient selected. ",
+                # `data-target`: pp-header.js keeps the panel catalogue
+                # closed for this link, so the patient list stays on top.
                 shiny::tags$button(type = "button",
                                    class = "blockr-slot pp-open-search",
+                                   `data-target` = "patients",
                                    "Search for one")
               )
             } else {

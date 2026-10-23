@@ -463,6 +463,8 @@ PatientProfile.part(function(ctx) {
   $(document).on('input', '#' + searchId, applyFilter);
 
   $(document).on('focusin', '#' + searchId, function() {
+    // Focused by "Search for one" (pp-header.js): the patients, not panels.
+    if (this.hasAttribute('data-no-browse')) return;
     if (browsing || $(this).val()) return;
     browsing = true;
     filterAdd();

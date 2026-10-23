@@ -252,7 +252,12 @@ pp_find_word <- function(viz, viz_id, param, ctrl, dm_obj, settings) {
       `data-title` = ctrl$title %||% "Show",
       `data-col` = col,
       `data-options` = as.character(jsonlite::toJSON(opts, auto_unbox = TRUE)),
-      `data-picks` = as.character(jsonlite::toJSON(picks, auto_unbox = TRUE))
+      `data-picks` = as.character(jsonlite::toJSON(picks, auto_unbox = TRUE)),
+      # Column -> label, so the menu can name the level of a pick that is not
+      # on the lanes column.
+      `data-levels` = as.character(jsonlite::toJSON(
+        as.list(ctrl$levels %||% list()), auto_unbox = TRUE
+      ))
     )),
     # How many of this patient's records the filter leaves, so an emptied
     # panel is never mistaken for a patient with no records.

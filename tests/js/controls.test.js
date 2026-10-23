@@ -115,6 +115,42 @@ test('filter picks are sent once, on close, as the data spells them', () => {
   h.close();
 });
 
+test('picks off the lanes column are listed by their column and sent back as they came', () => {
+  const h = boot();
+  h.send('find_vocab', VOCAB);
+  const w = word(h, 'viz_slot_ae_gantt', 'find');
+  w.setAttribute('data-picks', JSON.stringify([
+    { col: '*', value: 'erythem' },
+    { col: 'AEBODSYS', value: 'CARDIAC DISORDERS' },
+    { col: 'AEDECOD', value: 'SYNCOPE' }
+  ]));
+  w.setAttribute('data-levels', JSON.stringify({ AEBODSYS: 'Body system' }));
+  h.click(w);
+  const r = rows(h);
+  assert.equal(r[0], 'contains \u201cerythem\u201d');
+  assert.equal(r[1], 'Body system: Cardiac disorders');
+  // A new term keeps the others.
+  pick(h, 'Diarrhoea');
+  closeMenu(h);
+  h.tick(10);
+  assert.deepEqual(h.lastInput('viz_ctrl').value, [
+    { col: '*', value: 'erythem' },
+    { col: 'AEBODSYS', value: 'CARDIAC DISORDERS' },
+    { col: 'AEDECOD', value: 'SYNCOPE' },
+    { col: 'AEDECOD', value: 'DIARRHOEA' }
+  ]);
+  // And one can be unticked.
+  h.click(w);
+  pick(h, 'contains');
+  closeMenu(h);
+  h.tick(10);
+  assert.deepEqual(h.lastInput('viz_ctrl').value, [
+    { col: 'AEBODSYS', value: 'CARDIAC DISORDERS' },
+    { col: 'AEDECOD', value: 'SYNCOPE' }
+  ]);
+  h.close();
+});
+
 test('opening and closing a filter without a change sends nothing', () => {
   const h = boot();
   h.send('find_vocab', VOCAB);

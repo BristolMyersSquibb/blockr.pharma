@@ -166,8 +166,25 @@ PatientProfile.part(function(ctx) {
         (g.options || []).forEach(function(o) { add(o.value); });
       });
     }
-    var before = picks.filter(function(p) { return p.col === col; })
-      .map(function(p) { add(p.value); return termLabel(p.value); });
+    // Picks on another column (a free-text term, another coding level, the
+    // old single-string box) are listed too, named by their column, so they
+    // can be seen and unticked, and are sent back as they came.
+    /** @type {Record<string, string>} */
+    var levels = parseAttr(word, 'data-levels') || {};
+    /** @type {Record<string, {col: string, value: string}>} */
+    var other = {};
+    /** @type {Array<{value: string}>} */
+    var otherOptions = [];
+    var before = picks.map(function(p) {
+      if (p.col === col) { add(p.value); return termLabel(p.value); }
+      var shown = p.col === '*'
+        ? 'contains \u201c' + p.value + '\u201d'
+        : (levels[p.col] || p.col) + ': ' + termLabel(p.value);
+      if (!other[shown]) otherOptions.push({ value: shown });
+      other[shown] = { col: p.col, value: p.value };
+      return shown;
+    });
+    options = otherOptions.concat(options);
     var picked = before.slice();
 
     openMenu(word, {
@@ -179,6 +196,7 @@ PatientProfile.part(function(ctx) {
       onClose: function() {
         if (JSON.stringify(picked) === JSON.stringify(before)) return;
         send(vizId, param, picked.map(function(shown) {
+          if (other[shown]) return other[shown];
           return { col: col, value: raw[shown] !== undefined ? raw[shown] : shown };
         }));
       }

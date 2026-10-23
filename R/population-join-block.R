@@ -111,6 +111,12 @@ join_population <- function(events, population, id = "USUBJID") {
   # flag on ADSL), and a board that wires the two inputs the other way round
   # still gets the events' filters. The trail is keyed by block, so the
   # global filter's clauses, which reach both sides, appear once.
+  # The stand-in input carries only the trail, so the provenance (dataset
+  # name and note for download names and footers) is set here, from the
+  # events, else the population.
+  attr(out, "blockr_provenance") <-
+    attr(input, "blockr_provenance", exact = TRUE) %||%
+    attr(population, "blockr_provenance", exact = TRUE)
   blockr.dm::add_filter_trail(out, join_trails(input, population))
 }
 
