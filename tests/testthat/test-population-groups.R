@@ -139,14 +139,18 @@ test_that("pools are written into the filter trail, levels are not", {
   flat <- blockr.dm::add_filter_trail(flat, d)
   expect_equal(unname(blockr.dm::filter_trail(flat)), "All active = Low + High")
 
-  # Two pools, one of them unnamed: only the named one needs saying.
+  # Two pools, one of them unnamed: only the named ones need saying.
   two <- list(columns = list(
     list(members = "Placebo"),
     list(name = "Pool1", members = c("Low", "High")),
+    list(name = "Pool2", members = c("Placebo", "Low")),
     list(members = c("Placebo", "High"))
   ))
   df <- dm_stamp_group(data.frame(TRT = arms), "TRT", groups = two)
-  expect_equal(blockr.dm::filter_trail(df), c(Group = "Pool1 = Low + High"))
+  expect_equal(
+    blockr.dm::filter_trail(df),
+    c(Group = "Pool1 = Low + High\nPool2 = Placebo + Low")
+  )
 
   expect_null(blockr.dm::filter_trail(dm_stamp_group(make_arm_dm(), "TRT")))
   dropped <- dm_stamp_group(make_arm_dm(), "TRT",

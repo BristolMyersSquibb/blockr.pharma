@@ -113,7 +113,7 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
   mark_group_kind(out, as)
 }
 
-# The pools of a definition as one trail clause: "Pool1 = A + B; Pool2 = C".
+# The pools of a definition as one trail clause: one pool per line.
 # A column named after what it holds (a level under its own name, an unnamed
 # pool) is left out, since its header already says it. NULL when nothing is
 # left, which adds nothing to the trail.
@@ -127,7 +127,7 @@ pool_clause <- function(x, groups) {
   if (!any(named)) {
     return(NULL)
   }
-  paste(names(def$groups)[named], members[named], sep = " = ", collapse = "; ")
+  paste(names(def$groups)[named], members[named], sep = " = ", collapse = "\n")
 }
 
 # The chart's role dropdowns offer the columns a board marks as the "group"
