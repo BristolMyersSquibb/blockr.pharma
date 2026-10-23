@@ -171,6 +171,27 @@ test_that("the population's filter trail survives the join too", {
   ))
 })
 
+test_that("the events' provenance survives the join", {
+  ev <- data.frame(USUBJID = c("S1", "S2"), AEDECOD = c("Nausea", "Rash"))
+  attr(ev, "blockr_provenance") <- list(dataset = "adae", note = "Cut 1")
+  pop <- data.frame(USUBJID = c("S1", "S2", "S3"), TRT01A = "A")
+  attr(pop, "blockr_provenance") <- list(dataset = "adsl")
+  out <- join_population(ev, pop)
+  expect_identical(attr(out, "blockr_provenance", exact = TRUE),
+                   list(dataset = "adae", note = "Cut 1"))
+
+  # Kept alongside a trail.
+  attr(ev, "blockr_filters") <- c(ae_flags = "TRTEMFL")
+  out <- join_population(ev, pop)
+  expect_identical(attr(out, "blockr_provenance", exact = TRUE)$dataset, "adae")
+  expect_equal(unname(blockr.dm::filter_trail(out)), "TRTEMFL")
+
+  # Events without one take the population's.
+  attr(ev, "blockr_provenance") <- NULL
+  out <- join_population(ev, pop)
+  expect_identical(attr(out, "blockr_provenance", exact = TRUE)$dataset, "adsl")
+})
+
 test_that("column labels survive the join", {
   ev <- data.frame(
     USUBJID = c("S1", "S1", "S2"),
