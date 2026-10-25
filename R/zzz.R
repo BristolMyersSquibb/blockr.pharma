@@ -182,27 +182,9 @@ register_pharma_blocks <- function() {
     package = utils::packageName(),
     overwrite = TRUE
   )
-  register_blocks(
-    "new_ae_heatmap_block",
-    name = "AE Heatmap",
-    # uid matches the block's own leading class (the ctor prepends
-    # "ae_heatmap_block" over the engine's "heatmap_block"), which is what
-    # the metadata lookup keys on; explicit so a refactor cannot drift it.
-    uid = "ae_heatmap_block",
-    description = paste0(
-      "Subject x term AE matrix: cell = occurrence count, color = worst ",
-      "grade; top-N terms, rows grouped by arm, a click drills to the ",
-      "patient."
-    ),
-    category = "plot",
-    icon = "grid-3x3",
-    guidance = ae_heatmap_guidance(),
-    arguments = list(
-      ae_heatmap_arguments()
-    ),
-    package = utils::packageName(),
-    overwrite = TRUE
-  )
+  # The AE heatmap is a table block now (blockr.viz::new_table_block() in the
+  # groups layout); new_ae_heatmap_block() only builds one, so it has no
+  # registry entry of its own.
   register_blocks(
     "new_population_filter_block",
     name = "Global Population Filter",
