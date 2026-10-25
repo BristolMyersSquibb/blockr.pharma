@@ -75,11 +75,15 @@ new_ae_heatmap_block <- function(row = "USUBJID",
 
   # The default script counts the column the block was built with. A board
   # that saved a script (or "" for none) restores that instead.
-  if (is.null(script)) script <- ae_heatmap_script(col)
+  default_script <- is.null(script)
+  if (default_script) script <- ae_heatmap_script(col)
   values <- if (is.list(values)) values else list()
   if (!is.null(top_n) && is.null(values$top_n)) {
     values$top_n <- as.integer(top_n)
   }
+  # The sentence's "Top 25" reads the script's value; seed the default so it
+  # shows before anyone changes it.
+  if (default_script && is.null(values$top_n)) values$top_n <- 25L
   # A sentence saved before this block was a table names the old roles.
   if (is.character(subtitle) && length(subtitle) == 1L) {
     subtitle <- gsub("@col\\b", "@facet", subtitle, perl = TRUE)
