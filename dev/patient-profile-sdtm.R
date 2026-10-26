@@ -50,7 +50,7 @@ message("Patient profile SDTM demo on http://127.0.0.1:", pp_port, "/")
 serve(
   new_dock_board(
     blocks = c(
-      data = new_dm_example_block(dataset = "pharmaversesdtm"),
+      data = blockr.pharma::new_cdisc_example_block(dataset = "pharmaversesdtm"),
       profile = new_patient_profile_block(
         selected = c("patient_overview", "ae_gantt", "cm_gantt")
       )

@@ -20,7 +20,48 @@ utils::globalVariables("USUBJID")
 }
 
 #' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec arg_array arg_string
+#'   arg_boolean
 register_pharma_blocks <- function() {
+  register_blocks(
+    "new_cdisc_dm_block",
+    name = "CDISC dm",
+    uid = "cdisc_dm_block",
+    description = paste(
+      "Set CDISC keys (USUBJID PK/FK) and",
+      "optionally deduplicate subject columns"
+    ),
+    category = "structured",
+    icon = "patch-check",
+    guidance = paste(
+      "Turns a plain dm of CDISC/ADaM tables (adsl, adae, adlbc, ...) into",
+      "a keyed dm where USUBJID is the primary key on ADSL and the foreign",
+      "key on every other table. Always place this block immediately after",
+      "loading CDISC data and before any filtering, joining, or crossfilter",
+      "work. Without keys, downstream dm blocks can't cascade filters."
+    ),
+    arguments = list(
+      cdisc_dm_arguments()
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
+  register_blocks(
+    "new_cdisc_example_block",
+    name = "CDISC example data",
+    uid = "cdisc_example_block",
+    description = "Load a CDISC example study as a keyed dm",
+    category = "input",
+    icon = "database",
+    guidance = paste(
+      "Loads a CDISC example study (ADaM or SDTM) as a dm keyed on USUBJID.",
+      "Use for clinical demos and testing; no file paths needed."
+    ),
+    arguments = list(
+      cdisc_example_arguments()
+    ),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
   register_blocks(
     "new_patient_profile_block",
     name = "Patient Profile",
@@ -279,6 +320,50 @@ register_pharma_blocks <- function() {
     ),
     package = utils::packageName(),
     overwrite = TRUE
+  )
+}
+
+#' @noRd
+cdisc_dm_arguments <- function() {
+  new_arg_specs(
+    set_keys = new_arg_spec(
+      paste0(
+        "Logical. TRUE (default) sets USUBJID as primary key on ADSL and ",
+        "foreign key on all other tables. Required for any cascading dm ",
+        "filter to work."
+      ),
+      example = TRUE,
+      type = arg_boolean()
+    ),
+    dedup_cols = new_arg_spec(
+      paste0(
+        "Logical. TRUE removes duplicated subject-level columns (AGE, SEX, ",
+        "ARM, etc.) from non-ADSL tables so they live only on ADSL, which ",
+        "avoids column-name collisions in downstream joins. FALSE (the ",
+        "default) leaves every table as it was read."
+      ),
+      example = FALSE,
+      type = arg_boolean()
+    )
+  )
+}
+
+#' @noRd
+cdisc_example_arguments <- function() {
+  new_arg_specs(
+    # Which IDs are offered depends on the installed data packages (see
+    # cdisc_example_choices()), so this stays an open string, not an enum.
+    dataset = new_arg_spec(
+      paste0(
+        "Character. ID of the CDISC example study to load. One of: ",
+        "\"pharmaverseadam\" / \"safetydata_adam\" (CDISC ADaM clinical dm ",
+        "with adsl, adae, ...), \"pharmaversesdtm\" (raw CDISC SDTM domains: ",
+        "dm, ae, vs, lb, cm). Availability depends on installed data ",
+        "packages."
+      ),
+      example = "pharmaverseadam",
+      type = arg_string()
+    )
   )
 }
 

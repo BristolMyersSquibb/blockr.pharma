@@ -122,8 +122,8 @@ demog_fn <- function(title, vars) {
 serve(
   new_dock_board(
     blocks = c(
-      data = new_dm_example_block(dataset = "safetydata_adam"),
-      cdisc = new_cdisc_dm_block(),
+      data = blockr.pharma::new_cdisc_example_block(dataset = "safetydata_adam"),
+      cdisc = blockr.pharma::new_cdisc_dm_block(),
       adsl = new_dm_pull_block(table = "adsl", block_name = "Pull ADSL"),
 
       # Sender A: Sex / Race

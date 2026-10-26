@@ -91,11 +91,11 @@ options(
 blocks <- blockr.core::as_blocks(list(
 
   # -- Source: the ADaM dm, keyed, then filtered once for the whole board ----
-  data = blockr.dm::new_dm_example_block(
+  data = blockr.pharma::new_cdisc_example_block(
     dataset = "safetydata_adam",
     block_name = "ADaM data"
   ),
-  cdisc = blockr.dm::new_cdisc_dm_block(
+  cdisc = blockr.pharma::new_cdisc_dm_block(
     set_keys = TRUE,
     dedup_cols = TRUE,
     block_name = "CDISC"

@@ -89,8 +89,8 @@ message("Patient profile sidebar demo on http://127.0.0.1:", pp_port, "/")
 serve(
   new_dock_board(
     blocks = c(
-      data = new_dm_example_block(dataset = "safetydata_adam"),
-      cdisc = new_cdisc_dm_block(),
+      data = blockr.pharma::new_cdisc_example_block(dataset = "safetydata_adam"),
+      cdisc = blockr.pharma::new_cdisc_dm_block(),
       # `subject` restores the same way a saved board would: the block opens
       # on one patient, so the charts are drawn and the panel x is reachable
       # without picking anyone first.
