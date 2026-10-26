@@ -310,7 +310,7 @@ test_that("the block records what it filtered, and nothing when it filters nothi
 
   # An incoming trail is preserved, and this block's own clause is keyed by
   # block id, so re-evaluating replaces it rather than appending a second copy.
-  d <- blockr.dm::add_filter_trail(flag_df(), NULL, "global_filter", "SEX = F")
+  d <- blockr.dm::add_filter_trail(flag_df(), "global_filter", "SEX = F")
   out <- ev(e, d)
   expect_identical(
     blockr.dm::filter_trail(out),
@@ -318,7 +318,7 @@ test_that("the block records what it filtered, and nothing when it filters nothi
   )
 })
 
-test_that("in dm mode the clause is scoped to the table it narrowed", {
+test_that("in dm mode the clause goes on the table it narrowed only", {
   d <- flag_dm()
   shape <- flag_target_df(d, "adae")[0L, , drop = FALSE]
   out <- flag_eval(
@@ -326,31 +326,28 @@ test_that("in dm mode the clause is scoped to the table it narrowed", {
     d
   )
 
-  trail <- blockr.dm::filter_trail(out)
-  expect_identical(as.vector(trail), "TRTEMFL")
-  expect_identical(attr(trail, "tables"), list(ae_flags = "adae"))
+  expect_identical(blockr.dm::filter_trail(out), c(ae_flags = "TRTEMFL"))
+  expect_identical(blockr.dm::filter_trail(out, tables = "adae"),
+                   c(ae_flags = "TRTEMFL"))
 
-  # What a pull block does on each branch below this filter: adsl alone
-  # leaves the clause behind, adae carries it. The block narrowed adae and
+  # What a pull block gets on each branch below this filter: adsl alone
+  # does not carry the clause, adae does. The block narrowed adae and
   # nothing else, so a demographics table must not caption itself "TRTEMFL".
-  pop <- blockr.dm::add_filter_trail(
-    dm::pull_tbl(out, adsl), out, tables = "adsl"
-  )
-  expect_null(blockr.dm::filter_trail(pop))
+  expect_null(blockr.dm::filter_trail(dm::pull_tbl(out, adsl)))
+  expect_identical(blockr.dm::filter_trail(dm::pull_tbl(out, adae)),
+                   c(ae_flags = "TRTEMFL"))
 
-  aes <- blockr.dm::add_filter_trail(
-    dm::pull_tbl(out, adae), out, tables = "adae"
-  )
-  expect_identical(blockr.dm::filter_trail(aes), c(ae_flags = "TRTEMFL"))
+  # The expression names the table.
+  e <- make_flag_filter_expr("TRTEMFL", shape, "adae", "ae_flags")
+  expect_identical(e[["tables"]], "adae")
 
-  # Frame mode has no table to scope to, and stays unscoped.
+  # Frame mode: the clause goes on the frame.
   fr <- ev(
     make_flag_filter_expr("TRTEMFL", flag_df()[0L, , drop = FALSE], NULL,
                           "ae_flags"),
     flag_df()
   )
   expect_identical(blockr.dm::filter_trail(fr), c(ae_flags = "TRTEMFL"))
-  expect_null(attr(blockr.dm::filter_trail(fr), "tables"))
 })
 
 test_that("the clause uses the footnote text, then the label, then the name", {

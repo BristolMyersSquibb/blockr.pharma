@@ -52,7 +52,7 @@
 #'
 #' In dm mode the block previews as blockr.dm's dm diagram, click a table to
 #' page through it, because the table preview cannot render a dm. The clause
-#' the block writes to the filter trail is scoped to `table`, so a branch
+#' the block writes to the filter trail goes on `table` only, so a branch
 #' that leaves the dm through another table does not print it; see
 #' [blockr.dm::filter_trail()].
 #'
@@ -235,7 +235,7 @@ new_flag_filter_block <- function(columns = character(),
             shiny::req(derived)
             if (!isTRUE(derived$ok)) stop(derived$cond)
             make_flag_filter_expr(r_sel(), derived$shape, table,
-                                  blockr.dm::trail_key(session), r_notes())
+                                  trail_key(session), r_notes())
           }),
           # `table` is configuration, not a control: nothing in the UI edits
           # it, but it must round-trip or a saved board comes back filtering
@@ -423,8 +423,7 @@ input_slot <- function(name) {
 #' @noRd
 # `key` is the filter-trail key, NOT the `id` the block server is handed:
 # blockr.core calls every block's server with `id = "expr"`, so keying on it
-# would have each filter overwrite the one upstream of it. See
-# `blockr.dm::trail_key()`.
+# would have each filter overwrite the one upstream of it. See `trail_key()`.
 make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL,
                                   footnotes = NULL) {
   d <- data_slot()
@@ -447,28 +446,38 @@ make_flag_filter_expr <- function(selected, shape, table = NULL, key = NULL,
   }
 
   # This block's entry in the filter trail (see `blockr.dm::filter_trail()`).
-  # The flags are OR-ed, so the clause reads that way.
+  # The flags are OR-ed, so the clause reads that way. Nothing selected adds
+  # nothing: the trail upstream rides on the data untouched.
   #
-  # One case needs no wrapper: frame mode with nothing selected. There the
-  # block adds no clause AND has nothing to rescue, because `dplyr::filter()`
-  # carries data-frame attributes through on its own. dm mode always wraps,
-  # selected or not: `dm_zoom_to()` / `dm_update_zoomed()` rebuild the dm and
-  # an incoming trail would be lost.
-  #
-  # `data = d` and not the default: this block is `expr_type = "bquoted"`, so
-  # its input is the `.()` slot, not a bare `data` symbol -- see the note on
-  # `data_slot()` below.
-  #
-  # `table = table`: in dm mode the clause is scoped to the one table it
+  # In dm mode the clause goes on `table` only, the one table this block
   # narrowed, so a branch that leaves the dm through another table (the lab
-  # chart, off `lb` and `adsl`) does not print a filter that never touched
-  # its rows. The crossfilter's clauses are not scoped, because `dm_filter()`
-  # cascades and they really do reach every table.
-  if (is.null(clause) && is.null(table)) {
+  # chart, off `lb`) does not print a filter that never touched its rows. The
+  # crossfilter writes on every table, because `dm_filter()` cascades.
+  filter_trail_expr(inner, key, clause, tables = table)
+}
+
+# The block's expression wrapped so it writes its clause to the filter trail.
+# With no clause or key, the expression as it is. Self-qualified, because the
+# expression is also what an exported script runs.
+filter_trail_expr <- function(inner, key, clause, tables = NULL) {
+  if (is.null(key) || !length(clause) || is.na(clause[[1L]]) ||
+        !nzchar(clause[[1L]])) {
     return(inner)
   }
+  args <- list(quote(blockr.dm::add_filter_trail), inner, key, clause[[1L]])
+  if (length(tables)) {
+    args <- c(args, list(tables = as.character(tables)))
+  }
+  as.call(args)
+}
 
-  blockr.dm::trail_expr(inner, key, clause, data = d, table = table)
+# The key a block writes its trail clause under: its module namespace, which
+# carries the board's block id and is unique per block per session. Not the
+# `id` the block server gets, which blockr.core sets to "expr" for every
+# block. pp_drill_state() matches the drill filter's key on the same form.
+trail_key <- function(session = shiny::getDefaultReactiveDomain()) {
+  ns <- tryCatch(session$ns(""), error = function(e) NULL)
+  if (is.null(ns) || !length(ns) || !nzchar(ns)) "block" else ns
 }
 
 # Selected flags as one clause, which is what a `{filters}` caption prints.
@@ -531,8 +540,9 @@ flag_clean_footnotes <- function(x) {
 #' halves right: other tables keep their rows, and the keys survive.
 #'
 #' Because nothing cascades, the clause this block writes to the filter trail
-#' is scoped to `table`: a pull or flatten that leaves the dm through another
-#' table drops it, so only the exhibits built on the narrowed table print it.
+#' goes on `table` only: a pull or flatten that leaves the dm through another
+#' table does not carry it, so only the exhibits built on the narrowed table
+#' print it.
 #' See [blockr.dm::filter_trail()].
 #'
 #' @param d The data slot.

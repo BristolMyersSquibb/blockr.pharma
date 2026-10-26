@@ -37,27 +37,16 @@ test('nothing is written before R has counted a cohort', () => {
   h.close();
 });
 
-test('a drill turns the count into the reset, with what it started from', () => {
-  const h = boot();
-  h.send('subject_picker', { count: 6 });
-  h.send('drill', { clause: 'SEX = F', before: 179 });
-  assert.deepEqual(statusText(h), ['6 of 179 patients', '6 of 179 patients']);
-  const r = resets(h)[0];
-  // Names what is undone, and how many come back.
-  assert.equal(r.getAttribute('data-blockr-tooltip'), 'Show all 179 patients, clearing SEX = F');
-  h.send('drill', { clause: '' });
-  assert.deepEqual(statusText(h), ['6 patients', '6 patients']);
-  assert.equal(resets(h).length, 0);
-  h.close();
-});
-
-test('a drill whose filter did not count says only what it kept', () => {
-  // A remote dm: the drill filter skips the count.
+test('a drill turns the count into the reset', () => {
   const h = boot();
   h.send('subject_picker', { count: 6 });
   h.send('drill', { clause: 'SEX = F' });
   assert.deepEqual(statusText(h), ['6 patients', '6 patients']);
+  // Names what is undone.
   assert.equal(resets(h)[0].getAttribute('data-blockr-tooltip'), 'Show all patients, clearing SEX = F');
+  h.send('drill', { clause: '' });
+  assert.deepEqual(statusText(h), ['6 patients', '6 patients']);
+  assert.equal(resets(h).length, 0);
   h.close();
 });
 
@@ -67,16 +56,17 @@ test('a drill that matches nobody still says so, and keeps the reset', () => {
   assert.equal(resets(h).length, 0);
   // No patients BECAUSE of a drill: a result, and the state where the way
   // back matters most.
-  h.send('drill', { clause: 'SEX = M', before: 12 });
-  assert.deepEqual(statusText(h), ['0 of 12 patients', '0 of 12 patients']);
+  h.send('drill', { clause: 'SEX = M' });
+  assert.deepEqual(statusText(h), ['0 patients', '0 patients']);
+  assert.equal(resets(h).length, 2);
   h.close();
 });
 
 test('either message can land first; the status is painted from both', () => {
   const h = boot();
-  h.send('drill', { clause: 'SEX = M', before: 40 });
+  h.send('drill', { clause: 'SEX = M' });
   h.send('subject_picker', { count: 33 });
-  assert.deepEqual(statusText(h), ['33 of 40 patients', '33 of 40 patients']);
+  assert.deepEqual(statusText(h), ['33 patients', '33 patients']);
   h.close();
 });
 
@@ -84,7 +74,7 @@ test('the reset asks R to undrill and leaves the list alone', () => {
   const h = boot();
   const sidebar = h.el('pp_sidebar');
   h.send('subject_picker', { count: 6 });
-  h.send('drill', { clause: 'SEX = M', before: 12 });
+  h.send('drill', { clause: 'SEX = M' });
   const shutBefore = sidebar.classList.contains('collapsed');
   h.click(resets(h)[0]);
   assert.equal(h.inputs('undrill').length, 1);

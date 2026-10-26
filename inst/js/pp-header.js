@@ -47,8 +47,6 @@ PatientProfile.part(function(ctx) {
   /** @type {number | null} */
   var cohortN = null;
   var drillClause = '';
-  /** @type {number | null} */
-  var drillBefore = null;
 
   /** @param {number} n */
   function patients(n) {
@@ -61,16 +59,9 @@ PatientProfile.part(function(ctx) {
     var drilled = drillClause.length > 0;
     var html = '';
     if (drilled) {
-      // The reset names what it undoes. The drill filter sits below the
-      // population filter, so what comes back is the population, never
-      // "every patient": the count it started from says how many.
-      var n = cohortN || 0;
-      var label = drillBefore != null ?
-        n.toLocaleString() + ' of ' + patients(drillBefore) :
-        patients(n);
-      var tip = (drillBefore != null ?
-        'Show all ' + patients(drillBefore) : 'Show all patients') +
-        ', clearing ' + drillClause;
+      // The reset names what it undoes.
+      var label = patients(cohortN || 0);
+      var tip = 'Show all patients, clearing ' + drillClause;
       html = '<button type="button" class="pp-drill-reset" data-blockr-tooltip="' +
         esc(tip) + '">' + ICON_RESET + '<span>' + esc(label) + '</span></button>';
     } else if (cohortN != null) {
@@ -99,13 +90,11 @@ PatientProfile.part(function(ctx) {
   });
 
   // The drill. R reads it off the dm it was handed (pp-drill.R) and sends
-  // the clause, or '' when the cohort is the whole population, with how
-  // many patients the drill started from when the filter counted them. The
-  // reset asks R to clear the drill filter; the profile never edits its own
-  // data, it asks the block that did.
+  // the clause, or '' when the cohort is the whole population. The reset
+  // asks R to clear the drill filter; the profile never edits its own data,
+  // it asks the block that did.
   Shiny.addCustomMessageHandler(drillMsgId, function(msg) {
     drillClause = (msg && msg.clause) ? String(msg.clause) : '';
-    drillBefore = (msg && typeof msg.before === 'number') ? msg.before : null;
     paintCohort();
   });
 

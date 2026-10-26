@@ -170,7 +170,7 @@ test_that("the stamp carries the filter trail across", {
   d <- dm::dm_add_fk(d, ae, USUBJID, adsl)
 
   filtered <- blockr.dm::add_filter_trail(
-    dm::dm_filter(d, adsl = SEX == "F"), d, "global_filter", "SEX = F"
+    dm::dm_filter(d, adsl = SEX == "F"), "global_filter", "SEX = F"
   )
   expect_equal(
     unname(blockr.dm::filter_trail(filtered)), "SEX = F"

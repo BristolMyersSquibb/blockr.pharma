@@ -135,8 +135,8 @@ test_that("pools are written into the filter trail, levels are not", {
   d <- dm_stamp_group(make_arm_dm(), "TRT", groups = overlapping)
   expect_equal(blockr.dm::filter_trail(d), c(Group = "All active = Low + High"))
 
+  # On every table, so a flatten that starts at an event table carries it.
   flat <- dm::dm_flatten_to_tbl(d, ae)
-  flat <- blockr.dm::add_filter_trail(flat, d)
   expect_equal(unname(blockr.dm::filter_trail(flat)), "All active = Low + High")
 
   # Two pools, one of them unnamed: only the named ones need saying.

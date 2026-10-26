@@ -772,8 +772,7 @@ new_patient_profile_block <- function(selected = NULL,
 
           shiny::observe({
             d <- r_drill()
-            pp_send(session, "drill", list(clause = d$clause %||% "",
-                                           before = d$before))
+            pp_send(session, "drill", list(clause = d$clause %||% ""))
           })
 
           # The reset: tell the drill filter to forget its claim, over the

@@ -111,27 +111,23 @@ join_population <- function(events, population, id = "USUBJID") {
   # flag on ADSL), and a board that wires the two inputs the other way round
   # still gets the events' filters. The trail is keyed by block, so the
   # global filter's clauses, which reach both sides, appear once.
-  # The stand-in input carries only the trail, so the provenance (dataset
-  # name and note for download names and footers) is set here, from the
-  # events, else the population.
+  # They drop the provenance too (dataset name and note for download names
+  # and footers). It is taken from the events, else the population.
   attr(out, "blockr_provenance") <-
     attr(input, "blockr_provenance", exact = TRUE) %||%
     attr(population, "blockr_provenance", exact = TRUE)
-  blockr.dm::add_filter_trail(out, join_trails(input, population))
+  trail <- join_trails(input, population)
+  for (key in names(trail)) {
+    out <- blockr.dm::add_filter_trail(out, key, trail[[key]])
+  }
+  out
 }
 
-# The two inputs' trails as one, events first. Returned as an object carrying
-# the trail, the form add_filter_trail() reads its input in. Entries arrive
-# without table scope, both inputs being data frames.
+# The two inputs' trails as one, events first, each key once.
 join_trails <- function(events, population) {
-  # `[` would keep the scope attribute of one side; rebuilt bare instead.
-  bare <- function(x) {
-    t <- blockr.dm::filter_trail(x)
-    if (length(t)) stats::setNames(as.vector(t, "character"), names(t))
-  }
-  trail <- c(bare(events), bare(population))
-  trail <- trail[!duplicated(names(trail))]
-  structure(list(), blockr_filters = if (length(trail)) trail)
+  trail <- c(blockr.dm::filter_trail(events),
+             blockr.dm::filter_trail(population))
+  trail[!duplicated(names(trail))]
 }
 
 join_population_column_attrs <- function(events, population) {
