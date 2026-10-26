@@ -16,6 +16,11 @@
 #' the AE defaults (subject id, preferred term, grade, the top-25 prepare
 #' script and the sentence under the title) are what this function adds.
 #'
+#' It is kept so boards saved with it restore; they save as a table block
+#' from then on. New boards call [blockr.viz::new_table_block()] directly,
+#' with [ae_heatmap_script()] and [ae_heatmap_subtitle()] (see the clinical
+#' explorer example, `inst/examples/clinical-explorer.R`).
+#'
 #' @param row Column identifying a matrix row. Default `"USUBJID"`.
 #' @param col Column identifying a matrix column. Default `"AEDECOD"`
 #'   (the preferred term).

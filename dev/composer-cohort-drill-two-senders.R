@@ -1,7 +1,7 @@
 # TWO senders, ONE filter. Variant of composer-cohort-drill.R that puts a
 # second drillable summary on the board, both pushing into the SAME value
 # filter over the control channel -- via the TABLE BLOCKS' OWN send
-# (ctrl_target, the gear's "Send to filter" option), no sender blocks:
+# (drill_target, the gear's "Send to filter" option), no sender blocks:
 #
 #   adsl -> demog_a (Sex, Race)      -> tbl_a --.
 #     |                                          >-- cohort_filter -> profile
@@ -104,8 +104,8 @@ demog_fn <- function(title, vars) {
 }", title, blocks)
 }
 
-# The senders are the TABLE BLOCKS THEMSELVES: `ctrl_target` names the value
-# filter to drive and `ctrl_table` the dm table the conditions apply to (the
+# The senders are the TABLE BLOCKS THEMSELVES: `drill_target` names the value
+# filter to drive and `drill_table` the dm table the conditions apply to (the
 # gear's "Send to filter (beta)" option). The send rides on the drill's own
 # clicks, so it keeps working when the table is parked on an off-screen view
 # under lazy eval -- the failure mode that killed the standalone sender block
@@ -136,7 +136,7 @@ serve(
         block_name = "Demographics A (composer)"
       ),
       tbl_a = new_table_block(
-        drill = "auto", ctrl_target = "cohort_filter", ctrl_table = "adsl",
+        drill = "auto", drill_target = "cohort_filter", drill_table = "adsl",
         block_name = "Sex / Race"
       ),
 
@@ -151,7 +151,7 @@ serve(
         block_name = "Demographics B (composer)"
       ),
       tbl_b = new_table_block(
-        drill = "auto", ctrl_target = "cohort_filter", ctrl_table = "adsl",
+        drill = "auto", drill_target = "cohort_filter", drill_table = "adsl",
         block_name = "Age group / Ethnicity"
       ),
 

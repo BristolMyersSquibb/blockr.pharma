@@ -68,6 +68,12 @@ events and is painted by the worst grade. Returns a
 the AE defaults (subject id, preferred term, grade, the top-25 prepare
 script and the sentence under the title) are what this function adds.
 }
+\details{
+It is kept so boards saved with it restore; they save as a table block
+from then on. New boards call \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}} directly,
+with \code{\link[=ae_heatmap_script]{ae_heatmap_script()}} and \code{\link[=ae_heatmap_subtitle]{ae_heatmap_subtitle()}} (see the clinical
+explorer example, \code{inst/examples/clinical-explorer.R}).
+}
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 new_ae_heatmap_block(group = "TRT01A")
