@@ -3,9 +3,10 @@
 # A heatmap of subjects by terms is a table block in the groups layout: one
 # row per subject (grouped by arm), one column per term (a summary's
 # `facet`), each cell a count drawn as a square tile painted by the worst
-# grade (`fill`), in the compact look. This constructor turns the AE
-# heatmap's arguments into that call. It is kept so boards and code that name
-# it keep working; the result is a table block and saves as one.
+# grade (`fill`), in the compact look (`look = "compact"`). This
+# constructor turns the AE heatmap's arguments into that call. It is kept
+# so boards and code that name it keep working; the result is a table block
+# and saves as one.
 
 #' AE heatmap
 #'
@@ -101,7 +102,7 @@ new_ae_heatmap_block <- function(row = "USUBJID",
       layout = "groups",
       by = c(group, row),
       summaries = list(summary),
-      compact = TRUE,
+      look = "compact",
       value_labels = !isFALSE(cell_numbers),
       drill = "auto",
       drill_target = one(ctrl_target) %||% "auto",

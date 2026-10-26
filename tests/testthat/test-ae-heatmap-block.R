@@ -20,7 +20,7 @@ test_that("the AE arguments become the table's layout and summary", {
   )$payload
   expect_identical(p$layout, "groups")
   expect_identical(p$by, c("TRT01A", "USUBJID"))
-  expect_true(p$compact)
+  expect_identical(p$look, "compact")
   expect_false(p$value_labels)
   expect_identical(p$drill_target, "auto")
   s <- summary_of(new_ae_heatmap_block(color = "AETOXGR"))
