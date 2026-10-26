@@ -565,3 +565,69 @@ test_that("cdisc_dm_shape is identical across equal-but-fresh inputs", {
   )
   expect_null(cdisc_dm_shape(no_parent)$parent)
 })
+
+# Serialize -> JSON -> deserialize, as a saved board does.
+cdisc_ser_deser <- function(block) {
+  ser <- blockr.core::blockr_ser(block)
+  json <- jsonlite::toJSON(ser, null = "null", auto_unbox = TRUE)
+  parsed <- jsonlite::fromJSON(
+    as.character(json),
+    simplifyDataFrame = FALSE,
+    simplifyMatrix = FALSE
+  )
+  blockr.core::blockr_deser(parsed)
+}
+
+test_that("ser/deser cdisc_dm_block", {
+  for (keys in c(TRUE, FALSE)) {
+    for (dedup in c(TRUE, FALSE)) {
+      blk <- new_cdisc_dm_block(set_keys = keys, dedup_cols = dedup)
+      restored <- cdisc_ser_deser(blk)
+      expect_s3_class(restored, class(blk))
+      orig_state <- blockr.core:::initial_block_state(blk)
+      rest_state <- blockr.core:::initial_block_state(restored)
+      expect_equal(names(orig_state), names(rest_state))
+      for (nm in names(orig_state)) {
+        expect_equal(
+          orig_state[[nm]], rest_state[[nm]],
+          label = paste("state$", nm)
+        )
+      }
+    }
+  }
+})
+
+test_that("cdisc_dm_block follows externally set switches", {
+
+  ctrl_dm <- function() {
+    dm::dm(
+      adsl = data.frame(USUBJID = c("a", "b"), AGE = c(34, 61)),
+      adae = data.frame(USUBJID = c("a", "a"), AETERM = c("x", "y")),
+      adlb = data.frame(USUBJID = "b", LBTEST = "z")
+    )
+  }
+  expr_text <- function(x) paste(deparse(x), collapse = "\n")
+
+  block <- new_cdisc_dm_block(set_keys = TRUE, dedup_cols = TRUE)
+
+  expect_setequal(
+    blockr.core::external_ctrl_vars(block),
+    c("set_keys", "dedup_cols", "block_name")
+  )
+
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+      expect_match(expr_text(session$returned$expr()), "dm_add_pk")
+
+      session$returned$state$set_keys(FALSE)
+      session$flushReact()
+
+      # The expression is rebuilt from the switch, so the keys step is gone.
+      expect_no_match(expr_text(session$returned$expr()), "dm_add_pk")
+      expect_false(session$returned$state$set_keys())
+    },
+    args = list(x = block, data = list(data = function() ctrl_dm()))
+  )
+})
