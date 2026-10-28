@@ -17,9 +17,6 @@ type PpSyncSelected = string[];
 /** `sync_subject`: the picked patient, `""` for none. */
 interface PpSyncSubject { id: string }
 
-/** `sync_params`: `viz@@PARAMCD` keys of the parameters on screen. */
-type PpSyncParams = string[];
-
 /** `sync_band`: which panel the cohort strip draws, `""` for none. */
 interface PpSyncBand { viz_id: string }
 

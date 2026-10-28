@@ -528,75 +528,55 @@ test_that("the band follows the chips, not the card's declaration", {
 })
 
 
-# --- the add picker ----------------------------------------------------------
+# --- the panel picker --------------------------------------------------------
 #
-# Replaces test-pp-sidebar-draggable.R, which pinned a behaviour that has been
-# removed: cards in the sidebar's SELECTED list had to be draggable at boot,
-# because reordering happened over there. Reordering is now a drag of the card
-# itself, in the chart area, and the sidebar has no panel list at all. What is
-# worth pinning instead is the picker that replaced it -- and it is a pure
-# function of the catalogue, so it needs no session.
+# The catalogue reaches the client as Blockr.Pick options; a pure function of
+# the available vizs, so it needs no session.
 
-picker_html <- function(vizs) {
-  as.character(htmltools::renderTags(
-    pp_add_picker_ui(vizs, identity)
-  )$html)
-}
-
-test_that("the picker styles a parameter card by its code and its group", {
+test_that("the picker lists panels by domain, then parameters by group", {
   vizs <- list(
-    ae = viz_stub("ae", pp_band_ae(), "adae"),
-    alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"), "adlbc")
+    alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"), "adlbc"),
+    ae = viz_stub("ae", pp_band_ae(), "adae")
   )
   vizs$alt$params <- c(ALT = "Alanine Aminotransferase")
   vizs$alt$sublabel <- "Alanine Aminotransferase"
   vizs$alt$group_label <- "Chemistry"
-  vizs$alt$group_id <- "adlbc_all"
-  html <- picker_html(vizs)
+  vizs$ae$domain <- "Adverse events"
+  opts <- pp_picker_options(vizs)
 
-  # Both add the same way -- since parameters became cards there is only one
-  # kind of thing on the profile -- so both are data-kind="panel".
-  expect_false(grepl('data-kind="param"', html, fixed = TRUE))
-
-  # A parameter card reads as "ALT, Alanine Aminotransferase, in Chemistry".
-  expect_match(html, "pp-add-code", fixed = TRUE)
-  expect_match(html, ">ALT<", fixed = TRUE)
-  expect_match(html, ">Chemistry<", fixed = TRUE)
-
-  # And it is hidden until something is typed: a study's whole parameter set
-  # is sixty-odd rows, which is not a menu.
-  expect_match(html, "pp-add-row is-param", fixed = TRUE)
+  expect_identical(vapply(opts, `[[`, "", "value"), c("ae", "alt"))
+  expect_identical(opts[[1L]]$group, "Adverse events")
+  # A parameter card reads "ALT  Alanine Aminotransferase" under Chemistry.
+  expect_identical(opts[[2L]]$display, "ALT")
+  expect_identical(opts[[2L]]$label, "Alanine Aminotransferase")
+  expect_identical(opts[[2L]]$group, "Chemistry")
 })
 
-test_that("a parameter matches its own name, never its group's keywords", {
-  # The trap: a findings card's search text carries every PARAMCD and PARAM
-  # it covers. Folding it into each parameter made every one of them a hit
-  # for any of the others -- one code returned the whole card.
-  vizs <- list(alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"),
-                              "adlbc"))
+test_that("a panel carries its search keywords, a parameter none", {
+  vizs <- list(
+    alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"), "adlbc"),
+    ae = viz_stub("ae", pp_band_ae(), "adae")
+  )
   vizs$alt$params <- c(ALT = "Alanine Aminotransferase")
-  vizs$alt$sublabel <- "Alanine Aminotransferase"
   vizs$alt$group_label <- "Chemistry"
-  vizs$alt$search <- "CHEM ALB Albumin ALT Alanine Aminotransferase"
-
-  html <- picker_html(vizs)
-  hay <- sub('.*data-search-text="([^"]*)".*', "\\1", html)
-
-  expect_match(hay, "alt")
-  expect_match(hay, "chemistry")
-  # Albumin is a different card; typing it must not return this one.
-  expect_false(grepl("albumin", hay, fixed = TRUE))
+  vizs$alt$search <- "liver"
+  vizs$ae$search <- "toxicity events"
+  opts <- pp_picker_options(vizs)
+  # The filter in blockr-pick.js matches `keywords`, so "toxicity" finds the
+  # AE panel; the card keywords stay off the parameter.
+  expect_identical(opts[[1L]]$keywords, "toxicity events")
+  expect_null(opts[[2L]]$keywords)
 })
 
-test_that("a study with no parameters lists only panels", {
+test_that("the picker host carries its options as JSON", {
   vizs <- list(ae = viz_stub("ae", pp_band_ae(), "adae"))
-  html <- picker_html(vizs)
-  expect_false(grepl("is-param", html, fixed = TRUE))
-
-  # The section carries no search box of its own: the sidebar's one box
-  # searches the panels above it and the patients below it.
-  expect_false(grepl("pp-add-input", html, fixed = TRUE))
-  expect_match(html, "On the profile", fixed = TRUE)
+  html <- as.character(htmltools::renderTags(
+    pp_add_picker_ui(vizs, identity)
+  )$html)
+  expect_match(html, 'id="pp_panels"', fixed = TRUE)
+  json <- sub('.*data-options="([^"]*)".*', "\\1", html)
+  json <- gsub("&quot;", '"', json, fixed = TRUE)
+  expect_identical(jsonlite::fromJSON(json)$value, "ae")
 })
 
 test_that("a parameter card's caption does not name its parameter twice", {

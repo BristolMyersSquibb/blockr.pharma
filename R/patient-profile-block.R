@@ -673,24 +673,6 @@ new_patient_profile_block <- function(selected = NULL,
             r_viz_settings(settings)
           })
 
-          # Ship the parameters currently on screen to the result rows'
-          # check marks. Depends on BOTH the selection and the settings: a
-          # card off the panel shows none of its parameters as checked, however
-          # its items happen to be set.
-          shiny::observe({
-            sel <- r_selected()
-            settings <- r_viz_settings()
-            avail <- r_available()
-            keys <- unlist(lapply(intersect(sel, names(avail)), function(vid) {
-              items <- settings[[vid]]$items %||%
-                pp_viz_defaults(avail[[vid]])$items
-              if (length(items) == 0L) return(NULL)
-              paste0(vid, "@@", as.character(items))
-            }))
-            pp_send(session, "sync_params", keys
-            )
-          })
-
           # Reorder vizs via drag-drop
           shiny::observeEvent(input$reorder_viz, {
             new_order <- input$reorder_viz
@@ -731,6 +713,17 @@ new_patient_profile_block <- function(selected = NULL,
             out <- cur
             out[cur %in% visible] <- new_order
             r_selected(out)
+          })
+
+          # Set the visible selection in one step: what the panel picker sends
+          # for more than one change at a time (All, None, several picks in a
+          # row), so the profile redraws once rather than once per panel. The
+          # unavailable ids stay, as in a reorder.
+          shiny::observeEvent(input$set_viz, {
+            ids <- as.character(unlist(input$set_viz))
+            avail <- names(r_available())
+            cur <- r_selected()
+            r_selected(c(intersect(ids, avail), setdiff(cur, avail)))
           })
 
           # Sync sidebar toggle state to client whenever selection changes
@@ -1046,17 +1039,9 @@ new_patient_profile_block <- function(selected = NULL,
                                    ))
           })
 
-          # The picker behind the + button.
-          #
-          # Rendered ONCE per catalogue, not per selection: it re-renders only
-          # when the study's available vizs change, so opening it, typing in
-          # it and ticking things off never rebuilds it underneath the user.
-          # Which rows are ticked is kept in step by the sync_selected message
-          # the sidebar cards already use.
-          #
-          # Filtering is client-side. The catalogue is a few dozen rows and it
-          # is all here already; a round trip per keystroke would buy nothing
-          # and cost the caret (see the AE find box).
+          # The panel picker's catalogue. Rendered once per catalogue, not per
+          # selection: what is on the profile reaches it through sync_selected,
+          # so picking never rebuilds it.
           output$panel_picker <- shiny::renderUI({
             avail <- r_available()
             if (!length(avail)) return(NULL)
@@ -1144,8 +1129,8 @@ new_patient_profile_block <- function(selected = NULL,
             if (isTRUE(total > 1L)) {
               shiny::tagList(
                 "No patient selected. ",
-                # `data-target`: pp-header.js keeps the panel catalogue
-                # closed for this link, so the patient list stays on top.
+                # `data-target`: pp-header.js focuses the patients' filter
+                # box for this link, the panel picker's for "Add one".
                 shiny::tags$button(type = "button",
                                    class = "blockr-slot pp-open-search",
                                    `data-target` = "patients",

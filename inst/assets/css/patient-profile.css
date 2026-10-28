@@ -75,10 +75,9 @@
 }
 
 
-/* --- The sidebar: search, the panels, the patients ------------------------
+/* --- The sidebar: the panels, then the patients and their filter box -------
    Design system: a 30px search field (the size of the crossfilter card's),
-   menu-style rows with the hover wash, section titles for "On the profile",
-   the search's groups and "Patients", and the selected tint on the patient
+   menu-style rows with the hover wash, and the selected tint on the patient
    on screen. The sidebar's left edge is 14px; rows pull their hover fill
    out by their own padding so their text keeps that edge. */
 .pp-sidebar-search {
@@ -154,9 +153,7 @@
   display: none;
 }
 
-/* Section titles: "On the profile", the search's groups, "Patients". */
-.pp-add-title,
-.pp-add-group,
+/* Section titles: "Patients". */
 .pp-cohort-bandcap-title {
   display: flex;
   align-items: baseline;
@@ -169,203 +166,34 @@
   color: var(--blockr-color-text-muted);
 }
 
-.pp-add-title {
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.pp-add-group {
-  padding: 8px 0 4px;
-}
-
-.pp-add-group.is-hidden {
-  display: none;
-}
-
-/* The count after a section title: the number, not a shout. */
-.pp-add-n,
+/* The panel picker, a Blockr.Pick.list. Capped, so a long profile or an
+   unfolded catalogue leaves the patients their rows; the list scrolls
+   under its filter box. */
 .pp-panels {
   flex: 0 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 4px 12px 8px 14px;
+  padding: 8px 8px 6px 10px;
   border-bottom: 1px solid var(--blockr-color-border-default);
 }
 
-.pp-add-on-wrap.is-hidden {
-  display: none;
+.pp-panels > .blockr-pick--inline {
+  max-height: 340px;
 }
 
-/* Five rows, then it scrolls: uncapped, twelve panels would leave the
-   patients two rows. */
-.pp-add-on {
-  max-height: 170px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  margin: 0 -8px;
-  padding: 0 8px;
+/* A parameter's name is the meta, and it is long: it gives way, not its
+   code or the grip. */
+.pp-panels .blockr-pick__name:has(+ .blockr-select__opt-label) {
+  flex-shrink: 0;
 }
 
-.pp-add-results {
-  max-height: 290px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  flex: 1 1 auto;
-  min-height: 0;
-  margin: 0 -8px;
-  padding: 0 8px;
-}
-
-/* A row: 32px, 14px, radius 4, the hover wash. A parameter shows its code,
-   then its name as meta, which is cut first. */
-.pp-add-ord,
-.pp-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  margin: 0 -8px;
-  padding: 0 2px 0 8px;
-  border-radius: var(--blockr-radius-sm);
-  font-size: var(--blockr-font-size-base);
-  color: var(--blockr-color-text-default);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.pp-add-ord {
-  cursor: grab;
-  outline: none;
-}
-
-.pp-add-ord:hover,
-.pp-add-ord:focus-visible,
-.pp-add-row:hover,
-.pp-add-row.is-enter {
-  background: var(--blockr-color-bg-hover);
-}
-
-.pp-add-row.is-hidden {
-  display: none;
-}
-
-.pp-add-code,
-.pp-add-ord-code {
-  flex: none;
-  font-variant-numeric: tabular-nums;
-}
-
-.pp-add-name {
-  flex: 1 1 auto;
+.pp-panels .blockr-pick__option .blockr-select__opt-label {
+  flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.pp-add-code + .pp-add-name,
-.pp-add-name.is-meta {
-  font-size: var(--blockr-font-size-sm);
-  color: var(--blockr-color-text-muted);
-}
-
-.pp-add-row:hover .pp-add-code + .pp-add-name,
-.pp-add-row.is-enter .pp-add-code + .pp-add-name,
-.pp-add-ord:hover .pp-add-name.is-meta {
-  color: var(--blockr-color-text-default);
-}
-
-/* The check of what is on the profile, in front of the row. */
-.pp-add-tick {
-  display: inline-flex;
-  flex: 0 0 14px;
-  color: var(--blockr-color-text-accent);
-  visibility: hidden;
-}
-
-.pp-add-row.is-on .pp-add-tick {
-  visibility: visible;
-}
-
-.pp-add-row mark {
-  background: none;
-  color: inherit;
-  font-weight: var(--blockr-font-weight-semibold);
-}
-
-.pp-add-none {
-  display: none;
-  padding: 10px 0 6px;
-  text-align: center;
-  font-size: var(--blockr-font-size-sm);
-  font-style: italic;
-  color: var(--blockr-color-text-muted);
-}
-
-.pp-add-none.is-shown {
-  display: block;
-}
-
-/* Dragging a row: it dims, and a line shows where it lands. */
-.pp-add-ord.is-dragging {
-  opacity: 0.45;
-}
-
-/* Where it lands: a straight 2px line between two rows, from the text's
-   edge. Not a shadow on the row, which bent round its rounded corners. */
-.pp-add-ord {
-  position: relative;
-}
-
-.pp-add-ord.is-over::before,
-.pp-add-ord.is-over-last::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  right: 2px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--blockr-color-border-accent);
-  pointer-events: none;
-}
-
-.pp-add-ord.is-over::before {
-  top: -1px;
-}
-
-.pp-add-ord.is-over-last::after {
-  bottom: -1px;
-}
-
-.pp-add-ord.is-landed {
-  background: var(--blockr-color-bg-accent-subtle);
-}
-
-/* Remove: a 26px tool on the row under the pointer or the keyboard. */
-.pp-add-ord-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: var(--blockr-radius-sm);
-  background: transparent;
-  color: var(--blockr-color-text-muted);
-  cursor: pointer;
-  opacity: 0;
-}
-
-.pp-add-ord:hover .pp-add-ord-x,
-.pp-add-ord:focus-within .pp-add-ord-x {
-  opacity: 1;
-}
-
-.pp-add-ord-x:hover {
-  color: var(--blockr-color-text-danger);
+  white-space: nowrap;
 }
 
 /* The patients: a section title, then one sentence saying what the strip

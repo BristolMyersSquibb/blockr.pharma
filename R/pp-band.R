@@ -341,103 +341,54 @@ pp_search_icon <- function() {
   )
 }
 
+#' The panel picker's options
+#'
+#' The catalogue as `Blockr.Pick.list()` options: the panels under their
+#' domain, then the parameter cards under the findings group they come from.
+#' A parameter shows its code with its name as meta; a panel shows its name.
+#' Each is one viz, so the value is the viz id and a pick is a `toggle_viz`.
+#'
+#' @param avail Named list of available `pp_viz` definitions.
+#' @return A list of `list(value, display, label, group)`, a panel with its
+#'   `keywords` as well.
+#' @noRd
+pp_picker_options <- function(avail) {
+  is_param <- function(v) !is.null(v$group_label)
+  opt <- function(v) {
+    if (is_param(v)) {
+      list(value = v$id, display = names(v$params)[[1L]],
+           label = v$sublabel %||% v$label, group = v$group_label)
+    } else {
+      # A panel's own search text is how "liver" reaches Chemistry. A
+      # parameter gets none: its card's keywords would make every parameter
+      # on the card a hit (on ECG, "qt" found all five intervals).
+      list(value = v$id, display = v$label, group = v$domain %||% "",
+           keywords = v$search %||% "")
+    }
+  }
+  grouped <- function(vizs, key) {
+    by <- split(vizs, vapply(vizs, key, character(1L)))
+    unlist(lapply(by, function(g) lapply(g, opt)), recursive = FALSE,
+           use.names = FALSE)
+  }
+  c(grouped(Filter(Negate(is_param), avail), function(v) v$domain %||% ""),
+    grouped(Filter(is_param, avail), function(v) v$group_label %||% ""))
+}
+
 #' The add-panel picker
 #'
-#' One list, two kinds of row. A panel is a row with its domain on the right;
-#' a parameter is a row with its PARAMCD on the left and the panel it lives in
-#' on the right, so typing `ALB` answers "Albumin, and it is in Chemistry"
-#' without a second column.
-#'
-#' @section What matches what:
-#' A panel matches its label, its domain and the `search` text it declares
-#' (which is how `liver` reaches Chemistry). A parameter matches its code, its
-#' name and its panel's LABEL only -- never the panel's search text. Including
-#' it made every one of a card's parameters a hit for any of the card's
-#' keywords: on the ECG card, `qt` returned all five intervals instead of the
-#' two with QT in the name.
-#'
-#' @section Browsing and searching:
-#' With an empty, unfocused box the catalogue is not shown: what the sidebar
-#' shows then is the profile you have, which is the list above it. Focusing
-#' the empty box opens the whole catalogue under its section titles, minus
-#' what is already on the profile, so a reader who does not know a code can
-#' scroll to it. Typing narrows it to the matches.
+#' A host for the in-place `Blockr.Pick.list()` that pp-picker.js builds from
+#' `data-options`. What is on the profile comes from `sync_selected`.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
 #' @param ns The module's namespace function.
 #' @return A tag.
 #' @noRd
 pp_add_picker_ui <- function(avail, ns) {
-
-  row <- function(..., search, kind, viz_id, paramcd = NULL, hidden = FALSE) {
-    shiny::div(
-      class = paste("pp-add-row", if (hidden) "is-param"),
-      `data-kind` = kind,
-      `data-viz-id` = viz_id,
-      `data-paramcd` = paramcd,
-      `data-search-text` = tolower(search),
-      ...
-    )
-  }
-
-  # A parameter shows its code and then its name as meta, as every picking
-  # surface shows a code and its decode (design system, "Column names and
-  # their labels"); any other panel shows its name. The check in front marks
-  # what is already on the profile.
-  is_param <- function(v) !is.null(v$group_label)
-  tick <- shiny::span(class = "pp-add-tick", shiny::HTML(PP_ICON_CHECK))
-
-  viz_row <- function(v) {
-    if (is_param(v)) {
-      code <- names(v$params)[[1L]]
-      row(
-        tick,
-        shiny::span(class = "pp-add-code", code),
-        shiny::span(class = "pp-add-name", v$sublabel %||% v$label),
-        search = paste(code, v$sublabel %||% "", v$group_label),
-        kind = "panel", viz_id = v$id, hidden = TRUE
-      )
-    } else {
-      row(
-        tick,
-        shiny::span(class = "pp-add-name", v$label),
-        search = paste(v$label, v$domain %||% "", v$search %||% ""),
-        kind = "panel", viz_id = v$id
-      )
-    }
-  }
-
-  # The catalogue under section titles: the panels by domain, then the
-  # parameters by the findings group they come from.
-  grouped <- function(vizs, key) {
-    by <- split(vizs, vapply(vizs, key, character(1L)))
-    unlist(lapply(names(by), function(g) {
-      c(list(shiny::div(class = "pp-add-group", g)), lapply(by[[g]], viz_row))
-    }), recursive = FALSE)
-  }
-  panel_rows <- grouped(Filter(Negate(is_param), avail),
-                        function(v) v$domain %||% "")
-  param_rows <- grouped(Filter(is_param, avail),
-                        function(v) v$group_label %||% "")
-
   shiny::div(
     class = "pp-panels", id = ns("pp_panels"),
-    # What is on the profile, in profile order, and draggable.
-    #
-    # Filled by the client rather than rendered here: the order changes on
-    # every drag and this catalogue is deliberately rendered once, so the
-    # section that has to follow the order cannot be part of it.
-    shiny::div(
-      class = "pp-add-on-wrap",
-      shiny::div(class = "pp-add-title", "On the profile",
-                 shiny::span(class = "pp-add-n")),
-      shiny::div(class = "pp-add-on", id = ns("pp_add_on"),
-                 role = "list", `aria-label` = "On the profile")
-    ),
-    # The catalogue. Silent until the sidebar's search box is focused (the
-    # whole list) or has something in it (the matches).
-    shiny::div(class = "pp-add-results", panel_rows, param_rows),
-    shiny::div(class = "pp-add-none", "Nothing matches")
+    `data-options` = jsonlite::toJSON(pp_picker_options(avail),
+                                      auto_unbox = TRUE)
   )
 }
 

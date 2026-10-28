@@ -5,8 +5,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { mount } = require('./harness.js');
 
-const rows = (h) => h.qa('.blockr-select__option').map((e) => e.textContent);
-const pick = (h, text) => h.qa('.blockr-select__option')
+const rows = (h) => h.qa('.blockr-select__option').filter((e) => !e.closest('.pp-panels')).map((e) => e.textContent);
+const pick = (h, text) => h.qa('.blockr-select__option').filter((e) => !e.closest('.pp-panels'))
   .find((e) => e.textContent === text)
   .dispatchEvent(new h.win.Event('click', { bubbles: true }));
 

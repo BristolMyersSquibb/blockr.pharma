@@ -25,15 +25,14 @@ test_that("pp_send namespaces the channel", {
   expect_identical(wire(s$sent()[[1L]]$message), "{\"id\":\"A\"}")
 })
 
-test_that("the array channels reach the wire as arrays, one entry or none", {
+test_that("sync_selected reaches the wire as an array, one entry or none", {
   s <- mock_session()
   pp_send(s, "sync_selected", "ae_gantt")
   pp_send(s, "sync_selected", character())
   pp_send(s, "sync_selected", NULL)
   pp_send(s, "sync_selected", c("a", "b"))
-  pp_send(s, "sync_params", "x@@Y")
   got <- vapply(s$sent(), function(m) wire(m$message), character(1L))
-  expect_identical(got, c("[\"ae_gantt\"]", "[]", "[]", "[\"a\",\"b\"]", "[\"x@@Y\"]"))
+  expect_identical(got, c("[\"ae_gantt\"]", "[]", "[]", "[\"a\",\"b\"]"))
 })
 
 test_that("object channels are left as they are", {

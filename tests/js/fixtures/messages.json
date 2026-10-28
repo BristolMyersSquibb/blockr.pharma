@@ -1,9 +1,5 @@
 [
   {
-    "channel": "sync_params",
-    "payload": []
-  },
-  {
     "channel": "sync_selected",
     "payload": [
       "patient_overview",

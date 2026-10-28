@@ -133,22 +133,18 @@ PatientProfile.part(function(ctx) {
     toggleSidebar();
   });
 
-  // The slot words of the empty states ("Search for one", "Add one"):
-  // both are answered from the sidebar's search, so open the list and put
-  // the cursor there. Scoped to this block's layout, since the handler is
-  // on the document and a board can hold two profiles. "Search for one"
-  // looks for a patient, so it marks its focus and pp-picker.js leaves the
-  // panel catalogue closed.
+  // The slot words of the empty states: "Search for one" puts the cursor in
+  // the patients' filter box, "Add one" in the panel picker's. Scoped to
+  // this block's layout, since the handler is on the document and a board
+  // can hold two profiles.
   $(document).on('click', '.pp-open-search', function(e) {
     if (!$(this).closest('#' + layoutId).length) return;
     e.stopPropagation();
     toggleSidebar(false);
-    var search = byId(ns('search'));
-    if (!search) return;
     var patients = this.getAttribute('data-target') === 'patients';
-    if (patients) search.setAttribute('data-no-browse', 'true');
-    search.focus();
-    search.removeAttribute('data-no-browse');
+    var box = patients ? byId(ns('search')) : /** @type {HTMLElement | null} */ (
+      document.querySelector('#' + ns('pp_panels') + ' .blockr-select__search'));
+    if (box) box.focus();
   });
 
   // The download menu. Rendered once in R; this names the cohort's size and
