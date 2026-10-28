@@ -64,7 +64,11 @@ PatientProfile.part(function(ctx) {
     word.classList.add('blockr-slot--open');
     word.setAttribute('aria-expanded', 'true');
     var onClose = /** @type {any} */ (config).onClose;
-    Blockr.Select.menu(word, Object.assign({}, config, {
+    // A multi menu takes Blockr.Pick (blockr.dplyr), the multi-select on
+    // trial: picks on top, All and None. Blockr.Select where it is missing.
+    var Pick = /** @type {any} */ (window.Blockr).Pick;
+    var menu = /** @type {any} */ (config).mode === 'multi' && Pick ? Pick.menu : Blockr.Select.menu;
+    menu(word, Object.assign({}, config, {
       onClose: function() {
         word.classList.remove('blockr-slot--open');
         word.setAttribute('aria-expanded', 'false');

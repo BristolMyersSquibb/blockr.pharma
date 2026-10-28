@@ -24,6 +24,8 @@ pp_block_ui <- function(id) {
     # stylesheets. The profile's stylesheet reads the tokens without
     # fallbacks and its scripts build on blockr-ui.js.
     blockr.ui::controls_dep(),
+    # Blockr.Pick, the multi-select on trial, for the multi words.
+    blockr.dplyr::blockr_pick_dep(),
     # The data tooltip's card (.dd-tt-*), shared with every blockr.viz chart
     # so the profile's hover cards look like theirs.
     blockr.viz::tooltip_card_dep(),
