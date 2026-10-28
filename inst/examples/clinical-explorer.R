@@ -223,7 +223,8 @@ blocks <- blockr.core::as_blocks(list(
   # one row per subject grouped by arm, one column per term (the summary's
   # `facet`), each cell a count tile painted by the worst severity (`fill`),
   # in the compact look. The prepare script keeps the 25 most frequent
-  # terms; its `top_n` is the "Top 25" word in the sentence under the title.
+  # terms; its `top_terms` is the "Top 25" word in the sentence under the
+  # title.
   # safetyData's ADAE has no CTCAE grade column (AETOXGR), so the paint runs
   # off AESEV, whose MILD / MODERATE / SEVERE happens to sort correctly.
   ae_heatmap = blockr.viz::new_table_block(
@@ -240,7 +241,7 @@ blocks <- blockr.core::as_blocks(list(
     title = "Adverse events by subject",
     subtitle = blockr.pharma::ae_heatmap_subtitle(),
     script = blockr.pharma::ae_heatmap_script("AEDECOD"),
-    script_values = list(top_n = 25L),
+    script_values = list(top_terms = 25L),
     visible = "inputs",
     block_name = "AE Heatmap"
   ),
