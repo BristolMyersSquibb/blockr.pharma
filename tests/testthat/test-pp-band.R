@@ -552,6 +552,22 @@ test_that("the picker lists panels by domain, then parameters by group", {
   expect_identical(opts[[2L]]$group, "Chemistry")
 })
 
+test_that("a panel carries its search keywords, a parameter none", {
+  vizs <- list(
+    alt = viz_stub("alt", pp_band_series("adlbc", "ALT", "Alanine"), "adlbc"),
+    ae = viz_stub("ae", pp_band_ae(), "adae")
+  )
+  vizs$alt$params <- c(ALT = "Alanine Aminotransferase")
+  vizs$alt$group_label <- "Chemistry"
+  vizs$alt$search <- "liver"
+  vizs$ae$search <- "toxicity events"
+  opts <- pp_picker_options(vizs)
+  # The filter in blockr-pick.js matches `keywords`, so "toxicity" finds the
+  # AE panel; the card keywords stay off the parameter.
+  expect_identical(opts[[1L]]$keywords, "toxicity events")
+  expect_null(opts[[2L]]$keywords)
+})
+
 test_that("the picker host carries its options as JSON", {
   vizs <- list(ae = viz_stub("ae", pp_band_ae(), "adae"))
   html <- as.character(htmltools::renderTags(

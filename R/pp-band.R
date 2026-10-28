@@ -349,7 +349,8 @@ pp_search_icon <- function() {
 #' Each is one viz, so the value is the viz id and a pick is a `toggle_viz`.
 #'
 #' @param avail Named list of available `pp_viz` definitions.
-#' @return A list of `list(value, display, label, group)`.
+#' @return A list of `list(value, display, label, group)`, a panel with its
+#'   `keywords` as well.
 #' @noRd
 pp_picker_options <- function(avail) {
   is_param <- function(v) !is.null(v$group_label)
@@ -358,7 +359,11 @@ pp_picker_options <- function(avail) {
       list(value = v$id, display = names(v$params)[[1L]],
            label = v$sublabel %||% v$label, group = v$group_label)
     } else {
-      list(value = v$id, display = v$label, group = v$domain %||% "")
+      # A panel's own search text is how "liver" reaches Chemistry. A
+      # parameter gets none: its card's keywords would make every parameter
+      # on the card a hit (on ECG, "qt" found all five intervals).
+      list(value = v$id, display = v$label, group = v$domain %||% "",
+           keywords = v$search %||% "")
     }
   }
   grouped <- function(vizs, key) {
