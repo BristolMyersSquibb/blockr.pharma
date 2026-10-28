@@ -212,11 +212,3 @@ test('sync_band tags the panel the cohort strip draws, and re-tags after a rende
   assert.equal(h.qa('.pp-is-band').length, 0);
   h.close();
 });
-
-test('sync_params accepts what R sends, a list, and nothing', () => {
-  const h = boot();
-  assert.doesNotThrow(() => h.sendRecorded('sync_params'));
-  assert.doesNotThrow(() => h.send('sync_params', ['adlbc_all@@ALB', 'adlbc_all@@ALT']));
-  assert.doesNotThrow(() => h.send('sync_params', null));
-  h.close();
-});

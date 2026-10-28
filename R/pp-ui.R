@@ -65,7 +65,11 @@ pp_block_ui <- function(id) {
         # tag in the toolbar now does from a place you can see when this
         # is shut.
 
-        # Search: one box, two tenants, the panels and the patients.
+        # The panels on the profile, in order, and the catalogue folded
+        # under them: one Blockr.Pick.list, built by pp-picker.js. Above
+        # the patients, in the same order as the cards it controls.
+        shiny::uiOutput(ns("panel_picker")),
+        # The patients' filter box. The panels have their own, in the picker.
         shiny::div(class = "pp-sidebar-search",
           shiny::div(class = "pp-sidebar-search-wrapper",
             shiny::span(class = "pp-sidebar-search-icon",
@@ -74,42 +78,24 @@ pp_block_ui <- function(id) {
               type = "text",
               class = "pp-sidebar-search-input",
               id = ns("search"),
-              placeholder = "Search panels and patients",
-              `aria-label` = "Search panels and patients"
+              placeholder = "Filter patients",
+              `aria-label` = "Filter patients"
             ),
             # Clear: appears only while the box has text.
             shiny::tags$button(
               class = "pp-sidebar-search-clear is-hidden",
               id = ns("search_clear"),
               type = "button",
-              `aria-label` = "Clear the search",
-              `data-blockr-tooltip` = "Clear the search",
+              `aria-label` = "Clear the filter",
+              `data-blockr-tooltip` = "Clear the filter",
               shiny::HTML(PP_ICON_X)
             )
           )
         ),
 
-        # The cohort. Above the panels because it is what you come back
-        # to: panels are set once, patients are stepped through.
-        # The panels, above the patients.
-        #
-        # They were a list here, then a menu behind a toolbar button,
-        # and they are a list here again -- with the difference that
-        # this one shows what is ON the profile rather than a catalogue
-        # of everything. The catalogue only opens while the search box is
-        # focused or has something in it, so the column costs five rows
-        # instead of the whole study's parameter set.
-        #
-        # Above rather than below the patients for two reasons that only
-        # showed up on screen: the list reads top-down in the same order
-        # as the cards it controls, so a drag here is a drag next to the
-        # thing it moves; and a search puts its hits under the box
-        # rather than under 254 patient rows, where they would be off
-        # screen.
-        shiny::uiOutput(ns("panel_picker")),
         shiny::div(class = "pp-sidebar-section",
           # No heading either. A column of patient ids under a box that
-          # says "Search patients", with "254 patients" against its edge,
+          # says "Filter patients", with "254 patients" against its edge,
           # does not need a 10px grey word telling you it is a cohort --
           # and "cohort" is not a term every reader shares.
           # One row above the list: what the strip draws, the id prefix
@@ -127,17 +113,7 @@ pp_block_ui <- function(id) {
             `aria-label` = "Cohort",
             shiny::uiOutput(ns("sidebar_cohort"))
           )
-        ),
-
-        # No panel list. The sidebar answers WHO; the panels are a
-        # stack of cards a few hundred pixels to the right, and choosing
-        # and ordering them from over here meant doing the work in one
-        # place and watching the result in another. Adding is the +
-        # button in the toolbar, ordering is the grip in each card's own
-        # header, and removing is the x that was always there.
-        #
-        # The sidebar keeps its search, which now searches patients: the
-        # panels it used to find are in the picker's own box.
+        )
       ),
 
       # Chart area: a static subject picker, the dynamic header bar (gear

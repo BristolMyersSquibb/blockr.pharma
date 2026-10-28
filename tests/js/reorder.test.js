@@ -1,5 +1,5 @@
-/* Reordering panels by mouse: the On rows in the sidebar, and the panel
- * headers in the chart area. Both send the new order as one input. */
+/* Reordering panels by their header in the chart area. The sidebar's drag
+ * is the picker's (picker.test.js). */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,74 +12,8 @@ const boot = () => {
   h.renderAll();
   h.tick(0);
   h.send('sync_selected', ON);
-  // Rows stacked 24px apart from the top of the page.
-  h.qa('.pp-add-ord').forEach((r, i) => h.layout(r, { top: i * 24, left: 0, width: 200, height: 24 }));
   return h;
 };
-
-const drag = (h, from, toY) => {
-  h.mouse('mousedown', from, { clientY: from.getBoundingClientRect().top + 12 });
-  h.mouse('mousemove', h.doc, { clientY: toY });
-  h.mouse('mouseup', h.doc, { clientY: toY });
-};
-
-test('dragging an On row below the last puts it last', () => {
-  const h = boot();
-  const rows = h.qa('.pp-add-ord');
-  h.mouse('mousedown', rows[0], { clientY: 12 });
-  assert.equal(rows[0].classList.contains('is-dragging'), true);
-  h.mouse('mousemove', h.doc, { clientY: 30 });
-  assert.equal(rows[1].classList.contains('is-over'), true, 'above row 1\'s middle');
-  h.mouse('mousemove', h.doc, { clientY: 40 });
-  assert.equal(rows[1].classList.contains('is-over'), false, 'past row 1\'s middle');
-  assert.equal(rows[2].classList.contains('is-over'), true);
-  h.mouse('mousemove', h.doc, { clientY: 130 });
-  assert.equal(rows[4].classList.contains('is-over-last'), true);
-  h.mouse('mouseup', h.doc, { clientY: 130 });
-
-  const want = ON.slice(1).concat([ON[0]]);
-  assert.deepEqual(h.onProfile(), want, 'redrawn at once');
-  assert.deepEqual(h.lastInput('reorder_viz'), want);
-  assert.equal(h.qa('.is-dragging, .is-over, .is-over-last').length, 0);
-  h.close();
-});
-
-test('dragging a row above the first puts it first', () => {
-  const h = boot();
-  drag(h, h.qa('.pp-add-ord')[3], 2);
-  const want = [ON[3]].concat(ON.filter((x) => x !== ON[3]));
-  assert.deepEqual(h.onProfile(), want);
-  assert.deepEqual(h.lastInput('reorder_viz'), want);
-  h.close();
-});
-
-test('a drop where the row already is sends nothing', () => {
-  const h = boot();
-  drag(h, h.qa('.pp-add-ord')[1], 30);
-  assert.deepEqual(h.onProfile(), ON);
-  assert.equal(h.inputs('reorder_viz').length, 0);
-  // Just below itself is the same place.
-  drag(h, h.qa('.pp-add-ord')[1], 50);
-  assert.equal(h.inputs('reorder_viz').length, 0);
-  h.close();
-});
-
-test('the remove button is not a drag handle', () => {
-  const h = boot();
-  const x = h.q('.pp-add-ord .pp-add-ord-x');
-  h.mouse('mousedown', x, { clientY: 12 });
-  assert.equal(h.q('.pp-add-ord.is-dragging'), null);
-  h.close();
-});
-
-test('the server\'s echo of the new order leaves the rows in place', () => {
-  const h = boot();
-  drag(h, h.qa('.pp-add-ord')[0], 130);
-  const nodes = h.qa('.pp-add-ord');
-  h.send('sync_selected', ON.slice(1).concat([ON[0]]));
-  h.qa('.pp-add-ord').forEach((r, i) => assert.equal(r, nodes[i]));
-  h.close();
-});
 
 // --- panels dragged by their header -------------------------------------
 

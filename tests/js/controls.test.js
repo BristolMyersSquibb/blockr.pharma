@@ -15,9 +15,9 @@ const boot = () => {
 const gantt = (h) => h.el('viz_slot_ae_gantt');
 const word = (h, slot, param) => h.el(slot).querySelector(`.pp-slot[data-param="${param}"]`);
 const menu = (h) => h.q('.blockr-select__dropdown');
-const rows = (h) => h.qa('.blockr-select__option').map((e) => e.textContent);
+const rows = (h) => h.qa('.blockr-select__option').filter((e) => !e.closest('.pp-panels')).map((e) => e.textContent);
 const pick = (h, text) => {
-  const opt = h.qa('.blockr-select__option').find((e) => e.textContent.startsWith(text));
+  const opt = h.qa('.blockr-select__option').filter((e) => !e.closest('.pp-panels')).find((e) => e.textContent.startsWith(text));
   opt.dispatchEvent(new h.win.Event('click', { bubbles: true }));
 };
 // A press outside: blockr.ui's layers close on pointerdown, not on click.

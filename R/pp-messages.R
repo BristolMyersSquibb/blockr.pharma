@@ -6,9 +6,8 @@
 #'
 #' | channel          | payload                              | client effect |
 #' |------------------|--------------------------------------|---------------|
-#' | `sync_selected`  | character: panel ids on the profile  | On list, catalogue ticks, count |
+#' | `sync_selected`  | character: panel ids on the profile  | the panel picker's picks |
 #' | `sync_subject`   | `list(id = )`, `""` for none         | moves the selected class |
-#' | `sync_params`    | character: `viz@@PARAMCD` keys       | parameter ticks |
 #' | `sync_band`      | `list(viz_id = )`, `""` for none     | tags the band's panel |
 #' | `subject_picker` | `list(count = )`                     | the cohort count tag |
 #' | `dl_menu_state`  | `list(single, picked, n)`            | download menu scopes |
@@ -30,7 +29,7 @@ pp_send <- function(session, channel, payload) {
   # The array channels are wrapped here, once, so the client never has to
   # tolerate a bare string (blockr.docs, js-driven-blocks: the auto-unbox
   # rule).
-  if (channel %in% c("sync_selected", "sync_params")) {
+  if (channel %in% "sync_selected") {
     payload <- as.list(payload %||% character())
   }
   sink <- getOption("blockr.pharma.pp_message_sink")

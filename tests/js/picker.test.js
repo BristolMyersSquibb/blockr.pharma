@@ -1,6 +1,6 @@
-/* The panel picker in the sidebar: the On list the server's sync_selected
- * paints, the search over panels and patients, the first hit, and the
- * optimistic move when a row is picked or removed. */
+/* The sidebar: the panel picker (a Blockr.Pick.list) that sync_selected
+ * fills and that reports back through toggle_viz and reorder_viz, and the
+ * patients' own filter box. */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,8 +8,9 @@ const { mount } = require('./harness.js');
 
 const ON = ['patient_overview', 'ae_gantt', 'adlbc_all__ALB', 'adlbc_all__ALP', 'adlbc_all__ALT'];
 const search = (h) => h.el('search');
+const row = (h, id) => h.q(`#proxy1-pp_panels .blockr-select__option[data-value="${id}"]`);
+const filterBox = (h) => h.q('#proxy1-pp_panels .blockr-select__search');
 
-// The On list as R sent it for this fixture: five rows for three panels.
 const boot = (selected) => {
   const h = mount();
   h.renderAll();
@@ -19,99 +20,201 @@ const boot = (selected) => {
   return h;
 };
 
-test('sync_selected paints the On list in order, ticks the catalogue, counts', () => {
+/** A drag of one pick onto another, as the browser fires it. */
+const dragOnto = (h, from, onto, after) => {
+  const dt = { setData() {}, effectAllowed: '', dropEffect: '' };
+  h.layout(onto, { top: 100, left: 0, width: 200, height: 24 });
+  const fire = (type, el, y) => {
+    const ev = new h.win.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'dataTransfer', { value: dt });
+    Object.defineProperty(ev, 'clientY', { value: y });
+    el.dispatchEvent(ev);
+  };
+  const y = after ? 120 : 104;
+  fire('dragstart', from, 0);
+  fire('dragover', onto, y);
+  fire('drop', onto, y);
+  fire('dragend', from, y);
+};
+
+test('sync_selected puts the picks on top, in profile order', () => {
   const h = boot();
   assert.deepEqual(h.onProfile(), ON);
-  assert.equal(h.text('.pp-add-n'), '5');
-  const on = h.qa('.pp-add-row.is-on').map((r) => r.getAttribute('data-viz-id'));
-  assert.deepEqual(on.sort(), ON.slice().sort());
-  assert.equal(h.q('.pp-add-on-wrap').classList.contains('is-hidden'), false);
-
-  // A parameter row carries its code, then its name as meta; a panel row
-  // its name. No grip and no colour dot: the whole row drags.
-  const alb = h.q('.pp-add-ord[data-viz-id="adlbc_all__ALB"]');
-  assert.equal(alb.querySelector('.pp-add-ord-code').textContent, 'ALB');
-  assert.equal(alb.querySelector('.pp-add-name.is-meta').textContent, 'Albumin (g/L)');
-  const ae = h.q('.pp-add-ord[data-viz-id="ae_gantt"]');
-  assert.equal(ae.querySelector('.pp-add-ord-code'), null);
-  assert.equal(ae.querySelector('.pp-add-dot, .pp-add-ord-grip'), null);
-  assert.equal(ae.tabIndex, 0, 'focusable, for Alt+Up and Alt+Down');
-  assert.equal(ae.querySelector('button.pp-add-ord-x').getAttribute('data-blockr-tooltip'),
-    'Remove from the profile');
-
-  // Nothing selected: the block hides the whole On section and says nothing.
-  h.send('sync_selected', []);
-  assert.deepEqual(h.onProfile(), []);
-  assert.equal(h.text('.pp-add-n'), '');
-  assert.equal(h.q('.pp-add-on-wrap').classList.contains('is-hidden'), true);
-  // One panel arrives as a one-element array (pp_send wraps it).
-  h.send('sync_selected', ['ae_gantt']);
-  assert.deepEqual(h.onProfile(), ['ae_gantt']);
-  h.close();
-});
-
-test('an unchanged selection does not rebuild the rows', () => {
-  const h = boot();
-  const before = h.qa('.pp-add-ord');
-  h.send('sync_selected', ON);
-  const after = h.qa('.pp-add-ord');
-  assert.equal(after.length, before.length);
-  after.forEach((r, i) => assert.equal(r, before[i], 'same node'));
-  // Ids the catalogue does not know are dropped, not drawn blank.
+  assert.match(h.text('#proxy1-pp_panels .blockr-pick__count'), /^5 of 9 on the profile/);
+  // A parameter shows its code, with its name as meta.
+  assert.equal(row(h, 'adlbc_all__ALB').querySelector('.blockr-pick__name').textContent, 'ALB');
+  assert.equal(row(h, 'adlbc_all__ALB').querySelector('.blockr-select__opt-label').textContent,
+    'Albumin (g/L)');
+  // The rest under their groups.
+  const groups = h.qa('#proxy1-pp_panels .blockr-pick__subgroup').map((g) => g.textContent);
+  assert.ok(groups.includes('Vital signs'));
+  // Ids the catalogue does not know are left out.
   h.send('sync_selected', ON.concat(['no_such_panel']));
   assert.deepEqual(h.onProfile(), ON);
+  assert.equal(h.inputs('toggle_viz').length, 0, 'the server state is not echoed back');
   h.close();
 });
 
-test('with no query the catalogue is hidden and patients all show', () => {
+test('a tick adds a panel after the pause, as one toggle_viz', () => {
   const h = boot();
-  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
-  assert.ok(h.qa('.pp-add-results .pp-add-group').every((g) => g.classList.contains('is-hidden')));
+  h.click(row(h, 'advs_all__TEMP'));
+  assert.deepEqual(h.onProfile(), ON.concat(['advs_all__TEMP']), 'moved up at once');
+  h.tick(500);
+  assert.equal(h.inputs('toggle_viz').length, 0, 'nothing before the pause');
+  h.tick(600);
+  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
+  assert.equal(h.inputs('reorder_viz').length, 0);
+  h.close();
+});
+
+test('quick picks are reported together, removals included', () => {
+  const h = boot();
+  h.click(row(h, 'ae_gantt'));
+  h.tick(400);
+  h.click(row(h, 'advs_all__PULSE'));
+  h.tick(400);
+  h.click(row(h, 'advs_all__TEMP'));
+  h.tick(1000);
+  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value),
+    ['ae_gantt', 'advs_all__PULSE', 'advs_all__TEMP']);
+  assert.equal(h.inputs('reorder_viz').length, 0, 'additions go last, so no reorder');
+  h.close();
+});
+
+test('a tick and its untick inside the pause send nothing', () => {
+  const h = boot();
+  h.click(row(h, 'advs_all__TEMP'));
+  h.click(row(h, 'advs_all__TEMP'));
+  h.tick(1100);
+  assert.equal(h.inputs().filter((i) => /toggle_viz|reorder_viz/.test(i.name)).length, 0);
+  h.close();
+});
+
+test('dragging a pick sends the new order after the pause', () => {
+  const h = boot();
+  dragOnto(h, row(h, 'patient_overview'), row(h, 'adlbc_all__ALT'), true);
+  const want = ON.slice(1).concat(['patient_overview']);
+  assert.deepEqual(h.onProfile(), want);
+  h.tick(1100);
+  assert.deepEqual(h.lastInput('reorder_viz'), want);
+  assert.equal(h.inputs('toggle_viz').length, 0);
+  // The echo leaves it as it is and sends nothing.
+  h.resetInputs();
+  h.send('sync_selected', want);
+  assert.deepEqual(h.onProfile(), want);
+  h.tick(1100);
+  assert.equal(h.inputs().length, 0);
+  h.close();
+});
+
+test('an addition dragged up is a toggle and then a reorder', () => {
+  const h = boot();
+  h.click(row(h, 'advs_all__TEMP'));
+  dragOnto(h, row(h, 'advs_all__TEMP'), row(h, 'patient_overview'), false);
+  h.tick(1100);
+  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
+  assert.deepEqual(h.lastInput('reorder_viz'), ['advs_all__TEMP'].concat(ON));
+  const names = h.inputs().map((i) => i.name.replace('proxy1-', ''))
+    .filter((n) => n === 'toggle_viz' || n === 'reorder_viz');
+  assert.deepEqual(names, ['toggle_viz', 'reorder_viz'], 'the toggle first');
+  h.close();
+});
+
+test('a sync during the pause sends the pending picks and keeps them on screen', () => {
+  const h = boot();
+  h.click(row(h, 'advs_all__TEMP'));
+  // The server, not yet told, says the old state.
+  h.send('sync_selected', ON);
+  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
+  assert.deepEqual(h.onProfile(), ON.concat(['advs_all__TEMP']));
+  h.send('sync_selected', ON.concat(['advs_all__TEMP']));
+  h.tick(1100);
+  assert.equal(h.inputs('toggle_viz').length, 1, 'nothing sent twice');
+  h.close();
+});
+
+test('the panel picker rendering again keeps what is on the profile', () => {
+  const h = boot();
+  const host = h.el('panel_picker');
+  const fresh = h.el('pp_panels').cloneNode(false);
+  host.innerHTML = '';
+  host.appendChild(fresh);
+  h.rendered('panel_picker');
+  h.tick(0);
+  assert.deepEqual(h.onProfile(), ON);
+  assert.equal(h.qa('#proxy1-pp_panels .blockr-pick').length, 1);
+  h.close();
+});
+
+test('the picker filter narrows the panels and leaves the patients', () => {
+  const h = boot();
+  h.type(filterBox(h), 'temp');
+  const shown = h.qa('#proxy1-pp_panels .blockr-select__option').map((r) => r.getAttribute('data-value'));
+  assert.deepEqual(shown, ['advs_all__TEMP']);
   assert.equal(h.shownIds().length, 12);
-  assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false);
+  h.close();
+});
+
+// --- the patients' filter box ----------------------------------------------
+
+test('the patient box filters the patients only', () => {
+  const h = boot();
+  h.type(search(h), ' 1023 ');
+  assert.deepEqual(h.shownIds(), ['01-701-1023']);
+  assert.equal(h.q('.pp-pt.is-enter').getAttribute('data-usubjid'), '01-701-1023');
+  assert.equal(h.el('search_clear').classList.contains('is-hidden'), false);
+  assert.equal(h.onProfile().length, 5, 'the panels are untouched');
+  h.type(search(h), 'zzzz');
+  assert.equal(h.shownIds().length, 0);
   assert.equal(h.q('.is-enter'), null);
   h.close();
 });
 
-test('focusing the empty box browses everything not on the profile, grouped', () => {
+test('Escape and the clear button empty the patient box', () => {
   const h = boot();
-  const pop = h.el('pp_panels');
-  search(h).focus();
-  assert.equal(pop.classList.contains('is-browsing'), true);
-  const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
-  const all = h.qa('.pp-add-row').map((r) => r.getAttribute('data-viz-id'));
-  assert.deepEqual(shown, all.filter((id) => !ON.includes(id)), 'everything not on the profile, in catalogue order');
-  const heads = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim());
-  assert.ok(heads.includes('Vital signs'), 'parameters under their findings card');
-  assert.ok(!heads.includes('Treatment'), 'a group whose rows are all on the profile has no heading');
-  assert.equal(h.shownIds().length, 12, 'the cohort is untouched');
-  assert.equal(h.q('.is-enter'), null);
+  h.type(search(h), 'zzzz');
+  h.key(search(h), 'Escape');
+  assert.equal(search(h).value, '');
+  assert.equal(h.shownIds().length, 12);
+  h.type(search(h), '1023');
+  h.click(h.el('search_clear'));
+  assert.equal(search(h).value, '');
+  assert.equal(h.shownIds().length, 12);
+  assert.equal(h.el('search_clear').classList.contains('is-hidden'), true);
+  h.close();
+});
 
-  // Enter alone takes nothing; the arrows pick a row first.
+test('the arrows walk the patients, clamped, and Enter picks one', () => {
+  const h = boot();
+  h.type(search(h), '01-701');
+  const list = h.shownIds();
+  assert.ok(list.length > 3);
+  const at = () => h.q('.pp-pt.is-enter').getAttribute('data-usubjid');
+  assert.equal(at(), list[0]);
+  assert.equal(h.key(search(h), 'ArrowDown').defaultPrevented, true);
+  assert.equal(at(), list[1]);
+  h.key(search(h), 'ArrowUp');
+  h.key(search(h), 'ArrowUp');
+  assert.equal(at(), list[0], 'up from the top stays put');
+  h.key(search(h), 'ArrowDown');
   h.key(search(h), 'Enter');
-  assert.deepEqual(h.inputs('toggle_viz'), []);
-
-  // Typing is a search again: only the matches, under their own heading.
-  h.type(search(h), 'temp');
-  assert.equal(pop.classList.contains('is-browsing'), false);
-  assert.deepEqual(h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent.trim()),
-    ['Vital signs']);
-  // Deleting the query goes back to browsing.
-  h.type(search(h), '');
-  assert.equal(pop.classList.contains('is-browsing'), true);
-
-  // A click in the list keeps it open; a click in the cohort closes it.
-  h.mouse('mousedown', '.pp-add-results');
-  assert.equal(pop.classList.contains('is-browsing'), true);
-  h.mouse('mousedown', '.pp-pt');
-  assert.equal(pop.classList.contains('is-browsing'), false);
-  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
+  h.tick(1000);
+  assert.equal(h.lastInput('pick_subject'), list[1]);
   h.close();
 });
 
-test('"Search for one" focuses the box with the catalogue closed; "Add one" opens it', () => {
+test('the filter survives the cohort list rendering again', () => {
   const h = boot();
-  const pop = h.el('pp_panels');
+  h.type(search(h), '1023');
+  h.qa('.pp-pt').forEach((r) => r.classList.remove('is-filtered-out'));
+  h.rendered('sidebar_cohort');
+  h.tick(0);
+  assert.deepEqual(h.shownIds(), ['01-701-1023']);
+  h.close();
+});
+
+test('"Search for one" focuses the patient box, "Add one" the picker filter', () => {
+  const h = boot();
   const link = (target) => {
     const b = h.doc.createElement('button');
     b.className = 'blockr-slot pp-open-search';
@@ -121,346 +224,7 @@ test('"Search for one" focuses the box with the catalogue closed; "Add one" open
   };
   h.click(link('patients'));
   assert.equal(h.doc.activeElement, search(h));
-  assert.equal(pop.classList.contains('is-browsing'), false);
-  assert.equal(search(h).hasAttribute('data-no-browse'), false, 'the mark is cleared');
-
-  search(h).blur();
   h.click(link());
-  assert.equal(h.doc.activeElement, search(h));
-  assert.equal(pop.classList.contains('is-browsing'), true);
-  h.close();
-});
-
-test('picking while browsing moves the row up and keeps the list open; Escape closes it', () => {
-  const h = boot();
-  const pop = h.el('pp_panels');
-  search(h).focus();
-  h.click('.pp-add-row[data-viz-id="advs_all__TEMP"]');
-  assert.equal(h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]').classList.contains('is-hidden'), true);
-  assert.equal(pop.classList.contains('is-browsing'), true);
-  h.key(search(h), 'Escape');
-  assert.equal(pop.classList.contains('is-browsing'), false);
-  h.close();
-});
-
-test('a query filters panels and patients together and marks the first hit', () => {
-  const h = boot();
-  h.type(search(h), 'temp');
-  const shown = h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'));
-  assert.deepEqual(shown, ['advs_all__TEMP']);
-  // The hit's section title shows; the others, with nothing under them, do not.
-  const titles = h.qa('.pp-add-results .pp-add-group:not(.is-hidden)').map((g) => g.textContent);
-  assert.deepEqual(titles, ['Vital signs']);
-  assert.equal(h.shownIds().length, 0, 'no patient matches "temp"');
-  assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false, 'one panel matched');
-  assert.equal(h.q('.is-enter').getAttribute('data-viz-id'), 'advs_all__TEMP');
-  assert.equal(h.el('pp_sidebar').classList.contains('is-searching'), true);
-  assert.equal(h.el('search_clear').classList.contains('is-hidden'), false);
-
-  // Case and surrounding space do not matter.
-  h.type(search(h), '  ALB ');
-  assert.deepEqual(h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id')),
-    ['adlbc_all__ALB']);
-
-  // A patient id: no panel matches, the patient is the first hit.
-  h.type(search(h), '1023');
-  assert.equal(h.qa('.pp-add-row:not(.is-hidden)').length, 0);
-  assert.deepEqual(h.shownIds(), ['01-701-1023']);
-  assert.equal(h.q('.is-enter').getAttribute('data-usubjid'), '01-701-1023');
-  assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false);
-
-  // Nothing anywhere.
-  h.type(search(h), 'zzzz');
-  assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), true);
-  assert.equal(h.q('.is-enter'), null);
-  assert.equal(h.shownIds().length, 0);
-  h.close();
-});
-
-test('Escape and the clear button empty the box and restore everything', () => {
-  const h = boot();
-  h.type(search(h), 'zzzz');
-  h.key(search(h), 'Escape');
-  assert.equal(search(h).value, '');
-  assert.equal(h.shownIds().length, 12);
-  assert.equal(h.q('.pp-add-none').classList.contains('is-shown'), false);
-  assert.equal(h.el('pp_sidebar').classList.contains('is-searching'), false);
-
-  h.type(search(h), 'alb');
-  h.click(h.el('search_clear'));
-  assert.equal(search(h).value, '');
-  assert.equal(h.shownIds().length, 12);
-  // The clear button puts the focus back in the now empty box, which is
-  // browsing; Escape then closes the catalogue.
-  assert.equal(h.el('pp_panels').classList.contains('is-browsing'), true);
-  h.key(search(h), 'Escape');
-  assert.ok(h.qa('.pp-add-row').every((r) => r.classList.contains('is-hidden')));
-  h.close();
-});
-
-test('picking a catalogue row moves it onto the profile and keeps the search', () => {
-  const h = boot();
-  h.type(search(h), 'temp');
-  const row = h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]');
-  h.click(row);
-
-  // Optimistic: the row is on, the On list has it last, the count moved.
-  assert.equal(row.classList.contains('is-on'), true);
-  assert.deepEqual(h.onProfile(), ON.concat(['advs_all__TEMP']));
-  assert.equal(h.text('.pp-add-n'), '6');
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
-  assert.equal(h.q('.pp-add-ord[data-viz-id="advs_all__TEMP"]').classList.contains('is-landed'), true);
-
-  // The query and its hits stay, so the next pick needs no retyping, and
-  // the box has the focus again with the cursor on the row just picked.
-  assert.equal(search(h).value, 'temp');
-  h.tick(0);
-  assert.equal(row.classList.contains('is-hidden'), false);
-  assert.equal(h.doc.activeElement, search(h));
-  assert.equal(row.classList.contains('is-enter'), true);
-
-  // The landing tint outlives the move and then goes.
-  h.tick(190 + 419);
-  assert.equal(h.q('.pp-add-ord[data-viz-id="advs_all__TEMP"]').classList.contains('is-landed'), true);
-  h.tick(1);
-  assert.equal(h.q('.pp-add-ord[data-viz-id="advs_all__TEMP"]').classList.contains('is-landed'), false);
-
-  // The server's echo, saying the same thing, leaves the rows alone.
-  const nodes = h.qa('.pp-add-ord');
-  h.send('sync_selected', ON.concat(['advs_all__TEMP']));
-  h.qa('.pp-add-ord').forEach((r, i) => assert.equal(r, nodes[i]));
-  h.close();
-});
-
-test('Enter picks the first hit, a panel before a patient', () => {
-  const h = boot();
-  h.type(search(h), 'temp');
-  h.key(search(h), 'Enter');
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['advs_all__TEMP']);
-  assert.equal(search(h).value, 'temp');
-  h.key(search(h), 'Escape');
-
-  // A patient hit: Enter clicks the row, which picks the patient and keeps
-  // the query in the box.
-  h.type(search(h), '1034');
-  const ev = h.key(search(h), 'Enter');
-  assert.equal(ev.defaultPrevented, true);
-  assert.deepEqual(h.inputs('pick_subject').map((i) => i.value), ['01-701-1034']);
-  assert.equal(h.selectedId(), '01-701-1034');
-  assert.equal(search(h).value, '1034');
-
-  // No hit: Enter does nothing.
-  h.resetInputs();
-  h.type(search(h), 'zzzz');
-  const none = h.key(search(h), 'Enter');
-  assert.equal(none.defaultPrevented, false);
-  assert.equal(h.inputs().length, 0);
-  h.close();
-});
-
-test('the x on an On row takes it off the profile', () => {
-  const h = boot();
-  h.click(h.q('.pp-add-ord[data-viz-id="ae_gantt"] .pp-add-ord-x'));
-  assert.deepEqual(h.onProfile(), ON.filter((x) => x !== 'ae_gantt'));
-  assert.equal(h.text('.pp-add-n'), '4');
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['ae_gantt']);
-  assert.equal(h.q('.pp-add-row[data-viz-id="ae_gantt"]').classList.contains('is-on'), true,
-    'the catalogue tick waits for the server');
-  h.send('sync_selected', ON.filter((x) => x !== 'ae_gantt'));
-  assert.equal(h.q('.pp-add-row[data-viz-id="ae_gantt"]').classList.contains('is-on'), false);
-  h.close();
-});
-
-test('a row that is on comes off again when clicked in the catalogue', () => {
-  const h = boot();
-  h.type(search(h), 'alb');
-  h.click(h.q('.pp-add-row[data-viz-id="adlbc_all__ALB"]'));
-  assert.deepEqual(h.onProfile(), ON.filter((x) => x !== 'adlbc_all__ALB'));
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), ['adlbc_all__ALB']);
-  assert.equal(h.q('.pp-add-row[data-viz-id="adlbc_all__ALB"]').classList.contains('is-on'), false);
-  h.close();
-});
-
-test('the panel picker rendering again re-applies the remembered selection', () => {
-  const h = mount();
-  const host = h.el('panel_picker');
-  const fresh = host.innerHTML;
-  h.renderAll();
-  h.tick(0);
-  h.send('sync_selected', ON);
-  // R re-renders the picker (a new catalogue): the ticks and the On list
-  // come back from memory, before any new sync_selected.
-  host.innerHTML = fresh;
-  assert.deepEqual(h.onProfile(), []);
-  h.rendered('panel_picker');
-  h.tick(0);
-  assert.deepEqual(h.onProfile(), ON);
-  assert.equal(h.qa('.pp-add-row.is-on').length, 5);
-  h.close();
-});
-
-test('the FLIP move animates a row from where it was to where it is', () => {
-  const h = boot();
-  h.type(search(h), 'temp');
-  const temp = h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]');
-  const still = h.q('.pp-add-row[data-viz-id="advs_all__PULSE"]');
-  // The row is measured before the change and again after: it moved 48px
-  // down the page (the On list above it grew by two rows).
-  let calls = 0;
-  temp.getBoundingClientRect = () => {
-    const top = calls++ === 0 ? 200 : 248;
-    return { top, left: 10, width: 200, height: 24, bottom: top + 24, right: 210 };
-  };
-  h.layout(still, { top: 100, left: 10, width: 200, height: 24 });
-
-  h.click(temp);
-  assert.equal(temp.style.transform, 'translate(0px,-48px)', 'held at its old place');
-  assert.equal(temp.style.transition, 'none');
-  assert.equal(still.style.transform, '', 'a row that did not move is left alone');
-
-  // Next frame: the transform is released under a transition.
-  h.tick(16);
-  assert.equal(temp.style.transform, '');
-  assert.match(temp.style.transition, /transform 190ms/);
-  h.close();
-});
-
-test('reduced motion skips the travel but keeps the landing tint longer', () => {
-  const h = boot();
-  h.win.matchMedia = () => ({ matches: true, addEventListener() {}, addListener() {} });
-  h.type(search(h), 'temp');
-  const temp = h.q('.pp-add-row[data-viz-id="advs_all__TEMP"]');
-  let calls = 0;
-  temp.getBoundingClientRect = () => {
-    const top = calls++ === 0 ? 200 : 248;
-    return { top, left: 10, width: 200, height: 24, bottom: top + 24, right: 210 };
-  };
-  h.click(temp);
-  assert.equal(temp.style.transform, '');
-  const landed = h.q('.pp-add-ord[data-viz-id="advs_all__TEMP"]');
-  h.tick(499);
-  assert.equal(landed.classList.contains('is-landed'), true);
-  h.tick(1);
-  assert.equal(landed.classList.contains('is-landed'), false);
-  h.close();
-});
-
-// The arrows: a cursor over the hits, and Enter takes what it is on.
-//
-// Enter took the FIRST hit whatever you did, so a search that found the right
-// panel third gave you no way to reach it from the keyboard: you typed, then
-// let go of the keyboard and used the mouse.
-
-const hits = (h) =>
-  h.qa('.pp-add-row:not(.is-hidden)').map((r) => r.getAttribute('data-viz-id'))
-    .concat(h.shownIds());
-const at = (h) => {
-  const row = h.q('.is-enter');
-  if (!row) return null;
-  return row.getAttribute('data-viz-id') || row.getAttribute('data-usubjid');
-};
-
-test('the arrows walk the hits and the ring follows', () => {
-  const h = boot();
-  h.type(search(h), 'al');
-  const list = hits(h);
-  assert.ok(list.length >= 3, 'the query has several hits to walk');
-  assert.equal(at(h), list[0], 'the cursor starts on the first hit');
-
-  h.key(search(h), 'ArrowDown');
-  assert.equal(at(h), list[1]);
-  h.key(search(h), 'ArrowDown');
-  assert.equal(at(h), list[2]);
-  h.key(search(h), 'ArrowUp');
-  assert.equal(at(h), list[1]);
-  h.close();
-});
-
-test('the cursor clamps at both ends rather than wrapping', () => {
-  // The cohort can be three hundred rows, and wrapping from its last patient
-  // back to the first panel is a jump the eye cannot follow.
-  const h = boot();
-  h.type(search(h), 'al');
-  const list = hits(h);
-
-  h.key(search(h), 'ArrowUp');
-  assert.equal(at(h), list[0], 'up from the top stays put');
-
-  for (let i = 0; i < list.length + 3; i++) h.key(search(h), 'ArrowDown');
-  assert.equal(at(h), list[list.length - 1], 'down past the end stays put');
-  h.close();
-});
-
-test('the cursor crosses from the panels into the patients', () => {
-  // One box, one result list: a cursor that stopped at the bottom of the
-  // panels would make the patients below look like a different result set.
-  const h = boot();
-  h.type(search(h), 'p');
-  const list = hits(h);
-  const panels = h.qa('.pp-add-row:not(.is-hidden)').length;
-  assert.ok(panels > 0 && list.length > panels, 'the query finds both kinds');
-
-  for (let i = 0; i < panels; i++) h.key(search(h), 'ArrowDown');
-  assert.equal(at(h), list[panels], 'the first patient follows the last panel');
-  assert.ok(h.q('.is-enter').hasAttribute('data-usubjid'));
-  h.close();
-});
-
-test('Enter takes the row the arrows are on, not the first hit', () => {
-  const h = boot();
-  h.type(search(h), 'al');
-  const list = hits(h);
-  h.key(search(h), 'ArrowDown');
-  h.key(search(h), 'ArrowDown');
-  const want = list[2];
-  h.key(search(h), 'Enter');
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value), [want]);
-  h.close();
-});
-
-test('a new keystroke puts the cursor back on the first hit', () => {
-  // The arrows move a cursor over THIS query's results. Carrying its position
-  // into the next query would land it on a row nobody was looking at.
-  const h = boot();
-  h.type(search(h), 'al');
-  h.key(search(h), 'ArrowDown');
-  h.key(search(h), 'ArrowDown');
-  h.type(search(h), 'alb');
-  assert.equal(at(h), hits(h)[0]);
-  h.close();
-});
-
-test('the arrows never move the caret in the box', () => {
-  // It is a text input: the browser's own Down jumps the caret to the end of
-  // the query, which is the last thing you want mid-search.
-  const h = boot();
-  h.type(search(h), 'al');
-  assert.equal(h.key(search(h), 'ArrowDown').defaultPrevented, true);
-  assert.equal(h.key(search(h), 'ArrowUp').defaultPrevented, true);
-
-  // Still swallowed with nothing to walk, so the caret cannot jump there
-  // either.
-  h.type(search(h), 'zzzz');
-  assert.equal(h.q('.is-enter'), null);
-  assert.equal(h.key(search(h), 'ArrowDown').defaultPrevented, true);
-  h.resetInputs();
-  assert.equal(h.key(search(h), 'Enter').defaultPrevented, false);
-  assert.equal(h.inputs().length, 0);
-  h.close();
-});
-
-test('Alt+Up and Alt+Down move the focused row and send the new order', () => {
-  const h = boot();
-  const second = h.onProfile()[1];
-  const row = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
-  h.key(row, 'ArrowUp', { altKey: true });
-  assert.equal(h.onProfile()[0], second);
-  assert.equal(h.lastInput('reorder_viz')[0], second);
-  const moved = h.q(`.pp-add-ord[data-viz-id="${second}"]`);
-  assert.equal(h.doc.activeElement, moved, 'focus stays with the row');
-  // At the top it goes no further.
-  const n = h.inputs('reorder_viz').length;
-  h.key(moved, 'ArrowUp', { altKey: true });
-  assert.equal(h.inputs('reorder_viz').length, n);
+  assert.equal(h.doc.activeElement, filterBox(h));
   h.close();
 });
