@@ -58,7 +58,8 @@ test_that("an old board restores as a table block", {
   expect_s3_class(b, "table_block")
   p <- blockr.core::blockr_ser(b)$payload
   expect_identical(p$by, c("Group", "USUBJID"))
-  expect_equal(p$script_values$top_n, 10)
+  expect_equal(p$script_values$top_terms, 10)
+  expect_match(p$subtitle, "{@top_terms}", fixed = TRUE)
   expect_true(p$download)
   expect_match(p$subtitle, "@facet", fixed = TRUE)
   expect_match(p$subtitle, "@fill", fixed = TRUE)
@@ -97,18 +98,28 @@ test_that("a production board's heatmap restores with the dock's names", {
                 })
   expect_s3_class(b, "table_block")
   expect_identical(attr(b, "visible"), "inputs")
+  # The old default script is written anew with its control renamed, and
+  # the sentence follows: the arm is the outer `by`, the grade is "worst".
+  p <- blockr.core::blockr_ser(b)$payload
+  expect_match(p$script, "^top_terms <- 25")
+  expect_equal(p$script_values$top_terms, 25)
+  expect_null(p$script_values$top_n)
+  expect_identical(
+    p$subtitle,
+    "[Top {@top_terms} ]{label(@facet)}[, painted by worst {label(@fill)}][, by {label(@parent)}]"
+  )
   # In code an unknown name is still an error.
   expect_error(new_ae_heatmap_block(visible = "inputs"), "visible")
 })
 
 test_that("the default script keeps the top_n values of the block's column", {
   sc <- ae_heatmap_script("CMDECOD")
-  expect_match(sc, "top_n <- 25", fixed = TRUE)
+  expect_match(sc, "top_terms <- 25", fixed = TRUE)
   expect_match(sc, "dplyr::count(data, CMDECOD, sort = TRUE)", fixed = TRUE)
   d <- data.frame(CMDECOD = c("A", "A", "B", "C"), USUBJID = c(1, 2, 1, 3))
   env <- new.env()
   env$data <- d
-  out <- eval(parse(text = sub("top_n <- 25[^\n]*", "top_n <- 1", sc)),
+  out <- eval(parse(text = sub("top_terms <- 25[^\n]*", "top_terms <- 1", sc)),
               envir = env)
   expect_identical(unique(out$CMDECOD), "A")
   # a name that is not syntactic is backticked, not broken
@@ -118,8 +129,27 @@ test_that("the default script keeps the top_n values of the block's column", {
 
 test_that("the sentence names the table's facet and fill", {
   expect_match(ae_heatmap_subtitle(), "{label(@facet)}", fixed = TRUE)
-  expect_match(ae_heatmap_subtitle(), "painted by {label(@fill)}",
+  expect_match(ae_heatmap_subtitle(), "painted by worst {label(@fill)}",
                fixed = TRUE)
+})
+
+test_that("the sentence reads the cap, the grade and the arm", {
+  viz <- asNamespace("blockr.viz")
+  b <- new_ae_heatmap_block(group = "TRT01A")
+  st <- blockr.core:::initial_block_state(b)
+  v <- lapply(st, function(x) if (shiny::is.reactive(x)) x() else x)
+  args <- viz$script_title_args(
+    viz$table_groups_title_args(viz$viz_block_spec("table"), v),
+    viz$cb_specs(viz$cb_parse(v$script)), v$script_values
+  )
+  d <- data.frame(TRT01A = "Placebo", USUBJID = "01", AEDECOD = "RASH",
+                  AETOXGR = "1")
+  attr(d$TRT01A, "label") <- "Actual Treatment"
+  attr(d$AEDECOD, "label") <- "Dictionary-Derived Term"
+  expect_identical(
+    viz$viz_titles(v, d, list(), args)$subtitle$text,
+    "Top 25 Dictionary-Derived Term, painted by worst AETOXGR, by Actual Treatment"
+  )
 })
 
 test_that("the heatmap computes: worst grade paints, rows by burden", {

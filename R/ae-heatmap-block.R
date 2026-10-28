@@ -28,11 +28,11 @@
 #'   `"AETOXGR"` (CTCAE grade); `"AESEV"` works when the study carries the
 #'   word scale. Empty: cells are painted by their count.
 #' @param group Optional column grouping the rows, e.g. the treatment arm.
-#' @param top_n LEGACY. Restores as the prepare script's `top_n` value.
+#' @param top_n LEGACY. Restores as the prepare script's `top_terms` value.
 #' @param cell_numbers Show the count in each cell.
 #' @param download Offer the table for download.
 #' @param title,subtitle,caption Text above and below the matrix. The
-#'   subtitle is the sentence whose `{@top_n}` word is the top-n control.
+#'   subtitle is the sentence whose `{@top_terms}` word shows the cap.
 #' @param script The prepare script. `NULL` (the default) builds the top-n
 #'   script for `col` ([ae_heatmap_script()]).
 #' @param values The prepare script's values.
@@ -90,21 +90,35 @@ new_ae_heatmap_block <- function(row = "USUBJID",
     args <- args[names(args) %in% known]
   }
 
-  # The default script counts the column the block was built with. A board
-  # that saved a script (or "" for none) restores that instead.
-  default_script <- is.null(script)
-  if (default_script) script <- ae_heatmap_script(col)
   values <- if (is.list(values)) values else list()
-  if (!is.null(top_n) && is.null(values$top_n)) {
-    values$top_n <- as.integer(top_n)
+  top_n <- if (!is.null(top_n)) as.integer(unlist(top_n))[1L]
+  # The default script counts the column the block was built with. A board
+  # that saved a script (or "" for none) restores that instead, unless it is
+  # this block's own default from before its control was `top_terms`: `top_n`
+  # is also the table's row cap, so the sentence's "Top 25" read the table's
+  # unset value. That script is written anew.
+  n_old <- ae_heatmap_old_script(script, col)
+  if (!is.null(n_old)) script <- NULL
+  if (is.null(script)) {
+    script <- ae_heatmap_script(col)
+    # The sentence's "Top 25" reads the script's value; seed it so it shows
+    # before anyone changes it.
+    values$top_terms <- values$top_terms %||% values$top_n %||% n_old %||%
+      top_n %||% 25L
+    values$top_n <- NULL
+    if (is.character(subtitle) && length(subtitle) == 1L) {
+      subtitle <- gsub("@top_n\\b", "@top_terms", subtitle, perl = TRUE)
+    }
+  } else if (!is.null(top_n) && is.null(values$top_n)) {
+    values$top_n <- top_n
   }
-  # The sentence's "Top 25" reads the script's value; seed the default so it
-  # shows before anyone changes it.
-  if (default_script && is.null(values$top_n)) values$top_n <- 25L
-  # A sentence saved before this block was a table names the old roles.
+  # A sentence saved before this block was a table names the old roles. The
+  # table reads `@group` as its row column (`by`); the heatmap's group is the
+  # outer `by`, which the table calls `parent`.
   if (is.character(subtitle) && length(subtitle) == 1L) {
     subtitle <- gsub("@col\\b", "@facet", subtitle, perl = TRUE)
     subtitle <- gsub("@color\\b", "@fill", subtitle, perl = TRUE)
+    subtitle <- gsub("@group\\b", "@parent", subtitle, perl = TRUE)
   }
 
   summary <- c(
@@ -141,24 +155,25 @@ new_ae_heatmap_block <- function(row = "USUBJID",
 
 #' The AE heatmap's default sentence
 #'
-#' "Top 25 Dictionary-Derived Term, painted by Standard Toxicity Grade, by
-#' Actual Treatment": the `{@top_n}` word opens its setting, and a bracketed
-#' clause leaves when its setting is empty.
+#' "Top 25 Dictionary-Derived Term, painted by worst Standard Toxicity
+#' Grade, by Actual Treatment": `{@top_terms}` is the prepare script's cap,
+#' `@parent` the column grouping the rows, and a bracketed clause leaves when
+#' its setting is empty.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 ae_heatmap_subtitle <- function() {
   paste0(
-    "[Top {@top_n} ]{label(@facet)}",
-    "[, painted by {label(@fill)}]",
-    "[, by {label(@group)}]"
+    "[Top {@top_terms} ]{label(@facet)}",
+    "[, painted by worst {label(@fill)}]",
+    "[, by {label(@parent)}]"
   )
 }
 
 #' The AE heatmap's default prepare script
 #'
-#' Keeps the `top_n` most frequent values of `col`, counted over the event
-#' rows. `top_n` is declared at the top, so it becomes a setting.
+#' Keeps the `top_terms` most frequent values of `col`, counted over the
+#' event rows. `top_terms` is declared at the top, so it becomes a setting.
 #'
 #' @param col The column the matrix spreads across, e.g. `"AEDECOD"`.
 #' @param top_n The default cap.
@@ -171,10 +186,33 @@ ae_heatmap_script <- function(col = "AEDECOD", top_n = 25L) {
   }
   sym <- deparse(as.name(col[[1L]]), backtick = TRUE)
   paste(
-    paste0("top_n <- ", as.integer(top_n), "  #| number(min = 1, max = 200)"),
+    paste0("top_terms <- ", as.integer(top_n),
+           "  #| number(min = 1, max = 200, label = \"Top terms\")"),
+    paste0("top <- dplyr::count(data, ", sym, ", sort = TRUE)"),
+    paste0("dplyr::filter(data, ", sym, " %in% utils::head(top$", sym,
+           ", top_terms))"),
+    sep = "\n"
+  )
+}
+
+# The cap of a script that is this block's default before the control was
+# renamed (`top_n`), or NULL for any other script.
+ae_heatmap_old_script <- function(script, col) {
+  if (!is.character(script) || length(script) != 1L || is.na(script)) {
+    return(NULL)
+  }
+  m <- regmatches(script, regexec("^top_n <- ([0-9]+)L?  #", script))[[1L]]
+  if (!length(m)) {
+    return(NULL)
+  }
+  sym <- deparse(as.name(col), backtick = TRUE)
+  old <- paste(
+    paste0("top_n <- ", m[[2L]], "  #| number(min = 1, max = 200)"),
     paste0("top <- dplyr::count(data, ", sym, ", sort = TRUE)"),
     paste0("dplyr::filter(data, ", sym, " %in% utils::head(top$", sym,
            ", top_n))"),
     sep = "\n"
   )
+  norm <- sub("^top_n <- ([0-9]+)L", "top_n <- \\1", script)
+  if (identical(trimws(norm), old)) as.integer(m[[2L]])
 }

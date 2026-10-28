@@ -15,6 +15,6 @@ ae_heatmap_script(col = "AEDECOD", top_n = 25L)
 The script, one string.
 }
 \description{
-Keeps the \code{top_n} most frequent values of \code{col}, counted over the event
-rows. \code{top_n} is declared at the top, so it becomes a setting.
+Keeps the \code{top_terms} most frequent values of \code{col}, counted over the
+event rows. \code{top_terms} is declared at the top, so it becomes a setting.
 }

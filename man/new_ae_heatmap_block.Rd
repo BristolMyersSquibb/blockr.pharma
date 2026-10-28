@@ -39,7 +39,7 @@ word scale. Empty: cells are painted by their count.}
 
 \item{group}{Optional column grouping the rows, e.g. the treatment arm.}
 
-\item{top_n}{LEGACY. Restores as the prepare script's \code{top_n} value.}
+\item{top_n}{LEGACY. Restores as the prepare script's \code{top_terms} value.}
 
 \item{cell_numbers}{Show the count in each cell.}
 
@@ -49,7 +49,7 @@ board's drill filter (\code{drill_target = "auto"}).}
 \item{download}{Offer the table for download.}
 
 \item{title, subtitle, caption}{Text above and below the matrix. The
-subtitle is the sentence whose \verb{\{@top_n\}} word is the top-n control.}
+subtitle is the sentence whose \verb{\{@top_terms\}} word shows the cap.}
 
 \item{script}{The prepare script. \code{NULL} (the default) builds the top-n
 script for \code{col} (\code{\link[=ae_heatmap_script]{ae_heatmap_script()}}).}
