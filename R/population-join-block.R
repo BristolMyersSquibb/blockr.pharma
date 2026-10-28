@@ -305,9 +305,8 @@ new_population_join_block <- function(id = "USUBJID", ...) {
             p <- input_slot("population")
             # Unset, or naming a column the inputs do not share: pass the
             # events through untouched. An unconfigured block returns its
-            # input, it does not error (blockr.docs
-            # design-system/ux-principles.md), and erroring here would also
-            # make a board unopenable while its data was still loading.
+            # input, it does not error, and erroring here would also make a
+            # board unopenable while its data was still loading.
             if (is.null(key) || !nzchar(key) || !isTRUE(r_ok())) {
               return(bquote(dplyr::filter(.(d), TRUE), list(d = d)))
             }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/ae-heatmap-block.R
 \name{new_ae_heatmap_block}
 \alias{new_ae_heatmap_block}
-\title{AE heatmap block}
+\title{AE heatmap}
 \usage{
 new_ae_heatmap_block(
   row = "USUBJID",
@@ -23,7 +23,7 @@ new_ae_heatmap_block(
   caption = NULL,
   script = NULL,
   values = list(),
-  locked_roles = c("color", "group"),
+  locked_roles = character(),
   ...
 )
 }
@@ -33,56 +33,49 @@ new_ae_heatmap_block(
 \item{col}{Column identifying a matrix column. Default \code{"AEDECOD"}
 (the preferred term).}
 
-\item{color}{Column whose worst level per cell drives the paint.
-Default \code{"AETOXGR"} (CTCAE grade, numeric 1-5); \code{"AESEV"} works when
-the word scale is what the study carries (ordered factors keep their
-own level order).}
+\item{color}{Column whose worst level per cell paints it. Default
+\code{"AETOXGR"} (CTCAE grade); \code{"AESEV"} works when the study carries the
+word scale. Empty: cells are painted by their count.}
 
-\item{group}{Optional column grouping the rows, e.g. the treatment arm
-(\code{"TRT01A"}, \code{"ACTARM"}). Empty: no grouping.}
+\item{group}{Optional column grouping the rows, e.g. the treatment arm.}
 
-\item{top_n}{LEGACY. A board saved with it restores it as the script's
-\code{top_n}.}
+\item{top_n}{LEGACY. Restores as the prepare script's \code{top_terms} value.}
 
-\item{cell_numbers, download, caption, values}{As in \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}.}
+\item{cell_numbers}{Show the count in each cell.}
 
-\item{drill, filter_column, filter_values, ctrl_target, ctrl_table}{LEGACY. A
-row click goes to the board's drill filter, as from a composer table;
-the block no longer filters.}
+\item{drill, filter_column, filter_values, max_height, ctrl_target, ctrl_table, locked_roles}{LEGACY, accepted so saved boards restore. A row click goes to the
+board's drill filter (\code{drill_target = "auto"}).}
 
-\item{max_height}{LEGACY. The matrix scrolls with its panel.}
+\item{download}{Offer the table for download.}
 
-\item{title, subtitle}{Text above the matrix. The subtitle is the block's
-sentence; its \verb{\{@top_n\}} word is the control for the cap.}
+\item{title, subtitle, caption}{Text above and below the matrix. The
+subtitle is the sentence whose \verb{\{@top_terms\}} word shows the cap.}
 
 \item{script}{The prepare script. \code{NULL} (the default) builds the top-n
-script for \code{col}, see \code{\link[=ae_heatmap_script]{ae_heatmap_script()}}; \code{""} means none.}
+script for \code{col} (\code{\link[=ae_heatmap_script]{ae_heatmap_script()}}).}
 
-\item{locked_roles}{Character vector of mapping roles whose values are
-authored elsewhere and hidden from the block UI. AE heatmaps always lock
-\code{color} and \code{group}.}
+\item{values}{The prepare script's values.}
 
-\item{...}{Forwarded to the engine constructor.}
+\item{...}{Forwarded to \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}} (\code{block_name}, ...).}
 }
 \value{
-A transform block of class \code{heatmap_block}, whose result is the
-subject x term matrix of counts.
+A table block (class \code{table_block}).
 }
 \description{
-Renders long adverse-event rows (one row per AE record) as a subject x
-term matrix: the cell shows the AE occurrence count and is painted by
-the worst grade -- the classic CDEx safety heatmap. A prepare script
-keeps the \code{top_n} most frequent terms, and "Top 25" in the sentence under
-the title is the control for it. Rows group by treatment arm and order by
-AE burden within it.
+A subject x term matrix of adverse events: each cell shows the number of
+events and is painted by the worst grade. Returns a
+\code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}} in the groups layout with a tile summary;
+the AE defaults (subject id, preferred term, grade, the top-25 prepare
+script and the sentence under the title) are what this function adds.
 }
 \details{
-A thin constructor over \code{\link[blockr.viz:new_heatmap_block]{blockr.viz::new_heatmap_block()}}, which owns
-the rendering; this one carries the AE defaults and is what study
-boards serialize.
+It is kept so boards saved with it restore; they save as a table block
+from then on. New boards call \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}} directly,
+with \code{\link[=ae_heatmap_script]{ae_heatmap_script()}} and \code{\link[=ae_heatmap_subtitle]{ae_heatmap_subtitle()}} (see the clinical
+explorer example, \code{inst/examples/clinical-explorer.R}).
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-new_ae_heatmap_block(group = "TRT01A", drill = TRUE)
+new_ae_heatmap_block(group = "TRT01A")
 \dontshow{\}) # examplesIf}
 }

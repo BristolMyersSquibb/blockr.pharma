@@ -61,8 +61,7 @@ test_that("the emitted call carries BOTH inputs as slots", {
 })
 
 test_that("no shared identifier passes the events through, and does not error", {
-  # An unconfigured block returns its input rather than erroring
-  # (blockr.docs design-system/ux-principles.md).
+  # An unconfigured block returns its input rather than erroring.
   odd <- data.frame(SUBJ = "S1", TRT01A = "A", stringsAsFactors = FALSE)
   blk <- new_population_join_block()
   shiny::testServer(

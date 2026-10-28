@@ -7,12 +7,12 @@
 #
 #   source(system.file("examples/clinical-explorer.R", package = "blockr.pharma"))
 #
-# It is a demo, deliberately small: 21 blocks over five views. The production
+# It is a demo, deliberately small: 19 blocks over five views. The production
 # CDEx board it is modelled on carries about 110 blocks over ten views, most of
 # them clinical tables composed with an internal package. Those do not appear
 # here. Where the production board composes a table, this one uses
-# `new_summary_table_block()`, which is open and does the same job for the
-# handful of tables a demo needs.
+# blockr.viz's table block in its variables layout, which is open and does the
+# same job for the handful of tables a demo needs.
 
 # ---- Package loading (dual: installed vs local source) ---------------------
 # `dev_local = FALSE` (the default, and what ships) attaches the INSTALLED
@@ -88,6 +88,11 @@ options(
 # result-preview data frame underneath it, which is the default. The blocks
 # left at the default are the plumbing ones, where the preview IS the point.
 
+# One categorical Table 1 variable: a count split by its levels.
+table1_share <- function(col) {
+  list(type = "simple", func = "count", show = "bar", color = col, name = col)
+}
+
 blocks <- blockr.core::as_blocks(list(
 
   # -- Source: the ADaM dm, keyed, then filtered once for the whole board ----
@@ -157,30 +162,29 @@ blocks <- blockr.core::as_blocks(list(
   ),
 
   # -- Population -----------------------------------------------------------
-  # Table 1. `new_summary_table_block()` emits the annotated data frame and
-  # `new_table_block()` draws it; that pairing is the open stand-in for the
-  # composed tables the production board carries.
-  pop_demog = blockr.viz::new_summary_table_block(
-    vars = c("AGE", "SEX", "RACE", "ETHNIC", "AGEGR1"),
-    by = "ARM",
-    stats = "mean_sd",
-    add_overall = TRUE,
-    overall_label = "Total",
-    visible = "inputs",
-    block_name = "Demographics (spec)"
-  ),
-  # `drill = "source"` is what makes a summary table drillable. On a
-  # structured table `drill` is a MODE, not a column: "auto" hands downstream
-  # the clicked DISPLAY row ("Sex: F"), "source" hands the RECORDS behind it
-  # (the 143 female subjects), resolved from the row's claim against the frame
-  # `summary_table()` stamped on its output. The claim is ROW-shaped by
-  # design: the arms are columns here and a column carries no machine
+  # Table 1: the table block in the variables layout, one row per statistic
+  # or level, one column per arm. A numeric variable is a `dist` summary, a
+  # categorical one a count split by the variable. It is the open stand-in
+  # for the composed tables the production board carries.
+  #
+  # `drill = "source"` is what makes it drillable: a click hands on the
+  # RECORDS behind the clicked row (the 143 female subjects), resolved from
+  # the row's claim, not the display row ("Sex: F"). The claim is ROW-shaped
+  # by design: the arms are columns here and a column carries no machine
   # identity, so clicking F in the Placebo column claims SEX == F, not
   # SEX == F AND ARM == Placebo.
-  pop_demog_tbl = blockr.viz::new_table_block(
+  pop_demog = blockr.viz::new_table_block(
+    layout = "variables",
+    by = "ARM",
+    summaries = c(
+      list(list(type = "dist", col = "AGE")),
+      lapply(c("SEX", "RACE", "ETHNIC", "AGEGR1"), table1_share)
+    ),
+    stats = "mean_sd",
+    total = TRUE,
     max_height = "600px",
     drill = "source",
-    ctrl_target = "pt_drill",
+    drill_target = "pt_drill",
     visible = "inputs",
     block_name = "Demographics"
   ),
@@ -201,36 +205,43 @@ blocks <- blockr.core::as_blocks(list(
 
   # -- Adverse events -------------------------------------------------------
   # Patients with at least one event of each severity / seriousness /
-  # relatedness, by actual arm. `id_var` is what makes the cells count
-  # PATIENTS rather than event rows, which is the only way an AE table is
-  # read.
-  ae_summary = blockr.viz::new_summary_table_block(
-    vars = c("AESEV", "AESER", "AEREL"),
+  # relatedness, by actual arm. `id` is what makes the cells count PATIENTS
+  # rather than event rows, which is the only way an AE table is read.
+  ae_summary = blockr.viz::new_table_block(
+    layout = "variables",
     by = "TRT01A",
-    id_var = "USUBJID",
-    add_overall = TRUE,
-    overall_label = "Total",
-    visible = "inputs",
-    block_name = "AE Summary (spec)"
-  ),
-  ae_summary_tbl = blockr.viz::new_table_block(
+    summaries = lapply(c("AESEV", "AESER", "AEREL"), table1_share),
+    id = "USUBJID",
+    total = TRUE,
     max_height = "600px",
     drill = "source",
-    ctrl_target = "pt_drill",
+    drill_target = "pt_drill",
     visible = "inputs",
     block_name = "AE Summary"
   ),
-  # Subject x preferred term matrix, cells painted by worst severity, rows
-  # grouped by arm. This replaces the hand-written function block plus shaded
-  # table the demo used to carry: `new_ae_heatmap_block()` now owns it.
+  # Subject x preferred term matrix: the table block in the groups layout,
+  # one row per subject grouped by arm, one column per term (the summary's
+  # `facet`), each cell a count tile painted by the worst severity (`fill`),
+  # in the compact look. The prepare script keeps the 25 most frequent
+  # terms; its `top_terms` is the "Top 25" word in the sentence under the
+  # title.
   # safetyData's ADAE has no CTCAE grade column (AETOXGR), so the paint runs
   # off AESEV, whose MILD / MODERATE / SEVERE happens to sort correctly.
-  ae_heatmap = blockr.pharma::new_ae_heatmap_block(
-    color = "AESEV",
-    group = "TRT01A",
-    top_n = 25L,
-    drill = TRUE,
-    ctrl_target = "pt_drill",
+  ae_heatmap = blockr.viz::new_table_block(
+    layout = "groups",
+    by = c("TRT01A", "USUBJID"),
+    summaries = list(list(
+      type = "simple", func = "count", show = "tile",
+      facet = "AEDECOD", fill = "AESEV", name = "Events"
+    )),
+    look = "compact",
+    drill = "auto",
+    drill_target = "pt_drill",
+    download = FALSE,
+    title = "Adverse events by subject",
+    subtitle = blockr.pharma::ae_heatmap_subtitle(),
+    script = blockr.pharma::ae_heatmap_script("AEDECOD"),
+    script_values = list(top_terms = 25L),
     visible = "inputs",
     block_name = "AE Heatmap"
   ),
@@ -356,8 +367,7 @@ links <- blockr.core::links(
     "data", "cdisc",
     "global_filter", "global_filter", "global_filter", "global_filter",
     "subjects", "subjects",
-    "pop_demog",
-    "ae_flat", "ae_summary", "ae_flat", "ae_flat", "ae_flat",
+    "ae_flat", "ae_flat", "ae_flat", "ae_flat",
     "lab_flat", "lab_param",
     "vs_flat", "vs_param",
     "cdisc", "pt_drill"
@@ -366,8 +376,7 @@ links <- blockr.core::links(
     "cdisc", "global_filter",
     "subjects", "ae_flat", "lab_flat", "vs_flat",
     "pop_demog", "dispo_chart",
-    "pop_demog_tbl",
-    "ae_summary", "ae_summary_tbl", "ae_heatmap", "ae_freq", "ae_gantt",
+    "ae_summary", "ae_heatmap", "ae_freq", "ae_gantt",
     "lab_param", "lab_traj",
     "vs_param", "vs_traj",
     "pt_drill", "pt_profile"
@@ -410,10 +419,10 @@ side_panels <- c(ext_panel("outline"), "pt_profile", ext_panel("assistant"))
 views <- list(
   Setup = vw(c("data", "cdisc", ext_panel("dag"), side_panels)),
   Population = vw(c(
-    "global_filter", "pop_demog_tbl", "dispo_chart", side_panels
+    "global_filter", "pop_demog", "dispo_chart", side_panels
   )),
   AdverseEvents = vw(
-    c("global_filter", "ae_heatmap", "ae_freq", "ae_gantt", "ae_summary_tbl",
+    c("global_filter", "ae_heatmap", "ae_freq", "ae_gantt", "ae_summary",
       side_panels),
     name = "Adverse Events"
   ),
@@ -428,7 +437,7 @@ grids <- list(
   Setup = dg("data", "cdisc", ext("dag"), side_rail()),
   Population = dg(
     "global_filter",
-    pn("pop_demog_tbl", "dispo_chart", active = "pop_demog_tbl"),
+    pn("pop_demog", "dispo_chart", active = "pop_demog"),
     side_rail(),
     sizes = c(1.3, 4)
   ),
@@ -436,7 +445,7 @@ grids <- list(
   # picture at once, and clicking a row drives the profile in the rail.
   AdverseEvents = dg(
     "global_filter",
-    pn("ae_heatmap", "ae_freq", "ae_gantt", "ae_summary_tbl",
+    pn("ae_heatmap", "ae_freq", "ae_gantt", "ae_summary",
        active = "ae_heatmap"),
     side_rail(),
     sizes = c(1.3, 4)
@@ -457,7 +466,7 @@ grids <- list(
 
 # ---- Stacks ----------------------------------------------------------------
 # One stack per section of the board. A stack is a NAMED, COLOURED grouping of
-# blocks, and it is what turns the outline rail from a flat list of 21 rows
+# blocks, and it is what turns the outline rail from a flat list of 19 rows
 # into something you can read: each row carries its stack's colour, and the
 # graph beside it reads as five sections rather than one long chain.
 #
@@ -478,13 +487,12 @@ stacks <- blockr.core::stacks(
     color = "#64748B"
   ),
   population = ds(
-    c("subjects", "pop_demog", "pop_demog_tbl", "dispo_chart"),
+    c("subjects", "pop_demog", "dispo_chart"),
     name = "Population",
     color = "#0891B2"
   ),
   adverse = ds(
-    c("ae_flat", "ae_summary", "ae_summary_tbl", "ae_heatmap", "ae_freq",
-      "ae_gantt"),
+    c("ae_flat", "ae_summary", "ae_heatmap", "ae_freq", "ae_gantt"),
     name = "Adverse Events",
     color = "#DC2626"
   ),
