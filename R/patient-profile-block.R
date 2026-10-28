@@ -715,6 +715,17 @@ new_patient_profile_block <- function(selected = NULL,
             r_selected(out)
           })
 
+          # Set the visible selection in one step: what the panel picker sends
+          # for more than one change at a time (All, None, several picks in a
+          # row), so the profile redraws once rather than once per panel. The
+          # unavailable ids stay, as in a reorder.
+          shiny::observeEvent(input$set_viz, {
+            ids <- as.character(unlist(input$set_viz))
+            avail <- names(r_available())
+            cur <- r_selected()
+            r_selected(c(intersect(ids, avail), setdiff(cur, avail)))
+          })
+
           # Sync sidebar toggle state to client whenever selection changes
           shiny::observe({
             sel <- r_selected()

@@ -13,6 +13,7 @@ PatientProfile.part(function(ctx) {
   var panelsId = ns('pp_panels');
   var toggleInputId = ns('toggle_viz');
   var reorderInputId = ns('reorder_viz');
+  var setInputId = ns('set_viz');
   var syncMsgId = ns('sync_selected');
 
   // --- The panel picker ----------------------------------------------------
@@ -42,6 +43,16 @@ PatientProfile.part(function(ctx) {
     var had = known.filter(function(v){ return opts.indexOf(v) >= 0; });
     var removed = had.filter(function(v){ return values.indexOf(v) < 0; });
     var added = values.filter(function(v){ return had.indexOf(v) < 0; });
+    var hidden = known.filter(function(v){ return opts.indexOf(v) < 0; });
+    // More than one change (All, None, several picks in a row) is one
+    // set_viz, so the profile redraws once. R keeps the unavailable ids
+    // after the ones this list offers.
+    if (removed.length + added.length > 1) {
+      Shiny.setInputValue(setInputId, values.slice(), {priority: 'event'});
+      known = values.concat(hidden);
+      sent = true;
+      return;
+    }
     removed.concat(added).forEach(function(id){
       Shiny.setInputValue(toggleInputId, id, {priority: 'event'});
     });
@@ -77,6 +88,8 @@ PatientProfile.part(function(ctx) {
       reorderable: true,
       label: 'Panels on the profile',
       countLabel: 'on the profile',
+      // A whole catalogue on one profile is never what is meant.
+      all: false,
       addLabel: 'Add panels',
       searchPlaceholder: 'Filter panels',
       onChange: report

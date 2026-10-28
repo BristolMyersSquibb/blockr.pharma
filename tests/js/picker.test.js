@@ -1,5 +1,6 @@
 /* The sidebar: the panel picker (a Blockr.Pick.list) that sync_selected
- * fills and that reports back through toggle_viz and reorder_viz, and the
+ * fills and that reports back through toggle_viz and reorder_viz (one
+ * change) or set_viz (several), and the
  * patients' own filter box. */
 'use strict';
 const test = require('node:test');
@@ -67,7 +68,7 @@ test('a tick adds a panel after the pause, as one toggle_viz', () => {
   h.close();
 });
 
-test('quick picks are reported together, removals included', () => {
+test('quick picks are reported together, as one set_viz', () => {
   const h = boot();
   h.click(row(h, 'ae_gantt'));
   h.tick(400);
@@ -75,9 +76,22 @@ test('quick picks are reported together, removals included', () => {
   h.tick(400);
   h.click(row(h, 'advs_all__TEMP'));
   h.tick(1000);
-  assert.deepEqual(h.inputs('toggle_viz').map((i) => i.value),
-    ['ae_gantt', 'advs_all__PULSE', 'advs_all__TEMP']);
-  assert.equal(h.inputs('reorder_viz').length, 0, 'additions go last, so no reorder');
+  // One update for the three changes, so the profile redraws once.
+  assert.equal(h.inputs('toggle_viz').length, 0);
+  assert.equal(h.inputs('reorder_viz').length, 0);
+  assert.deepEqual(h.inputs('set_viz').map((i) => i.value),
+    [ON.filter((v) => v !== 'ae_gantt').concat(['advs_all__PULSE', 'advs_all__TEMP'])]);
+  h.close();
+});
+
+test('None is one set_viz, and the profile has no All', () => {
+  const h = boot();
+  const btns = h.qa('#proxy1-pp_panels .blockr-pick__bulk-btn').map((b) => b.textContent);
+  assert.deepEqual(btns, ['None']);
+  h.q('#proxy1-pp_panels .blockr-pick__bulk-btn').click();
+  h.tick(1100);
+  assert.equal(h.inputs('toggle_viz').length, 0);
+  assert.deepEqual(h.inputs('set_viz').map((i) => i.value), [[]]);
   h.close();
 });
 

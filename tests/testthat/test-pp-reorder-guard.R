@@ -100,3 +100,24 @@ test_that("a payload that is not a permutation of the visible cards is refused",
     expect_equal(r_selected(), before)
   })
 })
+
+test_that("set_viz sets the visible selection in one step", {
+  # What the picker sends for several changes at once (All, None, quick
+  # picks). An unavailable id survives, as in a reorder; an unknown one is
+  # dropped.
+  blk <- new_patient_profile_block(
+    selected = c("patient_overview", "vital_signs")
+  )
+
+  shiny::testServer(blk[["expr_server"]],
+                    args = list(data = function() pp_reorder_dm()), {
+    session$flushReact()
+    session$setInputs(set_viz = list("ae_gantt", "nope"))
+    session$flushReact()
+    expect_equal(r_selected(), c("ae_gantt", "vital_signs"))
+
+    session$setInputs(set_viz = list())
+    session$flushReact()
+    expect_equal(r_selected(), "vital_signs")
+  })
+})
