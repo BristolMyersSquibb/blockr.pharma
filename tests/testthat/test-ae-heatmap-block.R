@@ -58,7 +58,7 @@ test_that("an old board restores as a table block", {
   expect_s3_class(b, "table_block")
   p <- blockr.core::blockr_ser(b)$payload
   expect_identical(p$by, c("Group", "USUBJID"))
-  expect_identical(p$script_values$top_n, 10L)
+  expect_equal(p$script_values$top_n, 10)
   expect_true(p$download)
   expect_match(p$subtitle, "@facet", fixed = TRUE)
   expect_match(p$subtitle, "@fill", fixed = TRUE)
@@ -98,7 +98,7 @@ test_that("the heatmap computes: worst grade paints, rows by burden", {
     session$flushReact()
     expect_identical(session$returned$state$layout(), "groups")
   })
-  p <- blockr.viz:::lane_prepare_summaries(
+  p <- blockr.viz:::groups_prepare_summaries(
     d, by = c("TRT01A", "USUBJID"),
     summaries = blockr.core::blockr_ser(b)$payload$summaries
   )

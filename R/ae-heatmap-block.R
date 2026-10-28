@@ -119,7 +119,10 @@ new_ae_heatmap_block <- function(row = "USUBJID",
       script = script,
       script_values = values
     ),
-    args
+    args,
+    # Named outright: called through do.call(), blockr.core cannot read the
+    # constructor off the call stack.
+    list(ctor = "new_table_block", ctor_pkg = "blockr.viz")
   ))
 }
 
