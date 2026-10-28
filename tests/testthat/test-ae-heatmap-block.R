@@ -65,6 +65,42 @@ test_that("an old board restores as a table block", {
   expect_identical(p$block_name, "AE Heatmap")
 })
 
+test_that("a production board's heatmap restores with the dock's names", {
+  # As the production board saved it: blockr.dock adds `visible`, which is
+  # not an argument and comes back as an attribute.
+  saved <- list(
+    object = c("ae_heatmap_block", "heatmap_block", "transform_block",
+               "block", "vctrs_vctr", "list"),
+    payload = list(row = "USUBJID", col = "AEDECOD", color = "AETOXGR",
+                   group = "Group", top_n = NULL, cell_numbers = TRUE,
+                   drill = NULL, download = TRUE, filter_column = NULL,
+                   filter_values = NULL, max_height = NULL,
+                   ctrl_target = NULL, ctrl_table = NULL,
+                   title = "Adverse events by subject",
+                   subtitle = paste0("[Top {@top_n} ]{label(@col)}[, painted by ",
+                                     "worst {label(@color)}][, by {label(@group)}]"),
+                   caption = NULL,
+                   script = paste(
+                     "top_n <- 25  #| number(min = 1, max = 200)",
+                     "top <- dplyr::count(data, AEDECOD, sort = TRUE)",
+                     "dplyr::filter(data, AEDECOD %in% utils::head(top$AEDECOD, top_n))",
+                     sep = "\n"),
+                   values = list(), block_name = "AE Heatmap",
+                   visible = "inputs"),
+    constructor = list(object = "blockr_ctor",
+                       constructor = "new_ae_heatmap_block",
+                       package = "blockr.pharma", version = "0.0.0.9108")
+  )
+  b <- tryCatch(blockr.core::blockr_deser(saved),
+                block_deser_class_error = function(e) {
+                  skip("blockr.core without the relaxed class check (#379)")
+                })
+  expect_s3_class(b, "table_block")
+  expect_identical(attr(b, "visible"), "inputs")
+  # In code an unknown name is still an error.
+  expect_error(new_ae_heatmap_block(visible = "inputs"), "visible")
+})
+
 test_that("the default script keeps the top_n values of the block's column", {
   sc <- ae_heatmap_script("CMDECOD")
   expect_match(sc, "top_n <- 25", fixed = TRUE)

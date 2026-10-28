@@ -77,7 +77,18 @@ new_ae_heatmap_block <- function(row = "USUBJID",
   # The framework's channel (a restore passes the saved ctor and class):
   # the result is a table block and must save as one.
   args <- list(...)
+  restore <- !is.null(args$ctor)
   args[c("ctor", "ctor_pkg", "class")] <- NULL
+  # A restore also passes what the board saved beside the arguments
+  # (blockr.dock's `visible`). Those go on the block as attributes, as
+  # blockr.viz restores its own blocks; in code an unknown name still errors.
+  extra <- list()
+  if (restore) {
+    known <- c(setdiff(names(formals(blockr.viz::new_table_block)), "..."),
+               "block_name", "block_metadata")
+    extra <- args[!names(args) %in% known]
+    args <- args[names(args) %in% known]
+  }
 
   # The default script counts the column the block was built with. A board
   # that saved a script (or "" for none) restores that instead.
@@ -102,7 +113,7 @@ new_ae_heatmap_block <- function(row = "USUBJID",
     if (!is.null(color)) list(fill = color)
   )
 
-  do.call(blockr.viz::new_table_block, c(
+  blk <- do.call(blockr.viz::new_table_block, c(
     list(
       layout = "groups",
       by = c(group, row),
@@ -124,6 +135,8 @@ new_ae_heatmap_block <- function(row = "USUBJID",
     # constructor off the call stack.
     list(ctor = "new_table_block", ctor_pkg = "blockr.viz")
   ))
+  for (nm in names(extra)) attr(blk, nm) <- extra[[nm]]
+  blk
 }
 
 #' The AE heatmap's default sentence
