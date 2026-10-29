@@ -207,3 +207,27 @@ test('the chart area is watched for size and its charts resized, debounced', () 
   assert.ok(h.observed().resize.includes(again));
   h.close();
 });
+
+test('a multi word holds None back, since an empty pick would be dropped', () => {
+  const h = boot();
+  const host = gantt(h).querySelector('.pp-chart-header');
+  host.insertAdjacentHTML('beforeend',
+    '<span class="blockr-slot pp-slot" data-kind="multi" data-viz-id="ae_gantt" ' +
+    'data-param="items" data-title="Items" data-value=\'["A","B"]\' ' +
+    'data-options=\'[{"value":"A"},{"value":"B"},{"value":"C"}]\'>A, B</span>');
+  h.click(word(h, 'viz_slot_ae_gantt', 'items'));
+  h.tick(0);
+  const list = h.q('.blockr-select__dropdown.blockr-pick__panel');
+  assert.ok(list, 'the multi word opens Blockr.Pick');
+  const none = Array.from(list.querySelectorAll('.blockr-pick__bulk-btn'))
+    .find((b) => b.textContent === 'None');
+  assert.equal(none.getAttribute('aria-disabled'), 'true');
+  none.dispatchEvent(new h.win.Event('click', { bubbles: true }));
+  pick(h, 'B');
+  // A is the last pick: it does not untick.
+  pick(h, 'A');
+  closeMenu(h);
+  h.tick(10);
+  assert.deepEqual(h.lastInput('viz_ctrl'), { viz_id: 'ae_gantt', param: 'items', value: ['A'] });
+  h.close();
+});

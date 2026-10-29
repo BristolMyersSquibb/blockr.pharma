@@ -123,9 +123,12 @@ PatientProfile.part(function(ctx) {
       options: parseAttr(word, 'data-options') || [],
       selected: picked,
       labelFirst: true,
+      // Nothing picked is not a view of anything: None and the last untick
+      // are held back in the list, rather than dropped on close.
+      min: 1,
+      minHint: 'Keep at least one',
       onChange: function(/** @type {string[]} */ v) { picked = v.slice(); },
       onClose: function() {
-        // Nothing picked is not a view of anything: keep what was there.
         if (!picked.length) return;
         if (JSON.stringify(picked) !== JSON.stringify(before)) {
           send(vizId, param, picked);
