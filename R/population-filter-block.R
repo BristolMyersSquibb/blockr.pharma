@@ -566,10 +566,10 @@ expr_server.population_filter_block <- function(x, data, ...) {
   out[["expr"]] <- shiny::reactive({
     inner <- inner_expr()
     pin <- pinned()
-    if (is.null(pin) || !length(pin) || !nzchar(pin[[1L]])) {
+    if (is.null(pin) || !length(pin) || is.na(pin[[1L]]) || !nzchar(pin[[1L]])) {
       return(inner)
     }
-    def <- stamp_groups_arg(groups()[[pin[[1L]]]])
+    def <- stamp_groups_arg(pinned_group_entry(groups(), pin[[1L]]))
     # Self-qualified: the expression is also what a report or an export shows,
     # and it has to run outside this package's namespace.
     stamped <- if (is.null(def)) {
@@ -588,11 +588,12 @@ expr_server.population_filter_block <- function(x, data, ...) {
     # subgroup" state every consumer already reads: a chart faceted by a
     # column the data lacks draws one panel, and group_by_args() nests nothing.
     sub <- as.character(unlist(subgroup()))
-    if (!length(sub) || !nzchar(sub[[1L]]) || identical(sub[[1L]], pin[[1L]])) {
+    if (!length(sub) || is.na(sub[[1L]]) || !nzchar(sub[[1L]]) ||
+        identical(sub[[1L]], pin[[1L]])) {
       return(stamped)
     }
     # Pooled exactly like the group, from the subgroup column's own entry.
-    sub_def <- stamp_groups_arg(groups()[[sub[[1L]]]])
+    sub_def <- stamp_groups_arg(pinned_group_entry(groups(), sub[[1L]]))
     if (is.null(sub_def)) {
       bquote(
         blockr.pharma::dm_stamp_group(.(stamped), .(sub[[1L]]), "Subgroup")
@@ -632,6 +633,20 @@ stamp_groups_arg <- function(entry) {
            members = as.character(unlist(p$members)))
     })
   )
+}
+
+# The group entry for a pinned column, or NULL when the pin cannot be resolved:
+# `NA`, or a column name the current group definition no longer carries (e.g. a
+# saved board pinned a column that a later group-structure change dropped or
+# renamed). `groups` is keyed by column name; indexing it with `[[` on an NA or
+# absent key errors ("subscript out of bounds"), so guard the lookup and let the
+# caller fall through to stamping the group name without a pooled definition.
+pinned_group_entry <- function(groups, key) {
+  if (is.null(key) || length(key) != 1L || is.na(key) ||
+      !is.list(groups) || !(key %in% names(groups))) {
+    return(NULL)
+  }
+  groups[[key]]
 }
 
 #' @noRd
