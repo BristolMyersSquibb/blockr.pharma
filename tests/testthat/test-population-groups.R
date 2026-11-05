@@ -92,6 +92,23 @@ test_that("the expression carries the columns shape, levels by name only", {
   )
 })
 
+test_that("pinned_group_entry resolves a named column, else NULL (no `[[` crash)", {
+  groups <- list(
+    TRT = list(columns = list(list(name = "", members = "Placebo")))
+  )
+  # A present pin yields its entry.
+  expect_identical(pinned_group_entry(groups, "TRT"), groups[["TRT"]])
+  # A stale pin (a saved board pinned a column the definition later dropped or
+  # renamed) or an NA pin must not error on `[[`; both fall through to NULL so
+  # the caller stamps the group name without a pooled definition.
+  expect_null(pinned_group_entry(groups, "GONE"))
+  expect_null(pinned_group_entry(groups, NA_character_))
+  expect_null(pinned_group_entry(NULL, "TRT"))
+  # An unnamed/ordered list indexed by name used to throw "subscript out of
+  # bounds"; it is now NULL.
+  expect_null(pinned_group_entry(list(list(members = "x")), "TRT"))
+})
+
 test_that("overlapping groups keep the raw level and carry the definition", {
   x <- c("Placebo", "Low", "High")
   out <- stamp_group(x, "TRT", overlapping)
