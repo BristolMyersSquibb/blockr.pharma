@@ -108,8 +108,11 @@ test_that("a production board's heatmap restores with the dock's names", {
     p$subtitle,
     "[Top {@top_terms} ]{label(@facet)}[, painted by worst {label(@fill)}][, by {label(@parent)}]"
   )
-  # In code an unknown name is still an error.
-  expect_error(new_ae_heatmap_block(visible = "inputs"), "visible")
+  # In code blockr.viz takes the dock's `visible` too; a misspelled name is
+  # still an error.
+  expect_identical(attr(new_ae_heatmap_block(visible = "inputs"), "visible"),
+                   "inputs")
+  expect_error(new_ae_heatmap_block(colour = "AETOXGR"), "colour")
 })
 
 test_that("the default script keeps the top_n values of the block's column", {
