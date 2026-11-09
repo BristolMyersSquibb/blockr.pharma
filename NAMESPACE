@@ -26,16 +26,14 @@ export(pp_patient_exhibit)
 export(pp_pick_subject)
 export(stamp_group)
 export(stamp_source)
-importFrom(blockr.core,
-  arg_array,
-  arg_boolean,
-  arg_string,
-  block_output,
-  block_render_trigger,
-  block_ui,
-  expr_server,
-  new_arg_spec,
-  new_arg_specs,
-  register_blocks
-)
+importFrom(blockr.core,arg_array)
+importFrom(blockr.core,arg_boolean)
+importFrom(blockr.core,arg_string)
+importFrom(blockr.core,block_output)
+importFrom(blockr.core,block_render_trigger)
+importFrom(blockr.core,block_ui)
+importFrom(blockr.core,expr_server)
+importFrom(blockr.core,new_arg_spec)
+importFrom(blockr.core,new_arg_specs)
+importFrom(blockr.core,register_blocks)
 importFrom(blockr.dm,new_value_filter_block)
