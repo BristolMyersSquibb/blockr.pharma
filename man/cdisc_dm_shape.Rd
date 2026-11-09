@@ -20,6 +20,6 @@ existing keys to strip, and the duplicated columns to drop. Deliberately
 returns base vectors and lists (not the \verb{dm_get_all_*()} tibbles) so two
 equal-but-freshly-built inputs produce an \code{identical()} result — that is
 what lets the \code{reactiveVal} holding it treat a spurious re-derivation as a
-no-op. See the note on the observer in \code{\link[blockr.dm:new_cdisc_dm_block]{new_cdisc_dm_block()}}.
+no-op. See the note on the observer in \code{\link[=new_cdisc_dm_block]{new_cdisc_dm_block()}}.
 }
 \keyword{internal}
