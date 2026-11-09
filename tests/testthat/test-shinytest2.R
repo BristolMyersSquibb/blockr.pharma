@@ -621,7 +621,7 @@ sort_by <- function(name) {
   run_js("document.querySelector('[id$=cohort_sort_by]').click();")
   wait_js("document.querySelector('.blockr-select__dropdown') !== null")
   run_js(sprintf(
-    "[...document.querySelectorAll('.blockr-select__option')]
+    "[...document.querySelectorAll('.blockr-select__dropdown .blockr-select__option')]
        .find(e => e.innerText.trim() === '%s').click();", name))
   wait_js(sprintf(
     "document.querySelector('[id$=cohort_sort_by]').innerText.trim() !== '%s'", prev))
@@ -724,7 +724,7 @@ test_that("the filter word lists the patient's terms, then the cohort's, and fil
   wait_js("document.querySelector('.blockr-select__dropdown') !== null")
   expect_length(spy_inputs("-find_vocab"), 1)
   expect_identical(
-    js("document.querySelector('.blockr-select__menu-title').innerText.trim().toLowerCase()"),
+    js("document.querySelector('.blockr-select__dropdown .blockr-select__menu-title').innerText.trim().toLowerCase()"),
     "show")
 
   # A term this patient has none of is offered too, so a filter can be armed
@@ -733,12 +733,13 @@ test_that("the filter word lists the patient's terms, then the cohort's, and fil
   who <- selected_id()
   mine <- unique(as.character(adae$AEDECOD[adae$USUBJID == who]))
   others <- setdiff(unique(as.character(adae$AEDECOD)), mine)
-  shown <- unlist(js("[...document.querySelectorAll('.blockr-select__option')]
+  shown <- unlist(js("[...document.querySelectorAll('.blockr-select__dropdown .blockr-select__option')]
                        .map(e => e.innerText.trim().toLowerCase())"))
   expect_true(any(tolower(others) %in% shown))
 
-  # A pick is sent once, when the menu closes.
-  run_js("document.querySelector('.blockr-select__option').click();")
+  # A pick is sent once, when the menu closes. The sidebar's panel picker is
+  # a Blockr.Pick list with the same option class, so look in the menu only.
+  run_js("document.querySelector('.blockr-select__dropdown .blockr-select__option').click();")
   Sys.sleep(0.3)
   expect_length(spy_inputs("-viz_ctrl"), 0)
   # blockr.ui closes a list on a pointerdown outside it, not on a click.
