@@ -10,7 +10,8 @@ swimmer_frame(
   con_meds = FALSE,
   max_lanes = 4L,
   parameter = "OVR",
-  cutoff = NULL
+  cutoff = NULL,
+  drugs = NULL
 )
 }
 \arguments{
@@ -31,7 +32,11 @@ administration; a daily drug stays a bar). Without administration dates
 
 \item{parameter}{The ADRS parameter of the overall response per visit.}
 
-\item{cutoff}{The data cutoff. \code{NULL}: the last date in the data.}
+\item{cutoff}{The data cutoff. \code{NULL} or \code{NA}: the last date in the data.
+Response visits, doses and deaths after it are left out.}
+
+\item{drugs}{The study drugs to draw, as \code{\link[=swimmer_drugs]{swimmer_drugs()}} names them.
+\code{NULL}: all.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

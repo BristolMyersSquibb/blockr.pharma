@@ -34,16 +34,26 @@
 #' @param max_lanes Lanes per patient before drugs fold into one grey
 #'   "Other" lane, listed on hover. Study drugs (`adex`) keep theirs.
 #' @param parameter The ADRS parameter of the overall response per visit.
-#' @param cutoff The data cutoff. `NULL`: the last date in the data.
+#' @param cutoff The data cutoff. `NULL` or `NA`: the last date in the data.
+#'   Response visits, doses and deaths after it are left out.
+#' @param drugs The study drugs to draw, as [swimmer_drugs()] names them.
+#'   `NULL`: all.
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
 #' @export
 swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
-                          max_lanes = 4L, parameter = "OVR", cutoff = NULL) {
+                          max_lanes = 4L, parameter = "OVR", cutoff = NULL,
+                          drugs = NULL) {
   doses <- match.arg(as.character(doses), c("Exceptions", "Plain", "Dots"))
+  if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- NULL
   tb <- swimmer_tables(data)
   sl <- swimmer_subjects(tb$adsl)
   rs <- swimmer_response(tb$adrs, parameter)
+  if (!is.null(cutoff)) {
+    cutoff <- as.Date(cutoff)
+    rs <- rs[rs$ADT <= cutoff, , drop = FALSE]
+    sl$DTHDT[!is.na(sl$DTHDT) & sl$DTHDT > cutoff] <- NA
+  }
   # The response population: subjects with an assessment.
   sl <- sl[sl$USUBJID %in% rs$USUBJID, , drop = FALSE]
   if (!nrow(sl)) {
@@ -51,10 +61,16 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
          "\").", call. = FALSE)
   }
   ex <- swimmer_exposure(tb$adex, sl, role = "study")
+  if (!is.null(drugs)) {
+    ex <- ex[ex$drug %in% as.character(drugs), , drop = FALSE]
+  }
   if (isTRUE(con_meds) && !is.null(tb$adcm)) {
     ex <- rbind(ex, swimmer_exposure(swimmer_cm(tb$adcm), sl, role = "cm"))
   }
   cutoff <- swimmer_cutoff(cutoff, sl, ex[ex$role == "study", ], rs)
+  # Nothing after the cutoff: a drug given past it is ongoing at it.
+  ex <- ex[ex$start <= cutoff, , drop = FALSE]
+  ex$end[!is.na(ex$end) & ex$end > cutoff] <- NA
   ex$open <- is.na(ex$end)
   ex$end[ex$open] <- cutoff
   t0 <- stats::setNames(sl$TRTSDT, sl$USUBJID)
@@ -161,6 +177,23 @@ swimmer_exposure <- function(adex, sl, role) {
   out$unit[is.na(out$unit)] <- ""
   out <- out[!is.na(out$start) & !is.na(out$drug), , drop = FALSE]
   out[order(out$USUBJID, out$drug, out$start), , drop = FALSE]
+}
+
+#' The study drugs of a swimmer's input
+#'
+#' The drug names in ADEX as the swimmer draws them, for the drugs setting.
+#'
+#' @param data The swimmer's input dm.
+#' @return A character vector, sorted.
+#' @export
+swimmer_drugs <- function(data) {
+  tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
+  if (is.null(tb)) return(character())
+  ex <- tb$adex
+  pc <- swimmer_col(ex, "PARAMCD")
+  if (!is.null(pc) && "DOSE" %in% pc) ex <- ex[pc %in% "DOSE", , drop = FALSE]
+  d <- swimmer_drug_name(as.character(swimmer_col(ex, c("EXTRT", "CMDECOD"))))
+  sort(unique(d[!is.na(d)]))
 }
 
 # "XANOMELINE" reads as "Xanomeline"; mixed case stays.
@@ -282,8 +315,8 @@ swimmer_day <- function(d, t0) {
 
 swimmer_days <- function(s, e, t0, open = FALSE) {
   open <- rep_len(open, length(s))
-  paste0("day ", swimmer_day(s, t0), " to ",
-         ifelse(open, "cutoff", swimmer_day(e, t0)))
+  paste0("Day ", swimmer_day(s, t0), " to ",
+         ifelse(open, "ongoing", swimmer_day(e, t0)))
 }
 
 # Assessment to next assessment; before the first, "Not assessed"; the last
@@ -389,7 +422,7 @@ swimmer_period_rows <- function(e, tt, doses) {
     e$USUBJID, start = swimmer_wk(e$start, tt), lane = as.character(e$lane),
     strip = paste0(ifelse(nzchar(dose), paste0(dose, "\n"), ""), "d ",
                    swimmer_day(e$start, tt), "–",
-                   ifelse(e$open, "cutoff", swimmer_day(e$end, tt)))
+                   ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
   )
   cut <- if (n > 1L && !identical(doses, "Plain") &&
                !identical(doses, "Dots")) {
@@ -397,7 +430,7 @@ swimmer_period_rows <- function(e, tt, doses) {
     swimmer_rows(
       e$USUBJID[i], start = swimmer_wk(e$start[i], tt),
       lane = as.character(e$lane[i]), colour = e$drug[i], mark = "step",
-      label = e$drug[i], days = paste("day", swimmer_day(e$start[i], tt)),
+      label = e$drug[i], days = paste("Day", swimmer_day(e$start[i], tt)),
       dose = paste0(dose[i - 1L], " to ", dose[i])
     )
   }
@@ -449,7 +482,7 @@ swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
     Plain = NULL,
     Dots = swimmer_rows(
       rep(id, n), start = swimmer_wk(d, tt), lane = lane, colour = drug,
-      mark = "dot", label = drug, days = paste("day", day), dose = dose
+      mark = "dot", label = drug, days = paste("Day", day), dose = dose
     ),
     Exceptions = {
       cut <- which(c(FALSE, adm$dose[-1L] < adm$dose[-n]))
@@ -458,21 +491,21 @@ swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
         swimmer_rows(
           rep(id, length(cut)), start = swimmer_wk(d[cut], tt), lane = lane,
           colour = drug, mark = "step", label = drug,
-          days = paste("day", day[cut]),
+          days = paste("Day", day[cut]),
           dose = paste0(dose[cut - 1L], " to ", dose[cut])
         ),
         swimmer_rows(
           rep(id, length(lt)), start = swimmer_wk(plan[lt], tt),
           end = swimmer_wk(d[lt], tt), lane = lane, colour = "Late dose",
           mark = "hollow", label = "Late dose",
-          days = paste0("cycle ", lt, ", day ", day[lt], ", ", late[lt],
+          days = paste0("Cycle ", lt, ", day ", day[lt], ", ", late[lt],
                         " days late")
         ),
         swimmer_rows(
           rep(id, length(skipped)), start = swimmer_wk(skipped, tt),
           end = swimmer_wk(skipped + every, tt), lane = lane, colour = drug,
           mark = "dashed", label = drug,
-          days = paste("skipped, planned day", swimmer_day(skipped, tt))
+          days = paste("Skipped, planned day", swimmer_day(skipped, tt))
         )
       )
     }
@@ -508,7 +541,7 @@ swimmer_other_rows <- function(e, tt) {
     swimmer_rows(
       e$USUBJID, start = swimmer_wk(e$start, tt), lane = "Other",
       strip = paste0(e$drug, "\nd ", swimmer_day(e$start, tt), "–",
-                     ifelse(e$open, "cutoff", swimmer_day(e$end, tt)))
+                     ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
     )
   )
 }
@@ -562,7 +595,8 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff) {
   out$lane <- factor(out$lane, levels = drugs)
   out$event <- factor(out$event, levels = c("Progression", "Serious AE",
                                             "Death"))
-  labels <- c(start = "Start, weeks", end = "End, weeks", colour = "Colour",
+  labels <- c(start = "Start, weeks", end = "End, weeks",
+              colour = "Response / drug",
               lane = "Drug", mark = "Mark", strip = "Strip", label = "Label",
               event_wk = "Week", event = "Event", ongoing = "Ongoing",
               days = "Study days", dose = "Dose", BOR = "Best response",

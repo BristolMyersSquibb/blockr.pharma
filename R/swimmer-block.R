@@ -67,33 +67,45 @@ new_swimmer_block <- function(doses = "Exceptions",
 
 #' The swimmer's prepare script
 #'
-#' Declares the doses and con meds settings and calls [swimmer_frame()] on
-#' the input dm.
+#' Declares the swimmer's settings, which the sentence under the title and
+#' the controls band show: the doses style, the drugs to draw (choices from
+#' the input's ADEX), the cutoff (automatic until a date is set) and the con
+#' meds flag. Then it calls [swimmer_frame()] on the input dm.
 #'
 #' @param max_lanes Lanes before drugs fold into "Other".
 #' @return The script, one string.
 #' @export
 swimmer_script <- function(max_lanes = 4L) {
   paste(
+    "lv <- blockr.pharma::swimmer_drugs(data)",
     paste0("doses <- factor(\"Exceptions\", levels = c(\"Exceptions\", ",
            "\"Dots\", \"Plain\"))  #| select(label = \"Doses\")"),
+    "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs\")",
+    paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
+           "placeholder = \"automatic\")"),
     "con_meds <- FALSE  #| flag(label = \"Con meds\")",
-    paste0("blockr.pharma::swimmer_frame(data, doses = doses, ",
-           "con_meds = con_meds, max_lanes = ", as.integer(max_lanes), ")"),
+    paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
+           "cutoff = cutoff, con_meds = con_meds, max_lanes = ",
+           as.integer(max_lanes), ")"),
     sep = "\n"
   )
 }
 
 #' The swimmer's sentence under the title
 #'
-#' `{@doses}` is the prepare script's doses setting, a picker in the
-#' sentence; `@parent` is the column grouping the rows (the table's outer
-#' `by`), and its clause leaves when the rows are not grouped.
+#' Each `{@...}` word is a setting to click: the cutoff, the doses style and
+#' the drugs from the prepare script, and the column grouping the rows
+#' (`@parent`, the table's outer `by`), offered among the listing columns.
+#' The grouping's clause leaves when the rows are not grouped.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 swimmer_subtitle <- function() {
-  "Weeks since treatment start, doses shown as {@doses}[, grouped by {label(@parent)}]"
+  paste0(
+    "Response and drugs by study week, doses shown as {@doses}, ",
+    "drugs {@drugs}, cutoff {@cutoff}",
+    "[, by {label(@parent in ARM, BOR, status)}]"
+  )
 }
 
 swimmer_summaries <- function() {
@@ -102,7 +114,7 @@ swimmer_summaries <- function() {
     list(type = "field", name = "Status", col = "status"),
     list(type = "simple", name = "Weeks", func = "max", col = "weeks",
          show = "number"),
-    list(type = "spans", name = "Weeks since first dose", x = "start",
+    list(type = "spans", name = "Study week", x = "start",
          xend = "end", color = "colour", label = "label",
          tooltip = c("days", "dose"), size = "lg",
          event_x = "event_wk", event_shape = "event", open = "ongoing",

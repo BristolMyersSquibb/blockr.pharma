@@ -13,6 +13,8 @@ swimmer_script(max_lanes = 4L)
 The script, one string.
 }
 \description{
-Declares the doses and con meds settings and calls \code{\link[=swimmer_frame]{swimmer_frame()}} on
-the input dm.
+Declares the swimmer's settings, which the sentence under the title and
+the controls band show: the doses style, the drugs to draw (choices from
+the input's ADEX), the cutoff (automatic until a date is set) and the con
+meds flag. Then it calls \code{\link[=swimmer_frame]{swimmer_frame()}} on the input dm.
 }

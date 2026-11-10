@@ -10,7 +10,8 @@ swimmer_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-\verb{\{@doses\}} is the prepare script's doses setting, a picker in the
-sentence; \verb{@parent} is the column grouping the rows (the table's outer
-\code{by}), and its clause leaves when the rows are not grouped.
+Each \verb{\{@...\}} word is a setting to click: the cutoff, the doses style and
+the drugs from the prepare script, and the column grouping the rows
+(\verb{@parent}, the table's outer \code{by}), offered among the listing columns.
+The grouping's clause leaves when the rows are not grouped.
 }

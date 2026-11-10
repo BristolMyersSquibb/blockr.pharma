@@ -110,3 +110,17 @@ test_that("new_swimmer_block is a groups table with the swimmer script", {
   expect_match(swimmer_script(), "swimmer_frame\\(data, doses = doses")
   expect_error(new_swimmer_block(doses = "nope"))
 })
+
+test_that("drugs and cutoff narrow the frame", {
+  a <- swim_adam()
+  expect_identical(swimmer_drugs(a), c("Drug Y", "Drug x"))
+  f <- swimmer_frame(a, drugs = "Drug Y")
+  expect_identical(levels(f$lane), "Drug Y")
+  # A cutoff at day 60: later visits and doses go, drugs given past it run on.
+  g <- swimmer_frame(a, cutoff = as.Date("2024-03-01"))
+  expect_true(all(g$start[!is.na(g$start)] <= 60 / 7 + 1e-9))
+  expect_identical(unique(g$status[g$USUBJID == "p1"]), "On treatment")
+  # NA is automatic.
+  expect_identical(swimmer_frame(a, cutoff = as.Date(NA)), swimmer_frame(a))
+  expect_match(swimmer_subtitle(), "@parent in ARM, BOR, status")
+})
