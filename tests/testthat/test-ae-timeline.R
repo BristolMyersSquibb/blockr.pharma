@@ -134,6 +134,14 @@ test_that("a fatal AE without a death date marks death on its lane", {
   expect_identical(as.character(ev$.lane), "1")
 })
 
+test_that("term labels go on the bars or only in the tooltip", {
+  a <- aes_of(ae_timeline_frame(aet_toy()))
+  expect_identical(a$.bar_label, a$Term)
+  t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "tooltip"))
+  expect_true(all(is.na(t$.bar_label)))
+  expect_identical(t$Term, a$Term)
+})
+
 test_that("a dm and ADAE alone both work", {
   tb <- aet_toy()
   d <- dm::dm(adae = tb$adae, adsl = tb$adsl)
@@ -165,7 +173,8 @@ test_that("the script's settings are its controls and run the frame", {
   ex <- parse(text = sc)
   vars <- vapply(ex[-length(ex)], function(e) as.character(e[[2L]]), "")
   expect_identical(vars, c("events", "colour", "lanes", "ongoing", "serious",
-                           "order_by", "treatment", "treatment_emergent"))
+                           "order_by", "term_labels", "treatment",
+                           "treatment_emergent"))
   env <- new.env()
   env$data <- aet_toy()
   out <- eval(ex, env)
