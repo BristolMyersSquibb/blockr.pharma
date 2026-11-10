@@ -86,7 +86,7 @@ ae_timeline_summaries <- function() {
     list(
       type = "spans", name = "Study day",
       x = "Start", xend = "End", color = "Severity",
-      label = "Term",
+      label = "Term", bar_label = ".bar_label",
       tooltip = c("Body system", "Severity", "Serious", "Study days",
                   "Outcome"),
       lane = ".lane", open = ".open", seg_style = ".style",
@@ -99,7 +99,7 @@ ae_timeline_summaries <- function() {
 #' The AE timeline's default sentence
 #'
 #' "All AEs by study day, coloured by Severity, overlaps stacked, serious
-#' AEs outlined", then "Ongoing AEs to last contact, cutoff automatic,
+#' AEs outlined, terms on the bars", then "Ongoing AEs to last contact, cutoff automatic,
 #' sorted by number of AEs, by Actual Treatment": each `{@...}` word is a
 #' setting of the prepare script and opens it. The grouping word offers the
 #' patient columns only.
@@ -109,7 +109,7 @@ ae_timeline_summaries <- function() {
 ae_timeline_subtitle <- function() {
   paste0(
     "{@events} by study day, coloured by {@colour}, overlaps {@lanes}, ",
-    "serious AEs {@serious}\\n",
+    "serious AEs {@serious}, terms {@term_labels}\\n",
     "Ongoing AEs to {@ongoing}, cutoff {@cutoff}, sorted by {@order_by}",
     "[, by {label(@parent in ", paste(AET_PATIENT_COLS, collapse = ", "),
     ")}]"
@@ -141,7 +141,7 @@ ae_timeline_script <- function(group = "TRT01A") {
         "No end runs to"),
     sel("serious", "outlined", AET_SERIOUS, "Serious AEs"),
     sel("order_by", "number of AEs", AET_ORDER, "Sort patients by"),
-    sel("term_labels", "on bar", c("on bar", "tooltip"), "Term labels"),
+    sel("term_labels", "on the bars", AET_TERM_LABELS, "Term labels"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
     "treatment <- TRUE  #| flag(label = \"Treatment period line\")",

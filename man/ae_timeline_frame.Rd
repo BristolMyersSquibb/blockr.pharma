@@ -12,7 +12,7 @@ ae_timeline_frame(
   ongoing = "last contact",
   serious = "outlined",
   order_by = "number of AEs",
-  term_labels = "on bar",
+  term_labels = "on the bars",
   treatment = TRUE,
   treatment_emergent = TRUE,
   cutoff = NULL,
@@ -43,8 +43,9 @@ bar), \code{"marked at onset"} (a triangle at its start) or \code{"unmarked"}.}
 \item{order_by}{Row order within a group: \code{"number of AEs"},
 \code{"worst grade"}, \code{"ongoing AEs"}, \code{"first onset"} or \code{"subject"}.}
 
-\item{term_labels}{Where the term shows: \code{"on bar"} (written on the bar
-when it fits, else after it) or \code{"tooltip"} (only on hover).}
+\item{term_labels}{Where the term shows: \code{"on the bars"} (written on the
+bar when it fits, else after it when there is room) or
+\code{"in the tooltip"} (only on hover).}
 
 \item{treatment}{Draw the treatment period as a line.}
 

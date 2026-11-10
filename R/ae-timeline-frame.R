@@ -34,8 +34,9 @@
 #'   bar), `"marked at onset"` (a triangle at its start) or `"unmarked"`.
 #' @param order_by Row order within a group: `"number of AEs"`,
 #'   `"worst grade"`, `"ongoing AEs"`, `"first onset"` or `"subject"`.
-#' @param term_labels Where the term shows: `"on bar"` (written on the bar
-#'   when it fits, else after it) or `"tooltip"` (only on hover).
+#' @param term_labels Where the term shows: `"on the bars"` (written on the
+#'   bar when it fits, else after it when there is room) or
+#'   `"in the tooltip"` (only on hover).
 #' @param treatment Draw the treatment period as a line.
 #' @param treatment_emergent Keep treatment-emergent AEs only (`TRTEMFL`),
 #'   when the column is there.
@@ -60,7 +61,7 @@ ae_timeline_frame <- function(data,
                               ongoing = "last contact",
                               serious = "outlined",
                               order_by = "number of AEs",
-                              term_labels = "on bar",
+                              term_labels = "on the bars",
                               treatment = TRUE,
                               treatment_emergent = TRUE,
                               cutoff = NULL,
@@ -73,8 +74,7 @@ ae_timeline_frame <- function(data,
                                                 "data cutoff"))
   serious <- match.arg(as.character(serious), AET_SERIOUS)
   order_by <- match.arg(as.character(order_by), AET_ORDER)
-  term_labels <- match.arg(as.character(term_labels), c("on bar",
-                                                        "tooltip"))
+  term_labels <- match.arg(as.character(term_labels), AET_TERM_LABELS)
   group <- as.character(unlist(group %||% character()))
   group <- group[!is.na(group) & nzchar(group)]
   group <- if (length(group)) group[[1L]]
@@ -113,7 +113,7 @@ ae_timeline_frame <- function(data,
     stop("No ", tolower(events), " to draw.", call. = FALSE)
   }
   rec$.lane <- aet_lanes(rec, lanes)
-  rec$.bar_label <- if (identical(term_labels, "on bar")) rec$Term else
+  rec$.bar_label <- if (identical(term_labels, "on the bars")) rec$Term else
     NA_character_
   rec$.style <- if (identical(serious, "outlined")) {
     ifelse(rec$Serious %in% "Yes", "outline", NA_character_)
@@ -160,6 +160,7 @@ aet_cap_at <- function(sl, cutoff) {
   sl
 }
 
+AET_TERM_LABELS <- c("on the bars", "in the tooltip")
 AET_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 AET_LANES <- c("stacked", "by term", "by body system", "on one lane")
 AET_ORDER <- c("number of AEs", "worst grade", "ongoing AEs", "first onset",

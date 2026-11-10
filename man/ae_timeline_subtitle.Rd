@@ -11,7 +11,7 @@ A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_ch
 }
 \description{
 "All AEs by study day, coloured by Severity, overlaps stacked, serious
-AEs outlined", then "Ongoing AEs to last contact, cutoff automatic,
+AEs outlined, terms on the bars", then "Ongoing AEs to last contact, cutoff automatic,
 sorted by number of AEs, by Actual Treatment": each \verb{\{@...\}} word is a
 setting of the prepare script and opens it. The grouping word offers the
 patient columns only.
