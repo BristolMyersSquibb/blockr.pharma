@@ -136,12 +136,14 @@ ae_timeline_script <- function(group = "TRT01A") {
     sel("serious", "outline", c("outline", "onset mark", "off"),
         "Serious AEs"),
     sel("order_by", "number of AEs", AET_ORDER, "Sort patients by"),
+    sel("term_labels", "on bar", c("on bar", "tooltip"), "Term labels"),
     "treatment <- TRUE  #| flag(label = \"Treatment period line\")",
     "treatment_emergent <- TRUE  #| flag(label = \"Treatment-emergent only\")",
     paste0(
       "blockr.pharma::ae_timeline_frame(data, events = events, ",
       "colour = colour, lanes = lanes, ongoing = ongoing, ",
-      "serious = serious, order_by = order_by, treatment = treatment, ",
+      "serious = serious, order_by = order_by, term_labels = term_labels, ",
+      "treatment = treatment, ",
       "treatment_emergent = treatment_emergent, group = ", grp, ")"
     ),
     sep = "\n"

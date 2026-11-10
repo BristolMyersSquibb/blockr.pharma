@@ -34,6 +34,8 @@
 #'   bar), `"onset mark"` (a triangle at its start) or `"off"`.
 #' @param order_by Row order within a group: `"number of AEs"`,
 #'   `"worst grade"`, `"ongoing AEs"`, `"first onset"` or `"subject"`.
+#' @param term_labels Where the term shows: `"on bar"` (written on the bar
+#'   when it fits, else after it) or `"tooltip"` (only on hover).
 #' @param treatment Draw the treatment period as a line.
 #' @param treatment_emergent Keep treatment-emergent AEs only (`TRTEMFL`),
 #'   when the column is there.
@@ -53,6 +55,7 @@ ae_timeline_frame <- function(data,
                               ongoing = "last contact",
                               serious = "outline",
                               order_by = "number of AEs",
+                              term_labels = "on bar",
                               treatment = TRUE,
                               treatment_emergent = TRUE,
                               group = "TRT01A") {
@@ -65,6 +68,8 @@ ae_timeline_frame <- function(data,
   serious <- match.arg(as.character(serious), c("outline", "onset mark",
                                                 "off"))
   order_by <- match.arg(as.character(order_by), AET_ORDER)
+  term_labels <- match.arg(as.character(term_labels), c("on bar",
+                                                        "tooltip"))
   group <- as.character(unlist(group %||% character()))
   group <- group[!is.na(group) & nzchar(group)]
   group <- if (length(group)) group[[1L]]
@@ -96,6 +101,8 @@ ae_timeline_frame <- function(data,
     stop("No ", tolower(events), " to draw.", call. = FALSE)
   }
   rec$.lane <- aet_lanes(rec, lanes)
+  rec$.bar_label <- if (identical(term_labels, "on bar")) rec$Term else
+    NA_character_
   rec$.style <- if (identical(serious, "outline")) {
     ifelse(rec$Serious %in% "Yes", "outline", NA_character_)
   } else {
@@ -414,7 +421,7 @@ aet_finish <- function(out, rec, sl, group, order_by, colour) {
   attr(out$USUBJID, "label") <- "Patient"
   keep <- c(group, "USUBJID", "AEs", "Ongoing", "Serious AEs", "Worst",
             "Start", "End", ".open", "Severity", ".lane", ".style", "Term",
-            "Body system", "Serious", "Outcome", "Days", ".trt_from",
+            "Body system", "Serious", "Outcome", "Days", ".bar_label", ".trt_from",
             ".trt_to", ".event_day", "Event")
   out[, keep, drop = FALSE]
 }
