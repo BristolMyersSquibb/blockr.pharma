@@ -49,7 +49,7 @@ test_that("an AE without an end runs open to last contact or the cutoff", {
   expect_true(n$.open)
   # Last contact 2024-03-30 is study day 90.
   expect_equal(n$End, 90)
-  expect_identical(n$Days, "Day 5 to ongoing")
+  expect_identical(n[["Study days"]], "Day 5 to ongoing")
   # To the cutoff it has no end, so the table runs it to the axis end.
   a2 <- aes_of(ae_timeline_frame(tb, ongoing = "data cutoff"))
   expect_true(is.na(a2$End[a2$Term == "Nausea"]))
@@ -70,7 +70,7 @@ test_that("serious AEs, death and the treatment line", {
   expect_true(is.na(ev$.lane))
   # The cross is the third shape.
   expect_identical(levels(f$Event)[[3L]], "Death")
-  m <- ae_timeline_frame(aet_toy(), serious = "onset mark")
+  m <- ae_timeline_frame(aet_toy(), serious = "marked at onset")
   s <- m[m$Event %in% "Serious AE", ]
   expect_equal(s$.event_day, 5)
   # The onset mark sits on its AE's lane.
@@ -121,7 +121,9 @@ test_that("events, lanes and the group follow their settings", {
   expect_true(all(one$.lane == "1"))
   f <- ae_timeline_frame(tb)
   expect_identical(attr(f$TRT01A, "label"), "Actual Treatment")
-  expect_false("TRT01A" %in% names(ae_timeline_frame(tb, group = NULL)))
+  # The other patient columns stay for grouping.
+  expect_true("TRT01A" %in% names(ae_timeline_frame(tb, group = NULL)))
+  expect_error(ae_timeline_frame(tb, group = "NOPE"), "neither")
 })
 
 test_that("a fatal AE without a death date marks death on its lane", {
@@ -140,6 +142,22 @@ test_that("term labels go on the bars or only in the tooltip", {
   t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "tooltip"))
   expect_true(all(is.na(t$.bar_label)))
   expect_identical(t$Term, a$Term)
+})
+
+test_that("a cutoff leaves out what comes after it", {
+  tb <- aet_toy()
+  # 2024-01-20 is study day 20 for both patients.
+  f <- ae_timeline_frame(tb, cutoff = as.Date("2024-01-20"))
+  a <- aes_of(f)
+  expect_false("Rash" %in% a$Term)
+  # Ongoing at the cutoff, so it runs to the capped last contact.
+  n <- a[a$Term == "Nausea", ]
+  expect_true(n$.open)
+  expect_equal(n$End, 20)
+  expect_false("Death" %in% as.character(f$Event))
+  # NA is automatic.
+  expect_identical(ae_timeline_frame(tb, cutoff = as.Date(NA)),
+                   ae_timeline_frame(tb))
 })
 
 test_that("a dm and ADAE alone both work", {
@@ -173,7 +191,7 @@ test_that("the script's settings are its controls and run the frame", {
   ex <- parse(text = sc)
   vars <- vapply(ex[-length(ex)], function(e) as.character(e[[2L]]), "")
   expect_identical(vars, c("events", "colour", "lanes", "ongoing", "serious",
-                           "order_by", "term_labels", "treatment",
+                           "order_by", "term_labels", "cutoff", "treatment",
                            "treatment_emergent"))
   env <- new.env()
   env$data <- aet_toy()
@@ -182,5 +200,6 @@ test_that("the script's settings are its controls and run the frame", {
   # Every word in the sentence is a setting of the script.
   words <- regmatches(ae_timeline_subtitle(),
                       gregexpr("\\{@([a-z_]+)\\}", ae_timeline_subtitle()))[[1]]
+  expect_length(words, 7L)
   expect_true(all(gsub("[{}@]", "", words) %in% vars))
 })

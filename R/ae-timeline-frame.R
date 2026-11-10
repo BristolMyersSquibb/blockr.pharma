@@ -30,8 +30,8 @@
 #' @param ongoing Where an AE without an end runs to: `"last contact"`
 #'   (`LSTALVDT`, else the last treatment day) or `"data cutoff"` (no end,
 #'   so the bar runs to the end of the axis, the last date in the data).
-#' @param serious How a serious AE shows: `"outline"` (a dark edge on its
-#'   bar), `"onset mark"` (a triangle at its start) or `"off"`.
+#' @param serious How a serious AE shows: `"outlined"` (a dark edge on its
+#'   bar), `"marked at onset"` (a triangle at its start) or `"unmarked"`.
 #' @param order_by Row order within a group: `"number of AEs"`,
 #'   `"worst grade"`, `"ongoing AEs"`, `"first onset"` or `"subject"`.
 #' @param term_labels Where the term shows: `"on bar"` (written on the bar
@@ -39,8 +39,13 @@
 #' @param treatment Draw the treatment period as a line.
 #' @param treatment_emergent Keep treatment-emergent AEs only (`TRTEMFL`),
 #'   when the column is there.
+#' @param cutoff The data cutoff, a date. `NULL` or `NA`: automatic, the
+#'   last date in the data. AEs starting after it are left out, an AE still
+#'   open at it is ongoing, and death and last contact after it do not count.
 #' @param group The column grouping the patients, e.g. `"TRT01A"`. Empty:
-#'   none.
+#'   none. The frame also keeps the other patient columns ADSL has of
+#'   `TRT01P`, `ARM`, `ACTARM`, `SEX`, `AGEGR1` and `RACE`, so the table can
+#'   group by them instead.
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
 #' @examples
@@ -53,11 +58,12 @@ ae_timeline_frame <- function(data,
                               colour = "Severity",
                               lanes = "stacked",
                               ongoing = "last contact",
-                              serious = "outline",
+                              serious = "outlined",
                               order_by = "number of AEs",
                               term_labels = "on bar",
                               treatment = TRUE,
                               treatment_emergent = TRUE,
+                              cutoff = NULL,
                               group = "TRT01A") {
   events <- match.arg(as.character(events),
                       c("All AEs", "Serious AEs", "Ongoing AEs"))
@@ -65,8 +71,7 @@ ae_timeline_frame <- function(data,
   lanes <- match.arg(as.character(lanes), AET_LANES)
   ongoing <- match.arg(as.character(ongoing), c("last contact",
                                                 "data cutoff"))
-  serious <- match.arg(as.character(serious), c("outline", "onset mark",
-                                                "off"))
+  serious <- match.arg(as.character(serious), AET_SERIOUS)
   order_by <- match.arg(as.character(order_by), AET_ORDER)
   term_labels <- match.arg(as.character(term_labels), c("on bar",
                                                         "tooltip"))
@@ -75,22 +80,29 @@ ae_timeline_frame <- function(data,
   group <- if (length(group)) group[[1L]]
 
   tb <- aet_tables(data)
+  pcols <- aet_patient_cols(tb, group)
   # Row subsets drop a column's label; the header and sentence read it.
-  group_label <- if (!is.null(group)) {
-    attr((tb$adsl %||% tb$adae)[[group]], "label", exact = TRUE)
-  }
+  src <- tb$adsl %||% tb$adae
+  labels <- lapply(stats::setNames(pcols, pcols), function(nm) {
+    attr(src[[nm]] %||% tb$adae[[nm]], "label", exact = TRUE)
+  })
   ae <- tb$adae
   if (isTRUE(treatment_emergent) && "TRTEMFL" %in% names(ae)) {
     ae <- ae[ae$TRTEMFL %in% "Y", , drop = FALSE]
   }
-  sl <- aet_subjects(tb$adsl, ae, group)
+  sl <- aet_subjects(tb$adsl, ae, pcols)
   ae <- ae[as.character(ae$USUBJID) %in% sl$USUBJID, , drop = FALSE]
+  cutoff <- aet_date(cutoff)
+  if (!length(cutoff) || is.na(cutoff[[1L]])) {
+    cutoff <- aet_cutoff(ae, sl)
+  }
+  cutoff <- cutoff[[1L]]
+  sl <- aet_cap_at(sl, cutoff)
   rec <- aet_records(ae, sl, colour)
+  rec <- aet_ends(rec, sl, ongoing, cutoff)
   if (!nrow(rec)) {
     stop("No adverse event with an onset day to draw.", call. = FALSE)
   }
-  cutoff <- aet_cutoff(ae, sl)
-  rec <- aet_ends(rec, sl, ongoing, cutoff)
   rec <- switch(
     events,
     "Serious AEs" = rec[rec$Serious %in% "Yes", , drop = FALSE],
@@ -103,7 +115,7 @@ ae_timeline_frame <- function(data,
   rec$.lane <- aet_lanes(rec, lanes)
   rec$.bar_label <- if (identical(term_labels, "on bar")) rec$Term else
     NA_character_
-  rec$.style <- if (identical(serious, "outline")) {
+  rec$.style <- if (identical(serious, "outlined")) {
     ifelse(rec$Serious %in% "Yes", "outline", NA_character_)
   } else {
     NA_character_
@@ -117,11 +129,38 @@ ae_timeline_frame <- function(data,
   )
   # Past the cutoff the record has no end: it runs, open, to the axis end.
   if (identical(ongoing, "data cutoff")) out$End[out$.open] <- NA_real_
-  out <- aet_finish(out, rec, sl, group, order_by, colour)
-  if (!is.null(group_label)) attr(out[[group]], "label") <- group_label
+  out <- aet_finish(out, rec, sl, pcols, order_by, colour)
+  for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]
   out
 }
 
+# Patient-level columns a table can group by.
+AET_PATIENT_COLS <- c("TRT01A", "TRT01P", "ARM", "ACTARM", "SEX", "AGEGR1",
+                      "RACE")
+
+# The grouping column first, then the patient columns the data has.
+aet_patient_cols <- function(tb, group) {
+  have <- union(names(tb$adsl), names(tb$adae))
+  if (!is.null(group) && !group %in% have) {
+    stop("Column \"", group, "\" is in neither adsl nor adae.",
+         call. = FALSE)
+  }
+  unique(c(group, intersect(AET_PATIENT_COLS, have)))
+}
+
+# Nothing after the cutoff: death, last contact and the last dose past it
+# move to it or leave.
+aet_cap_at <- function(sl, cutoff) {
+  if (is.na(cutoff)) return(sl)
+  sl$DTHDT[!is.na(sl$DTHDT) & sl$DTHDT > cutoff] <- as.Date(NA)
+  for (nm in c("LSTALVDT", "TRTEDT")) {
+    late <- !is.na(sl[[nm]]) & sl[[nm]] > cutoff
+    sl[[nm]][late] <- cutoff
+  }
+  sl
+}
+
+AET_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 AET_LANES <- c("stacked", "by term", "by body system", "on one lane")
 AET_ORDER <- c("number of AEs", "worst grade", "ongoing AEs", "first onset",
                "subject")
@@ -172,16 +211,11 @@ aet_day <- function(d, t0) {
 
 # One row per patient: first and last dose, last contact, death, group. From
 # ADSL when given, else the first ADAE row of each patient.
-aet_subjects <- function(adsl, ae, group) {
+aet_subjects <- function(adsl, ae, pcols) {
   src <- if (!is.null(adsl)) adsl else ae[!duplicated(ae$USUBJID), ,
                                           drop = FALSE]
-  if (!is.null(group) && !group %in% names(src)) {
-    if (group %in% names(ae)) {
-      src[[group]] <- ae[[group]][match(src$USUBJID, ae$USUBJID)]
-    } else {
-      stop("Column \"", group, "\" is in neither adsl nor adae.",
-           call. = FALSE)
-    }
+  for (nm in setdiff(pcols, names(src))) {
+    src[[nm]] <- ae[[nm]][match(src$USUBJID, ae$USUBJID)]
   }
   n <- nrow(src)
   na_date <- rep(as.Date(NA), n)
@@ -193,7 +227,7 @@ aet_subjects <- function(adsl, ae, group) {
     DTHDT = aet_date(aet_col(src, "DTHDT")) %||% na_date,
     stringsAsFactors = FALSE
   )
-  if (!is.null(group)) out[[group]] <- src[[group]]
+  for (nm in pcols) out[[nm]] <- src[[nm]]
   out[!is.na(out$USUBJID) & out$USUBJID %in% as.character(ae$USUBJID), ,
       drop = FALSE]
 }
@@ -271,6 +305,14 @@ aet_cutoff <- function(ae, sl) {
 aet_ends <- function(rec, sl, ongoing, cutoff) {
   i <- match(rec$USUBJID, sl$USUBJID)
   t0 <- sl$TRTSDT[i]
+  cut <- aet_day(rep(cutoff, length(i)), t0)
+  keep <- !is.finite(cut) | rec$Start <= cut
+  rec <- rec[keep, , drop = FALSE]
+  i <- i[keep]
+  t0 <- t0[keep]
+  cut <- cut[keep]
+  # Still open at the cutoff is ongoing.
+  rec$End[is.finite(cut) & is.finite(rec$End) & rec$End > cut] <- NA_real_
   last <- if (identical(ongoing, "last contact")) {
     lc <- sl$LSTALVDT[i]
     lc[is.na(lc)] <- sl$TRTEDT[i][is.na(lc)]
@@ -283,7 +325,7 @@ aet_ends <- function(rec, sl, ongoing, cutoff) {
   rec$End[rec$.open] <- pmax(fill[rec$.open], rec$Start[rec$.open])
   # A one-day AE is a day long, not a point.
   rec$End <- pmax(rec$End, rec$Start + 0.6)
-  rec$Days <- paste0("Day ", rec$Start, " to ",
+  rec[["Study days"]] <- paste0("Day ", rec$Start, " to ",
                      ifelse(rec$.open, "ongoing", round(rec$End)))
   rec
 }
@@ -337,7 +379,7 @@ aet_treatment_rows <- function(sl, rec) {
 # death date.
 aet_event_rows <- function(rec, sl, serious) {
   out <- list()
-  if (identical(serious, "onset mark")) {
+  if (identical(serious, "marked at onset")) {
     s <- rec[rec$Serious %in% "Yes", , drop = FALSE]
     out$ser <- aet_blank(s$USUBJID, rec)
     if (!is.null(out$ser)) {
@@ -373,7 +415,7 @@ aet_fill_cols <- function(x, ...) {
 }
 
 # Listing values per patient, row order, column types and colours.
-aet_finish <- function(out, rec, sl, group, order_by, colour) {
+aet_finish <- function(out, rec, sl, pcols, order_by, colour) {
   out <- aet_fill_cols(out)
   rec <- out[is.finite(out$Start), , drop = FALSE]
   ids <- sl$USUBJID
@@ -403,10 +445,7 @@ aet_finish <- function(out, rec, sl, group, order_by, colour) {
   out[["Serious AEs"]] <- n_ser[out$USUBJID]
   w <- worst[out$USUBJID]
   out$Worst <- factor(ifelse(is.na(w), NA, lv[w]), levels = lv)
-  if (!is.null(group)) {
-    g <- sl[[group]][match(out$USUBJID, sl$USUBJID)]
-    out[[group]] <- g
-  }
+  for (nm in pcols) out[[nm]] <- sl[[nm]][match(out$USUBJID, sl$USUBJID)]
   out <- out[order(i, is.na(out$Start), out$Start), , drop = FALSE]
   rownames(out) <- NULL
   # The colour column: severity words or grades, with their own colours.
@@ -419,10 +458,10 @@ aet_finish <- function(out, rec, sl, group, order_by, colour) {
   out$Event <- factor(out$.event, levels = c("Serious AE", "Fatal AE",
                                              "Death"))
   attr(out$USUBJID, "label") <- "Patient"
-  keep <- c(group, "USUBJID", "AEs", "Ongoing", "Serious AEs", "Worst",
+  keep <- c(pcols, "USUBJID", "AEs", "Ongoing", "Serious AEs", "Worst",
             "Start", "End", ".open", "Severity", ".lane", ".style", "Term",
-            "Body system", "Serious", "Outcome", "Days", ".bar_label", ".trt_from",
-            ".trt_to", ".event_day", "Event")
+            "Body system", "Serious", "Outcome", "Study days", ".bar_label",
+            ".trt_from", ".trt_to", ".event_day", "Event")
   out[, keep, drop = FALSE]
 }
 

@@ -10,11 +10,12 @@ ae_timeline_frame(
   colour = "Severity",
   lanes = "stacked",
   ongoing = "last contact",
-  serious = "outline",
+  serious = "outlined",
   order_by = "number of AEs",
   term_labels = "on bar",
   treatment = TRUE,
   treatment_emergent = TRUE,
+  cutoff = NULL,
   group = "TRT01A"
 )
 }
@@ -36,8 +37,8 @@ lanes as overlap needs), \code{"by term"}, \code{"by body system"}, or
 (\code{LSTALVDT}, else the last treatment day) or \code{"data cutoff"} (no end,
 so the bar runs to the end of the axis, the last date in the data).}
 
-\item{serious}{How a serious AE shows: \code{"outline"} (a dark edge on its
-bar), \code{"onset mark"} (a triangle at its start) or \code{"off"}.}
+\item{serious}{How a serious AE shows: \code{"outlined"} (a dark edge on its
+bar), \code{"marked at onset"} (a triangle at its start) or \code{"unmarked"}.}
 
 \item{order_by}{Row order within a group: \code{"number of AEs"},
 \code{"worst grade"}, \code{"ongoing AEs"}, \code{"first onset"} or \code{"subject"}.}
@@ -50,8 +51,14 @@ when it fits, else after it) or \code{"tooltip"} (only on hover).}
 \item{treatment_emergent}{Keep treatment-emergent AEs only (\code{TRTEMFL}),
 when the column is there.}
 
+\item{cutoff}{The data cutoff, a date. \code{NULL} or \code{NA}: automatic, the
+last date in the data. AEs starting after it are left out, an AE still
+open at it is ongoing, and death and last contact after it do not count.}
+
 \item{group}{The column grouping the patients, e.g. \code{"TRT01A"}. Empty:
-none.}
+none. The frame also keeps the other patient columns ADSL has of
+\code{TRT01P}, \code{ARM}, \code{ACTARM}, \code{SEX}, \code{AGEGR1} and \code{RACE}, so the table can
+group by them instead.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

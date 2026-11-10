@@ -87,7 +87,8 @@ ae_timeline_summaries <- function() {
       type = "spans", name = "Study day",
       x = "Start", xend = "End", color = "Severity",
       label = "Term",
-      tooltip = c("Body system", "Severity", "Serious", "Days", "Outcome"),
+      tooltip = c("Body system", "Severity", "Serious", "Study days",
+                  "Outcome"),
       lane = ".lane", open = ".open", seg_style = ".style",
       band_x = ".trt_from", band_xend = ".trt_to",
       event_x = ".event_day", event_shape = "Event"
@@ -97,16 +98,21 @@ ae_timeline_summaries <- function() {
 
 #' The AE timeline's default sentence
 #'
-#' "All AEs by study day, coloured by Severity, overlaps stacked, ongoing
-#' AEs to last contact, by Actual Treatment": each `{@...}` word is a
-#' setting of the prepare script and opens it.
+#' "All AEs by study day, coloured by Severity, overlaps stacked, serious
+#' AEs outlined", then "Ongoing AEs to last contact, cutoff automatic,
+#' sorted by number of AEs, by Actual Treatment": each `{@...}` word is a
+#' setting of the prepare script and opens it. The grouping word offers the
+#' patient columns only.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 ae_timeline_subtitle <- function() {
   paste0(
     "{@events} by study day, coloured by {@colour}, overlaps {@lanes}, ",
-    "ongoing AEs to {@ongoing}[, by {label(@parent)}]"
+    "serious AEs {@serious}\\n",
+    "Ongoing AEs to {@ongoing}, cutoff {@cutoff}, sorted by {@order_by}",
+    "[, by {label(@parent in ", paste(AET_PATIENT_COLS, collapse = ", "),
+    ")}]"
   )
 }
 
@@ -133,17 +139,18 @@ ae_timeline_script <- function(group = "TRT01A") {
     sel("lanes", "stacked", AET_LANES, "Overlaps"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
-    sel("serious", "outline", c("outline", "onset mark", "off"),
-        "Serious AEs"),
+    sel("serious", "outlined", AET_SERIOUS, "Serious AEs"),
     sel("order_by", "number of AEs", AET_ORDER, "Sort patients by"),
     sel("term_labels", "on bar", c("on bar", "tooltip"), "Term labels"),
+    paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
+           "placeholder = \"automatic\")"),
     "treatment <- TRUE  #| flag(label = \"Treatment period line\")",
     "treatment_emergent <- TRUE  #| flag(label = \"Treatment-emergent only\")",
     paste0(
       "blockr.pharma::ae_timeline_frame(data, events = events, ",
       "colour = colour, lanes = lanes, ongoing = ongoing, ",
       "serious = serious, order_by = order_by, term_labels = term_labels, ",
-      "treatment = treatment, ",
+      "cutoff = cutoff, treatment = treatment, ",
       "treatment_emergent = treatment_emergent, group = ", grp, ")"
     ),
     sep = "\n"
