@@ -86,10 +86,14 @@ swimmer_script <- function(max_lanes = 4L) {
 
 #' The swimmer's sentence under the title
 #'
+#' `{@doses}` is the prepare script's doses setting, a picker in the
+#' sentence; `@parent` is the column grouping the rows (the table's outer
+#' `by`), and its clause leaves when the rows are not grouped.
+#'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 swimmer_subtitle <- function() {
-  "Weeks since first dose, doses as {@doses}"
+  "Weeks since treatment start, doses shown as {@doses}[, grouped by {label(@parent)}]"
 }
 
 swimmer_summaries <- function() {

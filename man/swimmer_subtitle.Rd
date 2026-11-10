@@ -10,5 +10,7 @@ swimmer_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-The swimmer's sentence under the title
+\verb{\{@doses\}} is the prepare script's doses setting, a picker in the
+sentence; \verb{@parent} is the column grouping the rows (the table's outer
+\code{by}), and its clause leaves when the rows are not grouped.
 }

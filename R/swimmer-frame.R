@@ -566,7 +566,8 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff) {
               lane = "Drug", mark = "Mark", strip = "Strip", label = "Label",
               event_wk = "Week", event = "Event", ongoing = "Ongoing",
               days = "Study days", dose = "Dose", BOR = "Best response",
-              weeks = "Weeks on treatment", status = "Status")
+              weeks = "Weeks on treatment", status = "Status", ARM = "Arm",
+              USUBJID = "Subject")
   for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]
   rownames(out) <- NULL
   out
