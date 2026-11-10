@@ -50,28 +50,36 @@ test_that("an AE without an end runs open to last contact or the cutoff", {
   # Last contact 2024-03-30 is study day 90.
   expect_equal(n$End, 90)
   expect_identical(n$Days, "Day 5 to ongoing")
+  # To the cutoff it has no end, so the table runs it to the axis end.
   a2 <- aes_of(ae_timeline_frame(tb, ongoing = "data cutoff"))
-  expect_equal(a2$End[a2$Term == "Nausea"], 90)
+  expect_true(is.na(a2$End[a2$Term == "Nausea"]))
+  expect_equal(a2$End[a2$Term == "Headache"], 10)
   tb$adsl$LSTALVDT[[1L]] <- as.Date("2024-03-01")
   a3 <- aes_of(ae_timeline_frame(tb))
   expect_equal(a3$End[a3$Term == "Nausea"], 61)
-  a4 <- aes_of(ae_timeline_frame(tb, ongoing = "data cutoff"))
-  expect_equal(a4$End[a4$Term == "Nausea"], 61)
 })
 
-test_that("serious onset and death are events; the line is the treatment", {
+test_that("serious AEs, death and the treatment line", {
   f <- ae_timeline_frame(aet_toy())
+  expect_identical(f$.style[f$Term %in% "Nausea"], "outline")
+  expect_true(all(is.na(f$.style[f$Term %in% c("Headache", "Rash")])))
   ev <- f[!is.na(f$Event), ]
-  expect_setequal(as.character(ev$Event), c("Serious AE", "Death"))
-  expect_equal(ev$.event_day[ev$Event == "Death"], 25)
-  expect_equal(ev$.event_day[ev$Event == "Serious AE"], 5)
+  expect_identical(as.character(ev$Event), "Death")
+  expect_equal(ev$.event_day, 25)
+  # A death date marks the whole row.
+  expect_true(is.na(ev$.lane))
+  # The cross is the third shape.
+  expect_identical(levels(f$Event)[[3L]], "Death")
+  m <- ae_timeline_frame(aet_toy(), serious = "onset mark")
+  s <- m[m$Event %in% "Serious AE", ]
+  expect_equal(s$.event_day, 5)
+  # The onset mark sits on its AE's lane.
+  expect_identical(as.character(s$.lane), "2")
+  expect_true(all(is.na(m$.style)))
   trt <- f[is.finite(f$.trt_to), ]
   expect_equal(trt$.trt_to[trt$USUBJID == "A"], 60)
   expect_false(any(is.finite(ae_timeline_frame(aet_toy(),
                                                treatment = FALSE)$.trt_to)))
-  o <- ae_timeline_frame(aet_toy(), serious = "outline")
-  expect_identical(o$.style[o$Term %in% "Nausea"], "outline")
-  expect_false("Serious AE" %in% as.character(o$Event))
 })
 
 test_that("the listing values repeat per patient and sort the rows", {
@@ -114,6 +122,16 @@ test_that("events, lanes and the group follow their settings", {
   f <- ae_timeline_frame(tb)
   expect_identical(attr(f$TRT01A, "label"), "Actual Treatment")
   expect_false("TRT01A" %in% names(ae_timeline_frame(tb, group = NULL)))
+})
+
+test_that("a fatal AE without a death date marks death on its lane", {
+  tb <- aet_toy()
+  tb$adsl$DTHDT <- as.Date(NA)
+  tb$adae$AESDTH[[4L]] <- "Y"
+  f <- ae_timeline_frame(tb)
+  ev <- f[f$Event %in% "Death", ]
+  expect_equal(ev$.event_day, 4)
+  expect_identical(as.character(ev$.lane), "1")
 })
 
 test_that("a dm and ADAE alone both work", {

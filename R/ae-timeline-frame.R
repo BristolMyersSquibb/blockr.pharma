@@ -28,10 +28,10 @@
 #'   lanes as overlap needs), `"by term"`, `"by body system"`, or
 #'   `"on one lane"`.
 #' @param ongoing Where an AE without an end runs to: `"last contact"`
-#'   (`LSTALVDT`, else the last treatment day) or `"data cutoff"` (the last
-#'   date in the data).
-#' @param serious How a serious AE shows: `"onset mark"` (a triangle at its
-#'   start), `"outline"` (an outline on the bar) or `"off"`.
+#'   (`LSTALVDT`, else the last treatment day) or `"data cutoff"` (no end,
+#'   so the bar runs to the end of the axis, the last date in the data).
+#' @param serious How a serious AE shows: `"outline"` (a dark edge on its
+#'   bar), `"onset mark"` (a triangle at its start) or `"off"`.
 #' @param order_by Row order within a group: `"number of AEs"`,
 #'   `"worst grade"`, `"ongoing AEs"`, `"first onset"` or `"subject"`.
 #' @param treatment Draw the treatment period as a line.
@@ -51,7 +51,7 @@ ae_timeline_frame <- function(data,
                               colour = "Severity",
                               lanes = "stacked",
                               ongoing = "last contact",
-                              serious = "onset mark",
+                              serious = "outline",
                               order_by = "number of AEs",
                               treatment = TRUE,
                               treatment_emergent = TRUE,
@@ -62,7 +62,7 @@ ae_timeline_frame <- function(data,
   lanes <- match.arg(as.character(lanes), AET_LANES)
   ongoing <- match.arg(as.character(ongoing), c("last contact",
                                                 "data cutoff"))
-  serious <- match.arg(as.character(serious), c("onset mark", "outline",
+  serious <- match.arg(as.character(serious), c("outline", "onset mark",
                                                 "off"))
   order_by <- match.arg(as.character(order_by), AET_ORDER)
   group <- as.character(unlist(group %||% character()))
@@ -108,6 +108,8 @@ ae_timeline_frame <- function(data,
     if (isTRUE(treatment)) aet_treatment_rows(sl, rec),
     aet_event_rows(rec, sl, serious)
   )
+  # Past the cutoff the record has no end: it runs, open, to the axis end.
+  if (identical(ongoing, "data cutoff")) out$End[out$.open] <- NA_real_
   out <- aet_finish(out, rec, sl, group, order_by, colour)
   if (!is.null(group_label)) attr(out[[group]], "label") <- group_label
   out
@@ -334,6 +336,7 @@ aet_event_rows <- function(rec, sl, serious) {
     if (!is.null(out$ser)) {
       out$ser$.event_day <- s$Start
       out$ser$.event <- "Serious AE"
+      out$ser$.lane <- s$.lane
     }
   }
   dth <- sl[!is.na(sl$DTHDT), , drop = FALSE]
@@ -345,6 +348,8 @@ aet_event_rows <- function(rec, sl, serious) {
   if (!is.null(out$dth)) {
     out$dth$.event_day <- c(day, fat$End)
     out$dth$.event <- "Death"
+    # A death date marks the whole row; a fatal AE's end, its own lane.
+    out$dth$.lane <- c(rep(NA_character_, length(day)), fat$.lane)
   }
   out <- Filter(Negate(is.null), out)
   if (!length(out)) return(NULL)
@@ -402,7 +407,10 @@ aet_finish <- function(out, rec, sl, group, order_by, colour) {
   attr(out$Severity, "blockr_colors") <- AET_COLOURS[lv]
   attr(out$Worst, "blockr_colors") <- AET_COLOURS[lv]
   out$.lane <- factor(out$.lane, levels = aet_lane_levels(out$.lane, rec))
-  out$Event <- factor(out$.event, levels = c("Serious AE", "Death"))
+  # The level order picks the shapes: a filled triangle, an open triangle
+  # (unused), a cross.
+  out$Event <- factor(out$.event, levels = c("Serious AE", "Fatal AE",
+                                             "Death"))
   attr(out$USUBJID, "label") <- "Patient"
   keep <- c(group, "USUBJID", "AEs", "Ongoing", "Serious AEs", "Worst",
             "Start", "End", ".open", "Severity", ".lane", ".style", "Term",

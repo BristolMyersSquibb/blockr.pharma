@@ -10,7 +10,7 @@ ae_timeline_frame(
   colour = "Severity",
   lanes = "stacked",
   ongoing = "last contact",
-  serious = "onset mark",
+  serious = "outline",
   order_by = "number of AEs",
   treatment = TRUE,
   treatment_emergent = TRUE,
@@ -32,11 +32,11 @@ lanes as overlap needs), \code{"by term"}, \code{"by body system"}, or
 \code{"on one lane"}.}
 
 \item{ongoing}{Where an AE without an end runs to: \code{"last contact"}
-(\code{LSTALVDT}, else the last treatment day) or \code{"data cutoff"} (the last
-date in the data).}
+(\code{LSTALVDT}, else the last treatment day) or \code{"data cutoff"} (no end,
+so the bar runs to the end of the axis, the last date in the data).}
 
-\item{serious}{How a serious AE shows: \code{"onset mark"} (a triangle at its
-start), \code{"outline"} (an outline on the bar) or \code{"off"}.}
+\item{serious}{How a serious AE shows: \code{"outline"} (a dark edge on its
+bar), \code{"onset mark"} (a triangle at its start) or \code{"off"}.}
 
 \item{order_by}{Row order within a group: \code{"number of AEs"},
 \code{"worst grade"}, \code{"ongoing AEs"}, \code{"first onset"} or \code{"subject"}.}

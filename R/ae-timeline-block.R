@@ -133,7 +133,7 @@ ae_timeline_script <- function(group = "TRT01A") {
     sel("lanes", "stacked", AET_LANES, "Overlaps"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
-    sel("serious", "onset mark", c("onset mark", "outline", "off"),
+    sel("serious", "outline", c("outline", "onset mark", "off"),
         "Serious AEs"),
     sel("order_by", "number of AEs", AET_ORDER, "Sort patients by"),
     "treatment <- TRUE  #| flag(label = \"Treatment period line\")",
