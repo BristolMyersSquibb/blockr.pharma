@@ -139,7 +139,7 @@ test_that("a fatal AE without a death date marks death on its lane", {
 test_that("term labels go on the bars or only in the tooltip", {
   a <- aes_of(ae_timeline_frame(aet_toy()))
   expect_identical(a$.bar_label, a$Term)
-  t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "tooltip"))
+  t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "in the tooltip"))
   expect_true(all(is.na(t$.bar_label)))
   expect_identical(t$Term, a$Term)
 })
@@ -183,6 +183,7 @@ test_that("the block is a groups table that saves as one", {
   sp <- p$summaries[[length(p$summaries)]]
   expect_identical(sp$type, "spans")
   expect_identical(sp$lane, ".lane")
+  expect_identical(sp$bar_label, ".bar_label")
   expect_identical(p$sort_by, "data")
 })
 
@@ -200,6 +201,6 @@ test_that("the script's settings are its controls and run the frame", {
   # Every word in the sentence is a setting of the script.
   words <- regmatches(ae_timeline_subtitle(),
                       gregexpr("\\{@([a-z_]+)\\}", ae_timeline_subtitle()))[[1]]
-  expect_length(words, 7L)
+  expect_length(words, 8L)
   expect_true(all(gsub("[{}@]", "", words) %in% vars))
 })
