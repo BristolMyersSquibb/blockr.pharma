@@ -124,3 +124,25 @@ test_that("drugs and cutoff narrow the frame", {
   expect_identical(swimmer_frame(a, cutoff = as.Date(NA)), swimmer_frame(a))
   expect_match(swimmer_subtitle(), "@parent in ARM, BOR, status")
 })
+
+test_that("the swimmer is in the menu and saves as a viz table", {
+  # Its own uid: one taken from the class would replace viz's Table.
+  expect_true("swimmer_block" %in% blockr.core::list_blocks())
+  tbl <- blockr.core:::get_registry_entry("table_block")
+  expect_identical(attr(tbl, "ctor_name"), "new_table_block")
+
+  blk <- blockr.core::create_block("swimmer_block")
+  expect_s3_class(blk, "table_block")
+  expect_identical(blockr.core::block_name(blk), "Efficacy swimmer")
+  ctor <- attr(blk, "ctor")
+  expect_identical(attr(ctor, "fun"), "new_table_block")
+  expect_identical(attr(ctor, "pkg"), "blockr.viz")
+  expect_identical(blockr.core::block_metadata(blk)$id, "table_block")
+
+  back <- blockr.core::blockr_deser(blockr.core::blockr_ser(blk))
+  expect_s3_class(back, "table_block")
+  expect_identical(
+    blockr.core::blockr_ser(back)[c("constructor", "payload")],
+    blockr.core::blockr_ser(blk)[c("constructor", "payload")]
+  )
+})

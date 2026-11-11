@@ -47,6 +47,8 @@ new_swimmer_block <- function(doses = "Exceptions",
   doses <- match.arg(doses, c("Exceptions", "Dots", "Plain"))
   args <- list(...)
   args[c("ctor", "ctor_pkg", "class")] <- NULL
+  # Added from the menu it would be named after its class, "Table".
+  if (is.null(args$block_name)) args$block_name <- "Efficacy swimmer"
   do.call(blockr.viz::new_table_block, c(
     list(
       layout = "groups",

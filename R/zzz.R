@@ -226,6 +226,40 @@ register_pharma_blocks <- function() {
   # The AE heatmap is a table block now (blockr.viz::new_table_block() in the
   # groups layout); new_ae_heatmap_block() only builds one, so it has no
   # registry entry of its own.
+  #
+  # The swimmer is built the same way but is in the menu. Its block is a
+  # viz table block (class table_block, ctor new_table_block), so a saved
+  # board restores it as a Table with viz's metadata. The uid must be given:
+  # taken from the class it would be "table_block" and replace viz's Table.
+  register_blocks(
+    "new_swimmer_block",
+    name = "Efficacy Swimmer",
+    uid = "swimmer_block",
+    description = paste0(
+      "One row per patient: response over time, drug lanes with doses, ",
+      "from a CDISC dm."
+    ),
+    category = "table",
+    icon = "bar-chart-steps",
+    guidance = paste0(
+      "Takes a dm of ADaM tables as they are: ADSL, ADEX, ADRS (overall ",
+      "response by visit, PARAMCD OVR) and, optional, ADAE (serious AEs) ",
+      "and ADCM (con meds). Link it from the CDISC dm block or a filter ",
+      "below it; it needs no prep blocks. It draws one row per patient with ",
+      "the response as a bar in study weeks, a thin lane per drug above it, ",
+      "and arrows for drugs ongoing at the cutoff."
+    ),
+    # Plain descriptions, not arg specs: core checks specs against the
+    # formals of the block's own constructor, new_table_block().
+    arguments = list(c(
+      doses = "How a drug lane shows its doses: Exceptions, Dots or Plain.",
+      con_meds = "Draw con meds from ADCM as lanes too (TRUE/FALSE).",
+      max_lanes = "Lanes per patient before drugs fold into \"Other\".",
+      group = "ADSL column grouping the rows, default ARM."
+    )),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
   register_blocks(
     "new_population_filter_block",
     name = "Global Population Filter",
