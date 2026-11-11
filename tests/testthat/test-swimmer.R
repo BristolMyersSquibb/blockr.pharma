@@ -31,7 +31,7 @@ test_that("swimmer_frame builds response, lanes, events and listing", {
   f <- swimmer_frame(swim_adam())
   expect_setequal(unique(f$USUBJID), c("p1", "p2"))
   # Response: not assessed, then assessment to next, the last to follow-up.
-  r <- f[f$USUBJID == "p1" & is.na(f$lane) & !is.na(f$start), ]
+  r <- f[f$USUBJID == "p1" & f$full & !is.na(f$start), ]
   expect_identical(as.character(r$colour), c("Not assessed", "SD", "PR", "PR"))
   expect_equal(r$start[[2]], 6)
   # Best response and status.
@@ -42,7 +42,7 @@ test_that("swimmer_frame builds response, lanes, events and listing", {
   ev <- f[f$USUBJID == "p2" & !is.na(f$event), ]
   expect_identical(as.character(ev$event), c("Progression", "Death"))
   # Lanes: one per drug, an all-caps name in title case.
-  expect_setequal(levels(f$lane), c("Drug x", "Drug Y"))
+  expect_setequal(levels(f$lane), c("Drug x", "Drug Y", "INV"))
   # Own colours for every colour level.
   expect_true(all(levels(f$colour) %in% names(attr(f$colour,
                                                     "blockr_colors"))))
@@ -87,7 +87,7 @@ test_that("past max_lanes con meds fold into Other, study drugs keep lanes", {
     CMDOSE = 1, CMDOSU = "tablet"
   )
   f <- swimmer_frame(a, con_meds = TRUE, max_lanes = 4L)
-  expect_setequal(levels(f$lane), c("Drug x", "Drug Y", "Other"))
+  expect_setequal(levels(f$lane), c("Drug x", "Drug Y", "Other", "INV"))
   expect_identical(levels(f$lane)[[3]], "Other")
   o <- f[f$lane %in% "Other" & !is.na(f$strip), ]
   expect_length(o$strip, 3L)
@@ -115,7 +115,7 @@ test_that("drugs and cutoff narrow the frame", {
   a <- swim_adam()
   expect_identical(swimmer_drugs(a), c("Drug Y", "Drug x"))
   f <- swimmer_frame(a, drugs = "Drug Y")
-  expect_identical(levels(f$lane), "Drug Y")
+  expect_identical(levels(f$lane), c("Drug Y", "INV"))
   # A cutoff at day 60: later visits and doses go, drugs given past it run on.
   g <- swimmer_frame(a, cutoff = as.Date("2024-03-01"))
   expect_true(all(g$start[!is.na(g$start)] <= 60 / 7 + 1e-9))
@@ -208,4 +208,37 @@ test_that("the frame draws days and only the events asked for", {
   ev <- swimmer_frame(a, events = "Death")
   expect_true(all(is.na(ev$event) | ev$event == "Death"))
   expect_true(all(c("AGE", "SEX", "dose_level") %in% names(wk)))
+})
+
+test_that("several assessments draw a full bar each, with their own progression", {
+  a <- swim_adam()
+  d <- function(x) as.Date("2024-01-01") + x
+  a$adrs <- rbind(a$adrs, data.frame(
+    USUBJID = c("p1", "p1", "p2", "p2", "p2"),
+    PARAMCD = c("OVRBICR", "OVRBICR", "OVRIR", "OVRIR", "OVRIR"),
+    ADT = d(c(42, 84, 42, 80, 110)), AVALC = c("SD", "PD", "iSD", "iUPD", "iCPD")
+  ))
+  expect_identical(swimmer_assessments(a), c("OVR", "OVRBICR", "OVRIR"))
+  # Bar order follows the factor's levels, not the order of the picks.
+  ass <- factor(c("OVRIR", "OVR"), levels = c("OVR", "OVRBICR", "OVRIR"))
+  f <- swimmer_frame(a, assess = ass)
+  full <- unique(as.character(f$lane[f$full]))
+  expect_identical(full, c("INV", "iRECIST"))
+  expect_identical(tail(levels(f$lane), 2L), c("INV", "iRECIST"))
+  # iRECIST keeps its values; its first iUPD is a progression on its bar.
+  ir <- f[f$lane %in% "iRECIST", ]
+  expect_true("iUPD" %in% as.character(ir$colour))
+  pd <- ir[!is.na(ir$event_wk) & ir$event %in% "Progression", ]
+  expect_equal(pd$event_wk, 80 / 7)
+  # BOR per assessment, headed by its name; the main one is the BOR column.
+  expect_identical(unique(f$BOR_2[f$USUBJID == "p2"]), "iSD")
+  expect_identical(attr(f$BOR_2, "label"), "BOR iRECIST")
+  expect_identical(attr(f$BOR, "label"), "BOR INV")
+  expect_true(all(is.na(f$BOR_3)))
+  # One assessment: one full lane, the BOR as before.
+  g <- swimmer_frame(a)
+  expect_identical(unique(as.character(g$lane[g$full])), "INV")
+  expect_identical(attr(g$BOR, "label"), "Best response")
+  expect_identical(swimmer_assess_label(c("OVR", "OVRBICR", "XYZ")),
+                   c("INV", "BICR", "XYZ"))
 })

@@ -109,7 +109,7 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
 
 # The swimmer's own settings: its prepare script's values.
 SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
-                      "events", "unit", "parameter")
+                      "events", "unit", "parameter", "assess")
 
 #' The swimmer's prepare script
 #'
@@ -125,10 +125,11 @@ SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
 swimmer_script <- function(max_lanes = 4L) {
   paste(
     "lv <- blockr.pharma::swimmer_drugs(data)",
+    "av <- blockr.pharma::swimmer_assessments(data)",
+    paste0("assess <- factor(av[1], levels = av)  #| select(label = ",
+           "\"Response assessments\", multiple = TRUE)"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
-    paste0("parameter <- \"OVR\"  #| text(label = ",
-           "\"Overall response (ADRS PARAMCD)\")"),
     paste0("unit <- factor(\"weeks\", levels = c(\"weeks\", \"days\"))  ",
            "#| select(label = \"Time unit\")"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
@@ -142,7 +143,7 @@ swimmer_script <- function(max_lanes = 4L) {
            "#| select(label = \"Events\")"),
     paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
            "cutoff = cutoff, con_meds = con_meds, max_lanes = max_lanes, ",
-           "events = events, unit = unit, parameter = parameter)"),
+           "events = events, unit = unit, assess = assess)"),
     sep = "\n"
   )
 }
@@ -171,6 +172,7 @@ swimmer_subtitle <- function() {
 #' @export
 swimmer_clauses <- function() {
   c(
+    assess = "response by {@assess}",
     doses = "doses shown as {@doses}",
     drugs = "drugs {@drugs}",
     con_meds = "[{@con_meds}]",
@@ -190,7 +192,7 @@ swimmer_clauses <- function() {
 swimmer_gear <- function() {
   blockr.viz::table_gear(
     tabs = list(
-      Data = list(Tables = "mapping", Time = c("cutoff", "unit")),
+      Data = list(Tables = c("mapping", "assess"), Time = c("cutoff", "unit")),
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
         `Drug lines` = c("drugs", "doses", "con_meds", "max_lanes"),
@@ -218,7 +220,12 @@ swimmer_columns <- function() {
                  show = "number"),
     Age = list(type = "field", col = "AGE", on = FALSE),
     Sex = list(type = "field", col = "SEX", on = FALSE),
-    `Dose level` = list(type = "field", col = "dose_level", on = FALSE)
+    `Dose level` = list(type = "field", col = "dose_level", on = FALSE),
+    # A second and third assessment's best response, headed by its name.
+    BOR2 = list(type = "field", col = "BOR_2", name = NA, on = FALSE,
+                title = "BOR, 2nd assessment"),
+    BOR3 = list(type = "field", col = "BOR_3", name = NA, on = FALSE,
+                title = "BOR, 3rd assessment")
   )
 }
 
@@ -235,7 +242,7 @@ swimmer_lane <- function() {
        xend = "end", color = "colour", label = "label",
        tooltip = c("days", "dose"), size = "lg",
        event_x = "event_wk", event_shape = "event", open = "ongoing",
-       lane = "lane", seg_style = "mark", strip = "strip")
+       lane = "lane", lane_full = "full", seg_style = "mark", strip = "strip")
 }
 
 # The mapping editor's script (inst/js/swimmer-gear.js).

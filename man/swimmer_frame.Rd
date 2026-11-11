@@ -13,7 +13,8 @@ swimmer_frame(
   cutoff = NULL,
   drugs = NULL,
   events = NULL,
-  unit = "weeks"
+  unit = "weeks",
+  assess = NULL
 )
 }
 \arguments{
@@ -32,7 +33,8 @@ administration; a daily drug stays a bar). Without administration dates
 \item{max_lanes}{Lanes per patient before drugs fold into one grey
 "Other" lane, listed on hover. Study drugs (\code{adex}) keep theirs.}
 
-\item{parameter}{The ADRS parameter of the overall response per visit.}
+\item{parameter}{The ADRS parameter of the overall response per visit,
+when \code{assess} names none.}
 
 \item{cutoff}{The data cutoff. \code{NULL} or \code{NA}: the last date in the data.
 Response visits, doses and deaths after it are left out.}
@@ -45,6 +47,11 @@ Response visits, doses and deaths after it are left out.}
 
 \item{unit}{The time axis, \code{"weeks"} or \code{"days"} since the first dose.
 The listing's weeks on treatment stay weeks.}
+
+\item{assess}{The response assessments to draw, ADRS PARAMCDs in bar
+order (a factor in its level order): each a full bar, the first the main
+one, which the best response, the sort and the patient's status follow.
+\code{\link[=swimmer_assessments]{swimmer_assessments()}} lists them. \code{NULL}: \code{parameter} alone.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

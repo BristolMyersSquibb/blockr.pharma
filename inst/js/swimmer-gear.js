@@ -29,8 +29,6 @@
     '.pharma-map th{font-weight:500;color:var(--blockr-color-text-muted,#6b7280)}',
     '.pharma-map .is-ok{color:#047857}.pharma-map .is-bad{color:#b45309;font-weight:600}',
     '.pharma-map .is-off{color:var(--blockr-color-text-muted,#9ca3af)}',
-    '.pharma-map-param{margin-top:10px;display:flex;gap:8px;align-items:center;font-size:13px}',
-    '.pharma-map-param select{min-width:120px}',
     '.pharma-map-note{font-size:12px;color:var(--blockr-color-text-muted,#6b7280);margin-top:6px}'
   ].join('');
 
@@ -40,11 +38,8 @@
     s.id = 'pharma-map-style';
   };
 
-  /** The script's current value of `name` (R sends a one-element array). */
-  const current = (ctx, name) => {
-    const v = ((ctx.script && ctx.script.values) || {})['sv_' + name];
-    return Array.isArray(v) ? v[0] : v;
-  };
+  /** The script's current value of `name`. */
+  const current = (ctx, name) => ((ctx.script && ctx.script.values) || {})['sv_' + name];
 
   function draw(parent, ctx) {
     style();
@@ -52,10 +47,10 @@
     const info = (ctx.profile && ctx.profile.wire && ctx.profile.wire.info) || {};
     const roles = info.roles || [];
     const params = info.parameters || [];
-    const param = current(ctx, 'parameter') || 'OVR';
+    const picked = [].concat(current(ctx, 'assess') || []);
     const err = ctx.script && ctx.script.error;
     const bad = roles.filter((r) => (r.need && !r.found) || (r.found && (r.missing || []).length));
-    const noParam = params.length > 0 && !params.includes(param);
+    const noParam = params.length > 0 && !picked.some((p) => params.includes(p));
 
     let msg = 'All tables and columns found.';
     if (bad.length) {
@@ -63,7 +58,7 @@
         ? r.table + ' has no ' + r.missing.join(', ') + '.'
         : 'No ' + r.table + ' in the input.').join(' ');
     } else if (noParam) {
-      msg = 'ADRS has no PARAMCD "' + param + '". Pick the overall response parameter.';
+      msg = 'ADRS has none of the picked assessments. Pick them under Response assessments.';
     } else if (err) {
       msg = err;
     }
@@ -82,23 +77,9 @@
       el('td', ok ? 'is-ok' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : '!');
     }
 
-    const pick = el('div', 'pharma-map-param', host);
-    el('span', null, pick, 'Overall response, ADRS PARAMCD');
-    const sel = el('select', null, pick);
-    const opts = params.length ? params.slice() : [param];
-    if (!opts.includes(param)) opts.unshift(param);
-    for (const p of opts) {
-      const o = el('option', null, sel, p);
-      o.value = p;
-      if (p === param) o.selected = true;
-    }
-    sel.addEventListener('change', () => {
-      const held = Object.assign({}, ctx.values.script_values || {});
-      held.parameter = sel.value;
-      ctx.setValues({ script_values: held });
-    });
     el('div', 'pharma-map-note', host,
-       'Names match without case. Any of the listed alternatives will do (ARM, TRT01A or ACTARM).');
+       'Names match without case. Any of the listed alternatives will do (ARM, TRT01A or ACTARM). ' +
+       'ADRS parameters: ' + (params.join(', ') || 'none') + '.');
   }
 
   B.viz.gear.editors.mapping = { label: 'Found in the input', draw };
