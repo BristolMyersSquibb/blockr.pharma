@@ -173,7 +173,7 @@ swimmer_clauses <- function() {
   c(
     doses = "doses shown as {@doses}",
     drugs = "drugs {@drugs}",
-    con_meds = "con meds {@con_meds}",
+    con_meds = "[{@con_meds}]",
     events = "events {@events}",
     cutoff = "cutoff {@cutoff}",
     group = "[by {label(@parent in ARM, BOR, status)}]"
