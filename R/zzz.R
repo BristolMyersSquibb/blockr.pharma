@@ -227,10 +227,8 @@ register_pharma_blocks <- function() {
   # groups layout); new_ae_heatmap_block() only builds one, so it has no
   # registry entry of its own.
   #
-  # The swimmer is built the same way but is in the menu. Its block is a
-  # viz table block (class table_block, ctor new_table_block), so a saved
-  # board restores it as a Table with viz's metadata. The uid must be given:
-  # taken from the class it would be "table_block" and replace viz's Table.
+  # The swimmer is a table block of its own class (swimmer_block) that saves
+  # and restores under new_swimmer_block(), so its uid comes from its class.
   register_blocks(
     "new_swimmer_block",
     name = "Efficacy Swimmer",
@@ -251,11 +249,14 @@ register_pharma_blocks <- function() {
     ),
     # Plain descriptions, not arg specs: core checks specs against the
     # formals of the block's own constructor, new_table_block().
+    # Plain descriptions, not arg specs: core checks specs against the
+    # constructor's formals, and these settings travel through `...`.
     arguments = list(c(
       doses = "How a drug lane shows its doses: Exceptions, Dots or Plain.",
       con_meds = "Draw con meds from ADCM as lanes too (TRUE/FALSE).",
-      max_lanes = "Lanes per patient before drugs fold into \"Other\".",
-      group = "ADSL column grouping the rows, default ARM."
+      unit = "The time axis: weeks or days since the first dose.",
+      group = "ADSL column grouping the rows, default ARM.",
+      cutoff = "The data cutoff, a date; NA for the last date in the data."
     )),
     package = utils::packageName(),
     overwrite = TRUE

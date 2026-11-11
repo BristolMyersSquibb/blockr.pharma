@@ -38,13 +38,22 @@
 #'   Response visits, doses and deaths after it are left out.
 #' @param drugs The study drugs to draw, as [swimmer_drugs()] names them.
 #'   `NULL`: all.
+#' @param events The events drawn on the response bar: any of
+#'   `"Progression"`, `"Serious AE"`, `"Death"`. `NULL`: all.
+#' @param unit The time axis, `"weeks"` or `"days"` since the first dose.
+#'   The listing's weeks on treatment stay weeks.
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
 #' @export
 swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
                           max_lanes = 4L, parameter = "OVR", cutoff = NULL,
-                          drugs = NULL) {
+                          drugs = NULL, events = NULL, unit = "weeks") {
   doses <- match.arg(as.character(doses), c("Exceptions", "Plain", "Dots"))
+  unit <- match.arg(as.character(unit), c("weeks", "days"))
+  if (!length(parameter) || is.na(parameter[[1L]]) || !nzchar(parameter[[1L]])) {
+    parameter <- "OVR"
+  }
+  max_lanes <- max(1L, as.integer(max_lanes %||% 4L))
   if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- NULL
   tb <- swimmer_tables(data)
   sl <- swimmer_subjects(tb$adsl)
@@ -85,7 +94,23 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
     swimmer_event_rows(rs, sl, tb$adae, t0)
   )
   out <- do.call(rbind, parts)
-  swimmer_finish(out, sl, rs, ex, fu, cutoff)
+  if (!is.null(events)) {
+    out <- out[is.na(out$event) | out$event %in% as.character(events), ,
+               drop = FALSE]
+  }
+  out <- swimmer_finish(out, sl, rs, ex, fu, cutoff, tb$adsl)
+  if (unit == "days") out <- swimmer_in_days(out)
+  out
+}
+
+# The time axis in days since the first dose: the weeks times seven.
+swimmer_in_days <- function(out) {
+  for (nm in c("start", "end", "event_wk")) {
+    lab <- attr(out[[nm]], "label")
+    out[[nm]] <- out[[nm]] * 7
+    attr(out[[nm]], "label") <- sub("weeks?", "days", sub("Week", "Day", lab))
+  }
+  out
 }
 
 # --- inputs ----------------------------------------------------------------
@@ -558,7 +583,7 @@ SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 
 # The listing columns, the colour and lane levels with their colours, and
 # the labels the tooltips print.
-swimmer_finish <- function(out, sl, rs, ex, fu, cutoff) {
+swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   bor <- vapply(split(rs$AVALC, rs$USUBJID), function(v) {
     hit <- SWIMMER_BOR[SWIMMER_BOR %in% v]
     if (length(hit)) hit[[1L]] else NA_character_
@@ -580,6 +605,16 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff) {
   out$BOR <- unname(bor[out$USUBJID])
   out$weeks <- unname(wk[m])
   out$status <- status[m]
+  # Columns the listing offers besides (age, sex, the first study dose).
+  ids <- as.character(adsl$USUBJID)
+  at <- match(out$USUBJID, ids)
+  out$AGE <- swimmer_col(adsl, "AGE")[at] %||% rep(NA_real_, nrow(out))
+  out$SEX <- as.character(swimmer_col(adsl, "SEX")[at] %||%
+                            rep(NA_character_, nrow(out)))
+  first <- study[order(study$USUBJID, study$start), , drop = FALSE]
+  first <- first[!duplicated(first$USUBJID), , drop = FALSE]
+  lvl <- stats::setNames(swimmer_fmt_dose(first$dose, first$unit), first$USUBJID)
+  out$dose_level <- unname(lvl[out$USUBJID])
 
   drugs <- levels(ex$lane)
   dcol <- stats::setNames(rep_len(SWIMMER_DRUGS, length(drugs)), drugs)
@@ -601,7 +636,8 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff) {
               event_wk = "Week", event = "Event", ongoing = "Ongoing",
               days = "Study days", dose = "Dose", BOR = "Best response",
               weeks = "Weeks on treatment", status = "Status", ARM = "Arm",
-              USUBJID = "Subject")
+              USUBJID = "Subject", AGE = "Age", SEX = "Sex",
+              dose_level = "First dose")
   for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]
   rownames(out) <- NULL
   out

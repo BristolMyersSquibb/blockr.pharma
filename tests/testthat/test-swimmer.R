@@ -125,24 +125,87 @@ test_that("drugs and cutoff narrow the frame", {
   expect_match(swimmer_subtitle(), "@parent in ARM, BOR, status")
 })
 
-test_that("the swimmer is in the menu and saves as a viz table", {
-  # Its own uid: one taken from the class would replace viz's Table.
+test_that("the swimmer is in the menu and saves and restores as itself", {
+  # Its own uid: one taken from the table's class would replace viz's Table.
   expect_true("swimmer_block" %in% blockr.core::list_blocks())
   tbl <- blockr.core:::get_registry_entry("table_block")
   expect_identical(attr(tbl, "ctor_name"), "new_table_block")
 
   blk <- blockr.core::create_block("swimmer_block")
-  expect_s3_class(blk, "table_block")
+  expect_identical(class(blk)[1:2], c("swimmer_block", "table_block"))
   expect_identical(blockr.core::block_name(blk), "Efficacy swimmer")
   ctor <- attr(blk, "ctor")
-  expect_identical(attr(ctor, "fun"), "new_table_block")
-  expect_identical(attr(ctor, "pkg"), "blockr.viz")
-  expect_identical(blockr.core::block_metadata(blk)$id, "table_block")
+  expect_identical(attr(ctor, "fun"), "new_swimmer_block")
+  expect_identical(attr(ctor, "pkg"), "blockr.pharma")
+  expect_identical(blockr.core::block_metadata(blk)$id, "swimmer_block")
 
-  back <- blockr.core::blockr_deser(blockr.core::blockr_ser(blk))
-  expect_s3_class(back, "table_block")
-  expect_identical(
-    blockr.core::blockr_ser(back)[c("constructor", "payload")],
-    blockr.core::blockr_ser(blk)[c("constructor", "payload")]
-  )
+  # What a board saves: the swimmer's arguments, its script left out.
+  blk <- new_swimmer_block(doses = "Dots", group = "BOR")
+  ser <- blockr.core::blockr_ser(blk)
+  expect_identical(ser$constructor$constructor, "new_swimmer_block")
+  expect_setequal(names(ser$payload)[names(ser$payload) %in%
+                                       names(formals(new_swimmer_block))],
+                  setdiff(names(formals(new_swimmer_block)), "..."))
+  expect_false("script" %in% names(ser$payload))
+  expect_identical(ser$payload$script_values$doses, "Dots")
+  expect_identical(ser$payload$by, c("BOR", "USUBJID"))
+  back <- blockr.core::blockr_deser(ser)
+  expect_identical(class(back)[1], "swimmer_block")
+  expect_identical(attr(attr(back, "ctor"), "fun"), "new_swimmer_block")
+  expect_identical(blockr.core::blockr_ser(back)$payload, ser$payload)
+  # Others may set only the swimmer's own arguments.
+  expect_false("layout" %in% blockr.core::external_ctrl_vars(blk))
+  expect_true("script_values" %in% blockr.core::external_ctrl_vars(blk))
+})
+
+test_that("the swimmer's settings go to its script values; its gear is its own", {
+  blk <- new_swimmer_block(doses = "Plain", con_meds = TRUE, unit = "days",
+                           max_lanes = 3)
+  sv <- blockr.core::blockr_ser(blk)$payload$script_values
+  expect_identical(sv[c("doses", "con_meds", "unit", "max_lanes")],
+                   list(doses = "Plain", con_meds = TRUE, unit = "days",
+                        max_lanes = 3))
+  expect_error(new_swimmer_block(doses = "nope"))
+  g <- swimmer_gear()
+  expect_s3_class(g, "viz_table_gear")
+  expect_identical(vapply(g$tabs, `[[`, "", "title"),
+                   c("Data", "Patients", "Lanes", "Titles", "Interaction"))
+  on <- vapply(g$columns, `[[`, NA, "on")
+  expect_identical(names(on[on]), NULL)
+  expect_identical(vapply(g$columns[on], `[[`, "", "name"),
+                   c("BOR", "Status", "Weeks"))
+  expect_identical(vapply(swimmer_summaries(), `[[`, "", "name"),
+                   c("BOR", "Status", "Weeks", "Study time"))
+  # The subtitle is made of the clauses the gear ticks.
+  expect_match(swimmer_subtitle(), swimmer_clauses()[["doses"]], fixed = TRUE)
+  expect_false(grepl(swimmer_clauses()[["con_meds"]], swimmer_subtitle(),
+                     fixed = TRUE))
+})
+
+test_that("swimmer_mapping() says which tables and columns it found", {
+  a <- swim_adam()
+  m <- swimmer_mapping(a)
+  roles <- vapply(m$roles, `[[`, "", "role")
+  expect_identical(roles, c("Subjects", "Doses", "Response", "Serious AEs",
+                            "Con meds"))
+  expect_true(all(vapply(m$roles[1:3], `[[`, NA, "found")))
+  expect_identical(m$parameters, "OVR")
+  tabs <- if (inherits(a, "dm")) dm::dm_get_tables(a) else a
+  tabs$adrs$ADT <- NULL
+  m2 <- swimmer_mapping(tabs[c("adsl", "adrs")])
+  expect_false(m2$roles[[2L]]$found)
+  expect_identical(m2$roles[[3L]]$missing, "ADT")
+  expect_identical(swimmer_mapping(NULL)$parameters, character())
+})
+
+test_that("the frame draws days and only the events asked for", {
+  a <- swim_adam()
+  wk <- swimmer_frame(a)
+  dy <- swimmer_frame(a, unit = "days")
+  expect_equal(as.numeric(dy$start), as.numeric(wk$start) * 7)
+  expect_identical(attr(dy$start, "label"), "Start, days")
+  expect_identical(dy$weeks, wk$weeks)
+  ev <- swimmer_frame(a, events = "Death")
+  expect_true(all(is.na(ev$event) | ev$event == "Death"))
+  expect_true(all(c("AGE", "SEX", "dose_level") %in% names(wk)))
 })

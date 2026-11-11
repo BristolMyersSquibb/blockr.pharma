@@ -11,7 +11,9 @@ swimmer_frame(
   max_lanes = 4L,
   parameter = "OVR",
   cutoff = NULL,
-  drugs = NULL
+  drugs = NULL,
+  events = NULL,
+  unit = "weeks"
 )
 }
 \arguments{
@@ -37,6 +39,12 @@ Response visits, doses and deaths after it are left out.}
 
 \item{drugs}{The study drugs to draw, as \code{\link[=swimmer_drugs]{swimmer_drugs()}} names them.
 \code{NULL}: all.}
+
+\item{events}{The events drawn on the response bar: any of
+\code{"Progression"}, \code{"Serious AE"}, \code{"Death"}. \code{NULL}: all.}
+
+\item{unit}{The time axis, \code{"weeks"} or \code{"days"} since the first dose.
+The listing's weeks on treatment stay weeks.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

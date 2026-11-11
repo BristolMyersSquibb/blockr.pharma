@@ -7,14 +7,15 @@
 swimmer_script(max_lanes = 4L)
 }
 \arguments{
-\item{max_lanes}{Lanes before drugs fold into "Other".}
+\item{max_lanes}{Lanes before drugs fold into "Other", by default.}
 }
 \value{
 The script, one string.
 }
 \description{
-Declares the swimmer's settings, which the sentence under the title and
-the controls band show: the doses style, the drugs to draw (choices from
-the input's ADEX), the cutoff (automatic until a date is set) and the con
-meds flag. Then it calls \code{\link[=swimmer_frame]{swimmer_frame()}} on the input dm.
+Declares the swimmer's settings, which its gear shows as rows: the doses
+style, the drugs to draw (choices from the input's ADEX), the cutoff
+(automatic until a date is set), con meds, the lanes before "Other", the
+events, the time unit and the ADRS parameter. Then it calls
+\code{\link[=swimmer_frame]{swimmer_frame()}} on the input dm.
 }

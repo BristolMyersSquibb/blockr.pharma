@@ -27,10 +27,14 @@ export(pp_patient_exhibit)
 export(pp_pick_subject)
 export(stamp_group)
 export(stamp_source)
+export(swimmer_clauses)
 export(swimmer_drugs)
 export(swimmer_frame)
+export(swimmer_gear)
+export(swimmer_mapping)
 export(swimmer_script)
 export(swimmer_subtitle)
+export(swimmer_summaries)
 importFrom(blockr.core,
   arg_array,
   arg_boolean,

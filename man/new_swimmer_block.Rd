@@ -5,53 +5,76 @@
 \title{Efficacy swimmer}
 \usage{
 new_swimmer_block(
-  doses = "Exceptions",
-  con_meds = FALSE,
-  max_lanes = 4L,
-  group = "ARM",
+  by = c("ARM", "USUBJID"),
+  summaries = swimmer_summaries(),
+  sort_by = "Weeks",
+  sort_dir = "desc",
+  script_values = list(),
   title = "Efficacy swimmer",
   subtitle = swimmer_subtitle(),
+  caption = getOption("blockr.viz.default_caption"),
+  drill = NULL,
+  drill_target = "",
+  drill_table = "",
+  search = TRUE,
+  download = TRUE,
   ...
 )
 }
 \arguments{
-\item{doses}{How a drug lane shows its doses: \code{"Exceptions"}, \code{"Dots"} or
-\code{"Plain"}.}
+\item{by}{The rows: the grouping column, then \code{USUBJID}. A single
+\code{"USUBJID"} does not group.}
 
-\item{con_meds}{Draw con meds from ADCM as lanes too.}
+\item{summaries}{The listing columns and the swimlane; see
+\code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
 
-\item{max_lanes}{Lanes before drugs fold into "Other".}
+\item{sort_by, sort_dir}{Row order: a listing column, and its direction.}
 
-\item{group}{Column grouping the rows. Default the arm.}
+\item{script_values}{The swimmer's settings, by name: \code{doses}
+(\code{"Exceptions"}, \code{"Dots"} or \code{"Plain"}), \code{drugs}, \code{cutoff} (a date,
+\code{NA} for the last date in the data), \code{con_meds}, \code{max_lanes}, \code{events},
+\code{unit} (\code{"weeks"} or \code{"days"}), \code{parameter} (the ADRS PARAMCD).}
 
-\item{title, subtitle}{Text above the table.}
+\item{title, subtitle, caption}{Text above and below the block. The subtitle
+is a template whose \verb{\{@name\}} words readers click.}
 
-\item{...}{Forwarded to \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
+\item{drill, drill_target, drill_table}{A click on a patient filters another
+block; see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
+
+\item{search, download}{The search field and the download button.}
+
+\item{...}{The swimmer's settings by name (\code{doses = "Dots"}, as in
+\code{script_values}) and \code{group}, the grouping column; arguments for
+\code{\link[blockr.core:new_block]{blockr.core::new_block()}} (\code{block_name}).}
 }
 \value{
-A table block (class \code{table_block}).
+A table block of class \code{swimmer_block}.
 }
 \description{
 One row per patient: the overall response over time as a bar with first
 progression, serious AEs and death on it, and a thin line per drug above
 it, with an arrow while the drug is ongoing at the cutoff. Rows grow with
-the number of drugs; past \code{max_lanes} drugs, study drugs keep their lanes
+the number of drugs; past the lanes setting, study drugs keep their lanes
 and the rest fold into a grey "Other" lane. Pointing at a drug lists its
-cycles (number, dose, study day, delay). Time is weeks since the first
-dose.
+cycles (number, dose, study day, delay). Time is weeks (or days) since the
+first dose.
 }
 \details{
 The input is a dm of ADaM tables as they are: ADSL, ADEX, ADRS (overall
-response per visit, \code{PARAMCD == "OVR"}) and, optional, ADAE. The block
-computes study weeks, drugs ongoing to the cutoff, response periods and
-the best overall response (\code{\link[=swimmer_frame]{swimmer_frame()}}). The doses setting sits
-beside the title: "Exceptions" (dose cuts, late doses, skipped cycles),
-"Dots" (one ring per administration) or "Plain".
+response per visit, \code{PARAMCD == "OVR"}) and, optional, ADAE and ADCM. The
+block computes study time, drugs ongoing to the cutoff, response periods
+and the best overall response (\code{\link[=swimmer_frame]{swimmer_frame()}}).
 
-Returns a \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}} in the groups layout.
+Its gear has the tabs Data (the tables found, the response parameter, the
+cutoff), Patients (grouping, sort, listing columns), Lanes (drugs, doses,
+con meds, events, time unit), Titles and Interaction. A setting ticked "In
+the subtitle" (Titles) becomes a word readers click.
+
+Returns a table block (\code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}, groups layout) of
+class \code{swimmer_block}.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-new_swimmer_block()
+new_swimmer_block(doses = "Dots")
 \dontshow{\}) # examplesIf}
 }

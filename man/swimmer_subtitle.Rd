@@ -11,7 +11,8 @@ A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_ch
 }
 \description{
 Each \verb{\{@...\}} word is a setting to click: the cutoff, the doses style and
-the drugs from the prepare script, and the column grouping the rows
-(\verb{@parent}, the table's outer \code{by}), offered among the listing columns.
-The grouping's clause leaves when the rows are not grouped.
+the drugs, and the column grouping the rows (\verb{@parent}, the table's outer
+\code{by}). The grouping's clause leaves when the rows are not grouped. The
+gear's "In the subtitle" ticks add and remove the clauses of
+\code{\link[=swimmer_clauses]{swimmer_clauses()}}.
 }
