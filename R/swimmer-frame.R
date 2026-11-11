@@ -63,7 +63,7 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
   if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- NULL
   tb <- swimmer_tables(data)
   sl <- swimmer_subjects(tb$adsl)
-  assess <- swimmer_assess_order(assess, parameter)
+  assess <- swimmer_assess_codes(swimmer_assess_order(assess, parameter), tb)
   lab <- swimmer_assess_label(assess)
   # Every assessment's visits, the main one's first.
   ra <- lapply(assess, function(a) swimmer_response(tb$adrs, a))
@@ -197,6 +197,15 @@ swimmer_assess_order <- function(assess, parameter) {
   if (!length(assess)) parameter else assess
 }
 
+# The PARAMCDs of picks given as bar names ("BICR") or as codes.
+swimmer_assess_codes <- function(assess, tb) {
+  codes <- swimmer_assessments(tb)
+  labs <- swimmer_assess_label(codes)
+  out <- ifelse(assess %in% labs & !assess %in% codes,
+                codes[match(assess, labs)], assess)
+  unique(out[!is.na(out)])
+}
+
 # A bar's name: the assessor a PARAMCD usually stands for, else the code.
 swimmer_assess_label <- function(assess) {
   known <- c(OVR = "INV", OVRINV = "INV", OVRLRESP = "INV", OVRBICR = "BICR",
@@ -212,12 +221,14 @@ swimmer_assess_label <- function(assess) {
 #' investigator parameter comes first.
 #'
 #' @param data The swimmer's input dm.
-#' @return A character vector of PARAMCDs.
+#' @param labels Return the bars' names (INV, BICR, iRECIST) in place of the
+#'   PARAMCDs, as the gear offers them.
+#' @return A character vector of PARAMCDs, or of names.
 #' @export
-swimmer_assessments <- function(data) {
+swimmer_assessments <- function(data, labels = FALSE) {
   tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
   pc <- if (!is.null(tb)) swimmer_col(tb$adrs, "PARAMCD")
-  if (is.null(pc)) return("OVR")
+  if (is.null(pc)) return(if (labels) "INV" else "OVR")
   v <- swimmer_resp_value(tb$adrs$AVALC)
   ok <- tapply(v, as.character(pc), function(x) {
     mean(x %in% c(names(SWIMMER_RESPONSE), "NOT EVALUABLE")) > 0.8
@@ -225,7 +236,8 @@ swimmer_assessments <- function(data) {
   out <- names(ok)[ok %in% TRUE]
   first <- intersect(c("OVR", "OVRINV", "OVRLRESP"), out)
   out <- c(first, sort(setdiff(out, first)))
-  if (length(out)) out else "OVR"
+  if (!length(out)) out <- "OVR"
+  if (labels) swimmer_assess_label(out) else out
 }
 
 # A response value as the swimmer draws it: upper case, iRECIST's `i` kept.

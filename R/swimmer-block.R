@@ -125,7 +125,7 @@ SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
 swimmer_script <- function(max_lanes = 4L) {
   paste(
     "lv <- blockr.pharma::swimmer_drugs(data)",
-    "av <- blockr.pharma::swimmer_assessments(data)",
+    "av <- blockr.pharma::swimmer_assessments(data, labels = TRUE)",
     paste0("assess <- factor(av[1], levels = av)  #| select(label = ",
            "\"Response assessments\", multiple = TRUE)"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
@@ -277,8 +277,8 @@ SWIMMER_ROLES <- list(
 #' ADRS parameters, for the gear's Tables row. Names match without case.
 #'
 #' @param data The swimmer's input dm.
-#' @return A list: `roles` (role, table, found, columns, missing, need) and
-#'   `parameters`.
+#' @return A list: `roles` (role, table, found, columns, missing, need),
+#'   `parameters` (ADRS PARAMCDs) and `assessments` (the bars' names).
 #' @export
 swimmer_mapping <- function(data) {
   tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
@@ -298,5 +298,10 @@ swimmer_mapping <- function(data) {
   adrs <- tabs[["adrs"]]
   pc <- if (!is.null(adrs)) swimmer_col(as.data.frame(adrs), "PARAMCD")
   list(roles = roles,
-       parameters = sort(unique(as.character(pc[!is.na(pc)]))))
+       parameters = sort(unique(as.character(pc[!is.na(pc)]))),
+       assessments = if (!is.null(adrs)) {
+         swimmer_assessments(tabs, labels = TRUE)
+       } else {
+         character()
+       })
 }

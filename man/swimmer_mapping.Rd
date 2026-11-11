@@ -10,8 +10,8 @@ swimmer_mapping(data)
 \item{data}{The swimmer's input dm.}
 }
 \value{
-A list: \code{roles} (role, table, found, columns, missing, need) and
-\code{parameters}.
+A list: \code{roles} (role, table, found, columns, missing, need),
+\code{parameters} (ADRS PARAMCDs) and \code{assessments} (the bars' names).
 }
 \description{
 Per role, whether its table is there and which columns it lacks, and the

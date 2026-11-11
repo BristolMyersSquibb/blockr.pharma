@@ -4,13 +4,16 @@
 \alias{swimmer_assessments}
 \title{The response assessments in a swimmer's input}
 \usage{
-swimmer_assessments(data)
+swimmer_assessments(data, labels = FALSE)
 }
 \arguments{
 \item{data}{The swimmer's input dm.}
+
+\item{labels}{Return the bars' names (INV, BICR, iRECIST) in place of the
+PARAMCDs, as the gear offers them.}
 }
 \value{
-A character vector of PARAMCDs.
+A character vector of PARAMCDs, or of names.
 }
 \description{
 The ADRS parameters whose values are overall responses (CR, PR, SD, PD,

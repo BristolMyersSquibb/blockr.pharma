@@ -50,7 +50,8 @@
     const picked = [].concat(current(ctx, 'assess') || []);
     const err = ctx.script && ctx.script.error;
     const bad = roles.filter((r) => (r.need && !r.found) || (r.found && (r.missing || []).length));
-    const noParam = params.length > 0 && !picked.some((p) => params.includes(p));
+    const names = info.assessments || [];
+    const noParam = names.length > 0 && !picked.some((p) => names.includes(p));
 
     let msg = 'All tables and columns found.';
     if (bad.length) {

@@ -241,4 +241,9 @@ test_that("several assessments draw a full bar each, with their own progression"
   expect_identical(attr(g$BOR, "label"), "Best response")
   expect_identical(swimmer_assess_label(c("OVR", "OVRBICR", "XYZ")),
                    c("INV", "BICR", "XYZ"))
+  # The gear offers the bars' names; the frame takes them as the codes.
+  expect_identical(swimmer_assessments(a, labels = TRUE),
+                   c("INV", "BICR", "iRECIST"))
+  byname <- factor(c("INV", "iRECIST"), levels = c("INV", "BICR", "iRECIST"))
+  expect_identical(swimmer_frame(a, assess = byname), f)
 })
