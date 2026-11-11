@@ -17,6 +17,8 @@
   };
 
   const STYLE = [
+    '.vz-row-controls > .pharma-map-wrap{display:flex;flex-direction:column;align-items:stretch;',
+    'width:100%;max-width:680px}',
     '.pharma-map-status{font-size:13px;padding:6px 10px;border-radius:6px;margin:0 0 8px;',
     'background:#ecfdf5;color:#047857}',
     '.pharma-map-status.is-bad{background:#fef3c7;color:#b45309}',
@@ -28,6 +30,7 @@
     '.pharma-map .is-ok{color:#047857}.pharma-map .is-bad{color:#b45309;font-weight:600}',
     '.pharma-map .is-off{color:var(--blockr-color-text-muted,#9ca3af)}',
     '.pharma-map-param{margin-top:10px;display:flex;gap:8px;align-items:center;font-size:13px}',
+    '.pharma-map-param select{min-width:120px}',
     '.pharma-map-note{font-size:12px;color:var(--blockr-color-text-muted,#6b7280);margin-top:6px}'
   ].join('');
 
@@ -43,8 +46,9 @@
     return Array.isArray(v) ? v[0] : v;
   };
 
-  function draw(host, ctx) {
+  function draw(parent, ctx) {
     style();
+    const host = el('div', 'pharma-map-wrap', parent);
     const info = (ctx.profile && ctx.profile.wire && ctx.profile.wire.info) || {};
     const roles = info.roles || [];
     const params = info.parameters || [];
@@ -78,9 +82,9 @@
       el('td', ok ? 'is-ok' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : '!');
     }
 
-    const row = el('div', 'pharma-map-param', host);
-    el('span', null, row, 'Overall response, ADRS PARAMCD');
-    const sel = el('select', null, row);
+    const pick = el('div', 'pharma-map-param', host);
+    el('span', null, pick, 'Overall response, ADRS PARAMCD');
+    const sel = el('select', null, pick);
     const opts = params.length ? params.slice() : [param];
     if (!opts.includes(param)) opts.unshift(param);
     for (const p of opts) {
@@ -97,5 +101,5 @@
        'Names match without case. Any of the listed alternatives will do (ARM, TRT01A or ACTARM).');
   }
 
-  B.viz.gear.editors.mapping = { label: 'Tables', draw };
+  B.viz.gear.editors.mapping = { label: 'Found in the input', draw };
 })();
