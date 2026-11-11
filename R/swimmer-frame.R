@@ -421,7 +421,7 @@ swimmer_period_rows <- function(e, tt, doses) {
   strip <- swimmer_rows(
     e$USUBJID, start = swimmer_wk(e$start, tt), lane = as.character(e$lane),
     strip = paste0(ifelse(nzchar(dose), paste0(dose, "\n"), ""), "d ",
-                   swimmer_day(e$start, tt), "–",
+                   swimmer_day(e$start, tt), "\u2013",
                    ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
   )
   cut <- if (n > 1L && !identical(doses, "Plain") &&
@@ -540,7 +540,7 @@ swimmer_other_rows <- function(e, tt) {
     ),
     swimmer_rows(
       e$USUBJID, start = swimmer_wk(e$start, tt), lane = "Other",
-      strip = paste0(e$drug, "\nd ", swimmer_day(e$start, tt), "–",
+      strip = paste0(e$drug, "\nd ", swimmer_day(e$start, tt), "\u2013",
                      ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
     )
   )
