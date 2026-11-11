@@ -44,10 +44,10 @@ test_that("the treatment lane folds a multi-line arm label to one line", {
 
   # A study's own arm column may carry line breaks the ADaM arm variables
   # never do. The lane draws one line of text inside the bar.
-  js <- overview_arm_js("XYZ-000000 2.5mg+\nOxaliplatin")
+  js <- overview_arm_js("XYZ-000000 2.5mg+\nDrug B")
 
-  expect_false(grepl("2.5mg+\nOxaliplatin", js, fixed = TRUE))
-  expect_true(grepl("2.5mg+ Oxaliplatin", js, fixed = TRUE))
+  expect_false(grepl("2.5mg+\nDrug B", js, fixed = TRUE))
+  expect_true(grepl("2.5mg+ Drug B", js, fixed = TRUE))
 })
 
 test_that("a hostile arm label is encoded, not pasted, into the lane's JS", {

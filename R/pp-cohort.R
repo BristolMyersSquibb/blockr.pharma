@@ -1704,7 +1704,7 @@ pp_cohort_pick <- function(sel, ids) {
 #' Split a cohort's ids into the part that is shared and the part that varies
 #'
 #' A prod USUBJID is around twenty characters and most of them are constant:
-#' `CA2440001-01-703-1129` is study, then site, then subject, and the study is
+#' `STUDY0001-01-703-1129` is study, then site, then subject, and the study is
 #' the same for every row of the board. Printing it 254 times is what pushes
 #' the row past the sidebar's width.
 #'
@@ -1716,7 +1716,7 @@ pp_cohort_pick <- function(sel, ids) {
 #' hides the subject number, and cutting the head hides which site.
 #'
 #' @section Why it trims to a separator, and keeps two segments:
-#' The common prefix of a cohort at one site is `CA2440001-01-703-1` -- one
+#' The common prefix of a cohort at one site is `STUDY0001-01-703-1` -- one
 #' character into the subject number. Cutting there would leave `129`, which
 #' is not an id anyone recognises, so the prefix is trimmed back to the last
 #' separator it contains.

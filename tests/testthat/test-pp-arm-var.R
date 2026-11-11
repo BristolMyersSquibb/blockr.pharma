@@ -70,7 +70,7 @@ test_that("the picker labels subjects with the resolved arm role", {
   adsl <- data.frame(
     USUBJID = c("a", "b"),
     TRT = c("Drug X", "Drug Y"),
-    ACTARM = c("GROUPAB COMPOUND-A", "GROUPBP1 COMPOUND-A"),
+    ACTARM = c("ARM A COMPOUND-A", "ARM B1 COMPOUND-A"),
     AGE = c(63L, 71L), SEX = c("F", "M"),
     stringsAsFactors = FALSE
   )
@@ -82,7 +82,7 @@ test_that("the picker labels subjects with the resolved arm role", {
   # undeclared: ACTARM, the default
   undeclared <- pp_subject_choices(dm_obj, pp_resolve_roles(dm_obj)$arm)
   expect_identical(undeclared$meta,
-                   c("GROUPAB COMPOUND-A · 63F", "GROUPBP1 COMPOUND-A · 71M"))
+                   c("ARM A COMPOUND-A · 63F", "ARM B1 COMPOUND-A · 71M"))
 })
 
 test_that("labels degrade to id-only when the arm does not resolve", {
@@ -116,7 +116,7 @@ test_that("the overview lane honors the injected arm role", {
     adsl = data.frame(
       USUBJID = "a",
       TRTSDT = as.Date("2020-01-01"), TRTEDT = as.Date("2020-06-01"),
-      TRT = "Drug X", ACTARM = "GROUPAB COMPOUND-A",
+      TRT = "Drug X", ACTARM = "ARM A COMPOUND-A",
       stringsAsFactors = FALSE
     )
   )
@@ -130,7 +130,7 @@ test_that("the overview lane honors the injected arm role", {
   expect_match(lane_label(list(roles = list(arm = "TRT"))), "Drug X")
   expect_match(
     lane_label(list(roles = pp_resolve_roles(dm_obj)["arm"])),
-    "GROUPAB COMPOUND-A"
+    "ARM A COMPOUND-A"
   )
   # no role injected (or unresolved): generic label, never a guess
   expect_match(lane_label(list()), "Treatment")
