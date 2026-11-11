@@ -631,10 +631,10 @@ test_that("the band maps from day0, not from zero", {
 # characters off an id.
 
 test_that("the shared prefix is lifted, and only the shared part", {
-  ids <- c("CA2440001-01-701-1115", "CA2440001-01-703-1129",
-           "CA2440001-01-702-1122")
+  ids <- c("STUDY0001-01-701-1115", "STUDY0001-01-703-1129",
+           "STUDY0001-01-702-1122")
   d <- pp_cohort_id_display(ids)
-  expect_identical(d$prefix, "CA2440001-01-")
+  expect_identical(d$prefix, "STUDY0001-01-")
   expect_identical(d$short, c("701-1115", "703-1129", "702-1122"))
   # nothing that distinguishes two patients is dropped
   expect_identical(length(unique(d$short)), length(unique(ids)))
@@ -645,10 +645,10 @@ test_that("the displayed id does not change as the cohort narrows", {
   # Without the two-segment floor a patient would read as 703-1129 in the
   # whole cohort and 1129 at their own site, and the id under the cursor
   # would change as you filter.
-  one_site <- c("CA2440001-01-703-1129", "CA2440001-01-703-1130",
-                "CA2440001-01-703-1141")
+  one_site <- c("STUDY0001-01-703-1129", "STUDY0001-01-703-1130",
+                "STUDY0001-01-703-1141")
   d <- pp_cohort_id_display(one_site)
-  expect_identical(d$prefix, "CA2440001-01-")
+  expect_identical(d$prefix, "STUDY0001-01-")
   expect_identical(d$short[[1]], "703-1129")
 })
 
@@ -670,13 +670,13 @@ test_that("nothing is lifted when there is nothing to lift", {
   # ids with no separator are left alone rather than cut at a guessed point
   expect_identical(pp_cohort_id_display(c("ABC1115", "ABC1122"))$prefix, "")
   # one patient has nothing to compare against
-  expect_identical(pp_cohort_id_display("CA2440001-01-703-1129")$prefix, "")
+  expect_identical(pp_cohort_id_display("STUDY0001-01-703-1129")$prefix, "")
   expect_identical(pp_cohort_id_display(character())$short, character())
 })
 
 test_that("the download and the click keep the full id", {
   # The row shows the short form; everything that leaves the block must not.
-  ids <- c("CA2440001-01-701-1115", "CA2440001-01-703-1129")
+  ids <- c("STUDY0001-01-701-1115", "STUDY0001-01-703-1129")
   short <- pp_cohort_id_display(ids)$short
   # the click guard is checked against the real cohort ids, so a short form
   # would be rejected -- which is what proves the row must send the full one
