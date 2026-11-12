@@ -93,7 +93,7 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
     swimmer_drug_rows(ex, t0, doses, cutoff),
     swimmer_event_rows(rs, sl, tb$adae, t0)
   )
-  out <- do.call(rbind, parts)
+  out <- list2DF(swimmer_bind(parts))
   if (!is.null(events)) {
     out <- out[is.na(out$event) | out$event %in% as.character(events), ,
                drop = FALSE]
@@ -221,11 +221,14 @@ swimmer_drugs <- function(data) {
   sort(unique(d[!is.na(d)]))
 }
 
-# "XANOMELINE" reads as "Xanomeline"; mixed case stays.
+# "XANOMELINE" reads as "Xanomeline"; mixed case stays. Each name once:
+# toTitleCase() is slow, and a con med table repeats its names many times.
 swimmer_drug_name <- function(x) {
-  up <- !is.na(x) & x == toupper(x)
-  x[up] <- tools::toTitleCase(tolower(x[up]))
-  x
+  lv <- unique(x)
+  nm <- lv
+  up <- !is.na(lv) & lv == toupper(lv)
+  nm[up] <- tools::toTitleCase(tolower(lv[up]))
+  nm[match(x, lv)]
 }
 
 swimmer_cm <- function(adcm) {
@@ -321,13 +324,24 @@ SWIMMER_NA_ROW <- list(
   ongoing = NA, days = NA_character_, dose = NA_character_
 )
 
-# Records as a frame, every column present.
+# Records as a list of columns, every column present. swimmer_bind() joins
+# such lists and swimmer_frame() makes the data frame once at the end: a
+# data frame per drug and patient, bound with rbind(), took half the time.
 swimmer_rows <- function(USUBJID, ...) {
   n <- length(USUBJID)
   if (!n) return(NULL)
   cols <- utils::modifyList(SWIMMER_NA_ROW, list(...))
-  cols <- lapply(cols, function(v) rep_len(v, n))
-  as.data.frame(c(list(USUBJID = USUBJID), cols), stringsAsFactors = FALSE)
+  c(list(USUBJID = USUBJID), lapply(cols, function(v) rep_len(v, n)))
+}
+
+# A list of swimmer_rows() results as one, in order. NULLs are left out.
+swimmer_bind <- function(sets) {
+  sets <- sets[!vapply(sets, is.null, NA)]
+  if (!length(sets)) return(NULL)
+  nms <- names(sets[[1L]])
+  stats::setNames(lapply(nms, function(nm) {
+    unlist(lapply(sets, `[[`, nm), use.names = FALSE)
+  }), nms)
 }
 
 swimmer_wk <- function(d, t0) (as.numeric(d) - as.numeric(t0)) / 7
@@ -362,9 +376,9 @@ swimmer_resp_rows <- function(rs, fu, t0) {
                    colour = "Not assessed", label = "Not assessed",
                    days = swimmer_days(tt, r$ADT[[1L]], tt))
     }
-    rbind(pre, a)
+    swimmer_bind(list(pre, a))
   })
-  do.call(rbind, out)
+  swimmer_bind(out)
 }
 
 # First progression and death on the response lane; serious AEs when ADAE
@@ -391,7 +405,7 @@ swimmer_event_rows <- function(rs, sl, adae, t0) {
     dth$USUBJID, event_wk = swimmer_wk(dth$DTHDT, t0[dth$USUBJID]),
     event = "Death"
   )))
-  do.call(rbind, out)
+  swimmer_bind(out)
 }
 
 swimmer_fmt_dose <- function(dose, unit) {
@@ -417,7 +431,7 @@ swimmer_drug_rows <- function(ex, t0, doses, cutoff) {
       swimmer_admin_rows(e, adm, tt, doses, cutoff)
     }
   })
-  do.call(rbind, out)
+  swimmer_bind(out)
 }
 
 # A drug's administrations, or NULL when its records are dose periods: one
@@ -459,7 +473,7 @@ swimmer_period_rows <- function(e, tt, doses) {
       dose = paste0(dose[i - 1L], " to ", dose[i])
     )
   }
-  rbind(bar, cut, strip)
+  swimmer_bind(list(bar, cut, strip))
 }
 
 # Daily administrations as dose periods: a run of the same dose without a
@@ -512,7 +526,7 @@ swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
     Exceptions = {
       cut <- which(c(FALSE, adm$dose[-1L] < adm$dose[-n]))
       lt <- which(late > 0)
-      rbind(
+      swimmer_bind(list(
         swimmer_rows(
           rep(id, length(cut)), start = swimmer_wk(d[cut], tt), lane = lane,
           colour = drug, mark = "step", label = drug,
@@ -532,7 +546,7 @@ swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
           mark = "dashed", label = drug,
           days = paste("Skipped, planned day", swimmer_day(skipped, tt))
         )
-      )
+      ))
     }
   )
   boxes <- c(
@@ -549,13 +563,13 @@ swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
     mark = c(ifelse(late > 0, "hollow", "solid"), rep("dashed",
                                                        length(skipped)))
   )
-  rbind(bar, marks, strip)
+  swimmer_bind(list(bar, marks, strip))
 }
 
 # A folded drug: its periods in grey on the "Other" lane, named in the strip.
 swimmer_other_rows <- function(e, tt) {
   n <- nrow(e)
-  rbind(
+  swimmer_bind(list(
     swimmer_rows(
       e$USUBJID, start = swimmer_wk(e$start, tt), end = swimmer_wk(e$end, tt),
       colour = "Other", lane = "Other", label = e$drug,
@@ -568,7 +582,7 @@ swimmer_other_rows <- function(e, tt) {
       strip = paste0(e$drug, "\nd ", swimmer_day(e$start, tt), "\u2013",
                      ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
     )
-  )
+  ))
 }
 
 # --- finish ----------------------------------------------------------------
