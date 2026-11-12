@@ -62,8 +62,12 @@ PatientProfile.part(function(ctx) {
       // The reset names what it undoes.
       var label = patients(cohortN || 0);
       var tip = 'Show all patients, clearing ' + drillClause;
+      // The count, then an x: the population filter's Reset all (blockr.dm
+      // .jscf-reset-btn), so a reader who has met one knows the other.
       html = '<button type="button" class="pp-drill-reset" data-blockr-tooltip="' +
-        esc(tip) + '">' + ICON_RESET + '<span>' + esc(label) + '</span></button>';
+        esc(tip) + '"><span class="pp-drill-reset-label">' + esc(label) +
+        '</span><span class="pp-drill-reset-x" aria-hidden="true">' +
+        window.Blockr.icons.remove + '</span></button>';
     } else if (cohortN != null) {
       html = '<span class="pp-cohort-total">' + esc(patients(cohortN)) + '</span>';
     }
@@ -78,10 +82,6 @@ PatientProfile.part(function(ctx) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
   }
-  var ICON_RESET = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" ' +
-    'aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 1 1 ' +
-    '.908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 ' +
-    '1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>';
 
   Shiny.addCustomMessageHandler(subjectPickerMsgId, function(msg) {
     if (!msg) return;

@@ -516,15 +516,15 @@
 }
 
 /* The drill's reset, the population filter's button (blockr.dm
-   .jscf-reset-btn): the design system's 26px main button, the icon and how
-   many patients the drill kept. */
+   .jscf-reset-btn): the design system's 26px main button, how many patients
+   the drill kept, then an x. */
 .pp-drill-reset {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   box-sizing: border-box;
   height: var(--blockr-control-h-xs);
-  padding: 0 7px;
+  padding: 0 6px 0 8px;
   border: 1px solid var(--blockr-color-border-accent-subtle);
   border-radius: var(--blockr-radius-sm);
   background: var(--blockr-color-bg-accent-subtle);
@@ -544,7 +544,8 @@
   border-color: var(--blockr-color-border-accent);
 }
 
-.pp-drill-reset svg {
+.pp-drill-reset-x {
+  display: inline-flex;
   flex: none;
 }
 
