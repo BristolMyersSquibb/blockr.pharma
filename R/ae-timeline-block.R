@@ -100,9 +100,10 @@ ae_timeline_summaries <- function() {
 
 #' The AE timeline's default sentence
 #'
-#' "All AEs by study day, coloured by Severity, overlaps on one lane, serious
-#' AEs outlined, terms on the bars", then "Ongoing AEs to last contact, cutoff automatic,
-#' sorted by number of AEs, by Actual Treatment": each `{@...}` word is a
+#' "All AEs by study day, coloured by grade or severity, overlaps on one
+#' lane, serious AEs outlined, terms on the bars", then "Ongoing AEs to last
+#' contact, cutoff automatic, sorted by number of AEs, by Actual Treatment":
+#' each `{@...}` word is a
 #' setting of the prepare script and opens it. The grouping word offers the
 #' patient columns only.
 #'
@@ -137,7 +138,7 @@ ae_timeline_script <- function(group = "TRT01A") {
   paste(
     sel("events", "All AEs", c("All AEs", "Serious AEs", "Ongoing AEs"),
         "Show"),
-    sel("colour", "Severity", c("Severity", "Grade"), "Colour by"),
+    sel("colour", "grade or severity", AET_COLOUR_BY, "Colour by"),
     sel("lanes", "on one lane", AET_LANES, "Overlaps"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),

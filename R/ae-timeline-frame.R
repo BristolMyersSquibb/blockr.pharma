@@ -23,7 +23,10 @@
 #'   reads (`TRTSDT`, `TRTEDT`, `LSTALVDT`, `DTHDT` and the group column) come
 #'   from ADSL when it is there, else from ADAE, which carries them in ADaM.
 #' @param events Which AEs: `"All AEs"`, `"Serious AEs"` or `"Ongoing AEs"`.
-#' @param colour `"Severity"` (`AESEV`) or `"Grade"` (`AETOXGR`/`ATOXGR`).
+#' @param colour `"grade or severity"` (the default) picks from the data:
+#'   grade when ADAE has one, else severity, else one neutral colour.
+#'   `"Severity"` (`AESEV`) or `"Grade"` (`AETOXGR`/`ATOXGR`) ask for one
+#'   and stop when ADAE does not have it.
 #' @param lanes How overlapping AEs draw: `"on one lane"` (one thin lane
 #'   per patient, overlapping bars drawn over each other, as the gantt chart
 #'   draws them), `"stacked"` (packed into as few lanes as overlap needs),
@@ -58,7 +61,7 @@
 #' @export
 ae_timeline_frame <- function(data,
                               events = "All AEs",
-                              colour = "Severity",
+                              colour = "grade or severity",
                               lanes = "on one lane",
                               ongoing = "last contact",
                               serious = "outlined",
@@ -70,7 +73,7 @@ ae_timeline_frame <- function(data,
                               group = "TRT01A") {
   events <- match.arg(as.character(events),
                       c("All AEs", "Serious AEs", "Ongoing AEs"))
-  colour <- match.arg(as.character(colour), c("Severity", "Grade"))
+  colour <- match.arg(as.character(colour), AET_COLOUR_BY)
   lanes <- match.arg(as.character(lanes), AET_LANES)
   ongoing <- match.arg(as.character(ongoing), c("last contact",
                                                 "data cutoff"))
@@ -89,6 +92,7 @@ ae_timeline_frame <- function(data,
     attr(src[[nm]] %||% tb$adae[[nm]], "label", exact = TRUE)
   })
   ae <- tb$adae
+  colour <- aet_colour_by(ae, colour)
   if (isTRUE(treatment_emergent) && "TRTEMFL" %in% names(ae)) {
     ae <- ae[aet_flag(ae$TRTEMFL), , drop = FALSE]
   }
@@ -167,6 +171,7 @@ aet_cap_at <- function(sl, cutoff) {
   sl
 }
 
+AET_COLOUR_BY <- c("grade or severity", "Grade", "Severity")
 AET_TERM_LABELS <- c("on the bars", "in the tooltip")
 AET_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 AET_LANES <- c("on one lane", "stacked", "by term", "by body system")
@@ -177,7 +182,8 @@ AET_ORDER <- c("number of AEs", "worst grade", "ongoing AEs", "first onset",
 AET_COLOURS <- c(
   Mild = "#f0c35a", Moderate = "#e07b39", Severe = "#b8322a",
   "Grade 1" = "#f0c35a", "Grade 2" = "#e07b39", "Grade 3" = "#b8322a",
-  "Grade 4" = "#7a1f1a", "Grade 5" = "#3b1210"
+  "Grade 4" = "#7a1f1a", "Grade 5" = "#3b1210",
+  AE = "#9aa3ad"
 )
 
 # --- inputs ----------------------------------------------------------------
@@ -256,9 +262,25 @@ aet_title <- function(x) {
   x
 }
 
-# The colour column: severity words in clinical order, or grades in numeric
-# order, as "Grade 3".
+# What the default colours by: grade when ADAE has one, else severity, else
+# nothing ("AE", one neutral colour). A column with no values does not count.
+aet_colour_by <- function(ae, colour) {
+  if (!identical(colour, "grade or severity")) return(colour)
+  has <- function(nms) {
+    v <- aet_col(ae, nms)
+    !is.null(v) && any(!is.na(v) & nzchar(as.character(v)))
+  }
+  if (has(c("ATOXGR", "AETOXGR"))) return("Grade")
+  if (has(c("ASEV", "AESEV"))) return("Severity")
+  "AE"
+}
+
+# The colour column: severity words in clinical order, grades in numeric
+# order, as "Grade 3", or one level "AE" when there is neither.
 aet_grade <- function(ae, colour) {
+  if (identical(colour, "AE")) {
+    return(factor(rep("AE", nrow(ae)), levels = "AE"))
+  }
   if (identical(colour, "Grade")) {
     g <- aet_col(ae, c("ATOXGR", "AETOXGR"))
     if (is.null(g)) {
@@ -461,6 +483,7 @@ aet_finish <- function(out, rec, sl, pcols, order_by, colour) {
   n_open <- per(function(r) sum(r$.open))
   n_ser <- per(function(r) sum(r$Serious %in% "Yes"))
   worst <- per(function(r) {
+    if (identical(colour, "AE")) return(NA_real_)
     g <- as.integer(r$.grade)
     if (all(is.na(g))) NA_real_ else max(g, na.rm = TRUE)
   })

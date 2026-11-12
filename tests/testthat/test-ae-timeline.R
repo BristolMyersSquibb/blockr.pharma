@@ -251,3 +251,42 @@ test_that("flags read as Y/N, TRUE/FALSE or 1/0", {
   expect_identical(aet_flag(c("y", "Yes", "N", "", NA)),
                    c(TRUE, TRUE, FALSE, FALSE, FALSE))
 })
+
+test_that("the default colour follows what ADAE has", {
+  tb <- aet_toy()
+  # Severity only (the toy, as pharmaverseadam ships it).
+  f <- ae_timeline_frame(tb)
+  expect_identical(attr(f$Severity, "label"), "Severity")
+  expect_identical(levels(f$Severity), c("Mild", "Moderate", "Severe"))
+  # A grade wins, with or without severity; prod ADAE has no AESEV.
+  g <- tb
+  g$adae$AETOXGR <- c("1", "3", "2", "2")
+  expect_identical(attr(ae_timeline_frame(g)$Severity, "label"), "Grade")
+  g$adae$AESEV <- NULL
+  fg <- ae_timeline_frame(g)
+  expect_identical(attr(fg$Severity, "label"), "Grade")
+  expect_identical(as.character(fg$Severity[fg$Term %in% "Nausea"]),
+                   "Grade 3")
+  # Neither: one neutral colour and no worst grade.
+  n <- tb
+  n$adae$AESEV <- NULL
+  fn <- ae_timeline_frame(n)
+  a <- aes_of(fn)
+  expect_identical(levels(fn$Severity), "AE")
+  expect_true(all(a$Severity == "AE"))
+  expect_true(all(is.na(fn$Worst)))
+  # A grade column with no values does not count.
+  e <- tb
+  e$adae$AETOXGR <- NA_character_
+  expect_identical(attr(ae_timeline_frame(e)$Severity, "label"), "Severity")
+  # An explicit setting wins, and stops when the column is not there.
+  expect_identical(attr(ae_timeline_frame(g, colour = "Grade")$Severity,
+                        "label"), "Grade")
+  g2 <- tb
+  g2$adae$AETOXGR <- c("1", "3", "2", "2")
+  expect_identical(attr(ae_timeline_frame(g2, colour = "Severity")$Severity,
+                        "label"), "Severity")
+  expect_error(ae_timeline_frame(g, colour = "Severity"), "severity")
+  expect_match(ae_timeline_script(), 'colour <- factor("grade or severity"',
+               fixed = TRUE)
+})

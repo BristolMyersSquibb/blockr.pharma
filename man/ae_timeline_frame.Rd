@@ -7,7 +7,7 @@
 ae_timeline_frame(
   data,
   events = "All AEs",
-  colour = "Severity",
+  colour = "grade or severity",
   lanes = "on one lane",
   ongoing = "last contact",
   serious = "outlined",
@@ -27,7 +27,10 @@ from ADSL when it is there, else from ADAE, which carries them in ADaM.}
 
 \item{events}{Which AEs: \code{"All AEs"}, \code{"Serious AEs"} or \code{"Ongoing AEs"}.}
 
-\item{colour}{\code{"Severity"} (\code{AESEV}) or \code{"Grade"} (\code{AETOXGR}/\code{ATOXGR}).}
+\item{colour}{\code{"grade or severity"} (the default) picks from the data:
+grade when ADAE has one, else severity, else one neutral colour.
+\code{"Severity"} (\code{AESEV}) or \code{"Grade"} (\code{AETOXGR}/\code{ATOXGR}) ask for one
+and stop when ADAE does not have it.}
 
 \item{lanes}{How overlapping AEs draw: \code{"on one lane"} (one thin lane
 per patient, overlapping bars drawn over each other, as the gantt chart

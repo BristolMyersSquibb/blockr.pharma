@@ -10,9 +10,10 @@ ae_timeline_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-"All AEs by study day, coloured by Severity, overlaps on one lane, serious
-AEs outlined, terms on the bars", then "Ongoing AEs to last contact, cutoff automatic,
-sorted by number of AEs, by Actual Treatment": each \verb{\{@...\}} word is a
+"All AEs by study day, coloured by grade or severity, overlaps on one
+lane, serious AEs outlined, terms on the bars", then "Ongoing AEs to last
+contact, cutoff automatic, sorted by number of AEs, by Actual Treatment":
+each \verb{\{@...\}} word is a
 setting of the prepare script and opens it. The grouping word offers the
 patient columns only.
 }
