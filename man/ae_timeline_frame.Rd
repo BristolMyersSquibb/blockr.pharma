@@ -8,7 +8,7 @@ ae_timeline_frame(
   data,
   events = "All AEs",
   colour = "Severity",
-  lanes = "stacked",
+  lanes = "on one lane",
   ongoing = "last contact",
   serious = "outlined",
   order_by = "number of AEs",
@@ -29,9 +29,10 @@ from ADSL when it is there, else from ADAE, which carries them in ADaM.}
 
 \item{colour}{\code{"Severity"} (\code{AESEV}) or \code{"Grade"} (\code{AETOXGR}/\code{ATOXGR}).}
 
-\item{lanes}{How overlapping AEs draw: \code{"stacked"} (packed into as few
-lanes as overlap needs), \code{"by term"}, \code{"by body system"}, or
-\code{"on one lane"}.}
+\item{lanes}{How overlapping AEs draw: \code{"on one lane"} (one thin lane
+per patient, overlapping bars drawn over each other, as the gantt chart
+draws them), \code{"stacked"} (packed into as few lanes as overlap needs),
+\code{"by term"} or \code{"by body system"}.}
 
 \item{ongoing}{Where an AE without an end runs to: \code{"last contact"}
 (\code{LSTALVDT}, else the last treatment day) or \code{"data cutoff"} (no end,
@@ -50,7 +51,8 @@ bar when it fits, else after it when there is room) or
 \item{treatment}{Draw the treatment period as a line.}
 
 \item{treatment_emergent}{Keep treatment-emergent AEs only (\code{TRTEMFL}),
-when the column is there.}
+when the column is there. Flags (\code{TRTEMFL}, \code{AESER}, \code{AESDTH}) may be
+\code{"Y"}/\code{"N"}, \code{TRUE}/\code{FALSE} or \code{1}/\code{0}.}
 
 \item{cutoff}{The data cutoff, a date. \code{NULL} or \code{NA}: automatic, the
 last date in the data. AEs starting after it are left out, an AE still

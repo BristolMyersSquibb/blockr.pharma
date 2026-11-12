@@ -33,8 +33,18 @@ aet_toy <- function() {
 
 aes_of <- function(f) f[is.finite(f$Start), , drop = FALSE]
 
+test_that("by default every AE of a patient is on one lane", {
+  a <- aes_of(ae_timeline_frame(aet_toy()))
+  # An empty lane is the patient's main lane: overlaps draw over each other.
+  expect_true(all(is.na(a$.lane)))
+  expect_length(levels(a$.lane), 0L)
+  # The block's script starts the same way.
+  expect_match(ae_timeline_script(), 'lanes <- factor("on one lane"',
+               fixed = TRUE)
+})
+
 test_that("overlapping AEs stack, a later one reuses the first lane", {
-  f <- ae_timeline_frame(aet_toy())
+  f <- ae_timeline_frame(aet_toy(), lanes = "stacked")
   a <- aes_of(f)
   a <- a[a$USUBJID == "A", ]
   expect_identical(as.character(a$.lane[a$Term == "Headache"]), "1")
@@ -70,7 +80,8 @@ test_that("serious AEs, death and the treatment line", {
   expect_true(is.na(ev$.lane))
   # The cross is the third shape.
   expect_identical(levels(f$Event)[[3L]], "Death")
-  m <- ae_timeline_frame(aet_toy(), serious = "marked at onset")
+  m <- ae_timeline_frame(aet_toy(), serious = "marked at onset",
+                         lanes = "stacked")
   s <- m[m$Event %in% "Serious AE", ]
   expect_equal(s$.event_day, 5)
   # The onset mark sits on its AE's lane.
@@ -99,13 +110,16 @@ test_that("the listing values repeat per patient and sort the rows", {
 test_that("severity keeps clinical order and its own colours", {
   f <- ae_timeline_frame(aet_toy())
   expect_identical(levels(f$Severity), c("Mild", "Moderate", "Severe"))
+  expect_identical(attr(f$Severity, "label"), "Severity")
   expect_identical(names(attr(f$Severity, "blockr_colors")),
                    c("Mild", "Moderate", "Severe"))
   expect_error(ae_timeline_frame(aet_toy(), colour = "Grade"),
                "toxicity grade")
   tb <- aet_toy()
   tb$adae$AETOXGR <- c("1", "3", "2", "2")
-  g <- aes_of(ae_timeline_frame(tb, colour = "Grade"))
+  gf <- ae_timeline_frame(tb, colour = "Grade")
+  expect_identical(attr(gf$Severity, "label"), "Grade")
+  g <- aes_of(gf)
   expect_identical(as.character(g$Severity[g$Term == "Nausea"]), "Grade 3")
 })
 
@@ -118,7 +132,7 @@ test_that("events, lanes and the group follow their settings", {
   t <- aes_of(ae_timeline_frame(tb, lanes = "by body system"))
   expect_identical(as.character(t$.lane[t$Term == "Rash"]), "Skin")
   one <- aes_of(ae_timeline_frame(tb, lanes = "on one lane"))
-  expect_true(all(one$.lane == "1"))
+  expect_true(all(is.na(one$.lane)))
   f <- ae_timeline_frame(tb)
   expect_identical(attr(f$TRT01A, "label"), "Actual Treatment")
   # The other patient columns stay for grouping.
@@ -130,16 +144,24 @@ test_that("a fatal AE without a death date marks death on its lane", {
   tb <- aet_toy()
   tb$adsl$DTHDT <- as.Date(NA)
   tb$adae$AESDTH[[4L]] <- "Y"
-  f <- ae_timeline_frame(tb)
+  f <- ae_timeline_frame(tb, lanes = "stacked")
   ev <- f[f$Event %in% "Death", ]
   expect_equal(ev$.event_day, 4)
   expect_identical(as.character(ev$.lane), "1")
+  # On one lane the mark sits on the patient's lane.
+  ev1 <- ae_timeline_frame(tb)
+  expect_true(is.na(ev1$.lane[ev1$Event %in% "Death"]))
 })
 
 test_that("term labels go on the bars or only in the tooltip", {
-  a <- aes_of(ae_timeline_frame(aet_toy()))
+  a <- aes_of(ae_timeline_frame(aet_toy(), lanes = "stacked"))
   expect_identical(a$.bar_label, a$Term)
-  t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "in the tooltip"))
+  # On one lane only an AE clear of the others is labelled: the ongoing
+  # nausea overlaps headache and rash, the fall stands alone.
+  one <- aes_of(ae_timeline_frame(aet_toy()))
+  expect_identical(one$Term[!is.na(one$.bar_label)], "Fall")
+  t <- aes_of(ae_timeline_frame(aet_toy(), term_labels = "in the tooltip",
+                                lanes = "stacked"))
   expect_true(all(is.na(t$.bar_label)))
   expect_identical(t$Term, a$Term)
 })
@@ -203,4 +225,29 @@ test_that("the script's settings are its controls and run the frame", {
                       gregexpr("\\{@([a-z_]+)\\}", ae_timeline_subtitle()))[[1]]
   expect_length(words, 8L)
   expect_true(all(gsub("[{}@]", "", words) %in% vars))
+})
+
+test_that("flags read as Y/N, TRUE/FALSE or 1/0", {
+  tb <- aet_toy()
+  tb$adae$TRTEMFL <- c("Y", "Y", "N", "Y")
+  tb$adae$AESER <- c("N", "Y", "N", "N")
+  tb$adae$AESDTH <- c("N", "N", "N", "Y")
+  tb$adsl$DTHDT <- as.Date(NA)
+  want <- ae_timeline_frame(tb)
+  expect_false("Rash" %in% want$Term)
+  expect_identical(want$Serious[want$Term %in% "Nausea"], "Yes")
+  expect_true("Death" %in% as.character(want$Event))
+  yn <- c("TRTEMFL", "AESER", "AESDTH")
+  lgl <- tb
+  for (nm in yn) lgl$adae[[nm]] <- lgl$adae[[nm]] == "Y"
+  expect_identical(ae_timeline_frame(lgl), want)
+  num <- tb
+  for (nm in yn) num$adae[[nm]] <- as.integer(num$adae[[nm]] == "Y")
+  expect_identical(ae_timeline_frame(num), want)
+  # Missing flags are FALSE, as an unset "Y" column is.
+  na <- lgl
+  na$adae$TRTEMFL[[3L]] <- NA
+  expect_identical(ae_timeline_frame(na), want)
+  expect_identical(aet_flag(c("y", "Yes", "N", "", NA)),
+                   c(TRUE, TRUE, FALSE, FALSE, FALSE))
 })

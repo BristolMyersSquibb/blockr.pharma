@@ -24,9 +24,10 @@
 #'   from ADSL when it is there, else from ADAE, which carries them in ADaM.
 #' @param events Which AEs: `"All AEs"`, `"Serious AEs"` or `"Ongoing AEs"`.
 #' @param colour `"Severity"` (`AESEV`) or `"Grade"` (`AETOXGR`/`ATOXGR`).
-#' @param lanes How overlapping AEs draw: `"stacked"` (packed into as few
-#'   lanes as overlap needs), `"by term"`, `"by body system"`, or
-#'   `"on one lane"`.
+#' @param lanes How overlapping AEs draw: `"on one lane"` (one thin lane
+#'   per patient, overlapping bars drawn over each other, as the gantt chart
+#'   draws them), `"stacked"` (packed into as few lanes as overlap needs),
+#'   `"by term"` or `"by body system"`.
 #' @param ongoing Where an AE without an end runs to: `"last contact"`
 #'   (`LSTALVDT`, else the last treatment day) or `"data cutoff"` (no end,
 #'   so the bar runs to the end of the axis, the last date in the data).
@@ -39,7 +40,8 @@
 #'   `"in the tooltip"` (only on hover).
 #' @param treatment Draw the treatment period as a line.
 #' @param treatment_emergent Keep treatment-emergent AEs only (`TRTEMFL`),
-#'   when the column is there.
+#'   when the column is there. Flags (`TRTEMFL`, `AESER`, `AESDTH`) may be
+#'   `"Y"`/`"N"`, `TRUE`/`FALSE` or `1`/`0`.
 #' @param cutoff The data cutoff, a date. `NULL` or `NA`: automatic, the
 #'   last date in the data. AEs starting after it are left out, an AE still
 #'   open at it is ongoing, and death and last contact after it do not count.
@@ -57,7 +59,7 @@
 ae_timeline_frame <- function(data,
                               events = "All AEs",
                               colour = "Severity",
-                              lanes = "stacked",
+                              lanes = "on one lane",
                               ongoing = "last contact",
                               serious = "outlined",
                               order_by = "number of AEs",
@@ -88,7 +90,7 @@ ae_timeline_frame <- function(data,
   })
   ae <- tb$adae
   if (isTRUE(treatment_emergent) && "TRTEMFL" %in% names(ae)) {
-    ae <- ae[ae$TRTEMFL %in% "Y", , drop = FALSE]
+    ae <- ae[aet_flag(ae$TRTEMFL), , drop = FALSE]
   }
   sl <- aet_subjects(tb$adsl, ae, pcols)
   ae <- ae[as.character(ae$USUBJID) %in% sl$USUBJID, , drop = FALSE]
@@ -115,6 +117,11 @@ ae_timeline_frame <- function(data,
   rec$.lane <- aet_lanes(rec, lanes)
   rec$.bar_label <- if (identical(term_labels, "on the bars")) rec$Term else
     NA_character_
+  # On one lane a label would run over the bars drawn across it: only an AE
+  # clear of the patient's other AEs carries one.
+  if (identical(lanes, "on one lane")) {
+    rec$.bar_label[aet_overlaps(rec)] <- NA_character_
+  }
   rec$.style <- if (identical(serious, "outlined")) {
     ifelse(rec$Serious %in% "Yes", "outline", NA_character_)
   } else {
@@ -162,7 +169,7 @@ aet_cap_at <- function(sl, cutoff) {
 
 AET_TERM_LABELS <- c("on the bars", "in the tooltip")
 AET_SERIOUS <- c("outlined", "marked at onset", "unmarked")
-AET_LANES <- c("stacked", "by term", "by body system", "on one lane")
+AET_LANES <- c("on one lane", "stacked", "by term", "by body system")
 AET_ORDER <- c("number of AEs", "worst grade", "ongoing AEs", "first onset",
                "subject")
 
@@ -195,6 +202,15 @@ aet_tables <- function(data) {
 aet_col <- function(df, nms) {
   hit <- intersect(nms, names(df))
   if (length(hit)) df[[hit[[1L]]]]
+}
+
+# An ADaM flag as TRUE/FALSE: "Y"/"N" as ADaM ships it, or logical or 1/0
+# as a reader or adapter may turn it. Anything else, NA included, is FALSE.
+aet_flag <- function(x) {
+  if (is.null(x)) return(logical())
+  if (is.logical(x)) return(!is.na(x) & x)
+  if (is.numeric(x)) return(!is.na(x) & x == 1)
+  toupper(trimws(as.character(x))) %in% c("Y", "YES", "TRUE", "T", "1")
 }
 
 aet_date <- function(x) {
@@ -277,16 +293,19 @@ aet_records <- function(ae, sl, colour) {
     v <- aet_col(ae, nms)
     if (is.null(v)) rep(NA_character_, n) else as.character(v)
   }
-  ser <- chr("AESER")
+  flag <- function(nm) {
+    v <- aet_col(ae, nm)
+    if (is.null(v)) rep(FALSE, n) else aet_flag(v)
+  }
   out <- data.frame(
     USUBJID = as.character(ae$USUBJID),
     Start = as.numeric(st),
     End = as.numeric(en),
     Term = aet_title(chr(c("AEDECOD", "AETERM"))),
     "Body system" = aet_title(chr(c("AEBODSYS", "AESOC"))),
-    Serious = ifelse(ser %in% "Y", "Yes", "No"),
+    Serious = ifelse(flag("AESER"), "Yes", "No"),
     Outcome = aet_title(chr("AEOUT")),
-    .fatal = chr("AESDTH") %in% "Y",
+    .fatal = flag("AESDTH"),
     check.names = FALSE, stringsAsFactors = FALSE
   )
   out$.grade <- aet_grade(ae, colour)
@@ -331,11 +350,13 @@ aet_ends <- function(rec, sl, ongoing, cutoff) {
   rec
 }
 
-# Lane per AE. Stacked packs each patient's AEs greedily by onset into the
-# first lane free by then; term and body system lanes keep one value each.
+# Lane per AE. One lane leaves the lane empty: every AE on the patient's
+# main lane, overlaps drawn over each other. Stacked packs each patient's AEs
+# greedily by onset into the first lane free by then; term and body system
+# lanes keep one value each.
 aet_lanes <- function(rec, lanes) {
   if (identical(lanes, "on one lane")) {
-    return(rep("1", nrow(rec)))
+    return(rep(NA_character_, nrow(rec)))
   }
   if (lanes %in% c("by term", "by body system")) {
     v <- if (identical(lanes, "by term")) rec$Term else rec[["Body system"]]
@@ -353,6 +374,20 @@ aet_lanes <- function(rec, lanes) {
     }
   }
   as.character(out)
+}
+
+# Does an AE overlap another AE of the same patient?
+aet_overlaps <- function(rec) {
+  out <- logical(nrow(rec))
+  for (idx in split(seq_len(nrow(rec)), rec$USUBJID)) {
+    if (length(idx) < 2L) next
+    s <- rec$Start[idx]
+    e <- rec$End[idx]
+    hit <- outer(s, e, "<") & outer(e, s, ">")
+    diag(hit) <- FALSE
+    out[idx] <- rowSums(hit) > 0
+  }
+  out
 }
 
 # Records for the overlays, every AE column empty.
@@ -452,6 +487,8 @@ aet_finish <- function(out, rec, sl, pcols, order_by, colour) {
   # The colour column: severity words or grades, with their own colours.
   names(out)[names(out) == ".grade"] <- "Severity"
   attr(out$Severity, "blockr_colors") <- AET_COLOURS[lv]
+  # The legend and tooltip name what the colour is.
+  attr(out$Severity, "label") <- colour
   attr(out$Worst, "blockr_colors") <- AET_COLOURS[lv]
   out$.lane <- factor(out$.lane, levels = aet_lane_levels(out$.lane, rec))
   # The level order picks the shapes: a filled triangle, an open triangle
@@ -469,6 +506,7 @@ aet_finish <- function(out, rec, sl, pcols, order_by, colour) {
 # Stacked lanes in number order; term and body system lanes by frequency.
 aet_lane_levels <- function(lane, rec) {
   v <- lane[!is.na(lane)]
+  if (!length(v)) return(character())
   if (all(grepl("^[0-9]+$", v))) {
     return(as.character(sort(unique(as.integer(v)))))
   }

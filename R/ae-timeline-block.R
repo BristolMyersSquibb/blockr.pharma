@@ -8,9 +8,11 @@
 #' AE timeline block
 #'
 #' One row per patient: each adverse event is a bar from onset to
-#' resolution by study day, coloured by severity or grade, with overlapping
-#' AEs stacked in lanes. An AE without an end is ongoing and runs, open, to
-#' the patient's last contact or the data cutoff. Serious AEs carry a mark,
+#' resolution by study day, coloured by severity or grade. Overlapping AEs
+#' draw over each other on one thin lane per patient, as the gantt chart
+#' draws them, or stack in lanes of their own. An AE without an end is
+#' ongoing and runs, open, to the patient's last contact or the data cutoff.
+#' Serious AEs carry a mark,
 #' death a cross, and a line shows the treatment period. Listing columns
 #' (number of AEs, ongoing, serious, worst grade) sit before the timeline
 #' and sort the rows.
@@ -98,7 +100,7 @@ ae_timeline_summaries <- function() {
 
 #' The AE timeline's default sentence
 #'
-#' "All AEs by study day, coloured by Severity, overlaps stacked, serious
+#' "All AEs by study day, coloured by Severity, overlaps on one lane, serious
 #' AEs outlined, terms on the bars", then "Ongoing AEs to last contact, cutoff automatic,
 #' sorted by number of AEs, by Actual Treatment": each `{@...}` word is a
 #' setting of the prepare script and opens it. The grouping word offers the
@@ -136,7 +138,7 @@ ae_timeline_script <- function(group = "TRT01A") {
     sel("events", "All AEs", c("All AEs", "Serious AEs", "Ongoing AEs"),
         "Show"),
     sel("colour", "Severity", c("Severity", "Grade"), "Colour by"),
-    sel("lanes", "stacked", AET_LANES, "Overlaps"),
+    sel("lanes", "on one lane", AET_LANES, "Overlaps"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
     sel("serious", "outlined", AET_SERIOUS, "Serious AEs"),

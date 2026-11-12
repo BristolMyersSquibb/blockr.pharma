@@ -38,9 +38,11 @@ A table block (class \code{table_block}).
 }
 \description{
 One row per patient: each adverse event is a bar from onset to
-resolution by study day, coloured by severity or grade, with overlapping
-AEs stacked in lanes. An AE without an end is ongoing and runs, open, to
-the patient's last contact or the data cutoff. Serious AEs carry a mark,
+resolution by study day, coloured by severity or grade. Overlapping AEs
+draw over each other on one thin lane per patient, as the gantt chart
+draws them, or stack in lanes of their own. An AE without an end is
+ongoing and runs, open, to the patient's last contact or the data cutoff.
+Serious AEs carry a mark,
 death a cross, and a line shows the treatment period. Listing columns
 (number of AEs, ongoing, serious, worst grade) sit before the timeline
 and sort the rows.
