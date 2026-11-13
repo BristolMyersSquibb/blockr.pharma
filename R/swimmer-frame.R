@@ -269,30 +269,96 @@ swimmer_cutoff <- function(cutoff, sl, ex, rs) {
 # runs, else the end of treatment or the last assessment, whichever is
 # later (the last alive date only when neither is known).
 swimmer_follow_up <- function(sl, ex, rs, cutoff) {
-  vapply(sl$USUBJID, function(id) {
-    s <- sl[sl$USUBJID == id, ]
-    if (!is.na(s$DTHDT)) return(as.numeric(s$DTHDT))
-    e <- ex[ex$USUBJID == id & ex$role == "study", , drop = FALSE]
-    if (any(e$on)) return(as.numeric(cutoff))
-    seen <- c(s$TRTEDT, rs$ADT[rs$USUBJID == id], e$end)
-    if (all(is.na(seen))) seen <- s$LSTALVDT
-    as.numeric(max(seen, na.rm = TRUE))
-  }, numeric(1L))
+  ids <- sl$USUBJID
+  n <- length(ids)
+  study <- ex$role == "study"
+  on <- tabulate(match(ex$USUBJID[study & ex$on], ids), n) > 0L
+  seen <- pmax(as.numeric(sl$TRTEDT),
+               swimmer_grp_max(match(rs$USUBJID, ids), as.numeric(rs$ADT), n),
+               swimmer_grp_max(match(ex$USUBJID[study], ids),
+                               as.numeric(ex$end[study]), n),
+               na.rm = TRUE)
+  alive <- as.numeric(sl$LSTALVDT)
+  alive[is.na(alive)] <- -Inf
+  seen[is.na(seen)] <- alive[is.na(seen)]
+  out <- ifelse(!is.na(sl$DTHDT), as.numeric(sl$DTHDT),
+                ifelse(on, as.numeric(cutoff), seen))
+  stats::setNames(out, ids)
 }
 
 # Whether each record's drug is still given at the cutoff: its last period
 # has no end, or, given in cycles, the next cycle would fall after the
 # cutoff.
 swimmer_ongoing <- function(ex, cutoff) {
+  if (!nrow(ex)) return(logical())
+  gr <- swimmer_groups(ex)
+  s <- as.numeric(ex$start)[gr$o]
+  open <- ex$open[gr$o]
+  every <- swimmer_every(s, as.numeric(ex$end)[gr$o], open, gr)
+  on <- tabulate(gr$g[open], gr$n) > 0L |
+    (!is.na(every) &
+       swimmer_grp_max(gr$g, s, gr$n) + 1.5 * every >= as.numeric(cutoff))
+  on[gr$id]
+}
+
+# --- groups ------------------------------------------------------------------
+
+# The records of each patient's drug: `id` the group of each record, in the
+# order the groups first appear, `o` the records sorted by group (keeping
+# their order within it), `g` the group of each sorted record, `first` and
+# `last` whether a sorted record starts or ends its group.
+swimmer_groups <- function(ex) {
   key <- paste(ex$USUBJID, ex$drug, sep = "\r")
-  on <- vapply(split(seq_len(nrow(ex)), key), function(i) {
-    e <- ex[i, , drop = FALSE]
-    if (any(e$open)) return(TRUE)
-    adm <- swimmer_admin(e)
-    !is.null(adm) &&
-      max(as.numeric(adm$date)) + 1.5 * adm$every >= as.numeric(cutoff)
-  }, NA)
-  unname(on[key])
+  id <- match(key, unique(key))
+  o <- order(id, method = "radix")
+  g <- id[o]
+  m <- length(g)
+  brk <- g[-1L] != g[-m]
+  list(id = id, o = o, g = g, n = if (m) max(g) else 0L,
+       first = c(TRUE, brk)[seq_len(m)], last = c(brk, TRUE)[seq_len(m)])
+}
+
+# Per group 1..n, the largest of x (NA where it has none).
+swimmer_grp_max <- function(g, x, n) {
+  out <- rep(NA_real_, n)
+  ok <- !is.na(g) & !is.na(x)
+  if (!any(ok)) return(out)
+  g <- g[ok]
+  x <- x[ok]
+  o <- order(g, x, method = "radix")
+  g <- g[o]
+  top <- !duplicated(g, fromLast = TRUE)
+  out[g[top]] <- x[o][top]
+  out
+}
+
+# Per group, the planned interval of a drug given in cycles, NA when its
+# records are dose periods: a cycle drug has one date per record (start =
+# end), at least two, further apart than daily. The interval is the most
+# common gap, the shorter on a tie, since a delay only lengthens one.
+# `s`, `end`, `open`: the sorted records of swimmer_groups() `gr`.
+swimmer_every <- function(s, end, open, gr) {
+  g <- gr$g
+  n <- gr$n
+  every <- rep(NA_real_, n)
+  cand <- tabulate(g, n) >= 2L & tabulate(g[open | end != s], n) == 0L
+  use <- !gr$first & cand[g]
+  if (!any(use)) return(every)
+  gap <- (s - c(NA, s[-length(s)]))[use]
+  gg <- g[use]
+  o <- order(gg, gap, method = "radix")
+  gg <- gg[o]
+  gap <- gap[o]
+  m <- length(gg)
+  run <- c(TRUE, gg[-1L] != gg[-m] | gap[-1L] != gap[-m])
+  cnt <- tabulate(cumsum(run))
+  rg <- gg[run]
+  rgap <- gap[run]
+  o2 <- order(rg, -cnt, rgap, method = "radix")
+  pick <- o2[!duplicated(rg[o2])]
+  every[rg[pick]] <- rgap[pick]
+  every[!is.na(every) & every <= 2] <- NA
+  every
 }
 
 # Con meds within follow-up: from four weeks before the first dose to the
@@ -366,6 +432,17 @@ swimmer_bind <- function(sets) {
   }), nms)
 }
 
+# swimmer_bind() of `sets`, then in order of group and place: `g` and `at`
+# per set, a value per row or one for all its rows.
+swimmer_bind_in <- function(sets, g, at) {
+  n <- vapply(sets, function(x) if (is.null(x)) 0L else length(x[[1L]]), 0L)
+  out <- swimmer_bind(sets)
+  if (is.null(out)) return(NULL)
+  o <- order(unlist(Map(rep_len, g, n)), unlist(Map(rep_len, at, n)),
+             method = "radix")
+  lapply(out, `[`, o)
+}
+
 swimmer_wk <- function(d, t0) (as.numeric(d) - as.numeric(t0)) / 7
 
 # CDISC study day: day 1 is the first dose, no day 0.
@@ -381,26 +458,28 @@ swimmer_days <- function(s, e, t0, open = FALSE) {
 }
 
 # Assessment to next assessment; before the first, "Not assessed"; the last
-# runs to the end of follow-up.
+# runs to the end of follow-up. `rs` is sorted by patient and date.
 swimmer_resp_rows <- function(rs, fu, t0) {
-  out <- lapply(split(rs, rs$USUBJID), function(r) {
-    id <- r$USUBJID[[1L]]
-    tt <- t0[[id]]
-    end <- as.Date(fu[[id]], origin = "1970-01-01")
-    nx <- c(r$ADT[-1L], max(end, r$ADT[[nrow(r)]]))
-    a <- swimmer_rows(
-      r$USUBJID, start = swimmer_wk(r$ADT, tt), end = swimmer_wk(nx, tt),
-      colour = r$AVALC, label = r$AVALC,
-      days = swimmer_days(r$ADT, nx, tt)
-    )
-    pre <- if (r$ADT[[1L]] > tt) {
-      swimmer_rows(id, start = 0, end = swimmer_wk(r$ADT[[1L]], tt),
-                   colour = "Not assessed", label = "Not assessed",
-                   days = swimmer_days(tt, r$ADT[[1L]], tt))
-    }
-    swimmer_bind(list(pre, a))
-  })
-  swimmer_bind(out)
+  m <- nrow(rs)
+  if (!m) return(NULL)
+  id <- rs$USUBJID
+  tt <- as.numeric(t0[id])
+  adt <- as.numeric(rs$ADT)
+  first <- c(TRUE, id[-1L] != id[-m])
+  last <- c(id[-1L] != id[-m], TRUE)
+  nx <- c(adt[-1L], NA)
+  nx[last] <- pmax(fu[id[last]], adt[last])
+  pat <- cumsum(first)
+  pre <- which(first & adt > tt)
+  sets <- list(
+    swimmer_rows(id[pre], start = 0, end = swimmer_wk(adt[pre], tt[pre]),
+                 colour = "Not assessed", label = "Not assessed",
+                 days = swimmer_days(tt[pre], adt[pre], tt[pre])),
+    swimmer_rows(id, start = swimmer_wk(adt, tt), end = swimmer_wk(nx, tt),
+                 colour = rs$AVALC, label = rs$AVALC,
+                 days = swimmer_days(adt, nx, tt))
+  )
+  swimmer_bind_in(sets, list(pat[pre], pat), list(1L, 2L))
 }
 
 # First progression and death on the response lane; serious AEs when ADAE
@@ -430,181 +509,209 @@ swimmer_event_rows <- function(rs, sl, adae, t0) {
   swimmer_bind(out)
 }
 
+# A dose with its unit, "" without a dose. Each value is formatted on its
+# own: a drug's doses do not change how one another print.
 swimmer_fmt_dose <- function(dose, unit) {
-  ifelse(is.na(dose), "", trimws(paste(format(dose, trim = TRUE,
-                                              drop0trailing = TRUE), unit)))
+  lv <- unique(dose[!is.na(dose)])
+  txt <- vapply(lv, format, "", trim = TRUE, drop0trailing = TRUE)
+  out <- trimws(paste(txt[match(dose, lv)], unit))
+  out[is.na(dose)] <- ""
+  out
 }
 
 # --- drug lanes ------------------------------------------------------------
 
 # Every drug of every patient: its period bar, its dose marks by `doses`, and
-# its strip.
+# its strip. A folded con med draws in grey on the "Other" lane; a drug given
+# in cycles (swimmer_every()) runs from the first dose to a cycle after the
+# last, with its cuts, late doses and skipped cycles or a ring per dose; any
+# other drug draws its dose periods, daily doses merged. All patients and
+# drugs at once; the records come out by drug and patient as the drugs first
+# appear in `ex`, each with its bar, marks and strip.
 swimmer_drug_rows <- function(ex, t0, doses, cutoff) {
-  key <- paste(ex$USUBJID, ex$drug, sep = "\r")
-  out <- lapply(split(ex, factor(key, levels = unique(key))), function(e) {
-    tt <- t0[[e$USUBJID[[1L]]]]
-    if (identical(as.character(e$lane[[1L]]), "Other")) {
-      return(swimmer_other_rows(e, tt))
-    }
-    adm <- swimmer_admin(e)
-    if (is.null(adm)) {
-      swimmer_period_rows(e, tt, doses)
-    } else {
-      swimmer_admin_rows(e, adm, tt, doses, cutoff)
-    }
-  })
-  swimmer_bind(out)
-}
-
-# A drug's administrations, or NULL when its records are dose periods: one
-# date each (start = end), at least two, further apart than daily. Adds the
-# planned interval: the most common gap, the shorter on a tie, since a delay
-# only lengthens one.
-swimmer_admin <- function(e) {
-  if (nrow(e) < 2L || any(e$open) || any(e$end != e$start)) return(NULL)
-  gap <- diff(as.numeric(e$start))
-  tab <- table(gap)
-  every <- min(as.numeric(names(tab)[tab == max(tab)]))
-  if (every <= 2) return(NULL)
-  list(date = e$start, dose = e$dose, unit = e$unit, every = every)
-}
-
-swimmer_period_rows <- function(e, tt, doses) {
-  e <- swimmer_merge_daily(e)
-  n <- nrow(e)
-  dose <- swimmer_fmt_dose(e$dose, e$unit)
-  bar <- swimmer_rows(
-    e$USUBJID, start = swimmer_wk(e$start, tt), end = swimmer_wk(e$end, tt),
-    colour = e$drug, lane = as.character(e$lane), label = e$drug,
-    ongoing = c(rep(FALSE, n - 1L), e$open[[n]]),
-    days = swimmer_days(e$start, e$end, tt, e$open), dose = dose
+  if (!nrow(ex)) return(NULL)
+  gr <- swimmer_groups(ex)
+  x <- ex[gr$o, , drop = FALSE]
+  g <- gr$g
+  x$lane <- as.character(x$lane)
+  tt <- as.numeric(t0[x$USUBJID])
+  s <- as.numeric(x$start)
+  e <- as.numeric(x$end)
+  other <- (x$lane %in% "Other")[gr$first]
+  every <- swimmer_every(s, e, x$open, gr)
+  every[other] <- NA
+  dose <- swimmer_fmt_dose(x$dose, x$unit)
+  pieces <- c(
+    swimmer_other_rows(x, which(other[g]), s, e, tt, dose, gr),
+    swimmer_period_rows(x, which(!other[g] & is.na(every[g])), s, e, tt,
+                        dose, gr, doses),
+    swimmer_admin_rows(x, which(!is.na(every[g])), s, tt, dose, gr,
+                       every[g], doses, cutoff)
   )
-  strip <- swimmer_rows(
-    e$USUBJID, start = swimmer_wk(e$start, tt), lane = as.character(e$lane),
-    strip = paste0(ifelse(nzchar(dose), paste0(dose, "\n"), ""), "d ",
-                   swimmer_day(e$start, tt), "\u2013",
-                   ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
-  )
-  cut <- if (n > 1L && !identical(doses, "Plain") &&
-               !identical(doses, "Dots")) {
-    i <- which(e$dose[-1L] < e$dose[-n]) + 1L
-    swimmer_rows(
-      e$USUBJID[i], start = swimmer_wk(e$start[i], tt),
-      lane = as.character(e$lane[i]), colour = e$drug[i], mark = "step",
-      label = e$drug[i], days = paste("Day", swimmer_day(e$start[i], tt)),
-      dose = paste0(dose[i - 1L], " to ", dose[i])
-    )
-  }
-  swimmer_bind(list(bar, cut, strip))
+  swimmer_bind_in(lapply(pieces, `[[`, "rows"), lapply(pieces, `[[`, "g"),
+                  lapply(pieces, `[[`, "at"))
 }
 
-# Daily administrations as dose periods: a run of the same dose without a
-# gap is one period.
-swimmer_merge_daily <- function(e) {
-  if (nrow(e) < 2L || any(e$end != e$start, na.rm = TRUE)) return(e)
-  s <- as.numeric(e$start)
-  brk <- c(TRUE, diff(s) > 2 | e$dose[-1L] != e$dose[-nrow(e)])
+# One piece of the drug lanes: rows, the group of each, and its place in the
+# group (10 bar, 20 to 23 marks, 30 to 32 strip).
+swimmer_piece <- function(rows, g, at) list(list(rows = rows, g = g, at = at))
+
+# Folded drugs: their periods in grey on the "Other" lane, named in the
+# strip. `i`: their sorted records.
+swimmer_other_rows <- function(x, i, s, e, tt, dose, gr) {
+  if (!length(i)) return(list())
+  open <- x$open[i]
+  c(
+    swimmer_piece(swimmer_rows(
+      x$USUBJID[i], start = swimmer_wk(s[i], tt[i]),
+      end = swimmer_wk(e[i], tt[i]), colour = "Other", lane = "Other",
+      label = x$drug[i], ongoing = gr$last[i] & open,
+      days = swimmer_days(s[i], e[i], tt[i], open), dose = dose[i]
+    ), gr$g[i], 10L),
+    swimmer_piece(swimmer_rows(
+      x$USUBJID[i], start = swimmer_wk(s[i], tt[i]), lane = "Other",
+      strip = paste0(x$drug[i], "\nd ", swimmer_day(s[i], tt[i]), "\u2013",
+                     ifelse(open, "ongoing", swimmer_day(e[i], tt[i])))
+    ), gr$g[i], 30L)
+  )
+}
+
+# Drugs given in dose periods. Daily administrations (start = end, two or
+# more) first become periods: a run of the same dose without a gap is one,
+# ending at its last day. A cut in the dose is a step (by `doses`).
+swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses) {
+  if (!length(i)) return(list())
+  g <- gr$g
+  daily <- tabulate(g[i], gr$n) >= 2L &
+    tabulate(g[i][which(e[i] != s[i])], gr$n) == 0L
+  prev <- c(NA, s[-length(s)])
+  prev_dose <- c(NA, x$dose[-length(s)])
+  brk <- gr$first | !daily[g] | s - prev > 2 | x$dose != prev_dose
+  brk <- brk[i] %in% TRUE | gr$first[i]
   run <- cumsum(brk)
-  first <- e[brk, , drop = FALSE]
-  first$end <- as.Date(tapply(s, run, max), origin = "1970-01-01")
-  first
+  end <- e[i]
+  merge <- daily[g[i]]
+  end[merge] <- swimmer_grp_max(run, s[i], max(run))[run[merge]]
+  k <- i[brk]
+  end <- end[brk]
+  gk <- g[k]
+  m <- length(k)
+  last <- c(gk[-1L] != gk[-m], TRUE)
+  open <- x$open[k]
+  lane <- x$lane[k]
+  out <- c(
+    swimmer_piece(swimmer_rows(
+      x$USUBJID[k], start = swimmer_wk(s[k], tt[k]),
+      end = swimmer_wk(end, tt[k]), colour = x$drug[k], lane = lane,
+      label = x$drug[k], ongoing = last & open,
+      days = swimmer_days(s[k], end, tt[k], open), dose = dose[k]
+    ), gk, 10L),
+    swimmer_piece(swimmer_rows(
+      x$USUBJID[k], start = swimmer_wk(s[k], tt[k]), lane = lane,
+      strip = paste0(ifelse(nzchar(dose[k]), paste0(dose[k], "\n"), ""), "d ",
+                     swimmer_day(s[k], tt[k]), "\u2013",
+                     ifelse(open, "ongoing", swimmer_day(end, tt[k])))
+    ), gk, 30L)
+  )
+  if (identical(doses, "Exceptions") && m > 1L) {
+    j <- which(c(FALSE, gk[-1L] == gk[-m] & x$dose[k][-1L] < x$dose[k][-m]))
+    ci <- k[j]
+    out <- c(out, swimmer_piece(swimmer_rows(
+      x$USUBJID[ci], start = swimmer_wk(s[ci], tt[ci]), lane = lane[j],
+      colour = x$drug[ci], mark = "step", label = x$drug[ci],
+      days = paste("Day", swimmer_day(s[ci], tt[ci])),
+      dose = paste0(dose[k][j - 1L], " to ", dose[ci])
+    ), gk[j], 20L))
+  }
+  out
 }
 
-# A drug given in cycles: the bar from the first dose to a cycle after the
-# last, and by `doses` its cuts, late doses and skipped cycles, or a ring per
-# dose. The strip lists every cycle.
-swimmer_admin_rows <- function(e, adm, tt, doses, cutoff) {
-  id <- e$USUBJID[[1L]]
-  drug <- e$drug[[1L]]
-  lane <- as.character(e$lane[[1L]])
-  d <- as.numeric(adm$date)
-  n <- length(d)
-  every <- adm$every
-  ongoing <- e$on[[1L]]
-  last <- if (ongoing) as.numeric(cutoff) else d[[n]] + every
-  dose <- swimmer_fmt_dose(adm$dose, adm$unit)
+# Drugs given in cycles: the bar from the first dose to a cycle after the
+# last (to the cutoff while ongoing), and by `doses` its cuts, late doses and
+# skipped cycles, or a ring per dose. The strip lists every cycle. `every`:
+# the interval of each sorted record's drug.
+swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
+  if (!length(i)) return(list())
+  g <- gr$g[i]
+  d <- s[i]
+  tt <- tt[i]
+  every <- every[i]
+  dose <- dose[i]
+  raw <- x$dose[i]
+  lane <- x$lane[i]
+  drug <- x$drug[i]
+  id <- x$USUBJID[i]
+  first <- gr$first[i]
+  m <- length(i)
+  start_at <- which(first)
+  pos <- seq_len(m) - rep(start_at, diff(c(start_at, m + 1L))) + 1L
   # Per dose: cycles skipped before it, and how many days late it came.
-  gap <- c(every, diff(d))
+  prev <- c(NA, d[-m])
+  gap <- ifelse(first, every, d - prev)
   skip <- pmax(0, floor((gap + every / 2) / every) - 1)
-  plan <- c(d[[1L]], d[-n] + (skip[-1L] + 1) * every)
+  plan <- ifelse(first, d, prev + (skip + 1) * every)
   late <- round(d - plan)
   late[late <= 2] <- 0
   day <- swimmer_day(d, tt)
-  bar <- swimmer_rows(
-    id, start = swimmer_wk(d[[1L]], tt), end = swimmer_wk(last, tt),
-    colour = drug, lane = lane, label = drug, ongoing = ongoing,
-    days = swimmer_days(d[[1L]], last, tt, ongoing),
-    dose = paste0(n, " doses, every ", every, " days")
-  )
-  skipped <- unlist(lapply(which(skip > 0), function(i) {
-    d[[i - 1L]] + seq_len(skip[[i]]) * every
-  }))
-  marks <- switch(doses,
-    Plain = NULL,
-    Dots = swimmer_rows(
-      rep(id, n), start = swimmer_wk(d, tt), lane = lane, colour = drug,
-      mark = "dot", label = drug, days = paste("Day", day), dose = dose
-    ),
-    Exceptions = {
-      cut <- which(c(FALSE, adm$dose[-1L] < adm$dose[-n]))
-      lt <- which(late > 0)
-      swimmer_bind(list(
-        swimmer_rows(
-          rep(id, length(cut)), start = swimmer_wk(d[cut], tt), lane = lane,
-          colour = drug, mark = "step", label = drug,
-          days = paste("Day", day[cut]),
-          dose = paste0(dose[cut - 1L], " to ", dose[cut])
-        ),
-        swimmer_rows(
-          rep(id, length(lt)), start = swimmer_wk(plan[lt], tt),
-          end = swimmer_wk(d[lt], tt), lane = lane, colour = "Late dose",
-          mark = "hollow", label = "Late dose",
-          days = paste0("Cycle ", lt, ", day ", day[lt], ", ", late[lt],
-                        " days late")
-        ),
-        swimmer_rows(
-          rep(id, length(skipped)), start = swimmer_wk(skipped, tt),
-          end = swimmer_wk(skipped + every, tt), lane = lane, colour = drug,
-          mark = "dashed", label = drug,
-          days = paste("Skipped, planned day", swimmer_day(skipped, tt))
-        )
-      ))
-    }
-  )
-  boxes <- c(
-    paste0("C", seq_len(n), "\n", dose, "\nd ", day,
-           ifelse(late > 0, paste0("\n+", late, " d"), "")),
-    rep("skip", length(skipped))
-  )
-  bx_x <- c(d, skipped)
-  bx_day <- c(day, swimmer_day(skipped, tt))
-  boxes[-seq_len(n)] <- paste0("skip\nd ", bx_day[-seq_len(n)])
-  strip <- swimmer_rows(
-    rep(id, length(bx_x)), start = swimmer_wk(bx_x, tt), lane = lane,
-    strip = boxes,
-    mark = c(ifelse(late > 0, "hollow", "solid"), rep("dashed",
-                                                       length(skipped)))
-  )
-  swimmer_bind(list(bar, marks, strip))
-}
-
-# A folded drug: its periods in grey on the "Other" lane, named in the strip.
-swimmer_other_rows <- function(e, tt) {
-  n <- nrow(e)
-  swimmer_bind(list(
-    swimmer_rows(
-      e$USUBJID, start = swimmer_wk(e$start, tt), end = swimmer_wk(e$end, tt),
-      colour = "Other", lane = "Other", label = e$drug,
-      ongoing = c(rep(FALSE, n - 1L), e$open[[n]]),
-      days = swimmer_days(e$start, e$end, tt, e$open),
-      dose = swimmer_fmt_dose(e$dose, e$unit)
-    ),
-    swimmer_rows(
-      e$USUBJID, start = swimmer_wk(e$start, tt), lane = "Other",
-      strip = paste0(e$drug, "\nd ", swimmer_day(e$start, tt), "\u2013",
-                     ifelse(e$open, "ongoing", swimmer_day(e$end, tt)))
+  # The bar, one per drug.
+  f <- start_at
+  l <- c(start_at[-1L] - 1L, m)
+  n <- l - f + 1L
+  ongoing <- x$on[i][f]
+  last <- ifelse(ongoing, as.numeric(cutoff), d[l] + every[f])
+  out <- swimmer_piece(swimmer_rows(
+    id[f], start = swimmer_wk(d[f], tt[f]), end = swimmer_wk(last, tt[f]),
+    colour = drug[f], lane = lane[f], label = drug[f], ongoing = ongoing,
+    days = swimmer_days(d[f], last, tt[f], ongoing),
+    dose = paste0(n, " doses, every ", every[f], " days")
+  ), g[f], 10L)
+  # Skipped cycles: after the dose before, one per interval.
+  sk_i <- rep(seq_len(m), skip)
+  sk <- prev[sk_i] + sequence(skip[skip > 0]) * every[sk_i]
+  if (identical(doses, "Dots")) {
+    out <- c(out, swimmer_piece(swimmer_rows(
+      id, start = swimmer_wk(d, tt), lane = lane, colour = drug, mark = "dot",
+      label = drug, days = paste("Day", day), dose = dose
+    ), g, 21L))
+  } else if (identical(doses, "Exceptions")) {
+    cut <- which(!first & c(FALSE, raw[-1L] < raw[-m]))
+    lt <- which(late > 0)
+    out <- c(
+      out,
+      swimmer_piece(swimmer_rows(
+        id[cut], start = swimmer_wk(d[cut], tt[cut]), lane = lane[cut],
+        colour = drug[cut], mark = "step", label = drug[cut],
+        days = paste("Day", day[cut]),
+        dose = paste0(dose[cut - 1L], " to ", dose[cut])
+      ), g[cut], 21L),
+      swimmer_piece(swimmer_rows(
+        id[lt], start = swimmer_wk(plan[lt], tt[lt]),
+        end = swimmer_wk(d[lt], tt[lt]), lane = lane[lt],
+        colour = "Late dose", mark = "hollow", label = "Late dose",
+        days = paste0("Cycle ", pos[lt], ", day ", day[lt], ", ", late[lt],
+                      " days late")
+      ), g[lt], 22L),
+      swimmer_piece(swimmer_rows(
+        id[sk_i], start = swimmer_wk(sk, tt[sk_i]),
+        end = swimmer_wk(sk + every[sk_i], tt[sk_i]), lane = lane[sk_i],
+        colour = drug[sk_i], mark = "dashed", label = drug[sk_i],
+        days = paste("Skipped, planned day", swimmer_day(sk, tt[sk_i]))
+      ), g[sk_i], 23L)
     )
-  ))
+  }
+  c(
+    out,
+    swimmer_piece(swimmer_rows(
+      id, start = swimmer_wk(d, tt), lane = lane,
+      strip = paste0("C", pos, "\n", dose, "\nd ", day,
+                     ifelse(late > 0, paste0("\n+", late, " d"), "")),
+      mark = ifelse(late > 0, "hollow", "solid")
+    ), g, 31L),
+    swimmer_piece(swimmer_rows(
+      id[sk_i], start = swimmer_wk(sk, tt[sk_i]), lane = lane[sk_i],
+      strip = paste0("skip\nd ", swimmer_day(sk, tt[sk_i])), mark = "dashed"
+    ), g[sk_i], 32L)
+  )
 }
 
 # --- finish ----------------------------------------------------------------
@@ -622,28 +729,29 @@ SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 SWIMMER_EVENTS <- c("Progression", "Serious AE", "Death")
 
 swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
-  bor <- vapply(split(rs$AVALC, rs$USUBJID), function(v) {
-    hit <- SWIMMER_BOR[SWIMMER_BOR %in% v]
-    if (length(hit)) hit[[1L]] else NA_character_
-  }, "")
+  ids <- sl$USUBJID
+  n <- length(ids)
+  # Best response: the best read in SWIMMER_BOR order.
+  rank <- match(rs$AVALC, SWIMMER_BOR)
+  best <- -swimmer_grp_max(match(rs$USUBJID, ids), -rank, n)
+  bor <- SWIMMER_BOR[best]
   study <- ex[ex$role == "study", , drop = FALSE]
+  at <- match(study$USUBJID, ids)
+  has <- tabulate(at, n) > 0L
+  on <- tabulate(at[study$on], n) > 0L
   # Time on treatment: to the cutoff while a study drug runs, else to the end
   # of treatment (the last dose without one).
-  wk <- vapply(sl$USUBJID, function(id) {
-    e <- study[study$USUBJID == id, , drop = FALSE]
-    s <- sl[sl$USUBJID == id, ]
-    if (!nrow(e) && is.na(s$TRTEDT)) return(NA_real_)
-    end <- if (any(e$on)) cutoff else if (!is.na(s$TRTEDT)) s$TRTEDT else max(e$end)
-    round(swimmer_wk(end, s$TRTSDT), 1)
-  }, numeric(1L))
-  on <- vapply(sl$USUBJID, function(id) any(study$on[study$USUBJID == id]),
-               NA)
+  end <- ifelse(on, as.numeric(cutoff),
+                ifelse(!is.na(sl$TRTEDT), as.numeric(sl$TRTEDT),
+                       swimmer_grp_max(at, as.numeric(study$end), n)))
+  wk <- round(swimmer_wk(end, sl$TRTSDT), 1)
+  wk[!has & is.na(sl$TRTEDT)] <- NA_real_
   status <- ifelse(!is.na(sl$DTHDT), "Died",
                    ifelse(on, "On treatment", "Off treatment"))
-  m <- match(out$USUBJID, sl$USUBJID)
+  m <- match(out$USUBJID, ids)
   out$ARM <- sl$ARM[m]
-  out$BOR <- unname(bor[out$USUBJID])
-  out$weeks <- unname(wk[m])
+  out$BOR <- bor[m]
+  out$weeks <- wk[m]
   out$status <- status[m]
   # Columns the listing offers besides (age, sex, the first study dose).
   ids <- as.character(adsl$USUBJID)
