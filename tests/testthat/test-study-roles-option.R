@@ -11,11 +11,16 @@ test_that("the option normalizes, serializes and restores", {
   opt <- new_study_roles_option()
   expect_s3_class(opt, "board_option")
   expect_identical(blockr.core::board_option_id(opt), "study_roles")
-  # undeclared default
+  # undeclared default; the subject resolves to the convention in the value
+  # itself, since blockr.viz reads it by option id and knows no CDISC names
   expect_identical(
     blockr.core::board_option_value(opt),
     list(arm = "", arm_code = "", severity = "", timeline = "",
-         indication = "", subject = "")
+         indication = "", subject = "USUBJID")
+  )
+  expect_identical(
+    blockr.core::board_option_value(opt, list(study_subject = " "))$subject,
+    "USUBJID"
   )
 
   # normalization: ctor keys, the editor's study_* input keys, whitespace

@@ -34,7 +34,9 @@ undeclared (convention: \code{TRTSDT}).}
 (convention: \code{CMINDC}).}
 
 \item{subject}{Column identifying a patient in every table; \code{""} =
-undeclared (convention: \code{USUBJID}). A drill click on any exhibit claims
+the convention, \code{USUBJID}. Unlike the other roles, the value stores the
+resolved name, so a board needs no setup for its drills to claim
+subjects. A drill click on any exhibit claims
 the values of this column behind the clicked mark, so the drill filter
 receives exactly the patients the exhibit counted.}
 

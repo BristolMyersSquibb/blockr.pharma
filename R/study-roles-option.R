@@ -20,10 +20,13 @@
 #   indication -- ADCM medication indication column. Default CMINDC; a study
 #                 carrying the reason for treatment elsewhere declares it
 #                 here, and the CM gantt colors its bars by it.
-#   subject    -- the column that identifies a patient. Default USUBJID.
-#                 Read by blockr.viz's drill senders by option id (they do
-#                 not depend on this package): a click claims the subjects
-#                 behind the clicked mark rather than the mark's column.
+#   subject    -- the column that identifies a patient. Default USUBJID,
+#                 written into the value itself (study_roles_normalize()):
+#                 blockr.viz's drill senders read the field by option id and
+#                 know no CDISC names, so an empty field has to reach them
+#                 already resolved. A click claims the subjects behind the
+#                 clicked mark rather than the mark's column. The patient
+#                 profile does not read this role.
 #
 # Deliberately NOT fields:
 #   - table aliases: the SDTM domain names (ae, vs, lb, cm, dm, ...) resolve
@@ -67,7 +70,9 @@
 #' @param indication ADCM medication indication column; `""` = undeclared
 #'   (convention: `CMINDC`).
 #' @param subject Column identifying a patient in every table; `""` =
-#'   undeclared (convention: `USUBJID`). A drill click on any exhibit claims
+#'   the convention, `USUBJID`. Unlike the other roles, the value stores the
+#'   resolved name, so a board needs no setup for its drills to claim
+#'   subjects. A drill click on any exhibit claims
 #'   the values of this column behind the clicked mark, so the drill filter
 #'   receives exactly the patients the exhibit counted.
 #' @param category Settings sidebar category
@@ -149,7 +154,8 @@ new_study_roles_option <- function(arm = "", arm_code = "", severity = "",
 #'
 #' TOTAL over the shapes a value can arrive in: the constructor's arguments,
 #' the update trigger's `study_*`-keyed input list, and the `list()` shapes
-#' JSON deserialization hands back. `""` is the undeclared state. Never
+#' JSON deserialization hands back. `""` is the undeclared state, except
+#' for `subject`, which resolves to `USUBJID` here (see the file header). Never
 #' errors on typed input (see the file header); anything unusable collapses
 #' to `""` here and, if a declared name is wrong, fails loudly at
 #' resolution instead.
@@ -170,13 +176,16 @@ study_roles_normalize <- function(x) {
     if (length(v) == 1L) v else ""
   }
 
+  subject <- scalar(key("subject"))
+  if (!nzchar(subject)) subject <- "USUBJID"
+
   list(
     arm = scalar(key("arm")),
     arm_code = scalar(key("arm_code")),
     severity = scalar(key("severity")),
     timeline = scalar(key("timeline")),
     indication = scalar(key("indication")),
-    subject = scalar(key("subject"))
+    subject = subject
   )
 }
 
