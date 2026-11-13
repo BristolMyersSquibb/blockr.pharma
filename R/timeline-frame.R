@@ -195,7 +195,8 @@ TL_OTHER <- c("Other class", "Other indication", "Other", "Other drug",
 # map may bind either spelling.
 TL_SCALE_VARS <- list(grade = c("ATOXGR", "AETOXGR"),
                       severity = c("ASEV", "AESEV"), class = "CMCLAS",
-                      indication = "CMINDC", drug = c("EXTRT", "CMDECOD"))
+                      indication = "CMINDC", drug = c("EXTRT", "CMDECOD"),
+                      response = "AVALC")
 
 # Boards saved before the con-med colour default changed name the old one.
 tl_cm_colour_value <- function(x) {
@@ -321,7 +322,8 @@ TL_COLS <- list(
   .event_x = NA_real_, .event = NA_character_, .ae = NA_real_,
   .ae_open = NA_real_, .ae_ser = NA_real_, .worst = NA_character_,
   .fatal = FALSE, .cm = NA_real_, .cm_new = NA_real_, .days_trt = NA_real_,
-  .svar = NA_character_, .skey = NA_character_
+  .svar = NA_character_, .skey = NA_character_, .tag = NA_character_,
+  .bor = NA_character_, .status = NA_character_
 )
 
 tl_bind <- function(parts) {
@@ -645,13 +647,14 @@ tl_fold <- function(parts, max_lanes) {
 # an AE and a con med of the same name stay two rows.
 tl_unique_rows <- function(parts) {
   seen <- character()
-  for (nm in intersect(c("ae", "cm", "trt"), names(parts))) {
+  for (nm in intersect(c("ae", "cm", "trt", "resp"), names(parts))) {
     p <- parts[[nm]]
     key <- paste(p$USUBJID, p$Row, sep = "\r")
     clash <- key %in% seen
     if (any(clash)) {
       p$Row[clash] <- paste0(p$Row[clash], switch(nm, cm = " (con med)",
-                                                    trt = " (treatment)", ""))
+                                                    trt = " (treatment)",
+                                                    resp = " (response)", ""))
       parts[[nm]] <- p
     }
     seen <- c(seen, unique(paste(p$USUBJID, p$Row, sep = "\r")))
@@ -711,6 +714,10 @@ tl_finish <- function(out, sl, opt, group) {
   n_cm <- per$sum(out$.cm %in% 1)
   worst <- per$max(match(out$.worst, wl))
   first <- per$min(ifelse(out$.src %in% c("AE", "CM"), out$Start, NA_real_))
+  days <- per$max(out$.days_trt)
+  bor <- per$min(match(out$.bor, SWIMMER_BOR))
+  prog <- per$min(ifelse(out$.event %in% "Progression" & is.na(out$Row),
+                         out$.event_x, NA_real_))
   key <- switch(
     opt$order_by,
     "number of events" = order(-(n_ae + n_cm), ids),
@@ -719,12 +726,15 @@ tl_finish <- function(out, sl, opt, group) {
     "ongoing AEs" = order(-n_open, -n_ae, ids),
     "first onset" = order(first, ids),
     "number of con meds" = order(-n_cm, ids),
+    "days on treatment" = order(-days, ids),
+    "best response" = order(bor, -days, ids),
+    "first progression" = order(prog, -days, ids),
     order(ids)
   )
   pos <- match(out$USUBJID, ids[key])
-  # Within a patient: the patient record, then AEs, con meds and treatment,
-  # each source's rows by first start.
-  src <- match(out$.src, c("AE", "CM", "Treatment"))
+  # Within a patient: the patient record, then AEs, con meds and treatment
+  # (or the sources in `opt$src_order`), each source's rows by first start.
+  src <- match(out$.src, opt$src_order %||% c("AE", "CM", "Treatment"))
   src[is.na(src)] <- 0L
   rk <- paste(out$USUBJID, out$Row, sep = "\r")
   row_first <- stats::ave(ifelse(is.finite(out$Start), out$Start, Inf), rk,
@@ -736,11 +746,12 @@ tl_finish <- function(out, sl, opt, group) {
   # One colour column over every source, each with its own palette.
   out$Colour <- tl_colour_factor(out, opt)
   out$.lane <- factor(c(AE = "Adverse events", CM = "Con meds",
-                        Treatment = "Treatment")[out$.src],
-                      levels = TL_SHOW)
+                        Treatment = "Treatment",
+                        Response = "Response")[out$.src],
+                      levels = opt$lanes %||% TL_SHOW)
   out$.worst <- factor(out$.worst, levels = wl)
-  out$Event <- factor(out$.event, levels = c("Serious AE", "Fatal AE",
-                                             "Death"))
+  out$Event <- factor(out$.event, levels = opt$events %||%
+                        c("Serious AE", "Fatal AE", "Death"))
   pr <- is.na(out$Row)
   pcols <- attr(sl, "pcols")
   out$.arm <- ifelse(pr, sl$.arm[match(out$USUBJID, sl$USUBJID)],
@@ -757,7 +768,8 @@ tl_finish <- function(out, sl, opt, group) {
   keep <- c("USUBJID", "Row", ".arm", pcols, ".ae", ".ae_open", ".ae_ser",
             ".worst", ".cm", ".cm_new", ".days_trt", "Start", "End",
             ".open", "Colour", ".lane", ".style", ".label", "Type",
-            "Details", "Days", ".bar_label", ".event_x", "Event")
+            "Details", "Days", ".bar_label", ".event_x", "Event",
+            opt$extra)
   out[, keep, drop = FALSE]
 }
 
@@ -774,9 +786,19 @@ tl_colour_factor <- function(out, opt) {
   drawn <- is.finite(out$Start) & !is.na(out$.colour)
   n_lv <- function(s) length(unique(out$.colour[drawn & out$.src %in% s]))
   cm <- drawn & out$.src %in% "CM"
+  # With response colours too, treatment takes one colour when the doses
+  # would leave con meds less than two.
+  trt <- drawn & out$.src %in% "Treatment"
+  if (any(trt) && n_lv("Response") &&
+        n_lv("AE") + n_lv("Response") + n_lv("Treatment") + 2L * any(cm) >
+          TL_MAX_COLOURS) {
+    out$.colour[trt] <- "Treatment"
+    out$.svar[trt] <- NA_character_
+  }
   if (any(cm)) {
     room <- min(TL_MAX_CM_COLOURS,
-                TL_MAX_COLOURS - n_lv("AE") - n_lv("Treatment"))
+                TL_MAX_COLOURS - n_lv("AE") - n_lv("Treatment") -
+                  n_lv("Response"))
     other <- switch(opt$cm_colour, class = "Other class",
                     indication = "Other indication", "Other")
     v <- tl_fold_top(out$.colour[cm], max(2L, room), other)
@@ -785,7 +807,7 @@ tl_colour_factor <- function(out, opt) {
   }
   lv <- character()
   col <- character()
-  for (s in c("AE", "CM", "Treatment")) {
+  for (s in c("Response", "AE", "CM", "Treatment")) {
     v <- unique(out$.colour[drawn & out$.src %in% s])
     if (!length(v)) next
     ord <- tl_level_order(s, v)
@@ -819,6 +841,7 @@ tl_level_order <- function(src, v) {
   fixed <- switch(
     src,
     AE = c(paste("Grade", 1:5), "Mild", "Moderate", "Severe", "AE"),
+    Response = names(SWIMMER_RESPONSE),
     CM = c("Started before treatment", "Started on treatment"),
     character()
   )
@@ -833,6 +856,11 @@ tl_palette <- function(src, lv) {
     AE = {
       p <- AET_COLOURS[lv]
       p[is.na(p)] <- "#e07b39"
+      unname(p)
+    },
+    Response = {
+      p <- SWIMMER_RESPONSE[lv]
+      p[is.na(p)] <- "#c9ced6"
       unname(p)
     },
     CM = {
