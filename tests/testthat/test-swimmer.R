@@ -174,15 +174,15 @@ test_that("the swimmer's settings go to its script values; its gear is its own",
   on <- vapply(g$columns, `[[`, NA, "on")
   expect_identical(names(on[on]), NULL)
   expect_identical(vapply(g$columns[on], `[[`, "", "name"),
-                   c("BOR", "Status", "Off treatment"))
+                   "BOR")
   expect_identical(vapply(swimmer_summaries(), `[[`, "", "name"),
-                   c("BOR", "Status", "Off treatment", "Study time"))
+                   c("BOR", "Study time"))
   # Days on treatment is offered, off; the rows sort by it. The lane is as
   # wide as the listing leaves it.
   expect_false(g$columns[[4L]]$on)
   expect_identical(g$columns[[4L]]$name, "Days")
   expect_identical(formals(new_swimmer_block)$sort_by, "duration")
-  lane <- swimmer_summaries()[[4L]]
+  lane <- swimmer_summaries()[[2L]]
   expect_identical(lane$size, "xl")
   expect_identical(lane$event_x, "event_day")
   # No weeks anywhere a reader sees them.
@@ -252,19 +252,19 @@ test_that("the reason off treatment comes from ADSL, also under other names", {
 
 test_that("a board saved with weeks restores in days", {
   old <- swimmer_summaries()
-  old[[4L]]$event_x <- "event_wk"
-  old <- c(old[1:3], list(list(type = "simple", name = "Weeks",
-                               func = "max", col = "weeks", show = "number")),
-           old[4L])
+  old[[2L]]$event_x <- "event_wk"
+  old <- c(old[1L], list(list(type = "simple", name = "Weeks",
+                              func = "max", col = "weeks", show = "number")),
+           old[2L])
   blk <- new_swimmer_block(summaries = old, sort_by = "weeks",
                            script_values = list(unit = "weeks"),
                            unit = "weeks")
   p <- blockr.core::blockr_ser(blk)$payload
   expect_identical(p$sort_by, "duration")
   expect_null(p$script_values$unit)
-  expect_identical(p$summaries[[4L]]$col, "duration")
-  expect_identical(p$summaries[[4L]]$name, "Days")
-  expect_identical(p$summaries[[5L]]$event_x, "event_day")
+  expect_identical(p$summaries[[2L]]$col, "duration")
+  expect_identical(p$summaries[[2L]]$name, "Days")
+  expect_identical(p$summaries[[3L]]$event_x, "event_day")
 })
 
 test_that("an end of treatment closes a study drug and ends the time on it", {

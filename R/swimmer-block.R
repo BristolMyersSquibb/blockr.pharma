@@ -236,12 +236,12 @@ swimmer_gear <- function() {
   )
 }
 
-# The listing columns the gear offers, the first three shown.
+# The listing columns the gear offers, best overall response shown.
 swimmer_columns <- function() {
   list(
     BOR = list(type = "field", col = "BOR"),
-    Status = list(type = "field", col = "status"),
-    `Off treatment` = list(type = "field", col = "reason"),
+    Status = list(type = "field", col = "status", on = FALSE),
+    `Off treatment` = list(type = "field", col = "reason", on = FALSE),
     Days = list(type = "simple", func = "max", col = "duration",
                 show = "number", on = FALSE),
     Age = list(type = "field", col = "AGE", on = FALSE),
