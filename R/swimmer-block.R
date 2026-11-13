@@ -182,18 +182,18 @@ swimmer_levels <- function(x) {
 
 #' The swimmer's sentence under the title
 #'
-#' Each `{@...}` word is a setting to click: the cutoff, the doses style and
-#' the drugs, and the column grouping the rows (`@parent`, the table's outer
-#' `by`). The grouping's clause leaves when the rows are not grouped. The
-#' gear's "In the subtitle" ticks add and remove the clauses of
-#' [swimmer_clauses()].
+#' Each `{@...}` word is a setting to click: the doses style and the drugs,
+#' and the column grouping the rows (`@parent`, the table's outer `by`). The
+#' grouping's clause leaves when the rows are not grouped. The cutoff is set
+#' in the gear (Data tab); its clause is off by default. The gear's "In the
+#' subtitle" ticks add and remove the clauses of [swimmer_clauses()].
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 swimmer_subtitle <- function() {
   cl <- swimmer_clauses()
   paste0("Response and drugs by study day, ",
-         paste(cl[c("doses", "drugs", "cutoff", "group")], collapse = ", "))
+         paste(cl[c("doses", "drugs", "group")], collapse = ", "))
 }
 
 #' The clauses the swimmer's settings put in its subtitle

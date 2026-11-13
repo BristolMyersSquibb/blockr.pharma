@@ -173,6 +173,8 @@ test_that("drugs and cutoff narrow the frame", {
   # NA is automatic.
   expect_identical(swimmer_frame(a, cutoff = as.Date(NA)), swimmer_frame(a))
   expect_match(swimmer_subtitle(), "{label(@parent)}", fixed = TRUE)
+  # The cutoff is a gear setting, not a word in the subtitle.
+  expect_false(grepl("cutoff", swimmer_subtitle(), fixed = TRUE))
 })
 
 test_that("the swimmer is in the menu and saves and restores as itself", {
