@@ -40,7 +40,8 @@
 #'   `"USUBJID"` does not group.
 #' @param summaries The listing columns and the swimlane; see
 #'   [blockr.viz::new_table_block()].
-#' @param sort_by,sort_dir Row order: a listing column, and its direction.
+#' @param sort_by,sort_dir Row order: a listing column or a numeric column of
+#'   the frame (`weeks`, weeks on treatment), and its direction.
 #' @param script_values The swimmer's settings, by name: `doses`
 #'   (`"Exceptions"`, `"Dots"` or `"Plain"`), `drugs`, `cutoff` (a date,
 #'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
@@ -59,7 +60,7 @@
 #' @export
 new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               summaries = swimmer_summaries(),
-                              sort_by = "Weeks",
+                              sort_by = "weeks",
                               sort_dir = "desc",
                               script_values = list(),
                               title = "Efficacy swimmer",
@@ -198,11 +199,13 @@ swimmer_gear <- function() {
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
         `Drug lines` = c("drugs", "doses", "con_meds", "max_lanes"),
-        `Response bar` = "events"
+        `Response bar` = "events",
+        Swimlane = "lane_width"
       ),
       Titles = "titles",
       Interaction = list(`Drill-down` = "drill",
-                         `Reader tools` = c("search", "download"))
+                         `Reader tools` = c("search", "download")),
+      Script = list(`Prepare script` = "script")
     ),
     columns = swimmer_columns(),
     groups = c(Arm = "ARM", `Actual arm` = "ACTARM", `Actual treatment` = "TRT01A",
@@ -215,13 +218,13 @@ swimmer_gear <- function() {
   )
 }
 
-# The listing columns the gear offers, the first three shown.
+# The listing columns the gear offers, the first two shown.
 swimmer_columns <- function() {
   list(
     BOR = list(type = "field", col = "BOR"),
     Status = list(type = "field", col = "status"),
     Weeks = list(type = "simple", func = "max", col = "weeks",
-                 show = "number"),
+                 show = "number", on = FALSE),
     Age = list(type = "field", col = "AGE", on = FALSE),
     Sex = list(type = "field", col = "SEX", on = FALSE),
     `Dose level` = list(type = "field", col = "dose_level", on = FALSE)

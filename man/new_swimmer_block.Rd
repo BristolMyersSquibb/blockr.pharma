@@ -7,7 +7,7 @@
 new_swimmer_block(
   by = c("ARM", "USUBJID"),
   summaries = swimmer_summaries(),
-  sort_by = "Weeks",
+  sort_by = "weeks",
   sort_dir = "desc",
   script_values = list(),
   title = "Efficacy swimmer",
@@ -28,7 +28,8 @@ new_swimmer_block(
 \item{summaries}{The listing columns and the swimlane; see
 \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
 
-\item{sort_by, sort_dir}{Row order: a listing column, and its direction.}
+\item{sort_by, sort_dir}{Row order: a listing column or a numeric column of
+the frame (\code{weeks}, weeks on treatment), and its direction.}
 
 \item{script_values}{The swimmer's settings, by name: \code{doses}
 (\code{"Exceptions"}, \code{"Dots"} or \code{"Plain"}), \code{drugs}, \code{cutoff} (a date,

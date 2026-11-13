@@ -169,13 +169,18 @@ test_that("the swimmer's settings go to its script values; its gear is its own",
   g <- swimmer_gear()
   expect_s3_class(g, "viz_table_gear")
   expect_identical(vapply(g$tabs, `[[`, "", "title"),
-                   c("Data", "Patients", "Lanes", "Titles", "Interaction"))
+                   c("Data", "Patients", "Lanes", "Titles", "Interaction",
+                     "Script"))
   on <- vapply(g$columns, `[[`, NA, "on")
   expect_identical(names(on[on]), NULL)
   expect_identical(vapply(g$columns[on], `[[`, "", "name"),
-                   c("BOR", "Status", "Weeks"))
+                   c("BOR", "Status"))
   expect_identical(vapply(swimmer_summaries(), `[[`, "", "name"),
-                   c("BOR", "Status", "Weeks", "Study time"))
+                   c("BOR", "Status", "Study time"))
+  # Weeks is offered, off; the rows still sort by weeks on treatment.
+  expect_false(g$columns[[3L]]$on)
+  expect_identical(g$columns[[3L]]$name, "Weeks")
+  expect_identical(formals(new_swimmer_block)$sort_by, "weeks")
   # The subtitle is made of the clauses the gear ticks.
   expect_match(swimmer_subtitle(), swimmer_clauses()[["doses"]], fixed = TRUE)
   expect_false(grepl(swimmer_clauses()[["con_meds"]], swimmer_subtitle(),

@@ -1,7 +1,8 @@
 // The swimmer gear's Tables row: what the swimmer found in its input dm (R's
 // swimmer_mapping(), sent as derived.gear.info) and the ADRS parameter of the
 // overall response, which writes the prepare script's `parameter`.
-// Registered as blockr.viz's gear editor "mapping" (core/gear/profile.js).
+// Registered as blockr.viz's gear editor "mapping" (core/gear/profile.js),
+// with "lane_width", the swimlane's Width.
 (function () {
   'use strict';
   const B = window.Blockr;
@@ -102,4 +103,23 @@
   }
 
   B.viz.gear.editors.mapping = { label: 'Found in the input', draw };
+
+  // The swimlane's width: the spans column's `size` (md, lg), the Width the
+  // table's summaries editor offers, here as a row of its own.
+  const WIDTHS = [['md', 'Regular'], ['lg', 'Wide']];
+  function drawWidth(parent, ctx) {
+    const sums = Array.isArray(ctx.values.summaries) ? ctx.values.summaries : [];
+    const lane = sums.find((s) => s && s.type === 'spans');
+    if (!lane) return;
+    const at = String(Math.max(0, WIDTHS.findIndex(([v]) => v === (lane.size || 'md'))));
+    const pick = (i) => {
+      const size = WIDTHS[Number(i)][0];
+      ctx.setValues({ summaries: sums.map((s) =>
+        s && s.type === 'spans' ? Object.assign({}, s, { size }) : s) });
+    };
+    const opts = WIDTHS.map(([, label], i) => ({ value: String(i), label }));
+    parent.appendChild(B.segmented(opts, at, pick, { label: 'Width' }).el);
+  }
+
+  B.viz.gear.editors.lane_width = { label: 'Width', draw: drawWidth };
 })();
