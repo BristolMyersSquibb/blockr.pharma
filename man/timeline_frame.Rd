@@ -14,17 +14,16 @@ timeline_frame(
   serious = "outlined",
   death = TRUE,
   cm_records = "active on treatment",
-  cm_colour = "class, else before or on treatment",
+  cm_colour = "before or on treatment",
   cm_lanes = "coded name",
   cm_prior = "clipped at the start",
   trt_colour = "dose level",
   dose_labels = TRUE,
   max_lanes = 12,
   origin = "first dose",
-  unit = "days",
   cutoff = NULL,
   ongoing = "last contact",
-  order_by = "number of AEs",
+  order_by = "number of events",
   group = "TRT01A"
 )
 }
@@ -50,18 +49,20 @@ severity), \code{"severity"}, \code{"grade"} or \code{"one colour"}.}
 \item{death}{Mark death with a cross.}
 
 \item{cm_records}{\code{"active on treatment"} (ends on or after the first dose,
-or ongoing) or \code{"all"} (the axis then starts four weeks before day 1).}
+or ongoing) or \code{"all"} (the axis then starts 28 days before day 1).}
 
-\item{cm_colour}{\code{"class, else before or on treatment"} (the drug class
-when most records have one), \code{"before or on treatment"}, \code{"indication"}
-or \code{"one colour"}.}
+\item{cm_colour}{\code{"before or on treatment"}, \code{"class"}, \code{"indication"} or
+\code{"one colour"}. Classes and indications keep their most common levels
+and fold the rest into "Other", so the colours stay within what a
+legend can show (see \code{\link[=timeline_frame]{timeline_frame()}}'s details).}
 
 \item{cm_lanes}{One row per \code{"coded name"}, \code{"reported name"} or
 \code{"class"}.}
 
 \item{cm_prior}{Con meds that start before the axis: \code{"clipped at the start"} or \code{"hidden"}.}
 
-\item{trt_colour}{\code{"dose level"}, \code{"drug"} or \code{"one colour"}.}
+\item{trt_colour}{\code{"dose level"} (more than five doses fall into dose
+ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one colour"}.}
 
 \item{dose_labels}{Write the dose on the treatment bars.}
 
@@ -71,15 +72,14 @@ fold into "Other con meds".}
 \item{origin}{Day 1 is the \code{"first dose"} (\code{TRTSDT}) or \code{"randomisation"}
 (\code{RANDDT}).}
 
-\item{unit}{\code{"days"} or \code{"weeks"}.}
-
 \item{cutoff}{The data cutoff, a date. \code{NULL} or \code{NA}: the last date in
 the data.}
 
 \item{ongoing}{A record without an end runs to \code{"last contact"}
 (\code{LSTALVDT}, else the last dose) or the \code{"data cutoff"}.}
 
-\item{order_by}{Patient order: \code{"number of AEs"}, \code{"worst AE"},
+\item{order_by}{Patient order: \code{"number of events"} (AEs and con meds
+shown), \code{"number of AEs"}, \code{"worst AE"},
 \code{"ongoing AEs"}, \code{"first onset"}, \code{"number of con meds"} or
 \code{"subject"}.}
 
@@ -94,6 +94,15 @@ Turns ADSL, ADAE, ADCM and ADEX into the long frame the timeline block
 draws (\code{\link[=new_timeline_block]{new_timeline_block()}}). It is that block's prepare step and needs
 no prep of its inputs. Tables and columns may be named as the patient
 profile allows (\code{dm}, \code{ae}, \code{cm}, \code{ex}; SDTM columns such as \code{AESTDTC}).
+}
+\details{
+Time is in study days. The colour column holds at most 15 levels
+over all sources, the most the table draws: AEs take theirs (at most
+five grades), treatment at most five, con meds what is left, at most
+eight. Each level carries its default colour (\code{blockr_colors}) and the
+data variable and value it stands for (\code{blockr_scale_keys}, e.g. \code{ASEV}
+\code{"MILD"}, \code{CMCLAS}, \code{EXTRT}), so a colour the board's scale map sets for
+that value wins.
 }
 \examples{
 if (requireNamespace("pharmaverseadam", quietly = TRUE)) {

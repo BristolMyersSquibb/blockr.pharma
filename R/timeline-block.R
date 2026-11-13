@@ -45,8 +45,8 @@
 #' @param ... The timeline's settings by name, as in `script_values`: `show`
 #'   (any of `"Adverse events"`, `"Con meds"`, `"Treatment"`; AEs and
 #'   treatment by default), `group` (the arm column), `cm_colour =
-#'   "indication"`, ...; and arguments for [blockr.core::new_block()]
-#'   (`block_name`).
+#'   "class"`, ...; and arguments for [blockr.core::new_block()]
+#'   (`block_name`). Time is in study days.
 #' @return A table block of class `timeline_block`.
 #' @examplesIf interactive()
 #' new_timeline_block(show = c("Con meds", "Treatment"))
@@ -66,8 +66,13 @@ new_timeline_block <- function(summaries = NULL,
                                download = TRUE,
                                ...) {
   dots <- table_state_drop(list(...), new_timeline_block)
+  # Boards saved while time could be in weeks.
+  dots$unit <- NULL
+  script_values$unit <- NULL
   own <- intersect(names(dots), TIMELINE_SETTINGS)
   script_values[own] <- dots[own]
+  script_values <- timeline_migrate(script_values)
+  subtitle <- sub("by study {@unit}", "in study days", subtitle, fixed = TRUE)
   if (!is.null(script_values$show)) {
     script_values$show <- intersect(TL_SHOW,
                                     as.character(unlist(script_values$show)))
@@ -109,9 +114,24 @@ new_timeline_block <- function(summaries = NULL,
 TIMELINE_SETTINGS <- c(
   "show", "group", "ae_records", "ae_show", "ae_colour", "ae_lanes",
   "serious", "death", "cm_records", "cm_colour", "cm_lanes", "cm_prior",
-  "trt_colour", "dose_labels", "max_lanes", "origin", "unit", "cutoff",
-  "ongoing", "order_by"
+  "trt_colour", "dose_labels", "max_lanes", "origin", "cutoff", "ongoing",
+  "order_by"
 )
+
+# Saved values of settings that changed: the old con-med colour default, and
+# a board sorted by AEs that shows none (the old default sort) sorts by the
+# con meds it shows.
+timeline_migrate <- function(sv) {
+  if (!is.null(sv$cm_colour)) {
+    sv$cm_colour <- tl_cm_colour_value(sv$cm_colour)
+  }
+  show <- as.character(unlist(sv$show %||% c("Adverse events", "Treatment")))
+  if (identical(as.character(unlist(sv$order_by)), "number of AEs") &&
+        !"Adverse events" %in% show) {
+    sv$order_by <- "number of events"
+  }
+  sv
+}
 
 #' The timeline's prepare script
 #'
@@ -140,7 +160,7 @@ timeline_script <- function() {
     sel("serious", "outlined", TL_SERIOUS, "Serious AEs"),
     flag("death", "TRUE", "Death as a cross"),
     sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which con meds"),
-    sel("cm_colour", TL_CM_COLOUR[[1L]], TL_CM_COLOUR, "Colour by"),
+    sel("cm_colour", "before or on treatment", TL_CM_COLOUR, "Colour by"),
     sel("cm_lanes", "coded name", names(TL_CM_LANES), "Open into one row per"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
@@ -149,12 +169,11 @@ timeline_script <- function() {
     paste0("max_lanes <- 12  #| number(min = 1, max = 40, step = 1, ",
            "label = \"Rows before \\\"Other con meds\\\"\")"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
-    sel("unit", "days", c("days", "weeks"), "Unit"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
-    sel("order_by", "number of AEs", TL_ORDER, "Sort patients by"),
+    sel("order_by", "number of events", TL_ORDER, "Sort patients by"),
     paste0("blockr.pharma::timeline_frame(data, ",
            paste0(args, " = ", args, collapse = ", "), ")"),
     sep = "\n"
@@ -170,7 +189,7 @@ timeline_script <- function() {
 #' @export
 timeline_subtitle <- function() {
   cl <- timeline_clauses()
-  paste0("{@show} by study {@unit}, one stripe per patient, ",
+  paste0("{@show} in study days, one stripe per patient, ",
          paste(cl[c("order_by", "cutoff")], collapse = ", "))
 }
 
@@ -203,7 +222,7 @@ timeline_gear <- function() {
   blockr.viz::table_gear(
     tabs = list(
       Data = list(Tables = "mapping", Show = "show",
-                  Time = c("origin", "unit", "cutoff", "ongoing")),
+                  Time = c("origin", "cutoff", "ongoing")),
       Patients = list(Rows = c("order_by", "group"), Columns = "columns"),
       Lanes = list(
         `Adverse events` = c("ae_records", "ae_show", "ae_colour", "ae_lanes",

@@ -39,8 +39,8 @@ block; see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()
 
 \item{...}{The timeline's settings by name, as in \code{script_values}: \code{show}
 (any of \code{"Adverse events"}, \code{"Con meds"}, \code{"Treatment"}; AEs and
-treatment by default), \code{group} (the arm column), \code{cm_colour = "indication"}, ...; and arguments for \code{\link[blockr.core:new_block]{blockr.core::new_block()}}
-(\code{block_name}).}
+treatment by default), \code{group} (the arm column), \code{cm_colour = "class"}, ...; and arguments for \code{\link[blockr.core:new_block]{blockr.core::new_block()}}
+(\code{block_name}). Time is in study days.}
 }
 \value{
 A table block of class \code{timeline_block}.

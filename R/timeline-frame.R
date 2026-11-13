@@ -4,8 +4,8 @@
 # in the frame, one record per thing drawn:
 #
 #   AE          a bar from onset to resolution, coloured by grade or severity
-#   con med     a bar from start to end, coloured by class or by whether it
-#               started before or on treatment
+#   con med     a bar from start to end, coloured by whether it started before
+#               or on treatment, by class or by indication
 #   treatment   a bar per dose period from ADEX, in greys by dose level; without
 #               ADEX one bar from first to last dose
 #   events      serious AE onset, death
@@ -38,29 +38,39 @@
 #' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
 #' @param death Mark death with a cross.
 #' @param cm_records `"active on treatment"` (ends on or after the first dose,
-#'   or ongoing) or `"all"` (the axis then starts four weeks before day 1).
-#' @param cm_colour `"class, else before or on treatment"` (the drug class
-#'   when most records have one), `"before or on treatment"`, `"indication"`
-#'   or `"one colour"`.
+#'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
+#' @param cm_colour `"before or on treatment"`, `"class"`, `"indication"` or
+#'   `"one colour"`. Classes and indications keep their most common levels
+#'   and fold the rest into "Other", so the colours stay within what a
+#'   legend can show (see [timeline_frame()]'s details).
 #' @param cm_lanes One row per `"coded name"`, `"reported name"` or
 #'   `"class"`.
 #' @param cm_prior Con meds that start before the axis: `"clipped at the
 #'   start"` or `"hidden"`.
-#' @param trt_colour `"dose level"`, `"drug"` or `"one colour"`.
+#' @param trt_colour `"dose level"` (more than five doses fall into dose
+#'   ranges), `"drug"` (more than five fold into "Other drug") or `"one
+#'   colour"`.
 #' @param dose_labels Write the dose on the treatment bars.
 #' @param max_lanes Rows per opened patient before the rest of the con meds
 #'   fold into "Other con meds".
 #' @param origin Day 1 is the `"first dose"` (`TRTSDT`) or `"randomisation"`
 #'   (`RANDDT`).
-#' @param unit `"days"` or `"weeks"`.
 #' @param cutoff The data cutoff, a date. `NULL` or `NA`: the last date in
 #'   the data.
 #' @param ongoing A record without an end runs to `"last contact"`
 #'   (`LSTALVDT`, else the last dose) or the `"data cutoff"`.
-#' @param order_by Patient order: `"number of AEs"`, `"worst AE"`,
+#' @param order_by Patient order: `"number of events"` (AEs and con meds
+#'   shown), `"number of AEs"`, `"worst AE"`,
 #'   `"ongoing AEs"`, `"first onset"`, `"number of con meds"` or
 #'   `"subject"`.
 #' @param group The patient column shown as the arm, e.g. `"TRT01A"`.
+#' @details Time is in study days. The colour column holds at most 15 levels
+#'   over all sources, the most the table draws: AEs take theirs (at most
+#'   five grades), treatment at most five, con meds what is left, at most
+#'   eight. Each level carries its default colour (`blockr_colors`) and the
+#'   data variable and value it stands for (`blockr_scale_keys`, e.g. `ASEV`
+#'   `"MILD"`, `CMCLAS`, `EXTRT`), so a colour the board's scale map sets for
+#'   that value wins.
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
 #' @examples
@@ -79,17 +89,16 @@ timeline_frame <- function(data,
                            serious = "outlined",
                            death = TRUE,
                            cm_records = "active on treatment",
-                           cm_colour = "class, else before or on treatment",
+                           cm_colour = "before or on treatment",
                            cm_lanes = "coded name",
                            cm_prior = "clipped at the start",
                            trt_colour = "dose level",
                            dose_labels = TRUE,
                            max_lanes = 12,
                            origin = "first dose",
-                           unit = "days",
                            cutoff = NULL,
                            ongoing = "last contact",
-                           order_by = "number of AEs",
+                           order_by = "number of events",
                            group = "TRT01A") {
   show <- intersect(TL_SHOW, as.character(unlist(show)))
   if (!length(show)) stop("Pick at least one thing to show.", call. = FALSE)
@@ -102,14 +111,13 @@ timeline_frame <- function(data,
     serious = arg(serious, TL_SERIOUS),
     death = isTRUE(as.logical(death)),
     cm_records = arg(cm_records, TL_CM_RECORDS),
-    cm_colour = arg(cm_colour, TL_CM_COLOUR),
+    cm_colour = arg(tl_cm_colour_value(cm_colour), TL_CM_COLOUR),
     cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
     dose_labels = isTRUE(as.logical(dose_labels)),
     max_lanes = max(1L, as.integer(max_lanes %||% 12L)[1L], na.rm = TRUE),
     origin = arg(origin, TL_ORIGIN),
-    unit = arg(unit, c("days", "weeks")),
     ongoing = arg(ongoing, c("last contact", "data cutoff")),
     order_by = arg(order_by, TL_ORDER)
   )
@@ -131,7 +139,7 @@ timeline_frame <- function(data,
   if ("Treatment" %in% show) parts$trt <- tl_treatment(tb$adex, sl, opt, cutoff)
   lo <- tl_axis_start(parts)
   if ("Con meds" %in% show && !is.null(tb$adcm)) {
-    # All con meds, prior-only ones included: the axis starts four weeks
+    # All con meds, prior-only ones included: the axis starts 28 days
     # before day 1, as the swimmer's con meds do.
     if (identical(opt$cm_records, "all")) lo <- min(lo, 1 - 28)
     parts$cm <- tl_cm(tb$adcm, sl, opt, cutoff, lo)
@@ -163,15 +171,41 @@ TL_AE_LANES <- c("preferred term" = "AEDECOD", "reported term" = "AETERM",
                  "body system" = "AEBODSYS")
 TL_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 TL_CM_RECORDS <- c("active on treatment", "all")
-TL_CM_COLOUR <- c("class, else before or on treatment",
-                  "before or on treatment", "indication", "one colour")
+TL_CM_COLOUR <- c("before or on treatment", "class", "indication",
+                  "one colour")
 TL_CM_LANES <- c("coded name" = "CMDECOD", "reported name" = "CMTRT",
                  "class" = "CMCLAS")
 TL_CM_PRIOR <- c("clipped at the start", "hidden")
 TL_TRT_COLOUR <- c("dose level", "drug", "one colour")
 TL_ORIGIN <- c("first dose", "randomisation")
-TL_ORDER <- c("number of AEs", "worst AE", "ongoing AEs", "first onset",
-              "number of con meds", "subject")
+TL_ORDER <- c("number of events", "number of AEs", "worst AE",
+              "ongoing AEs", "first onset", "number of con meds", "subject")
+
+# The most colour levels the table draws (blockr.viz's groups limit), and
+# what treatment and con meds take of them at most.
+TL_MAX_COLOURS <- 15L
+TL_MAX_TRT_COLOURS <- 5L
+TL_MAX_CM_COLOURS <- 8L
+# Folded levels, drawn last and in grey.
+TL_OTHER <- c("Other class", "Other indication", "Other", "Other drug",
+              "Other dose", "Dose not given")
+
+# The data variables a colour level stands for, for the board's scale map:
+# a level's key is its value in the variable the record came from, and the
+# map may bind either spelling.
+TL_SCALE_VARS <- list(grade = c("ATOXGR", "AETOXGR"),
+                      severity = c("ASEV", "AESEV"), class = "CMCLAS",
+                      indication = "CMINDC", drug = c("EXTRT", "CMDECOD"))
+
+# Boards saved before the con-med colour default changed name the old one.
+tl_cm_colour_value <- function(x) {
+  x <- as.character(unlist(x))[1L]
+  if (identical(x, "class, else before or on treatment")) {
+    "before or on treatment"
+  } else {
+    x
+  }
+}
 
 # Patient columns the listing can show, the arm first.
 TL_PATIENT_COLS <- c("TRT01A", "TRT01P", "ARM", "ACTARM", "SEX", "AGE",
@@ -286,7 +320,8 @@ TL_COLS <- list(
   Details = NA_character_, Days = NA_character_, .bar_label = NA_character_,
   .event_x = NA_real_, .event = NA_character_, .ae = NA_real_,
   .ae_open = NA_real_, .ae_ser = NA_real_, .worst = NA_character_,
-  .fatal = FALSE, .cm = NA_real_, .cm_new = NA_real_, .days_trt = NA_real_
+  .fatal = FALSE, .cm = NA_real_, .cm_new = NA_real_, .days_trt = NA_real_,
+  .svar = NA_character_, .skey = NA_character_
 )
 
 tl_bind <- function(parts) {
@@ -364,6 +399,10 @@ tl_ae <- function(ae, sl, opt, cutoff) {
                                  severity = "Severity", grade = "Grade",
                                  "one colour" = "AE"))
   grade <- aet_grade(ae, by)
+  # The value behind each level, for the board's scale map.
+  svar <- switch(by, Grade = "grade", Severity = "severity", NA_character_)
+  skey <- switch(by, Grade = chr(c("ATOXGR", "AETOXGR")),
+                 Severity = chr(c("ASEV", "AESEV")), rep(NA_character_, n))
   # The worst AE reads grade or severity, whatever colours the bars.
   worst <- if (identical(by, "AE")) {
     aet_grade(ae, aet_colour_by(ae, "grade or severity"))
@@ -380,7 +419,8 @@ tl_ae <- function(ae, sl, opt, cutoff) {
     Start = days$start, End = days$end, .colour = as.character(grade),
     .label = term, Type = rep("Adverse event", n), Details = det,
     .ae = rep(1, n), .ae_ser = as.numeric(ser),
-    .worst = as.character(worst), .fatal = flag("AESDTH")
+    .worst = as.character(worst), .fatal = flag("AESDTH"),
+    .svar = rep(svar, n), .skey = skey
   )
   p <- tl_keep(p, is.finite(p$Start))
   p <- tl_ends(p, sl, opt, cutoff)
@@ -432,7 +472,8 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
     Details = paste0(ifelse(is.na(ind), "", paste0("For ", tolower(ind))),
                      ifelse(is.na(cls), "", paste0(
                        ifelse(is.na(ind), "", ", "), aet_title(cls)))),
-    .cm = rep(1, n), .d1 = d1, .cls = aet_title(cls), .ind = ind
+    .cm = rep(1, n), .d1 = d1, .cls = aet_title(cls), .ind = ind,
+    .cls_raw = cls, .ind_raw = chr("CMINDC")
   )
   p <- tl_keep(p, is.finite(p$Start))
   if (identical(opt$cm_records, "active on treatment")) {
@@ -450,40 +491,32 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
     p$Start <- pmax(p$Start, lo)
   }
   p <- tl_cm_colour(p, opt)
-  p[c(".d1", ".cls", ".ind")] <- NULL
+  p[c(".d1", ".cls", ".ind", ".cls_raw", ".ind_raw")] <- NULL
   p
 }
 
-# Con-med colours: the class when most records have one, else started before
-# or on treatment; indication; or one colour. Classes and indications keep
-# their most common levels and put the rest in "Other".
+# Con-med colours: started before or on treatment, the class, the
+# indication, or one colour. A record without a class or indication is
+# "Other"; tl_colour_factor() folds the rarer ones in too.
 tl_cm_colour <- function(p, opt) {
   n <- length(p$USUBJID)
-  started <- ifelse(p$.cm_new == 1, "Started on treatment",
-                    "Started before treatment")
-  top <- function(x, other) {
-    tab <- sort(table(x[!is.na(x)]), decreasing = TRUE)
-    keep <- names(tab)[seq_len(min(length(tab), 7L))]
-    v <- ifelse(is.na(x), other, ifelse(x %in% keep, x, other))
-    list(v = v, lv = c(sort(keep), if (any(v == other)) other))
+  by <- function(x, raw, other, var) {
+    list(v = ifelse(is.na(x), other, x),
+         svar = ifelse(is.na(x), NA_character_, var), skey = raw)
   }
   res <- switch(
     opt$cm_colour,
-    "class, else before or on treatment" = {
-      if (n && mean(!is.na(p$.cls)) >= 0.5) {
-        top(p$.cls, "Other class")
-      } else {
-        list(v = started, lv = c("Started before treatment",
-                                 "Started on treatment"))
-      }
-    },
-    "before or on treatment" = list(v = started,
-                                    lv = c("Started before treatment",
-                                           "Started on treatment")),
-    indication = top(p$.ind, "Other indication"),
-    list(v = rep("Con med", n), lv = "Con med")
+    "before or on treatment" = list(
+      v = ifelse(p$.cm_new == 1, "Started on treatment",
+                 "Started before treatment")
+    ),
+    class = by(p$.cls, p$.cls_raw, "Other class", "class"),
+    indication = by(p$.ind, p$.ind_raw, "Other indication", "indication"),
+    list(v = rep("Con med", n))
   )
   p$.colour <- res$v
+  p$.svar <- res$svar %||% rep(NA_character_, n)
+  p$.skey <- res$skey %||% rep(NA_character_, n)
   p
 }
 
@@ -491,6 +524,9 @@ tl_cm_colour <- function(p, opt) {
 # first to last dose.
 tl_treatment <- function(adex, sl, opt, cutoff) {
   ex <- if (!is.null(adex)) swimmer_exposure(adex, sl, "study")
+  raw <- if (!is.null(adex)) {
+    unique(as.character(aet_col(adex, c("EXTRT", "CMDECOD"))))
+  }
   if (is.null(ex) || !nrow(ex)) {
     s <- sl[!is.na(sl$TRTSDT), , drop = FALSE]
     ex <- data.frame(USUBJID = s$USUBJID, drug = "Treatment",
@@ -513,24 +549,63 @@ tl_treatment <- function(adex, sl, opt, cutoff) {
     Details = ifelse(nzchar(dose), dose, NA_character_),
     .bar_label = if (opt$dose_labels) ifelse(nzchar(dose), dose,
                                              NA_character_),
-    .dose = ex$dose, .dose_txt = dose
+    .dose = ex$dose, .dose_txt = dose, .unit = ex$unit
   )
   p <- tl_keep(p, is.finite(p$Start))
   p <- tl_ends(p, sl, opt, cutoff)
-  res <- switch(
+  n <- length(p$USUBJID)
+  p$.colour <- switch(
     opt$trt_colour,
-    "dose level" = {
-      lv <- unique(p$.dose_txt[order(p$.dose)])
-      lv <- lv[nzchar(lv)]
-      v <- ifelse(nzchar(p$.dose_txt), p$.dose_txt, "Dose not given")
-      list(v = v, lv = c(lv, if (any(!nzchar(p$.dose_txt))) "Dose not given"))
-    },
-    drug = list(v = p$Row, lv = sort(unique(p$Row))),
-    list(v = rep("Treatment", length(p$USUBJID)), lv = "Treatment")
+    "dose level" = tl_dose_colour(p$.dose, p$.dose_txt, p$.unit,
+                                  TL_MAX_TRT_COLOURS),
+    drug = tl_fold_top(p$Row, TL_MAX_TRT_COLOURS, "Other drug"),
+    rep("Treatment", n)
   )
-  p$.colour <- res$v
-  p[c(".dose", ".dose_txt")] <- NULL
+  if (identical(opt$trt_colour, "drug")) {
+    # The drug as ADEX names it, before swimmer_drug_name() titled it.
+    k <- match(p$.colour, swimmer_drug_name(raw))
+    p$.svar <- ifelse(is.na(k), NA_character_, "drug")
+    p$.skey <- raw[k]
+  }
+  p[c(".dose", ".dose_txt", ".unit")] <- NULL
   p
+}
+
+# Dose levels as colours, lightest the lowest: each dose while there are at
+# most `cap`, else ranges of the most common unit. A dose in another unit is
+# "Other dose", a record without one "Dose not given".
+tl_dose_colour <- function(dose, txt, unit, cap) {
+  given <- nzchar(txt)
+  if (length(unique(txt[given])) + any(!given) <= cap) {
+    return(ifelse(given, txt, "Dose not given"))
+  }
+  ok <- given & is.finite(dose)
+  u <- names(which.max(table(unit[ok])))
+  main <- ok & unit == u
+  room <- cap - any(!main)
+  d <- dose[main]
+  br <- pretty(d, n = room)
+  k <- room
+  while (length(br) - 1L > room && k > 1L) {
+    k <- k - 1L
+    br <- pretty(d, n = k)
+  }
+  if (length(br) - 1L > room) br <- range(d)
+  fmt <- format(br, trim = TRUE, drop0trailing = TRUE)
+  lab <- trimws(paste(fmt[-length(fmt)], "to", fmt[-1L], u))
+  bin <- findInterval(d, br, rightmost.closed = TRUE, all.inside = TRUE)
+  out <- ifelse(given, "Other dose", "Dose not given")
+  out[main] <- lab[bin]
+  out
+}
+
+# Values past the `cap - 1` most common fold into `other`.
+tl_fold_top <- function(v, cap, other) {
+  lv <- unique(v[!is.na(v) & v != other])
+  if (length(lv) + any(v %in% other) <= cap) return(v)
+  tab <- table(factor(v[v %in% lv], levels = lv))
+  keep <- names(sort(tab, decreasing = TRUE))[seq_len(cap - 1L)]
+  ifelse(v %in% keep, v, other)
 }
 
 # Where the axis starts: day 1, or the first AE or dose before it. Con meds
@@ -625,7 +700,7 @@ tl_patient_rows <- function(sl, opt) {
 
 # --- finish -----------------------------------------------------------------
 
-# Row order, the colour and lane factors, the patient columns and the unit.
+# Row order, the colour and lane factors and the patient columns.
 tl_finish <- function(out, sl, opt, group) {
   out <- as.data.frame(out, stringsAsFactors = FALSE)
   ids <- sl$USUBJID
@@ -638,6 +713,7 @@ tl_finish <- function(out, sl, opt, group) {
   first <- per$min(ifelse(out$.src %in% c("AE", "CM"), out$Start, NA_real_))
   key <- switch(
     opt$order_by,
+    "number of events" = order(-(n_ae + n_cm), ids),
     "number of AEs" = order(-n_ae, ids),
     "worst AE" = order(-worst, -n_ae, ids),
     "ongoing AEs" = order(-n_open, -n_ae, ids),
@@ -676,9 +752,6 @@ tl_finish <- function(out, sl, opt, group) {
     out[[nm]] <- v
     if (!is.null(lab)) attr(out[[nm]], "label") <- lab
   }
-  if (identical(opt$unit, "weeks")) {
-    for (nm in c("Start", "End", ".event_x")) out[[nm]] <- out[[nm]] / 7
-  }
   attr(out$USUBJID, "label") <- "Patient"
   attr(out$Row, "label") <- "Row"
   keep <- c("USUBJID", "Row", ".arm", pcols, ".ae", ".ae_open", ".ae_ser",
@@ -694,13 +767,26 @@ tl_worst_levels <- function() {
 }
 
 # The colour factor: AE levels, then con-med levels, then treatment levels,
-# each with its palette as `blockr_colors`.
+# each with its palette as `blockr_colors` and the values the levels stand
+# for as `blockr_scale_keys`. Con meds take the room AEs and treatment leave,
+# their rarer levels folded into "Other".
 tl_colour_factor <- function(out, opt) {
+  drawn <- is.finite(out$Start) & !is.na(out$.colour)
+  n_lv <- function(s) length(unique(out$.colour[drawn & out$.src %in% s]))
+  cm <- drawn & out$.src %in% "CM"
+  if (any(cm)) {
+    room <- min(TL_MAX_CM_COLOURS,
+                TL_MAX_COLOURS - n_lv("AE") - n_lv("Treatment"))
+    other <- switch(opt$cm_colour, class = "Other class",
+                    indication = "Other indication", "Other")
+    v <- tl_fold_top(out$.colour[cm], max(2L, room), other)
+    out$.svar[cm][v != out$.colour[cm]] <- NA_character_
+    out$.colour[cm] <- v
+  }
   lv <- character()
   col <- character()
   for (s in c("AE", "CM", "Treatment")) {
-    v <- unique(out$.colour[out$.src %in% s & is.finite(out$Start)])
-    v <- v[!is.na(v)]
+    v <- unique(out$.colour[drawn & out$.src %in% s])
     if (!length(v)) next
     ord <- tl_level_order(s, v)
     lv <- c(lv, ord)
@@ -708,18 +794,36 @@ tl_colour_factor <- function(out, opt) {
   }
   f <- factor(out$.colour, levels = unique(lv))
   attr(f, "blockr_colors") <- stats::setNames(col, lv)[unique(lv)]
+  attr(f, "blockr_scale_keys") <- tl_scale_keys(out[drawn, , drop = FALSE])
   attr(f, "label") <- "Colour"
   f
 }
 
+# Per colour level, the data variables and values it stands for.
+tl_scale_keys <- function(out) {
+  k <- !is.na(out$.svar) & !is.na(out$.skey) & nzchar(out$.skey)
+  k <- unique(data.frame(level = out$.colour[k], svar = out$.svar[k],
+                         key = out$.skey[k], stringsAsFactors = FALSE))
+  vars <- TL_SCALE_VARS[k$svar]
+  data.frame(level = rep(k$level, lengths(vars)),
+             var = unlist(vars, use.names = FALSE),
+             key = rep(k$key, lengths(vars)), stringsAsFactors = FALSE)
+}
+
 tl_level_order <- function(src, v) {
+  if (identical(src, "Treatment")) {
+    # Doses by amount ("54 mg", "50 to 100 mg"), then the rest by name.
+    num <- suppressWarnings(as.numeric(sub(" .*", "", v)))
+    return(v[order(v %in% TL_OTHER, is.na(num), num, v)])
+  }
   fixed <- switch(
     src,
     AE = c(paste("Grade", 1:5), "Mild", "Moderate", "Severe", "AE"),
     CM = c("Started before treatment", "Started on treatment"),
     character()
   )
-  c(fixed[fixed %in% v], sort(setdiff(v, fixed)))
+  rest <- setdiff(v, c(fixed, TL_OTHER))
+  c(fixed[fixed %in% v], sort(rest), TL_OTHER[TL_OTHER %in% v])
 }
 
 tl_palette <- function(src, lv) {
@@ -740,7 +844,9 @@ tl_palette <- function(src, lv) {
       } else if (identical(lv, "Started before treatment")) {
         "#9db8de"
       } else {
-        rep_len(TL_CM_BLUES, n)
+        p <- rep_len(TL_CM_BLUES, n)
+        p[lv %in% TL_OTHER] <- "#b4bac3"
+        p
       }
     },
     {
