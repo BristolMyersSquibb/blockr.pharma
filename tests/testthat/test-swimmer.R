@@ -122,7 +122,7 @@ test_that("drugs and cutoff narrow the frame", {
   expect_identical(unique(g$status[g$USUBJID == "p1"]), "On treatment")
   # NA is automatic.
   expect_identical(swimmer_frame(a, cutoff = as.Date(NA)), swimmer_frame(a))
-  expect_match(swimmer_subtitle(), "@parent in ARM, BOR, status")
+  expect_match(swimmer_subtitle(), "{label(@parent)}", fixed = TRUE)
 })
 
 test_that("the swimmer is in the menu and saves and restores as itself", {
@@ -208,4 +208,50 @@ test_that("the frame draws days and only the events asked for", {
   ev <- swimmer_frame(a, events = "Death")
   expect_true(all(is.na(ev$event) | ev$event == "Death"))
   expect_true(all(c("AGE", "SEX", "dose_level") %in% names(wk)))
+})
+
+test_that("an end of treatment closes a study drug and ends the time on it", {
+  a <- swim_adam()
+  d <- function(x) as.Date("2024-01-01") + x
+  # p1's Drug X has no end, but p1 ended treatment on day 140: Drug X stops
+  # there, and p1 is off treatment.
+  a$adsl$TRTEDT <- d(c(140, 60, 30))
+  f <- swimmer_frame(a)
+  x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x" & !is.na(f$end), ]
+  expect_equal(max(x$end), 140 / 7)
+  expect_false(any(x$ongoing %in% TRUE))
+  expect_identical(unique(f$status[f$USUBJID == "p1"]), "Off treatment")
+  expect_equal(unique(f$weeks[f$USUBJID == "p1"]), round(140 / 7, 1))
+  # A record that starts after the end of treatment stays a point.
+  a$adex <- rbind(a$adex, data.frame(
+    USUBJID = "p2", PARAMCD = "DOSE", EXTRT = "DRUG X", ASTDT = d(70),
+    AENDT = as.Date(NA), EXDOSE = 100, EXDOSU = "mg"
+  ))
+  g <- swimmer_frame(a)
+  late <- g[g$USUBJID == "p2" & g$lane %in% "Drug x" & !is.na(g$start) &
+              g$start > 9 & is.na(g$mark) & is.na(g$strip), ]
+  expect_equal(late$end, late$start)
+  # Without an end of treatment the open drug runs on, as before.
+  a$adsl$TRTEDT <- d(c(NA, 60, 30))
+  h <- swimmer_frame(a)
+  expect_identical(unique(h$status[h$USUBJID == "p1"]), "On treatment")
+})
+
+test_that("the rows can be grouped by any of ADSL's grouping columns", {
+  a <- swim_adam()
+  a$adsl$TRT <- c("Low", "Low", "High")
+  a$adsl$RACE <- factor(c("A", "B", "A"))
+  a$adsl$NOTE <- paste("free text", 1:3)
+  f <- swimmer_frame(a)
+  expect_identical(unique(f$TRT[f$USUBJID == "p1"]), "Low")
+  expect_true("RACE" %in% names(f))
+  blk <- new_swimmer_block(group = "TRT")
+  expect_identical(blockr.core::blockr_ser(blk)$payload$by, c("TRT", "USUBJID"))
+})
+
+test_that("an ADSL data cutoff is the automatic cutoff", {
+  a <- swim_adam()
+  a$adsl$DCUTDT <- as.Date("2024-03-01")
+  f <- swimmer_frame(a)
+  expect_true(max(f$end, na.rm = TRUE) <= 60 / 7 + 1e-9)
 })

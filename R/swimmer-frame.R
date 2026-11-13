@@ -58,6 +58,10 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
   tb <- swimmer_tables(data)
   sl <- swimmer_subjects(tb$adsl)
   rs <- swimmer_response(tb$adrs, parameter)
+  # Without a cutoff set, the study's own data cutoff when ADSL has one.
+  if (is.null(cutoff) && any(!is.na(sl$DCUTDT))) {
+    cutoff <- max(sl$DCUTDT, na.rm = TRUE)
+  }
   if (!is.null(cutoff)) {
     cutoff <- as.Date(cutoff)
     rs <- rs[rs$ADT <= cutoff, , drop = FALSE]
@@ -73,6 +77,7 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
   if (!is.null(drugs)) {
     ex <- ex[ex$drug %in% as.character(drugs), , drop = FALSE]
   }
+  ex <- swimmer_close_study(ex, sl)
   if (isTRUE(con_meds) && !is.null(tb$adcm)) {
     ex <- rbind(ex, swimmer_exposure(swimmer_cm(tb$adcm), sl, role = "cm"))
   }
@@ -83,7 +88,9 @@ swimmer_frame <- function(data, doses = "Exceptions", con_meds = FALSE,
   ex$open <- is.na(ex$end)
   ex$end[ex$open] <- cutoff
   t0 <- stats::setNames(sl$TRTSDT, sl$USUBJID)
-  ex$on <- swimmer_ongoing(ex, cutoff)
+  # A patient with an end of treatment is on no study drug.
+  ex$on <- swimmer_ongoing(ex, cutoff) &
+    is.na(sl$TRTEDT[match(ex$USUBJID, sl$USUBJID)])
   fu <- swimmer_follow_up(sl, ex, rs, cutoff)
   ex <- swimmer_clip_cm(ex, t0, fu, cutoff)
   ex <- swimmer_fold(ex, max_lanes, t0)
@@ -156,6 +163,8 @@ swimmer_subjects <- function(adsl) {
     ARM = as.character(swimmer_col(adsl, c("ARM", "TRT01A", "ACTARM")) %||%
                          rep("All", n)),
     TRTSDT = swimmer_date(swimmer_col(adsl, "TRTSDT")) %||% na_date,
+    TRTEDT = swimmer_date(swimmer_col(adsl, "TRTEDT")) %||% na_date,
+    DCUTDT = swimmer_date(swimmer_col(adsl, "DCUTDT")) %||% na_date,
     DTHDT = swimmer_date(swimmer_col(adsl, "DTHDT")) %||% na_date,
     LSTALVDT = swimmer_date(swimmer_col(adsl, "LSTALVDT")) %||% na_date,
     stringsAsFactors = FALSE
@@ -239,6 +248,17 @@ swimmer_cm <- function(adcm) {
   adcm
 }
 
+# A study drug record without an end stops at the patient's end of
+# treatment (ADSL TRTEDT), or at its own start when it begins after it; it
+# stays open only while the patient has no end of treatment.
+swimmer_close_study <- function(ex, sl) {
+  te <- sl$TRTEDT[match(ex$USUBJID, sl$USUBJID)]
+  fix <- ex$role == "study" & is.na(ex$end) & !is.na(te)
+  ex$end[fix] <- as.Date(pmax(as.numeric(ex$start[fix]), as.numeric(te[fix])),
+                         origin = "1970-01-01")
+  ex
+}
+
 swimmer_cutoff <- function(cutoff, sl, ex, rs) {
   if (!is.null(cutoff)) return(as.Date(cutoff))
   d <- c(ex$start, ex$end, rs$ADT, sl$LSTALVDT, sl$DTHDT)
@@ -246,15 +266,17 @@ swimmer_cutoff <- function(cutoff, sl, ex, rs) {
 }
 
 # Each patient's end of follow-up: death, the cutoff while any study drug
-# runs, else the last date seen.
+# runs, else the end of treatment or the last assessment, whichever is
+# later (the last alive date only when neither is known).
 swimmer_follow_up <- function(sl, ex, rs, cutoff) {
   vapply(sl$USUBJID, function(id) {
     s <- sl[sl$USUBJID == id, ]
     if (!is.na(s$DTHDT)) return(as.numeric(s$DTHDT))
     e <- ex[ex$USUBJID == id & ex$role == "study", , drop = FALSE]
     if (any(e$on)) return(as.numeric(cutoff))
-    as.numeric(max(c(s$LSTALVDT, rs$ADT[rs$USUBJID == id], e$end),
-                   na.rm = TRUE))
+    seen <- c(s$TRTEDT, rs$ADT[rs$USUBJID == id], e$end)
+    if (all(is.na(seen))) seen <- s$LSTALVDT
+    as.numeric(max(seen, na.rm = TRUE))
   }, numeric(1L))
 }
 
@@ -597,18 +619,22 @@ SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 
 # The listing columns, the colour and lane levels with their colours, and
 # the labels the tooltips print.
+SWIMMER_EVENTS <- c("Progression", "Serious AE", "Death")
+
 swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   bor <- vapply(split(rs$AVALC, rs$USUBJID), function(v) {
     hit <- SWIMMER_BOR[SWIMMER_BOR %in% v]
     if (length(hit)) hit[[1L]] else NA_character_
   }, "")
   study <- ex[ex$role == "study", , drop = FALSE]
-  # Time on treatment: to the cutoff while a study drug runs.
+  # Time on treatment: to the cutoff while a study drug runs, else to the end
+  # of treatment (the last dose without one).
   wk <- vapply(sl$USUBJID, function(id) {
     e <- study[study$USUBJID == id, , drop = FALSE]
-    if (!nrow(e)) return(NA_real_)
-    end <- if (any(e$on)) cutoff else max(e$end)
-    round(swimmer_wk(end, sl$TRTSDT[sl$USUBJID == id]), 1)
+    s <- sl[sl$USUBJID == id, ]
+    if (!nrow(e) && is.na(s$TRTEDT)) return(NA_real_)
+    end <- if (any(e$on)) cutoff else if (!is.na(s$TRTEDT)) s$TRTEDT else max(e$end)
+    round(swimmer_wk(end, s$TRTSDT), 1)
   }, numeric(1L))
   on <- vapply(sl$USUBJID, function(id) any(study$on[study$USUBJID == id]),
                NA)
@@ -629,6 +655,7 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   first <- first[!duplicated(first$USUBJID), , drop = FALSE]
   lvl <- stats::setNames(swimmer_fmt_dose(first$dose, first$unit), first$USUBJID)
   out$dose_level <- unname(lvl[out$USUBJID])
+  out <- swimmer_adsl_groups(out, adsl)
 
   drugs <- levels(ex$lane)
   dcol <- stats::setNames(rep_len(SWIMMER_DRUGS, length(drugs)), drugs)
@@ -642,8 +669,7 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   out$colour <- factor(out$colour, levels = lv)
   attr(out$colour, "blockr_colors") <- cols[lv]
   out$lane <- factor(out$lane, levels = drugs)
-  out$event <- factor(out$event, levels = c("Progression", "Serious AE",
-                                            "Death"))
+  out$event <- factor(out$event, levels = SWIMMER_EVENTS)
   labels <- c(start = "Start, weeks", end = "End, weeks",
               colour = "Response / drug",
               lane = "Drug", mark = "Mark", strip = "Strip", label = "Label",
@@ -654,5 +680,22 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
               dose_level = "First dose")
   for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]
   rownames(out) <- NULL
+  out
+}
+
+# ADSL's grouping columns on every record (TRT, RACE, a region ...), so the
+# rows can be grouped by any of them: character, factor or logical columns
+# with at most 50 values, besides those the frame already has.
+swimmer_adsl_groups <- function(out, adsl) {
+  if (is.null(adsl) || !nrow(adsl)) return(out)
+  at <- match(out$USUBJID, as.character(adsl$USUBJID))
+  for (nm in setdiff(names(adsl), names(out))) {
+    x <- adsl[[nm]]
+    if (!(is.character(x) || is.factor(x) || is.logical(x))) next
+    if (length(unique(x)) > 50L) next
+    v <- x[at]
+    attr(v, "label") <- attr(x, "label", exact = TRUE)
+    out[[nm]] <- v
+  }
   out
 }

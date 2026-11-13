@@ -137,14 +137,18 @@ swimmer_script <- function(max_lanes = 4L) {
     "con_meds <- FALSE  #| flag(label = \"Con meds as lanes\")",
     paste0("max_lanes <- ", as.integer(max_lanes), "  #| number(min = 1, ",
            "max = 8, step = 1, label = \"Lanes before \\\"Other\\\"\")"),
-    paste0("events <- factor(c(\"Progression\", \"Serious AE\", \"Death\"), ",
-           "levels = c(\"Progression\", \"Serious AE\", \"Death\"))  ",
-           "#| select(label = \"Events\")"),
+    paste0("events <- factor(", swimmer_levels(SWIMMER_EVENTS), ", levels = ",
+           swimmer_levels(SWIMMER_EVENTS), ")  #| select(label = \"Events\")"),
     paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
            "cutoff = cutoff, con_meds = con_meds, max_lanes = max_lanes, ",
            "events = events, unit = unit, parameter = parameter)"),
     sep = "\n"
   )
+}
+
+# A character vector as R code: c("a", "b").
+swimmer_levels <- function(x) {
+  paste0("c(", paste0("\"", x, "\"", collapse = ", "), ")")
 }
 
 #' The swimmer's sentence under the title
@@ -176,7 +180,7 @@ swimmer_clauses <- function() {
     con_meds = "[{@con_meds}]",
     events = "events {@events}",
     cutoff = "cutoff {@cutoff}",
-    group = "[by {label(@parent in ARM, BOR, status)}]"
+    group = "[by {label(@parent)}]"
   )
 }
 
@@ -201,7 +205,9 @@ swimmer_gear <- function() {
                          `Reader tools` = c("search", "download"))
     ),
     columns = swimmer_columns(),
-    groups = c(Arm = "ARM", `Best response` = "BOR", Status = "status"),
+    groups = c(Arm = "ARM", `Actual arm` = "ACTARM", `Actual treatment` = "TRT01A",
+               Sex = "SEX", Race = "RACE", `Best response` = "BOR",
+               Status = "status"),
     clauses = swimmer_clauses(),
     info = swimmer_mapping,
     open = "Data",
