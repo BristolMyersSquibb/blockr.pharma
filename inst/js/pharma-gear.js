@@ -1,8 +1,12 @@
-// The swimmer gear's Tables row: what the swimmer found in its input dm (R's
-// swimmer_mapping(), sent as derived.gear.info) and the ADRS parameter of the
-// overall response, which writes the prepare script's `parameter`.
-// Registered as blockr.viz's gear editor "mapping" (core/gear/profile.js),
-// with "lane_width", the swimlane's Width.
+// Gear rows of the pharma blocks (the swimmer, the timeline), registered as
+// blockr.viz gear editors (core/gear/profile.js):
+//   mapping     the Tables row: what the block found in its input (R's
+//               swimmer_mapping() or timeline_mapping(), sent as
+//               derived.gear.info), and, when the info has `parameters`, the
+//               ADRS parameter, which writes the prepare script's `parameter`
+//   lane_width  the swimlane's Width
+//   open_rows   whether the patient rows start closed or open (the table's
+//               `open`)
 (function () {
   'use strict';
   const B = window.Blockr;
@@ -52,11 +56,13 @@
     const host = el('div', 'pharma-map-wrap', parent);
     const info = (ctx.profile && ctx.profile.wire && ctx.profile.wire.info) || {};
     const roles = info.roles || [];
-    const params = info.parameters || [];
+    // A one-element vector may arrive unboxed, as a string.
+    const hasParams = info.parameters != null;
+    const params = [].concat(info.parameters || []);
     const param = current(ctx, 'parameter') || 'OVR';
     const err = ctx.script && ctx.script.error;
     const bad = roles.filter((r) => (r.need && !r.found) || (r.found && (r.missing || []).length));
-    const noParam = params.length > 0 && !params.includes(param);
+    const noParam = hasParams && params.length > 0 && !params.includes(param);
 
     let msg = 'All tables and columns found.';
     if (bad.length) {
@@ -83,6 +89,12 @@
       el('td', ok ? 'is-ok' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : '!');
     }
 
+    if (hasParams) drawParam(host, ctx, params, param);
+    if (info.note) el('div', 'pharma-map-note', host, info.note);
+  }
+
+  /** The ADRS parameter of the overall response (the swimmer's). */
+  function drawParam(host, ctx, params, param) {
     const pick = el('div', 'pharma-map-param', host);
     el('span', null, pick, 'Overall response, ADRS PARAMCD');
     const sel = el('select', null, pick);
@@ -98,8 +110,6 @@
       held.parameter = sel.value;
       ctx.setValues({ script_values: held });
     });
-    el('div', 'pharma-map-note', host,
-       'Names match without case. Any of the listed alternatives will do (ARM, TRT01A or ACTARM).');
   }
 
   B.viz.gear.editors.mapping = { label: 'Found in the input', draw };
@@ -122,4 +132,16 @@
   }
 
   B.viz.gear.editors.lane_width = { label: 'Width', draw: drawWidth };
+
+  // The patient rows at start: closed or open (the table's `open`). The
+  // header's button opens and closes them all either way.
+  const OPEN = [['none', 'None open'], ['all', 'All open']];
+  function drawOpen(parent, ctx) {
+    const at = String(Math.max(0, OPEN.findIndex(([v]) => v === (ctx.values.open || 'none'))));
+    const opts = OPEN.map(([, label], i) => ({ value: String(i), label }));
+    parent.appendChild(B.segmented(opts, at, (i) => ctx.setValues({ open: OPEN[Number(i)][0] }),
+                                   { label: 'At start' }).el);
+  }
+
+  B.viz.gear.editors.open_rows = { label: 'At start', draw: drawOpen };
 })();

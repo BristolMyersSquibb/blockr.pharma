@@ -214,7 +214,7 @@ swimmer_gear <- function() {
     clauses = swimmer_clauses(),
     info = swimmer_mapping,
     open = "Data",
-    deps = list(swimmer_dep())
+    deps = list(pharma_gear_dep())
   )
 }
 
@@ -245,16 +245,6 @@ swimmer_lane <- function() {
        tooltip = c("days", "dose"), size = "lg",
        event_x = "event_wk", event_shape = "event", open = "ongoing",
        lane = "lane", seg_style = "mark", strip = "strip")
-}
-
-# The mapping editor's script (inst/js/swimmer-gear.js).
-swimmer_dep <- function() {
-  htmltools::htmlDependency(
-    name = "blockr-pharma-swimmer-gear",
-    version = utils::packageVersion("blockr.pharma"),
-    src = system.file("js", package = "blockr.pharma"),
-    script = "swimmer-gear.js"
-  )
 }
 
 # What the swimmer reads, per role: the table and its columns, each a set of
@@ -307,5 +297,7 @@ swimmer_mapping <- function(data) {
   adrs <- tabs[["adrs"]]
   pc <- if (!is.null(adrs)) swimmer_col(as.data.frame(adrs), "PARAMCD")
   list(roles = roles,
-       parameters = sort(unique(as.character(pc[!is.na(pc)]))))
+       parameters = sort(unique(as.character(pc[!is.na(pc)]))),
+       note = paste("Names match without case. Any of the listed",
+                    "alternatives will do (ARM, TRT01A or ACTARM)."))
 }

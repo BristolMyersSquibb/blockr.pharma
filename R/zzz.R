@@ -261,6 +261,39 @@ register_pharma_blocks <- function() {
     package = utils::packageName(),
     overwrite = TRUE
   )
+  # The timeline is a table block of its own class (timeline_block), as the
+  # swimmer is.
+  register_blocks(
+    "new_timeline_block",
+    name = "Timeline",
+    uid = "timeline_block",
+    description = paste0(
+      "One row per patient: adverse events, con meds and treatment over ",
+      "time, opening into a row per term, from a CDISC dm."
+    ),
+    category = "table",
+    icon = "bar-chart-steps",
+    guidance = paste0(
+      "Takes a dm of ADaM tables as they are: ADSL and any of ADAE, ADCM ",
+      "and ADEX. Link it from the CDISC dm block or a filter below it; it ",
+      "needs no prep blocks. Each patient is one stripe per source, the ",
+      "worst level active that day; a click opens the patient into a row ",
+      "per AE term, con med and drug."
+    ),
+    arguments = list(c(
+      show = paste("What to draw: any of \"Adverse events\", \"Con meds\",",
+                   "\"Treatment\"."),
+      ae_colour = "AE colour: grade or severity, severity, grade, one colour.",
+      cm_colour = paste("Con-med colour: class, else before or on",
+                        "treatment; before or on treatment; indication;",
+                        "one colour."),
+      unit = "The time axis: days or weeks since day 1.",
+      group = "ADSL column shown as the arm, default TRT01A.",
+      cutoff = "The data cutoff, a date; NA for the last date in the data."
+    )),
+    package = utils::packageName(),
+    overwrite = TRUE
+  )
   register_blocks(
     "new_population_filter_block",
     name = "Global Population Filter",
