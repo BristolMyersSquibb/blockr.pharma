@@ -148,6 +148,8 @@ test_that("the discontinuation reason is a tag where the drug lines stop", {
   ))
   expect_identical(cat$tag, c("PD", "WD", "AE", "WD", "WD", "ID", "OT"))
   expect_identical(cat$name[[2]], "Withdrawal by subject")
+  # No category is named as an event, so the legend keeps them apart.
+  expect_length(intersect(swimmer_reason_categories()$name, SWIMMER_EVENTS), 0L)
   expect_identical(cat$name[[7]], "Other")
   # A study may pass its own categories.
   own <- swimmer_reason_categories()

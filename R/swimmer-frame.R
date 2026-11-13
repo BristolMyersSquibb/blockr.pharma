@@ -889,7 +889,7 @@ swimmer_reason_categories <- function() {
                 "deviation|violation", "efficacy", "sponsor|terminat",
                 "complian", "pregnan"),
     tag = c("AE", "PD", "WD", "ID", "LF", "DV", "LE", "ST", "NC", "PG"),
-    name = c("Adverse event", "Progression", "Withdrawal by subject",
+    name = c("Adverse event", "Progressive disease", "Withdrawal by subject",
              "Investigator decision", "Lost to follow-up",
              "Protocol deviation", "Lack of efficacy", "Study terminated",
              "Non-compliance", "Pregnancy"),
@@ -1007,6 +1007,8 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL,
   why <- as.character(out$event[!is.na(out$tag)])
   lv <- sort(unique(why))
   why <- lv[order(-tabulate(match(why, lv), length(lv)), lv)]
+  # A category is never also an event level (it would be one legend entry).
+  why <- setdiff(why, SWIMMER_EVENTS)
   out$event <- factor(out$event, levels = c(SWIMMER_EVENTS, why))
   labels <- c(start = "Start, study day", end = "End, study day",
               colour = "Response / drug",
