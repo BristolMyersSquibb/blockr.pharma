@@ -9,7 +9,7 @@
 #              bar, a skipped cycle a gap between them, a reduced dose a
 #              thinner piece (`mark`), by the `doses` setting
 #   events     first progression, serious AEs (ADAE) and death on the main
-#              lane; the reason off treatment as a short tag (`tag`) where
+#              lane; the discontinuation reason as a short tag (`tag`) where
 #              the drug lines stop
 #
 # Every record carries its own tooltip (`tip`): what it is, then " \u00b7 ",
@@ -46,8 +46,8 @@
 #' @param events The events drawn on the response bar: any of
 #'   `"Progression"`, `"Serious AE"`, `"Death"`. `NULL`: all. Serious AEs
 #'   are off by default.
-#' @param reasons Tag where the drug lines stop with the reason off
-#'   treatment (ADSL `DCTREAS` and its stand-ins, see
+#' @param reasons Tag where the drug lines stop with the discontinuation
+#'   reason (ADSL `DCTREAS` and its stand-ins, see
 #'   [new_swimmer_block()]): "AE", "PD", "WD", ... ([swimmer_reason_tag()]).
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
@@ -114,8 +114,9 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
   )
   out <- list2DF(swimmer_bind(parts))
   if (!is.null(events)) {
-    keep <- c(as.character(events), "Off treatment")
-    out <- out[is.na(out$event) | out$event %in% keep, , drop = FALSE]
+    # The discontinuation reasons are no events: the setting leaves them.
+    out <- out[is.na(out$event) | !is.na(out$tag) |
+                 out$event %in% as.character(events), , drop = FALSE]
   }
   swimmer_finish(out, sl, rs, ex, fu, cutoff, tb$adsl)
 }
@@ -744,7 +745,8 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
   ), g[rf], 10L + seq_along(rf) * 0)
 }
 
-# The reason off treatment as a tag where the patient's drug lines stop:
+# The discontinuation reason as a tag where the patient's drug lines stop,
+# one event level per reason (the legend lists them with their tags):
 # at the end of the study drug piece that ends last, on its lane. A death
 # needs none: the death mark is there. `drug`: swimmer_drug_rows().
 swimmer_reason_rows <- function(drug, sl, ex) {
@@ -766,14 +768,14 @@ swimmer_reason_rows <- function(drug, sl, ex) {
   at <- match(drug$USUBJID[r], ids)
   x <- drug$end[r]
   swimmer_rows(
-    drug$USUBJID[r], event_day = x, event = "Off treatment",
+    drug$USUBJID[r], event_day = x, event = why[at],
     lane = drug$lane[r], tag = tag[at],
-    tip = paste0("Off treatment, ", tolower(swimmer_day_txt(x)), " · ",
+    tip = paste0("Discontinued, ", tolower(swimmer_day_txt(x)), " · ",
                  why[at])
   )
 }
 
-#' Two letters for a reason off treatment
+#' Two letters for a discontinuation reason
 #'
 #' The tag the swimmer draws where a patient's drug lines stop, by the words
 #' of the reason, so any study's wording finds its tag: "AE" adverse event,
@@ -867,15 +869,19 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   out$colour <- factor(out$colour, levels = lv)
   attr(out$colour, "blockr_colors") <- cols[lv]
   out$lane <- factor(out$lane, levels = drugs)
-  out$event <- factor(out$event, levels = c(SWIMMER_EVENTS, "Off treatment"))
+  # The discontinuation reasons after the events, the most frequent first.
+  why <- as.character(out$event[!is.na(out$tag)])
+  lv <- sort(unique(why))
+  why <- lv[order(-tabulate(match(why, lv), length(lv)), lv)]
+  out$event <- factor(out$event, levels = c(SWIMMER_EVENTS, why))
   labels <- c(start = "Start, study day", end = "End, study day",
               colour = "Response / drug",
               lane = "Drug", mark = "Dose style", label = "Label",
-              tag = "Off treatment", tip = "Tooltip",
+              tag = "Discontinuation reason", tip = "Tooltip",
               event_day = "Study day", event = "Event", ongoing = "Ongoing",
               BOR = "Best response",
               duration = "Days on treatment", status = "Status",
-              reason = "Reason off treatment", ARM = "Arm",
+              reason = "Discontinuation reason", ARM = "Arm",
               USUBJID = "Subject", AGE = "Age", SEX = "Sex",
               dose_level = "First dose")
   for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]

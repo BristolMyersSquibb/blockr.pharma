@@ -245,8 +245,8 @@ register_pharma_blocks <- function() {
       "and ADCM (con meds). Link it from the CDISC dm block or a filter ",
       "below it; it needs no prep blocks. It draws one row per patient with ",
       "the response as a bar in study days, a lane per drug above it, ",
-      "arrows for drugs ongoing at the cutoff and a tag for the reason off ",
-      "treatment."
+      "arrows for drugs ongoing at the cutoff and a tag for the ",
+      "discontinuation reason."
     ),
     # Plain descriptions, not arg specs: core checks specs against the
     # formals of the block's own constructor, new_table_block().
@@ -254,7 +254,7 @@ register_pharma_blocks <- function() {
     # constructor's formals, and these settings travel through `...`.
     arguments = list(c(
       doses = "How a drug lane shows its doses: Gaps and cuts, or Plain.",
-      reasons = "Tag the reason off treatment where the drug lines stop.",
+      reasons = "Tag the discontinuation reason where the drug lines stop.",
       con_meds = "Draw con meds from ADCM as lanes too (TRUE/FALSE).",
       group = "ADSL column grouping the rows, default ARM.",
       cutoff = "The data cutoff, a date; NA for the last date in the data."

@@ -46,8 +46,8 @@ Response visits, doses and deaths after it are left out.}
 \code{"Progression"}, \code{"Serious AE"}, \code{"Death"}. \code{NULL}: all. Serious AEs
 are off by default.}
 
-\item{reasons}{Tag where the drug lines stop with the reason off
-treatment (ADSL \code{DCTREAS} and its stand-ins, see
+\item{reasons}{Tag where the drug lines stop with the discontinuation
+reason (ADSL \code{DCTREAS} and its stand-ins, see
 \code{\link[=new_swimmer_block]{new_swimmer_block()}}): "AE", "PD", "WD", ... (\code{\link[=swimmer_reason_tag]{swimmer_reason_tag()}}).}
 }
 \value{

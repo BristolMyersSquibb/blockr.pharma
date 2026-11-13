@@ -99,7 +99,7 @@ test_that("a dose of zero draws a hairline", {
   expect_identical(x$mark, c(NA, "hairline"))
 })
 
-test_that("the reason off treatment is a tag where the drug lines stop", {
+test_that("the discontinuation reason is a tag where the drug lines stop", {
   a <- swim_adam()
   d <- function(x) as.Date("2024-01-01") + x
   a$adsl$TRTEDT <- d(c(NA, 60, 30))
@@ -108,10 +108,14 @@ test_that("the reason off treatment is a tag where the drug lines stop", {
   tg <- f[!is.na(f$tag), ]
   expect_identical(tg$USUBJID, "p2")
   expect_identical(tg$tag, "AE")
-  expect_identical(as.character(tg$event), "Off treatment")
+  expect_identical(as.character(tg$event), "Adverse event")
+  expect_identical(attr(f$tag, "label"), "Discontinuation reason")
   expect_identical(as.character(tg$lane), "Drug x")
   expect_equal(tg$event_day, 61)
-  expect_identical(tg$tip, "Off treatment, day 61 \u00b7 Adverse event")
+  expect_identical(tg$tip, "Discontinued, day 61 \u00b7 Adverse event")
+  # No event: the events setting leaves it.
+  expect_identical(swimmer_frame(a, events = "Death")$tag[!is.na(
+    swimmer_frame(a, events = "Death")$tag)], "AE")
   # Off by the setting; a death draws none.
   expect_false(any(!is.na(swimmer_frame(a, reasons = FALSE)$tag)))
   a$adsl$DCTREAS <- c(NA, "DEATH", NA)
@@ -243,7 +247,7 @@ test_that("swimmer_mapping() says which tables and columns it found", {
   m <- swimmer_mapping(a)
   roles <- vapply(m$roles, `[[`, "", "role")
   expect_identical(roles, c("Subjects", "Doses", "Response",
-                            "Reason off treatment", "Serious AEs",
+                            "Discontinuation reason", "Serious AEs",
                             "Con meds"))
   expect_true(all(vapply(m$roles[1:3], `[[`, NA, "found")))
   expect_identical(m$parameters, "OVR")
@@ -272,7 +276,7 @@ test_that("the frame draws study days and only the events asked for", {
   expect_true(all(c("AGE", "SEX", "dose_level") %in% names(f)))
 })
 
-test_that("the reason off treatment comes from ADSL, also under other names", {
+test_that("the discontinuation reason comes from ADSL, also under other names", {
   a <- swim_adam()
   a$adsl$TRTEDT <- as.Date("2024-01-01") + c(NA, 60, 30)
   a$adsl$DCTREAS <- c("", "ADVERSE EVENT", "Physician Decision")
@@ -280,7 +284,7 @@ test_that("the reason off treatment comes from ADSL, also under other names", {
   why <- tapply(f$reason, f$USUBJID, unique)
   expect_identical(why[["p2"]], "Adverse event")
   expect_true(is.na(why[["p1"]]))
-  expect_identical(attr(f$reason, "label"), "Reason off treatment")
+  expect_identical(attr(f$reason, "label"), "Discontinuation reason")
   # The study reason or the disposition term when there is no DCTREAS; a
   # completed disposition is no reason, nor one while on treatment.
   a$adsl$DCTREAS <- NULL
@@ -413,7 +417,7 @@ test_that("SDTM-style tables and columns read as their ADaM counterparts", {
   expect_identical(vapply(m$roles, `[[`, "", "table"),
                    c("DM", "EX", "RS", "DM", "AE", "CM"))
   expect_true(all(vapply(m$roles, `[[`, NA, "found")))
-  # Only the optional reason off treatment is not in this DM.
+  # Only the optional discontinuation reason is not in this DM.
   expect_identical(unlist(lapply(m$roles, `[[`, "missing")), "DCTREAS")
   expect_identical(m$parameters, "OVRLRESP")
   expect_identical(swimmer_mapping(a)$roles[[1L]]$table, "ADSL")

@@ -2,7 +2,7 @@
 % Please edit documentation in R/swimmer-frame.R
 \name{swimmer_reason_tag}
 \alias{swimmer_reason_tag}
-\title{Two letters for a reason off treatment}
+\title{Two letters for a discontinuation reason}
 \usage{
 swimmer_reason_tag(x)
 }
