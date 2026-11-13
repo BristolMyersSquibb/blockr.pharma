@@ -188,18 +188,27 @@ AET_COLOURS <- c(
 
 # --- inputs ----------------------------------------------------------------
 
+# ADAE and ADSL under their canonical names and columns. The input goes
+# through the patient profile's normalisation (pp_normalize_dm()), so SDTM
+# table names (ae, dm) and SDTM columns (AESTDTC, AESTDY, AESOC, RFXSTDTC,
+# ...) read as their ADaM counterparts here too.
 aet_tables <- function(data) {
-  if (is.data.frame(data)) {
-    return(list(adae = as.data.frame(data), adsl = NULL))
-  }
-  tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
-  if (!is.list(tabs)) {
+  if (is.data.frame(data)) data <- list(adae = data)
+  if (!inherits(data, "dm") && !is.list(data)) {
     stop("The AE timeline needs adae, or a dm with adae and adsl.",
          call. = FALSE)
   }
-  names(tabs) <- tolower(names(tabs))
+  nms <- if (inherits(data, "dm")) names(dm::dm_get_tables(data)) else
+    names(data)
+  if (!inherits(data, "dm") || !identical(nms, tolower(nms))) {
+    tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
+    names(tabs) <- tolower(names(tabs))
+    data <- do.call(dm::dm, lapply(tabs, as.data.frame))
+  }
+  tabs <- dm::dm_get_tables(pp_normalize_dm(data))
   if (is.null(tabs$adae)) {
-    stop("The AE timeline needs adae in its input dm.", call. = FALSE)
+    stop("The AE timeline needs adae (or ae) in its input dm.",
+         call. = FALSE)
   }
   list(adae = as.data.frame(tabs$adae),
        adsl = if (!is.null(tabs$adsl)) as.data.frame(tabs$adsl))
@@ -304,10 +313,9 @@ aet_records <- function(ae, sl, colour) {
   t0 <- sl$TRTSDT[match(as.character(ae$USUBJID), sl$USUBJID)]
   st <- aet_col(ae, "ASTDY")
   en <- aet_col(ae, "AENDY")
-  if (is.null(st)) st <- aet_day(aet_date(aet_col(ae, c("ASTDT", "AESTDTC"))),
-                                 t0)
+  if (is.null(st)) st <- aet_day(aet_date(aet_col(ae, "ASTDT")), t0)
   if (is.null(en)) {
-    d <- aet_date(aet_col(ae, c("AENDT", "AEENDTC")))
+    d <- aet_date(aet_col(ae, "AENDT"))
     en <- if (is.null(d)) rep(NA_real_, nrow(ae)) else aet_day(d, t0)
   }
   n <- nrow(ae)
@@ -324,7 +332,7 @@ aet_records <- function(ae, sl, colour) {
     Start = as.numeric(st),
     End = as.numeric(en),
     Term = aet_title(chr(c("AEDECOD", "AETERM"))),
-    "Body system" = aet_title(chr(c("AEBODSYS", "AESOC"))),
+    "Body system" = aet_title(chr("AEBODSYS")),
     Serious = ifelse(flag("AESER"), "Yes", "No"),
     Outcome = aet_title(chr("AEOUT")),
     .fatal = flag("AESDTH"),

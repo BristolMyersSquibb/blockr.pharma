@@ -299,3 +299,39 @@ test_that("per-patient summaries group the records once", {
   expect_identical(p$max(c(2L, NA, 5L, 9L, NA)), c(A = NA, B = 5, C = NA))
   expect_identical(p$min(c(4, 1, 3, 0, 7)), c(A = 1, B = 3, C = NA))
 })
+
+test_that("SDTM table and column names read through the profile's catalog", {
+  tb <- aet_toy()
+  want <- ae_timeline_frame(tb)
+  # Tables named dm, ae, cm, ex, as the patient profile accepts them.
+  cm <- data.frame(USUBJID = "A", CMDECOD = "ASPIRIN", CMSTDY = 3)
+  ex <- data.frame(USUBJID = "A", EXTRT = "DRUG", EXSTDY = 1)
+  d <- dm::dm(dm = tb$adsl, ae = tb$adae, cm = cm, ex = ex)
+  expect_identical(ae_timeline_frame(d)$Term, want$Term)
+  expect_identical(ae_timeline_frame(d)$Start, want$Start)
+  # SDTM columns: study days, dates as ISO text, body system as AESOC,
+  # treatment start and end from RFXSTDTC / RFXENDTC.
+  ae <- tb$adae
+  names(ae)[names(ae) == "ASTDY"] <- "AESTDY"
+  names(ae)[names(ae) == "AENDY"] <- "AEENDY"
+  names(ae)[names(ae) == "AEBODSYS"] <- "AESOC"
+  sl <- tb$adsl
+  sl$RFXSTDTC <- format(sl$TRTSDT)
+  sl$RFXENDTC <- paste0(format(sl$TRTEDT), "T10:30")
+  sl$TRTSDT <- NULL
+  sl$TRTEDT <- NULL
+  s <- ae_timeline_frame(dm::dm(DM = sl, AE = ae))
+  expect_identical(aes_of(s)$Term, aes_of(want)$Term)
+  expect_identical(aes_of(s)$Start, aes_of(want)$Start)
+  expect_identical(aes_of(s)[["Body system"]], aes_of(want)[["Body system"]])
+  expect_equal(s$.trt_to[is.finite(s$.trt_to)],
+               want$.trt_to[is.finite(want$.trt_to)])
+  # Days from ISO dates when there are no study days.
+  ae2 <- tb$adae
+  ae2$ASTDY <- NULL
+  ae2$AENDY <- NULL
+  # Both patients start treatment on 2024-01-01, study day 1.
+  ae2$AESTDTC <- format(as.Date("2024-01-01") + c(1, 4, 39, 2))
+  f2 <- ae_timeline_frame(list(adsl = tb$adsl, ae = ae2))
+  expect_identical(sort(aes_of(f2)$Start), c(2, 3, 5, 40))
+})
