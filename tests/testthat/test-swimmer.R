@@ -514,3 +514,32 @@ test_that("several response parameters draw a full bar each, the first the main 
   # The gear offers them as a multi-select in the script.
   expect_match(swimmer_script(), "multiple = TRUE", fixed = TRUE)
 })
+
+test_that("odd inputs: response patients not in ADSL, NA codes and reasons", {
+  a <- swim_adam()
+  d <- function(x) as.Date("2024-01-01") + x
+  # ADRS keeps a patient that a filter took out of ADSL, in both parameters.
+  a$adrs <- rbind(a$adrs, data.frame(
+    USUBJID = c("p9", "p1", "p9", NA), PARAMCD = c("OVR", "OVRBICR", "OVRBICR", NA),
+    ADT = d(c(20, 42, 20, 30)), AVALC = c("CR", "SD", "CR", NA)
+  ))
+  f <- swimmer_frame(a)
+  expect_false("p9" %in% f$USUBJID)
+  expect_identical(unique(f$BOR[f$USUBJID == "p1"]), "PR")
+  g <- swimmer_frame(a, parameter = c("OVR", "OVRBICR"))
+  expect_false("p9" %in% g$USUBJID)
+  expect_identical(unique(g$BOR_2[g$USUBJID == "p1"]), "SD")
+  expect_identical(swimmer_parameters(a), c("OVR", "OVRBICR"))
+  # A missing or empty reason, a factor of reasons, upper-case table names.
+  a$adsl$TRTEDT <- d(c(NA, 60, 30))
+  a$adsl$DCTREAS <- factor(c(NA, "", "ADVERSE EVENT"))
+  expect_s3_class(swimmer_frame(a), "data.frame")
+  up <- stats::setNames(a, toupper(names(a)))
+  expect_s3_class(swimmer_frame(up), "data.frame")
+  m <- swimmer_mapping(up)
+  expect_true(all(vapply(m$roles[1:3], `[[`, NA, "found")))
+  # ADSL and DM both present: ADSL is used, the mapping still reports.
+  both <- c(a, list(dm = a$adsl))
+  expect_s3_class(swimmer_frame(both), "data.frame")
+  expect_identical(swimmer_mapping(both)$roles[[1L]]$table, "ADSL")
+})

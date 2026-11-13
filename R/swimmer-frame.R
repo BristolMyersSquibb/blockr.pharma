@@ -83,6 +83,9 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
   }
   # The response population: subjects with an assessment.
   sl <- sl[sl$USUBJID %in% rs$USUBJID, , drop = FALSE]
+  # ADRS may hold patients ADSL does not (a population filter narrows ADSL
+  # only): they are not drawn.
+  rs <- rs[rs$USUBJID %in% sl$USUBJID, , drop = FALSE]
   if (!nrow(sl)) {
     stop("No subject has an overall response (ADRS PARAMCD \"",
          parameter[[1L]], "\").", call. = FALSE)
@@ -171,7 +174,9 @@ swimmer_resp_value <- function(x) {
 swimmer_bor_of <- function(rs, ids) {
   base <- sub("^i(UPD|CPD)$", "PD", sub("^i(CR|PR|SD)$", "\\1", rs$AVALC))
   rank <- match(base, SWIMMER_BOR)
-  ok <- !is.na(rank)
+  # A response of a patient not among `ids` (ADRS unfiltered while ADSL is)
+  # has no place.
+  ok <- !is.na(rank) & rs$USUBJID %in% ids
   g <- match(rs$USUBJID[ok], ids)
   o <- order(g, rank[ok], method = "radix")
   first <- o[!duplicated(g[o])]
