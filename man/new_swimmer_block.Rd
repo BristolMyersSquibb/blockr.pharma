@@ -7,7 +7,7 @@
 new_swimmer_block(
   by = c("ARM", "USUBJID"),
   summaries = swimmer_summaries(),
-  sort_by = "weeks",
+  sort_by = "duration",
   sort_dir = "desc",
   script_values = list(),
   title = "Efficacy swimmer",
@@ -29,12 +29,12 @@ new_swimmer_block(
 \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
 
 \item{sort_by, sort_dir}{Row order: a listing column or a numeric column of
-the frame (\code{weeks}, weeks on treatment), and its direction.}
+the frame (\code{duration}, days on treatment), and its direction.}
 
 \item{script_values}{The swimmer's settings, by name: \code{doses}
 (\code{"Exceptions"}, \code{"Dots"} or \code{"Plain"}), \code{drugs}, \code{cutoff} (a date,
 \code{NA} for the last date in the data), \code{con_meds}, \code{max_lanes}, \code{events},
-\code{unit} (\code{"weeks"} or \code{"days"}), \code{parameter} (the ADRS PARAMCD).}
+\code{parameter} (the ADRS PARAMCD).}
 
 \item{title, subtitle, caption}{Text above and below the block. The subtitle
 is a template whose \verb{\{@name\}} words readers click.}
@@ -53,12 +53,13 @@ A table block of class \code{swimmer_block}.
 }
 \description{
 One row per patient: the overall response over time as a bar with first
-progression, serious AEs and death on it, and a thin line per drug above
-it, with an arrow while the drug is ongoing at the cutoff. Rows grow with
-the number of drugs; past the lanes setting, study drugs keep their lanes
-and the rest fold into a grey "Other" lane. Pointing at a drug lists its
-cycles (number, dose, study day, delay). Time is weeks (or days) since the
-first dose.
+progression and death on it (serious AEs on request), and a thin line per
+drug above it, with an arrow while the drug is ongoing at the cutoff. Rows
+grow with the number of drugs; past the lanes setting, study drugs keep
+their lanes and the rest fold into a grey "Other" lane. Pointing at a drug
+lists its cycles (number, dose, study day, delay). Time is the study day,
+day 1 the first dose. The listing shows why a patient's treatment stopped
+(ADSL \code{DCTREAS}, else \code{DCSREAS}, \code{DSDECOD} or \code{DSTERM}).
 }
 \details{
 The input is a dm of ADaM tables as they are: ADSL, ADEX, ADRS (overall
@@ -68,7 +69,7 @@ and the best overall response (\code{\link[=swimmer_frame]{swimmer_frame()}}).
 
 Its gear has the tabs Data (the tables found, the response parameter, the
 cutoff), Patients (grouping, sort, listing columns), Lanes (drugs, doses,
-con meds, events, time unit), Titles and Interaction. A setting ticked "In
+con meds, events, lane width), Titles and Interaction. A setting ticked "In
 the subtitle" (Titles) becomes a word readers click.
 
 Returns a table block (\code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}, groups layout) of

@@ -87,7 +87,10 @@ pp_column_catalog <- function() {
       TRTSDT = d("RFXSTDTC", "RFSTDTC"),
       TRTEDT = d("RFXENDTC", "RFENDTC"),
       RFENDT = d("EOSDT", "RFENDTC"),
-      DTHDT  = d("DTHDTC")
+      DTHDT  = d("DTHDTC"),
+      # Why treatment stopped: the study discontinuation reason, else the
+      # disposition term, when the study ships no treatment reason.
+      DCTREAS = i("DCSREAS", "DSDECOD", "DSTERM")
     ),
     adae = list(
       ASTDT    = d("ASTDTC", "AESTDTC"),

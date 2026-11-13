@@ -16,12 +16,13 @@
 #' Efficacy swimmer
 #'
 #' One row per patient: the overall response over time as a bar with first
-#' progression, serious AEs and death on it, and a thin line per drug above
-#' it, with an arrow while the drug is ongoing at the cutoff. Rows grow with
-#' the number of drugs; past the lanes setting, study drugs keep their lanes
-#' and the rest fold into a grey "Other" lane. Pointing at a drug lists its
-#' cycles (number, dose, study day, delay). Time is weeks (or days) since the
-#' first dose.
+#' progression and death on it (serious AEs on request), and a thin line per
+#' drug above it, with an arrow while the drug is ongoing at the cutoff. Rows
+#' grow with the number of drugs; past the lanes setting, study drugs keep
+#' their lanes and the rest fold into a grey "Other" lane. Pointing at a drug
+#' lists its cycles (number, dose, study day, delay). Time is the study day,
+#' day 1 the first dose. The listing shows why a patient's treatment stopped
+#' (ADSL `DCTREAS`, else `DCSREAS`, `DSDECOD` or `DSTERM`).
 #'
 #' The input is a dm of ADaM tables as they are: ADSL, ADEX, ADRS (overall
 #' response per visit, `PARAMCD == "OVR"`) and, optional, ADAE and ADCM. The
@@ -30,7 +31,7 @@
 #'
 #' Its gear has the tabs Data (the tables found, the response parameter, the
 #' cutoff), Patients (grouping, sort, listing columns), Lanes (drugs, doses,
-#' con meds, events, time unit), Titles and Interaction. A setting ticked "In
+#' con meds, events, lane width), Titles and Interaction. A setting ticked "In
 #' the subtitle" (Titles) becomes a word readers click.
 #'
 #' Returns a table block ([blockr.viz::new_table_block()], groups layout) of
@@ -41,11 +42,11 @@
 #' @param summaries The listing columns and the swimlane; see
 #'   [blockr.viz::new_table_block()].
 #' @param sort_by,sort_dir Row order: a listing column or a numeric column of
-#'   the frame (`weeks`, weeks on treatment), and its direction.
+#'   the frame (`duration`, days on treatment), and its direction.
 #' @param script_values The swimmer's settings, by name: `doses`
 #'   (`"Exceptions"`, `"Dots"` or `"Plain"`), `drugs`, `cutoff` (a date,
 #'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
-#'   `unit` (`"weeks"` or `"days"`), `parameter` (the ADRS PARAMCD).
+#'   `parameter` (the ADRS PARAMCD).
 #' @param title,subtitle,caption Text above and below the block. The subtitle
 #'   is a template whose `{@name}` words readers click.
 #' @param drill,drill_target,drill_table A click on a patient filters another
@@ -60,7 +61,7 @@
 #' @export
 new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               summaries = swimmer_summaries(),
-                              sort_by = "weeks",
+                              sort_by = "duration",
                               sort_dir = "desc",
                               script_values = list(),
                               title = "Efficacy swimmer",
@@ -73,6 +74,11 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               download = TRUE,
                               ...) {
   dots <- list(...)
+  # Boards saved while time was in weeks.
+  dots$unit <- NULL
+  script_values$unit <- NULL
+  if (identical(sort_by, "weeks")) sort_by <- "duration"
+  summaries <- swimmer_in_days(summaries)
   own <- intersect(names(dots), SWIMMER_SETTINGS)
   if (length(own)) {
     if ("doses" %in% own) {
@@ -110,14 +116,27 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
 
 # The swimmer's own settings: its prepare script's values.
 SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
-                      "events", "unit", "parameter")
+                      "events", "parameter")
+
+# A board saved while time was in weeks names the frame's old columns: the
+# lane's events at `event_wk`, a listing column of `weeks`.
+swimmer_in_days <- function(summaries) {
+  lapply(summaries, function(s) {
+    if (identical(s$event_x, "event_wk")) s$event_x <- "event_day"
+    if (identical(s$col, "weeks")) {
+      s$col <- "duration"
+      if (identical(s$name, "Weeks")) s$name <- "Days"
+    }
+    s
+  })
+}
 
 #' The swimmer's prepare script
 #'
 #' Declares the swimmer's settings, which its gear shows as rows: the doses
 #' style, the drugs to draw (choices from the input's ADEX), the cutoff
 #' (automatic until a date is set), con meds, the lanes before "Other", the
-#' events, the time unit and the ADRS parameter. Then it calls
+#' events (serious AEs off) and the ADRS parameter. Then it calls
 #' [swimmer_frame()] on the input dm.
 #'
 #' @param max_lanes Lanes before drugs fold into "Other", by default.
@@ -130,19 +149,18 @@ swimmer_script <- function(max_lanes = 4L) {
            "placeholder = \"automatic\")"),
     paste0("parameter <- \"OVR\"  #| text(label = ",
            "\"Overall response (ADRS PARAMCD)\")"),
-    paste0("unit <- factor(\"weeks\", levels = c(\"weeks\", \"days\"))  ",
-           "#| select(label = \"Time unit\")"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
     paste0("doses <- factor(\"Exceptions\", levels = c(\"Exceptions\", ",
            "\"Dots\", \"Plain\"))  #| select(label = \"Doses on the drug lines\")"),
     "con_meds <- FALSE  #| flag(label = \"Con meds as lanes\")",
     paste0("max_lanes <- ", as.integer(max_lanes), "  #| number(min = 1, ",
            "max = 8, step = 1, label = \"Lanes before \\\"Other\\\"\")"),
-    paste0("events <- factor(", swimmer_levels(SWIMMER_EVENTS), ", levels = ",
-           swimmer_levels(SWIMMER_EVENTS), ")  #| select(label = \"Events\")"),
+    paste0("events <- factor(", swimmer_levels(c("Progression", "Death")),
+           ", levels = ", swimmer_levels(SWIMMER_EVENTS),
+           ")  #| select(label = \"Events\")"),
     paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
            "cutoff = cutoff, con_meds = con_meds, max_lanes = max_lanes, ",
-           "events = events, unit = unit, parameter = parameter)"),
+           "events = events, parameter = parameter)"),
     sep = "\n"
   )
 }
@@ -164,7 +182,7 @@ swimmer_levels <- function(x) {
 #' @export
 swimmer_subtitle <- function() {
   cl <- swimmer_clauses()
-  paste0("Response and drugs by study {@unit}, ",
+  paste0("Response and drugs by study day, ",
          paste(cl[c("doses", "drugs", "cutoff", "group")], collapse = ", "))
 }
 
@@ -195,7 +213,7 @@ swimmer_clauses <- function() {
 swimmer_gear <- function() {
   blockr.viz::table_gear(
     tabs = list(
-      Data = list(Tables = "mapping", Time = c("cutoff", "unit")),
+      Data = list(Tables = "mapping", Time = "cutoff"),
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
         `Drug lines` = c("drugs", "doses", "con_meds", "max_lanes"),
@@ -218,13 +236,14 @@ swimmer_gear <- function() {
   )
 }
 
-# The listing columns the gear offers, the first two shown.
+# The listing columns the gear offers, the first three shown.
 swimmer_columns <- function() {
   list(
     BOR = list(type = "field", col = "BOR"),
     Status = list(type = "field", col = "status"),
-    Weeks = list(type = "simple", func = "max", col = "weeks",
-                 show = "number", on = FALSE),
+    `Off treatment` = list(type = "field", col = "reason"),
+    Days = list(type = "simple", func = "max", col = "duration",
+                show = "number", on = FALSE),
     Age = list(type = "field", col = "AGE", on = FALSE),
     Sex = list(type = "field", col = "SEX", on = FALSE),
     `Dose level` = list(type = "field", col = "dose_level", on = FALSE)
@@ -242,8 +261,8 @@ swimmer_summaries <- function() {
 swimmer_lane <- function() {
   list(type = "spans", name = "Study time", x = "start",
        xend = "end", color = "colour", label = "label",
-       tooltip = c("days", "dose"), size = "lg",
-       event_x = "event_wk", event_shape = "event", open = "ongoing",
+       tooltip = c("days", "dose"), size = "xl",
+       event_x = "event_day", event_shape = "event", open = "ongoing",
        lane = "lane", seg_style = "mark", strip = "strip")
 }
 
@@ -257,6 +276,8 @@ SWIMMER_ROLES <- list(
                    c("ASTDT", "ASTDTM"))),
   list(role = "Response", table = "adrs", need = TRUE,
        cols = list("USUBJID", "PARAMCD", c("ADT", "ADTM"), "AVALC")),
+  list(role = "Reason off treatment", table = "adsl", need = FALSE,
+       cols = list(c("DCTREAS", "DCSREAS", "DSDECOD", "DSTERM"))),
   list(role = "Serious AEs", table = "adae", need = FALSE,
        cols = list("AESER", "ASTDT")),
   list(role = "Con meds", table = "adcm", need = FALSE,

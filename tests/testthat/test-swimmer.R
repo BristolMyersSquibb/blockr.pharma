@@ -33,7 +33,9 @@ test_that("swimmer_frame builds response, lanes, events and listing", {
   # Response: not assessed, then assessment to next, the last to follow-up.
   r <- f[f$USUBJID == "p1" & is.na(f$lane) & !is.na(f$start), ]
   expect_identical(as.character(r$colour), c("Not assessed", "SD", "PR", "PR"))
-  expect_equal(r$start[[2]], 6)
+  # Time is the study day: day 1 the first dose.
+  expect_equal(r$start[[1]], 1)
+  expect_equal(r$start[[2]], 43)
   # Best response and status.
   expect_identical(unique(f$BOR[f$USUBJID == "p1"]), "PR")
   expect_identical(unique(f$status[f$USUBJID == "p2"]), "Died")
@@ -52,12 +54,12 @@ test_that("cycle drugs: late doses, skipped cycles and cuts", {
   f <- swimmer_frame(swim_adam(), doses = "Exceptions")
   y <- f[f$USUBJID == "p1" & f$lane %in% "Drug Y", ]
   late <- y[y$mark %in% "hollow" & !is.na(y$end), ]
-  expect_equal(late$start * 7, 42)
-  expect_equal(late$end * 7, 49)
+  expect_equal(late$start, 43)
+  expect_equal(late$end, 50)
   skip <- y[y$mark %in% "dashed" & !is.na(y$end), ]
-  expect_equal(skip$start * 7, 91)
+  expect_equal(skip$start, 92)
   cut <- y[y$mark %in% "step", ]
-  expect_equal(cut$start * 7, 112)
+  expect_equal(cut$start, 113)
   expect_identical(cut$dose, "75 mg to 50 mg")
   # The strip: five cycles and the skip, the late one marked.
   st <- y[!is.na(y$strip), ]
@@ -67,7 +69,7 @@ test_that("cycle drugs: late doses, skipped cycles and cuts", {
   expect_match(st$strip[[6]], "^skip")
   # Daily Drug X: its dose cut from the periods, its arrow (ongoing).
   x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x", ]
-  expect_equal(x$start[x$mark %in% "step"] * 7, 50)
+  expect_equal(x$start[x$mark %in% "step"], 51)
   expect_true(any(x$ongoing, na.rm = TRUE))
 })
 
@@ -118,7 +120,7 @@ test_that("drugs and cutoff narrow the frame", {
   expect_identical(levels(f$lane), "Drug Y")
   # A cutoff at day 60: later visits and doses go, drugs given past it run on.
   g <- swimmer_frame(a, cutoff = as.Date("2024-03-01"))
-  expect_true(all(g$start[!is.na(g$start)] <= 60 / 7 + 1e-9))
+  expect_true(all(g$start[!is.na(g$start)] <= 61 + 1e-9))
   expect_identical(unique(g$status[g$USUBJID == "p1"]), "On treatment")
   # NA is automatic.
   expect_identical(swimmer_frame(a, cutoff = as.Date(NA)), swimmer_frame(a))
@@ -159,12 +161,10 @@ test_that("the swimmer is in the menu and saves and restores as itself", {
 })
 
 test_that("the swimmer's settings go to its script values; its gear is its own", {
-  blk <- new_swimmer_block(doses = "Plain", con_meds = TRUE, unit = "days",
-                           max_lanes = 3)
+  blk <- new_swimmer_block(doses = "Plain", con_meds = TRUE, max_lanes = 3)
   sv <- blockr.core::blockr_ser(blk)$payload$script_values
-  expect_identical(sv[c("doses", "con_meds", "unit", "max_lanes")],
-                   list(doses = "Plain", con_meds = TRUE, unit = "days",
-                        max_lanes = 3))
+  expect_identical(sv[c("doses", "con_meds", "max_lanes")],
+                   list(doses = "Plain", con_meds = TRUE, max_lanes = 3))
   expect_error(new_swimmer_block(doses = "nope"))
   g <- swimmer_gear()
   expect_s3_class(g, "viz_table_gear")
@@ -174,13 +174,20 @@ test_that("the swimmer's settings go to its script values; its gear is its own",
   on <- vapply(g$columns, `[[`, NA, "on")
   expect_identical(names(on[on]), NULL)
   expect_identical(vapply(g$columns[on], `[[`, "", "name"),
-                   c("BOR", "Status"))
+                   c("BOR", "Status", "Off treatment"))
   expect_identical(vapply(swimmer_summaries(), `[[`, "", "name"),
-                   c("BOR", "Status", "Study time"))
-  # Weeks is offered, off; the rows still sort by weeks on treatment.
-  expect_false(g$columns[[3L]]$on)
-  expect_identical(g$columns[[3L]]$name, "Weeks")
-  expect_identical(formals(new_swimmer_block)$sort_by, "weeks")
+                   c("BOR", "Status", "Off treatment", "Study time"))
+  # Days on treatment is offered, off; the rows sort by it. The lane is as
+  # wide as the listing leaves it.
+  expect_false(g$columns[[4L]]$on)
+  expect_identical(g$columns[[4L]]$name, "Days")
+  expect_identical(formals(new_swimmer_block)$sort_by, "duration")
+  lane <- swimmer_summaries()[[4L]]
+  expect_identical(lane$size, "xl")
+  expect_identical(lane$event_x, "event_day")
+  # No weeks anywhere a reader sees them.
+  expect_false(grepl("week", swimmer_script(), ignore.case = TRUE))
+  expect_false(grepl("week", swimmer_subtitle(), ignore.case = TRUE))
   # The subtitle is made of the clauses the gear ticks.
   expect_match(swimmer_subtitle(), swimmer_clauses()[["doses"]], fixed = TRUE)
   expect_false(grepl(swimmer_clauses()[["con_meds"]], swimmer_subtitle(),
@@ -191,7 +198,8 @@ test_that("swimmer_mapping() says which tables and columns it found", {
   a <- swim_adam()
   m <- swimmer_mapping(a)
   roles <- vapply(m$roles, `[[`, "", "role")
-  expect_identical(roles, c("Subjects", "Doses", "Response", "Serious AEs",
+  expect_identical(roles, c("Subjects", "Doses", "Response",
+                            "Reason off treatment", "Serious AEs",
                             "Con meds"))
   expect_true(all(vapply(m$roles[1:3], `[[`, NA, "found")))
   expect_identical(m$parameters, "OVR")
@@ -203,16 +211,60 @@ test_that("swimmer_mapping() says which tables and columns it found", {
   expect_identical(swimmer_mapping(NULL)$parameters, character())
 })
 
-test_that("the frame draws days and only the events asked for", {
+test_that("the frame draws study days and only the events asked for", {
   a <- swim_adam()
-  wk <- swimmer_frame(a)
-  dy <- swimmer_frame(a, unit = "days")
-  expect_equal(as.numeric(dy$start), as.numeric(wk$start) * 7)
-  expect_identical(attr(dy$start, "label"), "Start, days")
-  expect_identical(dy$weeks, wk$weeks)
+  a$adae <- data.frame(USUBJID = "p1", AESER = "Y",
+                       ASTDT = as.Date("2024-01-01") + 30)
+  f <- swimmer_frame(a)
+  expect_identical(attr(f$start, "label"), "Start, study day")
+  expect_false(any(grepl("week", vapply(f, function(x) {
+    attr(x, "label") %||% ""
+  }, ""), ignore.case = TRUE)))
+  # Serious AEs are off by default.
+  expect_false("Serious AE" %in% f$event)
+  expect_true("Serious AE" %in% swimmer_frame(a, events = NULL)$event)
   ev <- swimmer_frame(a, events = "Death")
   expect_true(all(is.na(ev$event) | ev$event == "Death"))
-  expect_true(all(c("AGE", "SEX", "dose_level") %in% names(wk)))
+  expect_true(all(c("AGE", "SEX", "dose_level") %in% names(f)))
+})
+
+test_that("the reason off treatment comes from ADSL, also under other names", {
+  a <- swim_adam()
+  a$adsl$TRTEDT <- as.Date("2024-01-01") + c(NA, 60, 30)
+  a$adsl$DCTREAS <- c("", "ADVERSE EVENT", "Physician Decision")
+  f <- swimmer_frame(a)
+  why <- tapply(f$reason, f$USUBJID, unique)
+  expect_identical(why[["p2"]], "Adverse event")
+  expect_true(is.na(why[["p1"]]))
+  expect_identical(attr(f$reason, "label"), "Reason off treatment")
+  # The study reason or the disposition term when there is no DCTREAS; a
+  # completed disposition is no reason, nor one while on treatment.
+  a$adsl$DCTREAS <- NULL
+  a$adsl$DSTERM <- c("PROGRESSIVE DISEASE", "COMPLETED", "DEATH")
+  g <- swimmer_frame(a)
+  why <- tapply(g$reason, g$USUBJID, unique)
+  expect_true(is.na(why[["p1"]]))
+  expect_true(is.na(why[["p2"]]))
+  a$adsl$DCSREAS <- c(NA, "WITHDRAWAL BY SUBJECT", NA)
+  expect_identical(unique(swimmer_frame(a)$reason[g$USUBJID == "p2"]),
+                   "Withdrawal by subject")
+})
+
+test_that("a board saved with weeks restores in days", {
+  old <- swimmer_summaries()
+  old[[4L]]$event_x <- "event_wk"
+  old <- c(old[1:3], list(list(type = "simple", name = "Weeks",
+                               func = "max", col = "weeks", show = "number")),
+           old[4L])
+  blk <- new_swimmer_block(summaries = old, sort_by = "weeks",
+                           script_values = list(unit = "weeks"),
+                           unit = "weeks")
+  p <- blockr.core::blockr_ser(blk)$payload
+  expect_identical(p$sort_by, "duration")
+  expect_null(p$script_values$unit)
+  expect_identical(p$summaries[[4L]]$col, "duration")
+  expect_identical(p$summaries[[4L]]$name, "Days")
+  expect_identical(p$summaries[[5L]]$event_x, "event_day")
 })
 
 test_that("an end of treatment closes a study drug and ends the time on it", {
@@ -223,10 +275,10 @@ test_that("an end of treatment closes a study drug and ends the time on it", {
   a$adsl$TRTEDT <- d(c(140, 60, 30))
   f <- swimmer_frame(a)
   x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x" & !is.na(f$end), ]
-  expect_equal(max(x$end), 140 / 7)
+  expect_equal(max(x$end), 141)
   expect_false(any(x$ongoing %in% TRUE))
   expect_identical(unique(f$status[f$USUBJID == "p1"]), "Off treatment")
-  expect_equal(unique(f$weeks[f$USUBJID == "p1"]), round(140 / 7, 1))
+  expect_equal(unique(f$duration[f$USUBJID == "p1"]), 141)
   # A record that starts after the end of treatment stays a point.
   a$adex <- rbind(a$adex, data.frame(
     USUBJID = "p2", PARAMCD = "DOSE", EXTRT = "DRUG X", ASTDT = d(70),
@@ -234,7 +286,7 @@ test_that("an end of treatment closes a study drug and ends the time on it", {
   ))
   g <- swimmer_frame(a)
   late <- g[g$USUBJID == "p2" & g$lane %in% "Drug x" & !is.na(g$start) &
-              g$start > 9 & is.na(g$mark) & is.na(g$strip), ]
+              g$start > 63 & is.na(g$mark) & is.na(g$strip), ]
   expect_equal(late$end, late$start)
   # Without an end of treatment the open drug runs on, as before.
   a$adsl$TRTEDT <- d(c(NA, 60, 30))
@@ -258,7 +310,7 @@ test_that("an ADSL data cutoff is the automatic cutoff", {
   a <- swim_adam()
   a$adsl$DCUTDT <- as.Date("2024-03-01")
   f <- swimmer_frame(a)
-  expect_true(max(f$end, na.rm = TRUE) <= 60 / 7 + 1e-9)
+  expect_true(max(f$end, na.rm = TRUE) <= 61 + 1e-9)
 })
 
 test_that("SDTM-style tables and columns read as their ADaM counterparts", {
@@ -284,24 +336,27 @@ test_that("SDTM-style tables and columns read as their ADaM counterparts", {
                     CMSTDTC = iso(a$adcm$ASTDT), CMENDTC = iso(a$adcm$AENDT))
   )
   cols <- c("USUBJID", "start", "end", "colour", "lane", "mark", "strip",
-            "label", "event_wk", "event", "ongoing", "days", "dose", "ARM",
-            "BOR", "weeks", "status")
-  want <- swimmer_frame(a, con_meds = TRUE)[cols]
-  got <- swimmer_frame(sdtm, con_meds = TRUE, parameter = "OVRLRESP")
+            "label", "event_day", "event", "ongoing", "days", "dose", "ARM",
+            "BOR", "duration", "status", "reason")
+  want <- swimmer_frame(a, con_meds = TRUE, events = NULL)[cols]
+  got <- swimmer_frame(sdtm, con_meds = TRUE, parameter = "OVRLRESP",
+                       events = NULL)
   expect_identical(got[cols], want)
   expect_true("Serious AE" %in% got$event)
   expect_true("Aspirin" %in% got$label)
   # The same as a dm, with upper-case names.
   up <- do.call(dm::dm, stats::setNames(sdtm, toupper(names(sdtm))))
   expect_identical(swimmer_frame(up, con_meds = TRUE,
-                                 parameter = "OVRLRESP")[cols], want)
+                                 parameter = "OVRLRESP", events = NULL)[cols],
+                   want)
   expect_identical(swimmer_drugs(up), swimmer_drugs(a))
   # The gear's Tables row names each table as the input does.
   m <- swimmer_mapping(sdtm)
   expect_identical(vapply(m$roles, `[[`, "", "table"),
-                   c("DM", "EX", "RS", "AE", "CM"))
+                   c("DM", "EX", "RS", "DM", "AE", "CM"))
   expect_true(all(vapply(m$roles, `[[`, NA, "found")))
-  expect_identical(unlist(lapply(m$roles, `[[`, "missing")), character())
+  # Only the optional reason off treatment is not in this DM.
+  expect_identical(unlist(lapply(m$roles, `[[`, "missing")), "DCTREAS")
   expect_identical(m$parameters, "OVRLRESP")
   expect_identical(swimmer_mapping(a)$roles[[1L]]$table, "ADSL")
 })

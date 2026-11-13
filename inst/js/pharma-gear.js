@@ -114,9 +114,9 @@
 
   B.viz.gear.editors.mapping = { label: 'Found in the input', draw };
 
-  // The swimlane's width: the spans column's `size` (md, lg), the Width the
-  // table's summaries editor offers, here as a row of its own.
-  const WIDTHS = [['md', 'Regular'], ['lg', 'Wide']];
+  // The swimlane's width: the spans column's `size` (md, lg, xl), the Width
+  // the table's summaries editor offers, here as a row of its own.
+  const WIDTHS = [['md', 'Regular'], ['lg', 'Wide'], ['xl', 'Widest']];
   function drawWidth(parent, ctx) {
     const sums = Array.isArray(ctx.values.summaries) ? ctx.values.summaries : [];
     const lane = sums.find((s) => s && s.type === 'spans');

@@ -12,8 +12,7 @@ swimmer_frame(
   parameter = "OVR",
   cutoff = NULL,
   drugs = NULL,
-  events = NULL,
-  unit = "weeks"
+  events = c("Progression", "Death")
 )
 }
 \arguments{
@@ -43,10 +42,8 @@ Response visits, doses and deaths after it are left out.}
 \code{NULL}: all.}
 
 \item{events}{The events drawn on the response bar: any of
-\code{"Progression"}, \code{"Serious AE"}, \code{"Death"}. \code{NULL}: all.}
-
-\item{unit}{The time axis, \code{"weeks"} or \code{"days"} since the first dose.
-The listing's weeks on treatment stay weeks.}
+\code{"Progression"}, \code{"Serious AE"}, \code{"Death"}. \code{NULL}: all. Serious AEs
+are off by default.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the
@@ -54,7 +51,7 @@ columns.
 }
 \description{
 Turns a study's ADaM tables into the long frame the swimmer block draws:
-study weeks, drugs ongoing to the cutoff, response periods, best overall
-response and the dose marks. It is the swimmer block's prepare step
+study days, drugs ongoing to the cutoff, response periods, best overall
+response, the reason treatment stopped and the dose marks. It is the swimmer block's prepare step
 (\code{\link[=new_swimmer_block]{new_swimmer_block()}}) and needs no prep of the inputs.
 }
