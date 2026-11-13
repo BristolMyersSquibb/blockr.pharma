@@ -472,22 +472,54 @@ aet_fill_cols <- function(x, ...) {
   x
 }
 
+# Per-patient summaries of record columns, by grouping the records once:
+# count, sum, max and min of a column, one value per id in `ids`, named by
+# id. Records of ids not in `ids` are ignored; an id without records counts
+# 0 and has no max or min. Works for any interval records keyed by patient.
+aet_per_patient <- function(id, ids) {
+  g <- match(id, ids)
+  ok <- !is.na(g)
+  g <- g[ok]
+  n <- length(ids)
+  named <- function(x) stats::setNames(as.numeric(x), ids)
+  ext <- function(x, f) {
+    x <- x[ok]
+    keep <- !is.na(x)
+    out <- rep(NA_real_, n)
+    if (any(keep)) {
+      v <- vapply(split(x[keep], g[keep]), f, numeric(1L))
+      out[as.integer(names(v))] <- v
+    }
+    named(out)
+  }
+  list(
+    count = function() named(tabulate(g, n)),
+    sum = function(x) {
+      out <- numeric(n)
+      s <- rowsum(as.numeric(x[ok]), g, reorder = TRUE)
+      out[as.integer(rownames(s))] <- s[, 1L]
+      named(out)
+    },
+    max = function(x) ext(x, max),
+    min = function(x) ext(x, min)
+  )
+}
+
 # Listing values per patient, row order, column types and colours.
 aet_finish <- function(out, rec, sl, pcols, order_by, colour) {
   out <- aet_fill_cols(out)
   rec <- out[is.finite(out$Start), , drop = FALSE]
   ids <- sl$USUBJID
-  per <- function(f) vapply(ids, function(id) f(rec[rec$USUBJID == id, ]),
-                            numeric(1L))
-  n_ae <- per(nrow)
-  n_open <- per(function(r) sum(r$.open))
-  n_ser <- per(function(r) sum(r$Serious %in% "Yes"))
-  worst <- per(function(r) {
-    if (identical(colour, "AE")) return(NA_real_)
-    g <- as.integer(r$.grade)
-    if (all(is.na(g))) NA_real_ else max(g, na.rm = TRUE)
-  })
-  first <- per(function(r) min(r$Start))
+  per <- aet_per_patient(rec$USUBJID, ids)
+  n_ae <- per$count()
+  n_open <- per$sum(rec$.open)
+  n_ser <- per$sum(rec$Serious %in% "Yes")
+  worst <- if (identical(colour, "AE")) {
+    stats::setNames(rep(NA_real_, length(ids)), ids)
+  } else {
+    per$max(as.integer(rec$.grade))
+  }
+  first <- per$min(rec$Start)
   lv <- levels(rec$.grade)
   key <- switch(
     order_by,

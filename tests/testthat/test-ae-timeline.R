@@ -290,3 +290,12 @@ test_that("the default colour follows what ADAE has", {
   expect_match(ae_timeline_script(), 'colour <- factor("grade or severity"',
                fixed = TRUE)
 })
+
+test_that("per-patient summaries group the records once", {
+  p <- aet_per_patient(c("B", "A", "B", "X", "B"), c("A", "B", "C"))
+  expect_identical(p$count(), c(A = 1, B = 3, C = 0))
+  expect_identical(p$sum(c(TRUE, FALSE, TRUE, TRUE, FALSE)),
+                   c(A = 0, B = 2, C = 0))
+  expect_identical(p$max(c(2L, NA, 5L, 9L, NA)), c(A = NA, B = 5, C = NA))
+  expect_identical(p$min(c(4, 1, 3, 0, 7)), c(A = 1, B = 3, C = NA))
+})
