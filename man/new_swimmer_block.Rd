@@ -32,7 +32,8 @@ new_swimmer_block(
 the frame (\code{duration}, days on treatment), and its direction.}
 
 \item{script_values}{The swimmer's settings, by name: \code{doses}
-(\code{"Exceptions"}, \code{"Dots"} or \code{"Plain"}), \code{drugs}, \code{cutoff} (a date,
+(\code{"Gaps and cuts"} or \code{"Plain"}), \code{reasons} (the tag for the reason off
+treatment), \code{drugs}, \code{cutoff} (a date,
 \code{NA} for the last date in the data), \code{con_meds}, \code{max_lanes}, \code{events},
 \code{parameter} (the ADRS PARAMCD).}
 
@@ -44,7 +45,7 @@ block; see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()
 
 \item{search, download}{The search field and the download button.}
 
-\item{...}{The swimmer's settings by name (\code{doses = "Dots"}, as in
+\item{...}{The swimmer's settings by name (\code{doses = "Plain"}, as in
 \code{script_values}) and \code{group}, the grouping column; arguments for
 \code{\link[blockr.core:new_block]{blockr.core::new_block()}} (\code{block_name}).}
 }
@@ -77,6 +78,6 @@ class \code{swimmer_block}.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-new_swimmer_block(doses = "Dots")
+new_swimmer_block(doses = "Plain")
 \dontshow{\}) # examplesIf}
 }

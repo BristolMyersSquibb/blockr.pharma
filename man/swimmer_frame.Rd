@@ -6,13 +6,14 @@
 \usage{
 swimmer_frame(
   data,
-  doses = "Exceptions",
+  doses = "Gaps and cuts",
   con_meds = FALSE,
   max_lanes = 4L,
   parameter = "OVR",
   cutoff = NULL,
   drugs = NULL,
-  events = c("Progression", "Death")
+  events = c("Progression", "Death"),
+  reasons = TRUE
 )
 }
 \arguments{
@@ -22,11 +23,11 @@ and \code{adrs} and, optional, \code{adae} (serious AEs as events) and \code{adc
 SDTM-style names work as in the patient profile: \code{dm}, \code{ex}, \code{rs}, \code{ae}
 and \code{cm}, and SDTM columns such as \code{EXSTDTC} or \code{RFXSTDTC}.}
 
-\item{doses}{How a drug lane shows its doses: \code{"Plain"} (the period bar),
-\code{"Exceptions"} (a dose cut as a step down, a late dose as a notch, a
-skipped cycle as a dashed stretch) or \code{"Dots"} (a ring per
-administration; a daily drug stays a bar). Without administration dates
-(dose periods only) both show the dose cuts only.}
+\item{doses}{How a drug lane shows its doses: \code{"Gaps and cuts"} (a
+skipped cycle leaves a gap, the bar thins after a dose cut and is a
+hairline at a dose of zero; late doses only in the tooltip) or
+\code{"Plain"} (the bar alone). The old \code{"Exceptions"} and \code{"Dots"} read as
+\code{"Gaps and cuts"}.}
 
 \item{con_meds}{Draw con meds from \code{adcm} as lanes too.}
 
@@ -44,6 +45,10 @@ Response visits, doses and deaths after it are left out.}
 \item{events}{The events drawn on the response bar: any of
 \code{"Progression"}, \code{"Serious AE"}, \code{"Death"}. \code{NULL}: all. Serious AEs
 are off by default.}
+
+\item{reasons}{Tag where the drug lines stop with the reason off
+treatment (ADSL \code{DCTREAS} and its stand-ins, see
+\code{\link[=new_swimmer_block]{new_swimmer_block()}}): "AE", "PD", "WD", ... (\code{\link[=swimmer_reason_tag]{swimmer_reason_tag()}}).}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

@@ -30,9 +30,11 @@ swim_adam <- function() {
 test_that("swimmer_frame builds response, lanes, events and listing", {
   f <- swimmer_frame(swim_adam())
   expect_setequal(unique(f$USUBJID), c("p1", "p2"))
-  # Response: not assessed, then assessment to next, the last to follow-up.
+  # Response: not assessed, then a run per read (PR, PR is one), the last
+  # to follow-up, each with its own tooltip.
   r <- f[f$USUBJID == "p1" & is.na(f$lane) & !is.na(f$start), ]
-  expect_identical(as.character(r$colour), c("Not assessed", "SD", "PR", "PR"))
+  expect_identical(as.character(r$colour), c("Not assessed", "SD", "PR"))
+  expect_identical(r$tip[[3]], "PR \u00b7 Day 85 to 201, 116 days")
   # Time is the study day: day 1 the first dose.
   expect_equal(r$start[[1]], 1)
   expect_equal(r$start[[2]], 43)
@@ -50,35 +52,63 @@ test_that("swimmer_frame builds response, lanes, events and listing", {
                                                     "blockr_colors"))))
 })
 
-test_that("cycle drugs: late doses, skipped cycles and cuts", {
-  f <- swimmer_frame(swim_adam(), doses = "Exceptions")
+test_that("cycle drugs: a gap for a skipped cycle, thinner after a cut", {
+  f <- swimmer_frame(swim_adam())
   y <- f[f$USUBJID == "p1" & f$lane %in% "Drug Y", ]
-  late <- y[y$mark %in% "hollow" & !is.na(y$end), ]
-  expect_equal(late$start, 43)
-  expect_equal(late$end, 50)
-  skip <- y[y$mark %in% "dashed" & !is.na(y$end), ]
-  expect_equal(skip$start, 92)
-  cut <- y[y$mark %in% "step", ]
-  expect_equal(cut$start, 113)
-  expect_identical(cut$dose, "75 mg to 50 mg")
-  # The strip: five cycles and the skip, the late one marked.
-  st <- y[!is.na(y$strip), ]
-  expect_length(st$strip, 6L)
-  expect_match(st$strip[[3]], "^C3\n75 mg\nd 50\n\\+7 d$")
-  expect_identical(st$mark[[3]], "hollow")
-  expect_match(st$strip[[6]], "^skip")
-  # Daily Drug X: its dose cut from the periods, its arrow (ongoing).
+  # Doses on days 1, 22, 50 (7 late), 71, then 92 skipped, 113 cut to 50 mg:
+  # one piece to the skipped cycle, a gap, a thinner piece to a cycle on.
+  expect_equal(y$start, c(1, 113))
+  expect_equal(y$end, c(92, 134))
+  expect_identical(y$mark, c(NA, "thinner"))
+  expect_identical(unique(y$tip), paste0(
+    "Drug Y, 75 mg every 21 days \u00b7 Day 1 to 134, 5 doses, 1 late, ",
+    "1 cycle skipped, cut to 50 mg on day 113"
+  ))
+  # Daily Drug X: thinner from its cut, its arrow (ongoing).
   x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x", ]
-  expect_equal(x$start[x$mark %in% "step"], 51)
+  expect_identical(x$mark, c(NA, "thinner"))
+  expect_equal(x$start[[2]], 51)
   expect_true(any(x$ongoing, na.rm = TRUE))
+  expect_match(x$tip[[1]], "cut to 50 mg on day 51$")
+  # The old styles read as gaps and cuts; plain draws the bar alone.
+  expect_identical(swimmer_frame(swim_adam(), doses = "Exceptions"), f)
+  plain <- swimmer_frame(swim_adam(), doses = "Plain")
+  py <- plain[plain$USUBJID == "p1" & plain$lane %in% "Drug Y", ]
+  expect_equal(c(py$start, py$end), c(1, 134))
+  expect_true(all(is.na(plain$mark)))
 })
 
-test_that("doses: dots ring each administration, plain draws only the bars", {
-  dots <- swimmer_frame(swim_adam(), doses = "Dots")
-  expect_identical(sum(dots$mark %in% "dot"), 5L)
-  plain <- swimmer_frame(swim_adam(), doses = "Plain")
-  drawn <- plain[is.na(plain$strip), ]
-  expect_false(any(drawn$mark %in% c("dot", "step", "hollow", "dashed")))
+test_that("a dose of zero draws a hairline", {
+  a <- swim_adam()
+  a$adex$EXDOSE[2] <- 0
+  x <- swimmer_frame(a)
+  x <- x[x$USUBJID == "p1" & x$lane %in% "Drug x", ]
+  expect_identical(x$mark, c(NA, "hairline"))
+})
+
+test_that("the reason off treatment is a tag where the drug lines stop", {
+  a <- swim_adam()
+  d <- function(x) as.Date("2024-01-01") + x
+  a$adsl$TRTEDT <- d(c(NA, 60, 30))
+  a$adsl$DCTREAS <- c(NA, "ADVERSE EVENT", NA)
+  f <- swimmer_frame(a)
+  tg <- f[!is.na(f$tag), ]
+  expect_identical(tg$USUBJID, "p2")
+  expect_identical(tg$tag, "AE")
+  expect_identical(as.character(tg$event), "Off treatment")
+  expect_identical(as.character(tg$lane), "Drug x")
+  expect_equal(tg$event_day, 61)
+  expect_identical(tg$tip, "Off treatment, day 61 \u00b7 Adverse event")
+  # Off by the setting; a death draws none.
+  expect_false(any(!is.na(swimmer_frame(a, reasons = FALSE)$tag)))
+  a$adsl$DCTREAS <- c(NA, "DEATH", NA)
+  expect_false(any(!is.na(swimmer_frame(a)$tag)))
+  expect_identical(
+    swimmer_reason_tag(c("Adverse Event", "Withdrawal of consent by subject",
+                         "PHYSICIAN DECISION", "Lost to follow-up",
+                         "Progressive disease", "Other", "Death", NA)),
+    c("AE", "WD", "PH", "LF", "PD", "OT", NA, NA)
+  )
 })
 
 test_that("past max_lanes con meds fold into Other, study drugs keep lanes", {
@@ -91,8 +121,9 @@ test_that("past max_lanes con meds fold into Other, study drugs keep lanes", {
   f <- swimmer_frame(a, con_meds = TRUE, max_lanes = 4L)
   expect_setequal(levels(f$lane), c("Drug x", "Drug Y", "Other"))
   expect_identical(levels(f$lane)[[3]], "Other")
-  o <- f[f$lane %in% "Other" & !is.na(f$strip), ]
-  expect_length(o$strip, 3L)
+  o <- f[f$lane %in% "Other", ]
+  expect_identical(sort(o$label), c("Aspirin", "Ibuprofen", "Paracetamol"))
+  expect_match(o$tip[[1]], "^[A-Z][a-z]+ \u00b7 Day 10 to 41$")
   f2 <- swimmer_frame(a, con_meds = TRUE, max_lanes = 6L)
   expect_true("Aspirin" %in% levels(f2$lane))
 })
@@ -107,7 +138,7 @@ test_that("swimmer_frame names what is missing", {
 })
 
 test_that("new_swimmer_block is a groups table with the swimmer script", {
-  blk <- new_swimmer_block(doses = "Dots")
+  blk <- new_swimmer_block(doses = "Plain")
   expect_s3_class(blk, "table_block")
   expect_match(swimmer_script(), "swimmer_frame\\(data, doses = doses")
   expect_error(new_swimmer_block(doses = "nope"))
@@ -142,14 +173,14 @@ test_that("the swimmer is in the menu and saves and restores as itself", {
   expect_identical(blockr.core::block_metadata(blk)$id, "swimmer_block")
 
   # What a board saves: the swimmer's arguments, its script left out.
-  blk <- new_swimmer_block(doses = "Dots", group = "BOR")
+  blk <- new_swimmer_block(doses = "Plain", group = "BOR")
   ser <- blockr.core::blockr_ser(blk)
   expect_identical(ser$constructor$constructor, "new_swimmer_block")
   expect_setequal(names(ser$payload)[names(ser$payload) %in%
                                        names(formals(new_swimmer_block))],
                   setdiff(names(formals(new_swimmer_block)), "..."))
   expect_false("script" %in% names(ser$payload))
-  expect_identical(ser$payload$script_values$doses, "Dots")
+  expect_identical(ser$payload$script_values$doses, "Plain")
   expect_identical(ser$payload$by, c("BOR", "USUBJID"))
   back <- blockr.core::blockr_deser(ser)
   expect_identical(class(back)[1], "swimmer_block")
@@ -265,6 +296,20 @@ test_that("a board saved with weeks restores in days", {
   expect_identical(p$summaries[[2L]]$col, "duration")
   expect_identical(p$summaries[[2L]]$name, "Days")
   expect_identical(p$summaries[[3L]]$event_x, "event_day")
+  # A lane saved with the hover strip and tooltip fields takes today's spec;
+  # the old dose styles read as gaps and cuts.
+  old[[3L]][c("tip", "event_tag", "lane_size")] <- NULL
+  old[[3L]]$strip <- "strip"
+  old[[3L]]$tooltip <- c("days", "dose")
+  old[[3L]]$size <- "lg"
+  blk <- new_swimmer_block(summaries = old,
+                           script_values = list(doses = "Dots"))
+  p <- blockr.core::blockr_ser(blk)$payload
+  lane <- p$summaries[[3L]]
+  expect_null(lane$strip)
+  expect_null(lane$tooltip)
+  expect_identical(c(lane$tip, lane$event_tag, lane$size), c("tip", "tag", "lg"))
+  expect_identical(p$script_values$doses, "Gaps and cuts")
 })
 
 test_that("an end of treatment closes a study drug and ends the time on it", {
@@ -286,7 +331,7 @@ test_that("an end of treatment closes a study drug and ends the time on it", {
   ))
   g <- swimmer_frame(a)
   late <- g[g$USUBJID == "p2" & g$lane %in% "Drug x" & !is.na(g$start) &
-              g$start > 63 & is.na(g$mark) & is.na(g$strip), ]
+              g$start > 63, ]
   expect_equal(late$end, late$start)
   # Without an end of treatment the open drug runs on, as before.
   a$adsl$TRTEDT <- d(c(NA, 60, 30))
@@ -335,8 +380,8 @@ test_that("SDTM-style tables and columns read as their ADaM counterparts", {
     cm = data.frame(USUBJID = "p1", CMDECOD = "ASPIRIN",
                     CMSTDTC = iso(a$adcm$ASTDT), CMENDTC = iso(a$adcm$AENDT))
   )
-  cols <- c("USUBJID", "start", "end", "colour", "lane", "mark", "strip",
-            "label", "event_day", "event", "ongoing", "days", "dose", "ARM",
+  cols <- c("USUBJID", "start", "end", "colour", "lane", "mark",
+            "label", "event_day", "event", "ongoing", "tip", "ARM",
             "BOR", "duration", "status", "reason")
   want <- swimmer_frame(a, con_meds = TRUE, events = NULL)[cols]
   got <- swimmer_frame(sdtm, con_meds = TRUE, parameter = "OVRLRESP",

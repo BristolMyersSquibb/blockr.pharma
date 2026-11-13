@@ -44,7 +44,8 @@
 #' @param sort_by,sort_dir Row order: a listing column or a numeric column of
 #'   the frame (`duration`, days on treatment), and its direction.
 #' @param script_values The swimmer's settings, by name: `doses`
-#'   (`"Exceptions"`, `"Dots"` or `"Plain"`), `drugs`, `cutoff` (a date,
+#'   (`"Gaps and cuts"` or `"Plain"`), `reasons` (the tag for the reason off
+#'   treatment), `drugs`, `cutoff` (a date,
 #'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
 #'   `parameter` (the ADRS PARAMCD).
 #' @param title,subtitle,caption Text above and below the block. The subtitle
@@ -52,12 +53,12 @@
 #' @param drill,drill_target,drill_table A click on a patient filters another
 #'   block; see [blockr.viz::new_table_block()].
 #' @param search,download The search field and the download button.
-#' @param ... The swimmer's settings by name (`doses = "Dots"`, as in
+#' @param ... The swimmer's settings by name (`doses = "Plain"`, as in
 #'   `script_values`) and `group`, the grouping column; arguments for
 #'   [blockr.core::new_block()] (`block_name`).
 #' @return A table block of class `swimmer_block`.
 #' @examplesIf interactive()
-#' new_swimmer_block(doses = "Dots")
+#' new_swimmer_block(doses = "Plain")
 #' @export
 new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               summaries = swimmer_summaries(),
@@ -74,17 +75,17 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               download = TRUE,
                               ...) {
   dots <- list(...)
-  # Boards saved while time was in weeks.
+  # Boards saved while time was in weeks, or with the old dose styles.
   dots$unit <- NULL
   script_values$unit <- NULL
   if (identical(sort_by, "weeks")) sort_by <- "duration"
-  summaries <- swimmer_in_days(summaries)
+  summaries <- swimmer_migrate(summaries)
   own <- intersect(names(dots), SWIMMER_SETTINGS)
-  if (length(own)) {
-    if ("doses" %in% own) {
-      dots$doses <- match.arg(dots$doses, c("Exceptions", "Dots", "Plain"))
-    }
-    script_values[own] <- dots[own]
+  if (length(own)) script_values[own] <- dots[own]
+  if (!is.null(script_values$doses)) {
+    d <- as.character(script_values$doses)
+    if (d %in% c("Exceptions", "Dots")) d <- "Gaps and cuts"
+    script_values$doses <- match.arg(d, c("Gaps and cuts", "Plain"))
   }
   if (!is.null(dots$group)) by <- c(dots$group, "USUBJID")
   dots[c(own, "group", "ctor", "ctor_pkg", "class", "gear", "max_lanes")] <- NULL
@@ -116,16 +117,23 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
 
 # The swimmer's own settings: its prepare script's values.
 SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
-                      "events", "parameter")
+                      "events", "reasons", "parameter")
 
-# A board saved while time was in weeks names the frame's old columns: the
-# lane's events at `event_wk`, a listing column of `weeks`.
-swimmer_in_days <- function(summaries) {
+# A saved board names the frame's old columns: a listing column of `weeks`,
+# the lane's events at `event_wk`, its hover strip and tooltip fields. The
+# lane takes today's spec, keeping its width.
+swimmer_migrate <- function(summaries) {
   lapply(summaries, function(s) {
-    if (identical(s$event_x, "event_wk")) s$event_x <- "event_day"
     if (identical(s$col, "weeks")) {
       s$col <- "duration"
       if (identical(s$name, "Weeks")) s$name <- "Days"
+    }
+    if (identical(s$type, "spans") && identical(s$x, "start")) {
+      size <- s$size
+      s <- utils::modifyList(s, swimmer_lane())
+      s$strip <- NULL
+      s$tooltip <- NULL
+      if (!is.null(size)) s$size <- size
     }
     s
   })
@@ -150,8 +158,10 @@ swimmer_script <- function(max_lanes = 4L) {
     paste0("parameter <- \"OVR\"  #| text(label = ",
            "\"Overall response (ADRS PARAMCD)\")"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
-    paste0("doses <- factor(\"Exceptions\", levels = c(\"Exceptions\", ",
-           "\"Dots\", \"Plain\"))  #| select(label = \"Doses on the drug lines\")"),
+    paste0("doses <- factor(\"Gaps and cuts\", levels = c(\"Gaps and cuts\", ",
+           "\"Plain\"))  #| select(label = \"Doses on the drug lines\")"),
+    paste0("reasons <- TRUE  #| flag(label = ",
+           "\"Reason off treatment where the drug lines stop\")"),
     "con_meds <- FALSE  #| flag(label = \"Con meds as lanes\")",
     paste0("max_lanes <- ", as.integer(max_lanes), "  #| number(min = 1, ",
            "max = 8, step = 1, label = \"Lanes before \\\"Other\\\"\")"),
@@ -160,7 +170,7 @@ swimmer_script <- function(max_lanes = 4L) {
            ")  #| select(label = \"Events\")"),
     paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
            "cutoff = cutoff, con_meds = con_meds, max_lanes = max_lanes, ",
-           "events = events, parameter = parameter)"),
+           "events = events, reasons = reasons, parameter = parameter)"),
     sep = "\n"
   )
 }
@@ -216,7 +226,8 @@ swimmer_gear <- function() {
       Data = list(Tables = "mapping", Time = "cutoff"),
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
-        `Drug lines` = c("drugs", "doses", "con_meds", "max_lanes"),
+        `Drug lines` = c("drugs", "doses", "reasons", "con_meds",
+                         "max_lanes"),
         `Response bar` = "events",
         Swimlane = "lane_width"
       ),
@@ -261,9 +272,9 @@ swimmer_summaries <- function() {
 swimmer_lane <- function() {
   list(type = "spans", name = "Study time", x = "start",
        xend = "end", color = "colour", label = "label",
-       tooltip = c("days", "dose"), size = "xl",
-       event_x = "event_day", event_shape = "event", open = "ongoing",
-       lane = "lane", seg_style = "mark", strip = "strip")
+       size = "xl", lane_size = "md", tip = "tip",
+       event_x = "event_day", event_shape = "event", event_tag = "tag",
+       open = "ongoing", lane = "lane", seg_style = "mark")
 }
 
 # What the swimmer reads, per role: the table and its columns, each a set of
