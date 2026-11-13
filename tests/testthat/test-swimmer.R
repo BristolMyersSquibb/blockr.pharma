@@ -543,3 +543,21 @@ test_that("odd inputs: response patients not in ADSL, NA codes and reasons", {
   expect_s3_class(swimmer_frame(both), "data.frame")
   expect_identical(swimmer_mapping(both)$roles[[1L]]$table, "ADSL")
 })
+
+test_that("the third response parameter, picked, with ADRS unfiltered", {
+  d <- function(x) as.Date("2024-01-01") + x
+  pc <- c("BOR", "OVRRESP", "OVRLRESP")
+  a <- list(
+    adsl = data.frame(USUBJID = c("p1", "p2"), ARM = "A", TRTSDT = d(0),
+                      DTHDT = d(NA), LSTALVDT = d(100)),
+    adex = data.frame(USUBJID = c("p1", "p2"), PARAMCD = "DOSE", EXTRT = "X",
+                      ASTDT = d(0), AENDT = d(50), EXDOSE = 1, EXDOSU = "mg"),
+    adrs = data.frame(USUBJID = c(rep(c("p1", "p2"), 3), "p9"),
+                      PARAMCD = c(rep(pc, each = 2), "OVRLRESP"),
+                      ADT = d(c(30, 30, 22, 22, 20, 20, 25)),
+                      AVALC = c("PR", "SD", "PR", "PD", "PR", "SD", "CR"))
+  )
+  f <- swimmer_frame(a, parameter = factor("OVRLRESP", levels = pc))
+  expect_setequal(unique(f$USUBJID), c("p1", "p2"))
+  expect_identical(unique(f$BOR[f$USUBJID == "p1"]), "PR")
+})
