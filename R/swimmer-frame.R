@@ -60,14 +60,17 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
   doses <- as.character(doses)
   if (doses %in% c("Exceptions", "Dots")) doses <- "Gaps and cuts"
   doses <- match.arg(doses, c("Gaps and cuts", "Plain"))
-  if (!length(parameter) || is.na(parameter[[1L]]) || !nzchar(parameter[[1L]])) {
-    parameter <- "OVR"
-  }
+  # One or more response parameters: the first is the main bar.
+  parameter <- as.character(parameter)
+  parameter <- unique(parameter[!is.na(parameter) & nzchar(parameter)])
+  if (!length(parameter)) parameter <- "OVR"
+  more <- parameter[-1L]
   max_lanes <- max(1L, as.integer(max_lanes %||% 4L))
   if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- NULL
   tb <- swimmer_tables(data)
   sl <- swimmer_subjects(tb$adsl)
-  rs <- swimmer_response(tb$adrs, parameter)
+  rs <- swimmer_response(tb$adrs, parameter[[1L]])
+  ra <- lapply(more, function(p) swimmer_response(tb$adrs, p))
   # Without a cutoff set, the study's own data cutoff when ADSL has one.
   if (is.null(cutoff) && any(!is.na(sl$DCUTDT))) {
     cutoff <- max(sl$DCUTDT, na.rm = TRUE)
@@ -75,13 +78,14 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
   if (!is.null(cutoff)) {
     cutoff <- as.Date(cutoff)
     rs <- rs[rs$ADT <= cutoff, , drop = FALSE]
+    ra <- lapply(ra, function(r) r[r$ADT <= cutoff, , drop = FALSE])
     sl$DTHDT[!is.na(sl$DTHDT) & sl$DTHDT > cutoff] <- NA
   }
   # The response population: subjects with an assessment.
   sl <- sl[sl$USUBJID %in% rs$USUBJID, , drop = FALSE]
   if (!nrow(sl)) {
-    stop("No subject has an overall response (ADRS PARAMCD \"", parameter,
-         "\").", call. = FALSE)
+    stop("No subject has an overall response (ADRS PARAMCD \"",
+         parameter[[1L]], "\").", call. = FALSE)
   }
   ex <- swimmer_exposure(tb$adex, sl, role = "study")
   if (!is.null(drugs)) {
@@ -106,11 +110,20 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
   ex <- swimmer_fold(ex, max_lanes, t0)
 
   drug <- swimmer_drug_rows(ex, t0, doses, cutoff)
-  parts <- list(
-    swimmer_resp_rows(rs, fu, t0),
-    drug,
-    swimmer_event_rows(rs, sl, tb$adae, t0),
-    if (isTRUE(reasons)) swimmer_reason_rows(drug, sl, ex)
+  # With several parameters each is a full bar named by its PARAMCD, the
+  # first the main one, each with its own progression.
+  lane <- if (length(more)) parameter[[1L]] else NA_character_
+  resp <- lapply(seq_along(more), function(k) {
+    r <- ra[[k]][ra[[k]]$USUBJID %in% sl$USUBJID, , drop = FALSE]
+    if (!nrow(r)) return(NULL)
+    list(swimmer_resp_rows(r, fu, t0, more[[k]]),
+         swimmer_pd_rows(r, t0, more[[k]]))
+  })
+  parts <- c(
+    list(swimmer_resp_rows(rs, fu, t0, lane), drug,
+         swimmer_event_rows(rs, sl, tb$adae, t0, lane)),
+    unlist(resp, recursive = FALSE),
+    list(if (isTRUE(reasons)) swimmer_reason_rows(drug, sl, ex))
   )
   out <- list2DF(swimmer_bind(parts))
   if (!is.null(events)) {
@@ -118,7 +131,73 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
     out <- out[is.na(out$event) | !is.na(out$tag) |
                  out$event %in% as.character(events), , drop = FALSE]
   }
-  swimmer_finish(out, sl, rs, ex, fu, cutoff, tb$adsl)
+  out <- swimmer_finish(out, sl, rs, ex, fu, cutoff, tb$adsl, parameter)
+  swimmer_bor_more(out, ra, more)
+}
+
+#' The response parameters in a swimmer's input
+#'
+#' The ADRS parameters whose values are overall responses (CR, PR, SD, PD,
+#' NE and their iRECIST forms), the choices for the swimmer's response bars.
+#' The usual investigator parameter comes first.
+#'
+#' @param data The swimmer's input dm.
+#' @return A character vector of PARAMCDs, `"OVR"` when none is found.
+#' @export
+swimmer_parameters <- function(data) {
+  tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
+  pc <- if (!is.null(tb)) swimmer_col(tb$adrs, "PARAMCD")
+  if (is.null(pc)) return("OVR")
+  v <- swimmer_resp_value(tb$adrs$AVALC)
+  ok <- tapply(v, as.character(pc), function(x) {
+    mean(x %in% c(names(SWIMMER_RESPONSE), "NOT EVALUABLE")) > 0.8
+  })
+  out <- names(ok)[ok %in% TRUE]
+  first <- intersect(c("OVR", "OVRINV", "OVRLRESP"), out)
+  out <- c(first, sort(setdiff(out, first)))
+  if (length(out)) out else "OVR"
+}
+
+# A response read as the swimmer draws it: upper case, iRECIST's `i` kept.
+swimmer_resp_value <- function(x) {
+  x <- toupper(as.character(x))
+  i <- grepl("^I(CR|PR|SD|UPD|CPD)$", x)
+  x[i] <- paste0("i", substring(x[i], 2L))
+  x
+}
+
+# Per patient `ids`, the best read of `rs` in SWIMMER_BOR order, iRECIST's
+# forms ranked as their RECIST ones (iUPD and iCPD as PD).
+swimmer_bor_of <- function(rs, ids) {
+  base <- sub("^i(UPD|CPD)$", "PD", sub("^i(CR|PR|SD)$", "\\1", rs$AVALC))
+  rank <- match(base, SWIMMER_BOR)
+  ok <- !is.na(rank)
+  g <- match(rs$USUBJID[ok], ids)
+  o <- order(g, rank[ok], method = "radix")
+  first <- o[!duplicated(g[o])]
+  out <- rep(NA_character_, length(ids))
+  out[g[first]] <- rs$AVALC[ok][first]
+  out
+}
+
+# The best response of the second and third parameter, as listing columns
+# labelled by their PARAMCD ("BOR OVRBICR"); empty when not drawn.
+swimmer_bor_more <- function(out, ra, more) {
+  ids <- unique(out$USUBJID)
+  for (k in 2:3) {
+    nm <- paste0("BOR_", k)
+    v <- rep(NA_character_, nrow(out))
+    if (k - 1L <= length(ra)) {
+      v <- swimmer_bor_of(ra[[k - 1L]], ids)[match(out$USUBJID, ids)]
+    }
+    out[[nm]] <- v
+    attr(out[[nm]], "label") <- if (k - 1L <= length(more)) {
+      paste("BOR", more[[k - 1L]])
+    } else {
+      paste0("BOR (response ", k, ")")
+    }
+  }
+  out
 }
 
 # --- inputs ----------------------------------------------------------------
@@ -200,7 +279,7 @@ swimmer_response <- function(adrs, parameter) {
   out <- data.frame(
     USUBJID = as.character(r$USUBJID),
     ADT = swimmer_date(swimmer_col(r, c("ADT", "ADTM"))),
-    AVALC = toupper(as.character(r$AVALC)),
+    AVALC = swimmer_resp_value(r$AVALC),
     stringsAsFactors = FALSE
   )
   out <- out[!is.na(out$ADT) & !is.na(out$AVALC) &
@@ -431,7 +510,7 @@ SWIMMER_NA_ROW <- list(
   start = NA_real_, end = NA_real_, colour = NA_character_,
   lane = NA_character_, mark = NA_character_, label = NA_character_,
   event_day = NA_real_, event = NA_character_, tag = NA_character_,
-  ongoing = NA, tip = NA_character_
+  ongoing = NA, tip = NA_character_, full = NA
 )
 
 # Records as a list of columns, every column present. swimmer_bind() joins
@@ -478,8 +557,11 @@ swimmer_day_txt <- function(x, open = FALSE) {
 
 # A run of the same response, from its first assessment to the next
 # different read; before the first, "Not assessed"; the last runs to the end
-# of follow-up. `rs` is sorted by patient and date.
-swimmer_resp_rows <- function(rs, fu, t0) {
+# of follow-up. `rs` is sorted by patient and date. `lane`: the parameter of
+# a full bar (NA: the one response lane), named in the tooltips.
+swimmer_resp_rows <- function(rs, fu, t0, lane = NA_character_) {
+  full <- if (is.na(lane)) NA else TRUE
+  who <- if (is.na(lane)) "" else paste0(" (", lane, ")")
   m <- nrow(rs)
   if (!m) return(NULL)
   id <- rs$USUBJID
@@ -499,13 +581,14 @@ swimmer_resp_rows <- function(rs, fu, t0) {
   pre <- which(first & adt > tt)
   pe <- swimmer_x(adt[pre], tt[pre])
   sets <- list(
-    swimmer_rows(id[pre], start = 1, end = pe,
+    swimmer_rows(id[pre], start = 1, end = pe, lane = lane, full = full,
                  colour = "Not assessed", label = "Not assessed",
-                 tip = paste0("Not assessed \u00b7 Day 1 to ",
+                 tip = paste0("Not assessed", who, " \u00b7 Day 1 to ",
                               ifelse(pe >= 1, pe, pe - 1))),
-    swimmer_rows(id[rf], start = st, end = en,
+    swimmer_rows(id[rf], start = st, end = en, lane = lane, full = full,
                  colour = rs$AVALC[rf], label = rs$AVALC[rf],
-                 tip = paste0(rs$AVALC[rf], " \u00b7 ", swimmer_day_txt(st),
+                 tip = paste0(rs$AVALC[rf], who, " \u00b7 ",
+                              swimmer_day_txt(st),
                               " to ", ifelse(en >= 1, en, en - 1),
                               ifelse(en > st, paste0(", ", round(en - st),
                                                      " days"), "")))
@@ -513,17 +596,27 @@ swimmer_resp_rows <- function(rs, fu, t0) {
   swimmer_bind_in(sets, list(pat[pre], pat[rf]), list(1L, 2L))
 }
 
-# First progression and death on the response lane; serious AEs when ADAE
-# is there.
-swimmer_event_rows <- function(rs, sl, adae, t0) {
-  pd <- rs[rs$AVALC == "PD", , drop = FALSE]
+# The first progression of one parameter (PD, or iRECIST's iUPD or iCPD),
+# on its bar: `lane` its PARAMCD, NA on the one response lane.
+swimmer_pd_rows <- function(rs, t0, lane = NA_character_) {
+  pd <- rs[rs$AVALC %in% c("PD", "iUPD", "iCPD"), , drop = FALSE]
   pd <- pd[!duplicated(pd$USUBJID), , drop = FALSE]
+  x <- swimmer_x(pd$ADT, t0[pd$USUBJID])
+  who <- if (is.na(lane)) "" else paste0(" (", lane, ")")
+  swimmer_rows(pd$USUBJID, event_day = x, event = "Progression", lane = lane,
+               tip = paste0("Progression", who, " \u00b7 ",
+                            swimmer_day_txt(x)))
+}
+
+# First progression and death on the response lane; serious AEs when ADAE
+# is there. `lane`: the main bar's parameter with several, else NA.
+swimmer_event_rows <- function(rs, sl, adae, t0, lane = NA_character_) {
   ev <- function(ids, d, what) {
     x <- swimmer_x(d, t0[ids])
     swimmer_rows(ids, event_day = x, event = what,
                  tip = paste0(what, " \u00b7 ", swimmer_day_txt(x)))
   }
-  out <- list(ev(pd$USUBJID, pd$ADT, "Progression"))
+  out <- list(swimmer_pd_rows(rs, t0, lane))
   if (!is.null(adae) && "AESER" %in% names(adae)) {
     ae <- adae[adae$AESER %in% "Y" & as.character(adae$USUBJID) %in% sl$USUBJID,
                , drop = FALSE]
@@ -807,7 +900,8 @@ swimmer_reason_tag <- function(x) {
 SWIMMER_RESPONSE <- c("Not assessed" = "#e4e7ec", CR = "#1d7a55",
                       PR = "#74bf95", SD = "#dcbd66",
                       "NON-CR/NON-PD" = "#ece2c6", PD = "#e3958c",
-                      NE = "#c9ced6")
+                      NE = "#c9ced6", iCR = "#1d7a55", iPR = "#74bf95",
+                      iSD = "#dcbd66", iUPD = "#efbcb5", iCPD = "#e3958c")
 SWIMMER_DRUGS <- c("#3f63a6", "#2a9686", "#a8649a", "#c08a3e", "#7d8b4a",
                    "#5f8fa8", "#b0707a", "#8a7bb0")
 SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
@@ -816,13 +910,12 @@ SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 # the labels the tooltips print.
 SWIMMER_EVENTS <- c("Progression", "Serious AE", "Death")
 
-swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
+swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL,
+                           parameter = NULL) {
   ids <- sl$USUBJID
   n <- length(ids)
-  # Best response: the best read in SWIMMER_BOR order.
-  rank <- match(rs$AVALC, SWIMMER_BOR)
-  best <- -swimmer_grp_max(match(rs$USUBJID, ids), -rank, n)
-  bor <- SWIMMER_BOR[best]
+  # Best response: the best read of the main parameter.
+  bor <- swimmer_bor_of(rs, ids)
   study <- ex[ex$role == "study", , drop = FALSE]
   at <- match(study$USUBJID, ids)
   has <- tabulate(at, n) > 0L
@@ -868,7 +961,10 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   lv <- lv[lv %in% out$colour]
   out$colour <- factor(out$colour, levels = lv)
   attr(out$colour, "blockr_colors") <- cols[lv]
-  out$lane <- factor(out$lane, levels = drugs)
+  # Drug lanes, then with several parameters their full bars in bar order.
+  bars <- if (length(parameter) > 1L) parameter else character()
+  out$lane <- factor(out$lane, levels = unique(c(drugs, bars)))
+  out$full <- out$full %in% TRUE
   # The discontinuation reasons after the events, the most frequent first.
   why <- as.character(out$event[!is.na(out$tag)])
   lv <- sort(unique(why))
@@ -877,6 +973,7 @@ swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL) {
   labels <- c(start = "Start, study day", end = "End, study day",
               colour = "Response / drug",
               lane = "Drug", mark = "Dose style", label = "Label",
+              full = "Response bar",
               tag = "Discontinuation reason", tip = "Tooltip",
               event_day = "Study day", event = "Event", ongoing = "Ongoing",
               BOR = "Best response",

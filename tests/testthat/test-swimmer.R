@@ -229,8 +229,8 @@ test_that("the swimmer's settings go to its script values; its gear is its own",
                    c("BOR", "Study time"))
   # Days on treatment is offered, off; the rows sort by it. The lane is as
   # wide as the listing leaves it.
-  expect_false(g$columns[[4L]]$on)
-  expect_identical(g$columns[[4L]]$name, "Days")
+  days <- Filter(function(x) identical(x$name, "Days"), g$columns)[[1L]]
+  expect_false(days$on)
   expect_identical(formals(new_swimmer_block)$sort_by, "duration")
   lane <- swimmer_summaries()[[2L]]
   expect_identical(lane$size, "xl")
@@ -451,4 +451,36 @@ test_that("a board restores the swimmer with its settings", {
   expect_identical(rt$restored$sort_by, "duration")
   expect_identical(as.character(rt$restored$script_values$doses),
                    "Gaps and cuts")
+})
+
+test_that("several response parameters draw a full bar each, the first the main one", {
+  a <- swim_adam()
+  d <- function(x) as.Date("2024-01-01") + x
+  a$adrs <- rbind(a$adrs, data.frame(
+    USUBJID = c("p1", "p1", "p2"), PARAMCD = "OVRBICR",
+    ADT = d(c(42, 84, 42)), AVALC = c("SD", "SD", "PD")
+  ))
+  expect_identical(swimmer_parameters(a), c("OVR", "OVRBICR"))
+  one <- swimmer_frame(a)
+  expect_false(any(one$full))
+  expect_true(all(is.na(one$BOR_2)))
+  f <- swimmer_frame(a, parameter = c("OVR", "OVRBICR"))
+  # Both parameters are full bars, the main one first after the drug lanes.
+  bars <- f[f$full, ]
+  expect_setequal(unique(as.character(bars$lane)), c("OVR", "OVRBICR"))
+  expect_identical(tail(levels(f$lane), 2L), c("OVR", "OVRBICR"))
+  b <- bars[bars$USUBJID == "p1" & bars$lane %in% "OVRBICR", ]
+  expect_identical(as.character(b$colour), c("Not assessed", "SD"))
+  expect_match(b$tip[[2]], "^SD \\(OVRBICR\\) · Day 43")
+  # Its own progression on its bar; the main BOR stays the first's.
+  pd <- f[f$event %in% "Progression" & f$USUBJID == "p2", ]
+  expect_setequal(as.character(pd$lane), c("OVR", "OVRBICR"))
+  expect_identical(unique(f$BOR[f$USUBJID == "p1"]), "PR")
+  expect_identical(unique(f$BOR_2[f$USUBJID == "p1"]), "SD")
+  expect_identical(attr(f$BOR_2, "label"), "BOR OVRBICR")
+  # iRECIST reads keep their i and rank as their RECIST forms.
+  expect_identical(swimmer_resp_value(c("ICR", "iupd", "PR")),
+                   c("iCR", "iUPD", "PR"))
+  # The gear offers them as a multi-select in the script.
+  expect_match(swimmer_script(), "multiple = TRUE", fixed = TRUE)
 })

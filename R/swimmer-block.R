@@ -29,7 +29,7 @@
 #' block computes study time, drugs ongoing to the cutoff, response periods
 #' and the best overall response ([swimmer_frame()]).
 #'
-#' Its gear has the tabs Data (the tables found, the response parameter, the
+#' Its gear has the tabs Data (the tables found, the response parameters, the
 #' cutoff), Patients (grouping, sort, listing columns), Lanes (drugs, doses,
 #' con meds, events, lane width), Titles and Interaction. A setting ticked "In
 #' the subtitle" (Titles) becomes a word readers click.
@@ -47,7 +47,8 @@
 #'   (`"Gaps and cuts"` or `"Plain"`), `reasons` (the tag for the reason off
 #'   treatment), `drugs`, `cutoff` (a date,
 #'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
-#'   `parameter` (the ADRS PARAMCD).
+#'   `parameter` (the ADRS PARAMCDs of the response bars, the first the main
+#'   one; with more than one, each is a full bar named by its code).
 #' @param title,subtitle,caption Text above and below the block. The subtitle
 #'   is a template whose `{@name}` words readers click.
 #' @param drill,drill_target,drill_table A click on a patient filters another
@@ -144,7 +145,7 @@ swimmer_migrate <- function(summaries) {
 #' Declares the swimmer's settings, which its gear shows as rows: the doses
 #' style, the drugs to draw (choices from the input's ADEX), the cutoff
 #' (automatic until a date is set), con meds, the lanes before "Other", the
-#' events (serious AEs off) and the ADRS parameter. Then it calls
+#' events (serious AEs off) and the ADRS response parameters. Then it calls
 #' [swimmer_frame()] on the input dm.
 #'
 #' @param max_lanes Lanes before drugs fold into "Other", by default.
@@ -155,8 +156,9 @@ swimmer_script <- function(max_lanes = 4L) {
     "lv <- blockr.pharma::swimmer_drugs(data)",
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
-    paste0("parameter <- \"OVR\"  #| text(label = ",
-           "\"Overall response (ADRS PARAMCD)\")"),
+    "pv <- blockr.pharma::swimmer_parameters(data)",
+    paste0("parameter <- factor(pv[1], levels = pv)  #| select(label = ",
+           "\"Response (ADRS PARAMCD)\", multiple = TRUE)"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
     paste0("doses <- factor(\"Gaps and cuts\", levels = c(\"Gaps and cuts\", ",
            "\"Plain\"))  #| select(label = \"Doses on the drug lines\")"),
@@ -223,7 +225,8 @@ swimmer_clauses <- function() {
 swimmer_gear <- function() {
   blockr.viz::table_gear(
     tabs = list(
-      Data = list(Tables = "mapping", Time = "cutoff"),
+      Data = list(Tables = "mapping", Response = "parameter",
+                  Time = "cutoff"),
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
         `Drug lines` = c("drugs", "doses", "reasons", "con_meds",
@@ -254,6 +257,9 @@ swimmer_columns <- function() {
     Status = list(type = "field", col = "status", on = FALSE),
     `Discontinuation reason` = list(type = "field", col = "reason",
                                     on = FALSE),
+    # The best response of a second and third response parameter.
+    `BOR 2` = list(type = "field", col = "BOR_2", on = FALSE),
+    `BOR 3` = list(type = "field", col = "BOR_3", on = FALSE),
     Days = list(type = "simple", func = "max", col = "duration",
                 show = "number", on = FALSE),
     Age = list(type = "field", col = "AGE", on = FALSE),
@@ -275,7 +281,7 @@ swimmer_lane <- function() {
        xend = "end", color = "colour", label = "label",
        size = "xl", lane_size = "md", tip = "tip",
        event_x = "event_day", event_shape = "event", event_tag = "tag",
-       open = "ongoing", lane = "lane", seg_style = "mark")
+       open = "ongoing", lane = "lane", lane_full = "full", seg_style = "mark")
 }
 
 # What the swimmer reads, per role: the table and its columns, each a set of

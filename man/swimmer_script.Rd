@@ -16,6 +16,6 @@ The script, one string.
 Declares the swimmer's settings, which its gear shows as rows: the doses
 style, the drugs to draw (choices from the input's ADEX), the cutoff
 (automatic until a date is set), con meds, the lanes before "Other", the
-events (serious AEs off) and the ADRS parameter. Then it calls
+events (serious AEs off) and the ADRS response parameters. Then it calls
 \code{\link[=swimmer_frame]{swimmer_frame()}} on the input dm.
 }

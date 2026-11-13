@@ -2,8 +2,9 @@
 // blockr.viz gear editors (core/gear/profile.js):
 //   mapping     the Tables row: what the block found in its input (R's
 //               swimmer_mapping() or timeline_mapping(), sent as
-//               derived.gear.info), and, when the info has `parameters`, the
-//               ADRS parameter, which writes the prepare script's `parameter`
+//               derived.gear.info); with `parameters` it says when the
+//               picked response parameter is not in ADRS (the pick itself is
+//               the prepare script's `parameter` row)
 //   lane_width  the swimlane's Width
 //   open_rows   whether the patient rows start closed or open (the table's
 //               `open`)
@@ -34,9 +35,6 @@
     '.pharma-map th{font-weight:500;color:var(--blockr-color-text-muted,#6b7280)}',
     '.pharma-map .is-ok{color:#047857}.pharma-map .is-bad{color:#b45309;font-weight:600}',
     '.pharma-map .is-off{color:var(--blockr-color-text-muted,#9ca3af)}',
-    '.pharma-map-param{margin-top:12px;display:flex;flex-direction:column;gap:4px}',
-    '.pharma-map-param-label{font-size:13px;color:var(--blockr-color-text-muted,#6b7280)}',
-    '.pharma-map-param-select{max-width:320px}',
     '.pharma-map-note{font-size:12px;color:var(--blockr-color-text-muted,#6b7280);margin-top:6px}'
   ].join('');
 
@@ -71,7 +69,7 @@
         ? r.table + ' has no ' + r.missing.join(', ') + '.'
         : 'No ' + r.table + ' in the input.').join(' ');
     } else if (noParam) {
-      msg = 'ADRS has no PARAMCD "' + param + '". Pick the overall response parameter.';
+      msg = 'ADRS has no PARAMCD "' + param + '". Pick a response parameter below.';
     } else if (err) {
       msg = err;
     }
@@ -95,29 +93,7 @@
       el('td', ok ? 'is-ok' : off ? 'is-off' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : off ? '' : '!');
     }
 
-    if (hasParams) drawParam(host, ctx, params, param);
     if (info.note) el('div', 'pharma-map-note', host, info.note);
-  }
-
-  /** The ADRS parameter of the overall response (the swimmer's), in the
-   * blockr.ui select the rest of the gear uses. */
-  function drawParam(host, ctx, params, param) {
-    const label = 'Overall response (ADRS PARAMCD)';
-    const pick = el('div', 'pharma-map-param', host);
-    el('div', 'pharma-map-param-label', pick, label);
-    const box = el('div', 'pharma-map-param-select', pick);
-    const opts = params.length ? params.slice() : [param];
-    if (!opts.includes(param)) opts.unshift(param);
-    const inst = B.Select.single(box, {
-      options: opts, selected: param, bordered: true, label,
-      onChange: (v) => {
-        if (!v || v === param) return;
-        const held = Object.assign({}, ctx.values.script_values || {});
-        held.parameter = v;
-        ctx.setValues({ script_values: held });
-      }
-    });
-    if (ctx.scope && ctx.scope.own) ctx.scope.own({ dispose: () => inst.destroy() });
   }
 
   B.viz.gear.editors.mapping = { label: 'Found in the input', draw };

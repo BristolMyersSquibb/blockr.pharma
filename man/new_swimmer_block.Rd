@@ -35,7 +35,8 @@ the frame (\code{duration}, days on treatment), and its direction.}
 (\code{"Gaps and cuts"} or \code{"Plain"}), \code{reasons} (the tag for the reason off
 treatment), \code{drugs}, \code{cutoff} (a date,
 \code{NA} for the last date in the data), \code{con_meds}, \code{max_lanes}, \code{events},
-\code{parameter} (the ADRS PARAMCD).}
+\code{parameter} (the ADRS PARAMCDs of the response bars, the first the main
+one; with more than one, each is a full bar named by its code).}
 
 \item{title, subtitle, caption}{Text above and below the block. The subtitle
 is a template whose \verb{\{@name\}} words readers click.}
@@ -68,7 +69,7 @@ response per visit, \code{PARAMCD == "OVR"}) and, optional, ADAE and ADCM. The
 block computes study time, drugs ongoing to the cutoff, response periods
 and the best overall response (\code{\link[=swimmer_frame]{swimmer_frame()}}).
 
-Its gear has the tabs Data (the tables found, the response parameter, the
+Its gear has the tabs Data (the tables found, the response parameters, the
 cutoff), Patients (grouping, sort, listing columns), Lanes (drugs, doses,
 con meds, events, lane width), Titles and Interaction. A setting ticked "In
 the subtitle" (Titles) becomes a word readers click.
