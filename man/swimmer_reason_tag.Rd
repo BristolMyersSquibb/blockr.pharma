@@ -13,11 +13,5 @@ swimmer_reason_tag(x)
 A character vector of tags, \code{NA} for none.
 }
 \description{
-The tag the swimmer draws where a patient's drug lines stop, by the words
-of the reason, so any study's wording finds its tag: "AE" adverse event,
-"PD" progression, "WD" withdrawal or consent, "PH" physician or
-investigator decision, "LF" lost to follow-up, "DV" protocol deviation,
-"LE" lack of efficacy, "NC" non-compliance, "ST" study terminated, "PG"
-pregnancy, "OT" anything else. A death gets none (the death mark is
-there), nor a missing reason.
+The tag of a reason's category (\code{\link[=swimmer_reason_category]{swimmer_reason_category()}}).
 }

@@ -113,6 +113,15 @@ test_that("the discontinuation reason is a tag where the drug lines stop", {
   expect_identical(as.character(tg$lane), "Drug x")
   expect_equal(tg$event_day, 61)
   expect_identical(tg$tip, "Discontinued, day 61 \u00b7 Adverse event")
+  # A reason worded otherwise names its category, then itself.
+  a2 <- a
+  a2$adsl$DCTREAS <- c(NA, "Partial withdrawal of consent", NA)
+  t2 <- swimmer_frame(a2)
+  t2 <- t2[!is.na(t2$tag), ]
+  expect_identical(c(t2$tag, as.character(t2$event)),
+                   c("WD", "Withdrawal by subject"))
+  expect_identical(t2$tip, paste("Discontinued, day 61 \u00b7 Withdrawal by",
+                                 "subject \u00b7 Partial withdrawal of consent"))
   # No event: the events setting leaves it.
   expect_identical(swimmer_frame(a, events = "Death")$tag[!is.na(
     swimmer_frame(a, events = "Death")$tag)], "AE")
@@ -124,8 +133,27 @@ test_that("the discontinuation reason is a tag where the drug lines stop", {
     swimmer_reason_tag(c("Adverse Event", "Withdrawal of consent by subject",
                          "PHYSICIAN DECISION", "Lost to follow-up",
                          "Progressive disease", "Other", "Death", NA)),
-    c("AE", "WD", "PH", "LF", "PD", "OT", NA, NA)
+    c("AE", "WD", "ID", "LF", "PD", "OT", NA, NA)
   )
+  # The six reasons of a real study: the three withdrawals share one
+  # category, the combined reason is the investigator's decision.
+  cat <- swimmer_reason_category(c(
+    "Progressive disease",
+    "Withdrawal of consent by subject from study",
+    "Adverse event",
+    "Full withdrawal of consent by subject from study",
+    "Partial withdrawal of consent by subject (continue to provide survival status)",
+    "The investigator's decision and the patient's preference",
+    "Moved to another country"
+  ))
+  expect_identical(cat$tag, c("PD", "WD", "AE", "WD", "WD", "ID", "OT"))
+  expect_identical(cat$name[[2]], "Withdrawal by subject")
+  expect_identical(cat$name[[7]], "Other")
+  # A study may pass its own categories.
+  own <- swimmer_reason_categories()
+  own$tag[own$tag == "WD"] <- "WC"
+  expect_identical(swimmer_reason_category("Withdrawal by subject", own)$tag,
+                   "WC")
 })
 
 test_that("past max_lanes con meds fold into Other, study drugs keep lanes", {

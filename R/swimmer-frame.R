@@ -839,9 +839,9 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
 }
 
 # The discontinuation reason as a tag where the patient's drug lines stop,
-# one event level per reason (the legend lists them with their tags):
-# at the end of the study drug piece that ends last, on its lane. A death
-# needs none: the death mark is there. `drug`: swimmer_drug_rows().
+# one event level per category (swimmer_reason_category()), which the legend
+# lists with its tag; the tooltip says the category and the exact reason.
+# A death needs none: the death mark is there. `drug`: swimmer_drug_rows().
 swimmer_reason_rows <- function(drug, sl, ex) {
   if (is.null(drug)) return(NULL)
   ids <- sl$USUBJID
@@ -849,8 +849,8 @@ swimmer_reason_rows <- function(drug, sl, ex) {
   on <- tabulate(match(ex$USUBJID[study & ex$on], ids), length(ids)) > 0L
   why <- sl$reason
   why[on] <- NA_character_
-  tag <- swimmer_reason_tag(why)
-  keep <- !is.na(tag)
+  cat <- swimmer_reason_category(why)
+  keep <- !is.na(cat$tag)
   if (!any(keep)) return(NULL)
   lanes <- unique(as.character(ex$lane[study]))
   r <- which(drug$lane %in% lanes & !is.na(drug$end) &
@@ -860,40 +860,78 @@ swimmer_reason_rows <- function(drug, sl, ex) {
   r <- r[!duplicated(drug$USUBJID[r])]
   at <- match(drug$USUBJID[r], ids)
   x <- drug$end[r]
+  # The exact reason after the category, unless it says no more.
+  raw <- why[at]
+  same <- tolower(raw) == tolower(cat$name[at])
   swimmer_rows(
-    drug$USUBJID[r], event_day = x, event = why[at],
-    lane = drug$lane[r], tag = tag[at],
-    tip = paste0("Discontinued, ", tolower(swimmer_day_txt(x)), " · ",
-                 why[at])
+    drug$USUBJID[r], event_day = x, event = cat$name[at],
+    lane = drug$lane[r], tag = cat$tag[at],
+    tip = paste0("Discontinued, ", tolower(swimmer_day_txt(x)), " \u00b7 ",
+                 cat$name[at], ifelse(same, "", paste0(" \u00b7 ", raw)))
   )
+}
+
+#' Categories of discontinuation reasons
+#'
+#' The standard categories the swimmer sorts a study's discontinuation
+#' reasons into, after the CDISC completion terms: a reason belongs to the
+#' first category whose pattern its words match (case ignored), so the
+#' three wordings of a withdrawal share one tag. A death has none (the death
+#' mark is there); a reason no pattern matches is "Other".
+#'
+#' @return A data frame: `pattern` (a regular expression), `tag` (two
+#'   letters) and `name` (the legend's words), in matching order.
+#' @export
+swimmer_reason_categories <- function() {
+  data.frame(
+    pattern = c("adverse", "progress|relapse|recurren|deteriorat",
+                "withdr|consent", "physician|investigator", "lost to",
+                "deviation|violation", "efficacy", "sponsor|terminat",
+                "complian", "pregnan"),
+    tag = c("AE", "PD", "WD", "ID", "LF", "DV", "LE", "ST", "NC", "PG"),
+    name = c("Adverse event", "Progression", "Withdrawal by subject",
+             "Investigator decision", "Lost to follow-up",
+             "Protocol deviation", "Lack of efficacy", "Study terminated",
+             "Non-compliance", "Pregnancy"),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' The category of each discontinuation reason
+#'
+#' Sorts reasons into [swimmer_reason_categories()]: the first pattern that
+#' matches wins; a reason no pattern matches is "Other" (tag "OT"). A death
+#' or a missing reason has no category.
+#'
+#' @param x Reasons, character.
+#' @param categories The categories, as [swimmer_reason_categories()] gives
+#'   them; a study may pass its own.
+#' @return A list of two character vectors, `tag` and `name`, `NA` where a
+#'   reason has no category.
+#' @export
+swimmer_reason_category <- function(x,
+                                    categories = swimmer_reason_categories()) {
+  t <- tolower(as.character(x))
+  k <- rep(NA_integer_, length(t))
+  for (j in rev(seq_len(nrow(categories)))) {
+    k[grepl(categories$pattern[[j]], t)] <- j
+  }
+  tag <- ifelse(is.na(k), "OT", categories$tag[k])
+  name <- ifelse(is.na(k), "Other", categories$name[k])
+  none <- is.na(t) | !nzchar(t) | grepl("death|died", t)
+  tag[none] <- NA_character_
+  name[none] <- NA_character_
+  list(tag = tag, name = name)
 }
 
 #' Two letters for a discontinuation reason
 #'
-#' The tag the swimmer draws where a patient's drug lines stop, by the words
-#' of the reason, so any study's wording finds its tag: "AE" adverse event,
-#' "PD" progression, "WD" withdrawal or consent, "PH" physician or
-#' investigator decision, "LF" lost to follow-up, "DV" protocol deviation,
-#' "LE" lack of efficacy, "NC" non-compliance, "ST" study terminated, "PG"
-#' pregnancy, "OT" anything else. A death gets none (the death mark is
-#' there), nor a missing reason.
+#' The tag of a reason's category ([swimmer_reason_category()]).
 #'
 #' @param x Reasons, character.
 #' @return A character vector of tags, `NA` for none.
 #' @export
-swimmer_reason_tag <- function(x) {
-  t <- tolower(as.character(x))
-  out <- rep("OT", length(t))
-  rules <- c(
-    "pregnan" = "PG", "terminat|sponsor" = "ST", "complian" = "NC",
-    "efficacy" = "LE", "deviation|violation" = "DV", "lost to" = "LF",
-    "physician|investigator" = "PH", "withdr|consent" = "WD",
-    "progress|relapse|recurren" = "PD", "adverse" = "AE"
-  )
-  for (re in names(rules)) out[grepl(re, t)] <- rules[[re]]
-  out[is.na(t) | !nzchar(t) | grepl("death|died", t)] <- NA_character_
-  out
-}
+swimmer_reason_tag <- function(x) swimmer_reason_category(x)$tag
 
 # --- finish ----------------------------------------------------------------
 
