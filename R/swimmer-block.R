@@ -74,7 +74,7 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
                               search = TRUE,
                               download = TRUE,
                               ...) {
-  dots <- list(...)
+  dots <- table_state_drop(list(...), new_swimmer_block)
   # Boards saved while time was in weeks, or with the old dose styles.
   dots$unit <- NULL
   script_values$unit <- NULL

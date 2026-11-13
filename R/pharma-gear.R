@@ -42,3 +42,19 @@ pharma_mapping <- function(data, roles) {
            miss[nzchar(miss)]))
   })
 }
+
+# A board saves a table block's whole state: every argument of
+# blockr.viz::new_table_block(), `layout` and `script` included, not only
+# those of the block's constructor. A block built on the table sets the rest
+# itself, so when the call carries a saved state (it names `layout`), the
+# table's arguments that `ctor` does not take are dropped. Passed on, they
+# would clash with the block's own (`layout`, `script`) or overwrite its
+# settings of the same name (the timeline's `unit`).
+table_state_drop <- function(dots, ctor) {
+  if (!"layout" %in% names(dots)) {
+    return(dots)
+  }
+  table_args <- setdiff(names(formals(blockr.viz::new_table_block)),
+                        c("...", names(formals(ctor))))
+  dots[setdiff(names(dots), table_args)]
+}

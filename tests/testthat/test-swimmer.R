@@ -422,3 +422,31 @@ test_that("SDTM-style tables and columns read as their ADaM counterparts", {
   expect_identical(m$parameters, "OVRLRESP")
   expect_identical(swimmer_mapping(a)$roles[[1L]]$table, "ADSL")
 })
+
+test_that("a board restores the swimmer with its settings", {
+  # The board saves the table's whole state, `layout` and `script` included,
+  # which the swimmer sets itself.
+  sm <- swimmer_summaries()
+  sm[[length(sm)]]$size <- "lg"
+  blk <- new_swimmer_block(
+    summaries = sm, sort_by = "BOR", sort_dir = "asc", group = "SEX",
+    doses = "Plain", reasons = FALSE, events = "Progression",
+    max_lanes = 2L, cutoff = as.Date("2024-05-01")
+  )
+  rt <- board_round_trip(blk, do.call(dm::dm, swim_adam()))
+  expect_true(all(c("layout", "script") %in% names(rt$saved)))
+  expect_s3_class(rt$block, "swimmer_block")
+  expect_identical(attr(attr(rt$block, "ctor"), "fun"), "new_swimmer_block")
+  expect_equal(plain_state(rt$restored), plain_state(rt$saved),
+               ignore_attr = TRUE)
+  expect_identical(rt$restored$script, swimmer_script())
+
+  # Saved before this week: weeks, the old dose style.
+  old <- new_swimmer_block(sort_by = "weeks", unit = "weeks",
+                           doses = "Exceptions")
+  rt <- board_round_trip(old, do.call(dm::dm, swim_adam()))
+  expect_s3_class(rt$block, "swimmer_block")
+  expect_identical(rt$restored$sort_by, "duration")
+  expect_identical(as.character(rt$restored$script_values$doses),
+                   "Gaps and cuts")
+})

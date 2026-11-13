@@ -316,3 +316,15 @@ test_that("per-patient summaries group the records once", {
   expect_identical(p$max(c(2L, NA, 5L, 9L, NA)), c(A = NA, B = 5, C = NA))
   expect_identical(p$min(c(4, 1, 3, 0, 7)), c(A = 1, B = 3, C = NA))
 })
+
+test_that("a board restores the timeline with its settings", {
+  # The saved state holds the table's `unit` (""), not the timeline's.
+  blk <- new_timeline_block(show = c("Adverse events", "Treatment"),
+                            unit = "weeks", open = "all")
+  rt <- board_round_trip(blk, tl_toy())
+  expect_identical(rt$saved$unit, "")
+  expect_s3_class(rt$block, "timeline_block")
+  expect_equal(plain_state(rt$restored), plain_state(rt$saved),
+               ignore_attr = TRUE)
+  expect_identical(as.character(rt$restored$script_values$unit), "weeks")
+})

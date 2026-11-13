@@ -65,7 +65,7 @@ new_timeline_block <- function(summaries = NULL,
                                search = TRUE,
                                download = TRUE,
                                ...) {
-  dots <- list(...)
+  dots <- table_state_drop(list(...), new_timeline_block)
   own <- intersect(names(dots), TIMELINE_SETTINGS)
   script_values[own] <- dots[own]
   if (!is.null(script_values$show)) {
