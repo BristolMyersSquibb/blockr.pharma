@@ -653,7 +653,9 @@ swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses) {
   # Per group: its first dose, its days, its cuts.
   fpos <- match(gk, gk)
   raw <- x$dose[k]
+  # A cut: a step down to below the first dose (as the thinner line says).
   cut <- which(c(FALSE, gk[-1L] == gk[-m] & raw[-1L] < raw[-m]))
+  cut <- cut[raw[cut] < raw[fpos][cut]]
   ctxt <- swimmer_cut_txt(cut, gk, dose[k], st, gr$n)
   lpos <- which(last)[match(gk, gk[last])]
   head <- paste0(x$drug[k], ifelse(nzchar(dose[k][fpos]),
@@ -700,6 +702,7 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
   last <- ifelse(ongoing, as.numeric(cutoff), d[l] + every[f])
   x0 <- swimmer_x(d, tt)
   cut <- which(!first & c(FALSE, raw[-1L] < raw[-m]))
+  cut <- cut[raw[cut] < raw[f][gi[cut]]]
   ctxt <- swimmer_cut_txt(cut, gi, dose, x0, ng)
   n_late <- tabulate(gi[late > 0], ng)
   n_skip <- tabulate(rep(gi, skip), ng)

@@ -78,6 +78,19 @@ test_that("cycle drugs: a gap for a skipped cycle, thinner after a cut", {
   expect_true(all(is.na(plain$mark)))
 })
 
+test_that("a cut back to the first dose is no cut", {
+  a <- swim_adam()
+  # Drug X: 100 mg, then up to 150, then back to 100.
+  a$adex <- rbind(a$adex[1:2, ], a$adex[2, ], a$adex[-(1:2), ])
+  a$adex$ASTDT[2:3] <- as.Date("2024-01-01") + c(50, 80)
+  a$adex$AENDT[2] <- as.Date("2024-01-01") + 79
+  a$adex$EXDOSE[2:3] <- c(150, 100)
+  x <- swimmer_frame(a)
+  x <- x[x$USUBJID == "p1" & x$lane %in% "Drug x", ]
+  expect_false(any(grepl("cut", x$tip)))
+  expect_true(all(is.na(x$mark)))
+})
+
 test_that("a dose of zero draws a hairline", {
   a <- swim_adam()
   a$adex$EXDOSE[2] <- 0
