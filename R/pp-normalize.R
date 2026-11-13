@@ -43,7 +43,8 @@ pp_table_catalog <- function() {
     adex = "ex",
     adlb = "lb",
     advs = "vs",
-    adeg = "eg"
+    adeg = "eg",
+    adrs = "rs"
   )
 }
 
@@ -120,6 +121,13 @@ pp_column_catalog <- function() {
       ASTDY = i("CMSTDY"),
       AENDY = i("CMENDY")
     ),
+    # SDTM RS: the test code, the standardized result and the date. Its
+    # overall response is RSTESTCD "OVRLRESP", not ADaM's "OVR".
+    adrs = list(
+      PARAMCD = i("RSTESTCD"),
+      AVALC   = i("RSSTRESC"),
+      ADT     = d("RSDTC")
+    ),
     # The dosing table's VISIT is load-bearing twice over: it is the first
     # place the cycle vocabulary is looked for (pp_cycle_sources()), and it
     # is the SCHEDULED label a dose bar reports next to the date it was
@@ -177,7 +185,18 @@ pp_as_date <- function(x) {
 #' @return A `dm`. Unchanged (same object) when nothing applied.
 #' @noRd
 pp_normalize_dm <- function(dm_obj) {
-  tbls <- dm::dm_get_tables(dm_obj)
+  res <- pp_normalize_tables(dm::dm_get_tables(dm_obj))
+  if (!res$changed) return(dm_obj)
+  do.call(dm::dm, lapply(res$tables, as.data.frame))
+}
+
+#' The normalization of pp_normalize_dm() on a named list of tables
+#'
+#' @param tbls A named list of data frames.
+#' @return A list: `tables`, the normalized tables, and `changed`, whether
+#'   anything applied.
+#' @noRd
+pp_normalize_tables <- function(tbls) {
   changed <- FALSE
 
   for (canonical in names(pp_table_catalog())) {
@@ -209,8 +228,7 @@ pp_normalize_dm <- function(dm_obj) {
     tbls[[tbl_name]] <- df
   }
 
-  if (!changed) return(dm_obj)
-  do.call(dm::dm, lapply(tbls, as.data.frame))
+  list(tables = tbls, changed = changed)
 }
 
 #' Which table holds the subjects?

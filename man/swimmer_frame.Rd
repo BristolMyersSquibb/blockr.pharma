@@ -19,7 +19,9 @@ swimmer_frame(
 \arguments{
 \item{data}{A \code{dm} (or a named list of data frames) with \code{adsl}, \code{adex}
 and \code{adrs} and, optional, \code{adae} (serious AEs as events) and \code{adcm}
-(con meds, with \code{con_meds = TRUE}). Names match case-insensitively.}
+(con meds, with \code{con_meds = TRUE}). Names match case-insensitively.
+SDTM-style names work as in the patient profile: \code{dm}, \code{ex}, \code{rs}, \code{ae}
+and \code{cm}, and SDTM columns such as \code{EXSTDTC} or \code{RFXSTDTC}.}
 
 \item{doses}{How a drug lane shows its doses: \code{"Plain"} (the period bar),
 \code{"Exceptions"} (a dose cut as a step down, a late dose as a notch, a

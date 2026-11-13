@@ -25,6 +25,8 @@
 #' @param data A `dm` (or a named list of data frames) with `adsl`, `adex`
 #'   and `adrs` and, optional, `adae` (serious AEs as events) and `adcm`
 #'   (con meds, with `con_meds = TRUE`). Names match case-insensitively.
+#'   SDTM-style names work as in the patient profile: `dm`, `ex`, `rs`, `ae`
+#'   and `cm`, and SDTM columns such as `EXSTDTC` or `RFXSTDTC`.
 #' @param doses How a drug lane shows its doses: `"Plain"` (the period bar),
 #'   `"Exceptions"` (a dose cut as a step down, a late dose as a notch, a
 #'   skipped cycle as a dashed stretch) or `"Dots"` (a ring per
@@ -128,6 +130,9 @@ swimmer_tables <- function(data) {
     stop("The swimmer needs a dm with adsl, adex and adrs.", call. = FALSE)
   }
   names(tabs) <- tolower(names(tabs))
+  # The patient profile's names: SDTM-style tables (dm, ex, rs, ae, cm) and
+  # SDTM columns (EXSTDTC, RFXSTDTC, ...) as their ADaM counterparts.
+  tabs <- pp_normalize_tables(tabs)$tables
   get <- function(nm) {
     x <- tabs[[nm]]
     if (!is.null(x)) as.data.frame(x)
@@ -193,8 +198,8 @@ swimmer_exposure <- function(adex, sl, role) {
   if (!is.null(pc) && "DOSE" %in% pc) adex <- adex[pc %in% "DOSE", ,
                                                     drop = FALSE]
   adex <- adex[as.character(adex$USUBJID) %in% sl$USUBJID, , drop = FALSE]
-  start <- swimmer_date(swimmer_col(adex, c("ASTDT", "EXSTDT", "ASTDTM")))
-  end <- swimmer_date(swimmer_col(adex, c("AENDT", "EXENDT", "AENDTM")))
+  start <- swimmer_date(swimmer_col(adex, c("ASTDT", "ASTDTM")))
+  end <- swimmer_date(swimmer_col(adex, c("AENDT", "AENDTM")))
   dose <- swimmer_col(adex, c("EXDOSE", "CMDOSE")) %||% rep(NA_real_,
                                                             nrow(adex))
   out <- data.frame(
@@ -492,7 +497,7 @@ swimmer_event_rows <- function(rs, sl, adae, t0) {
   if (!is.null(adae) && "AESER" %in% names(adae)) {
     ae <- adae[adae$AESER %in% "Y" & as.character(adae$USUBJID) %in% sl$USUBJID,
                , drop = FALSE]
-    d <- swimmer_date(swimmer_col(ae, c("ASTDT", "AESTDT")))
+    d <- swimmer_date(swimmer_col(ae, "ASTDT"))
     ok <- !is.na(d)
     if (any(ok)) {
       ids <- as.character(ae$USUBJID[ok])

@@ -15,5 +15,7 @@ A list: \code{roles} (role, table, found, columns, missing, need) and
 }
 \description{
 Per role, whether its table is there and which columns it lacks, and the
-ADRS parameters, for the gear's Tables row. Names match without case.
+ADRS parameters, for the gear's Tables row. Names match without case;
+tables and columns may be named as the patient profile allows (\code{dm},
+\code{ex}, \code{rs}, \code{ae}, \code{cm}; SDTM columns such as \code{EXSTDTC}).
 }

@@ -260,3 +260,48 @@ test_that("an ADSL data cutoff is the automatic cutoff", {
   f <- swimmer_frame(a)
   expect_true(max(f$end, na.rm = TRUE) <= 60 / 7 + 1e-9)
 })
+
+test_that("SDTM-style tables and columns read as their ADaM counterparts", {
+  a <- swim_adam()
+  iso <- function(x) format(x, "%Y-%m-%d")
+  a$adae <- data.frame(USUBJID = "p1", AESER = "Y",
+                       ASTDT = as.Date("2024-01-01") + 30)
+  a$adcm <- data.frame(USUBJID = "p1", CMDECOD = "ASPIRIN",
+                       ASTDT = as.Date("2024-01-01") + c(5, 60),
+                       AENDT = as.Date("2024-01-01") + c(20, NA))
+  sdtm <- list(
+    dm = data.frame(USUBJID = a$adsl$USUBJID, ARM = a$adsl$ARM,
+                    RFXSTDTC = iso(a$adsl$TRTSDT),
+                    DTHDTC = iso(a$adsl$DTHDT), LSTALVDT = a$adsl$LSTALVDT),
+    ex = data.frame(USUBJID = a$adex$USUBJID, EXTRT = a$adex$EXTRT,
+                    EXSTDTC = iso(a$adex$ASTDT),
+                    EXENDTC = iso(a$adex$AENDT), EXDOSE = a$adex$EXDOSE,
+                    EXDOSU = a$adex$EXDOSU),
+    rs = data.frame(USUBJID = a$adrs$USUBJID, RSTESTCD = "OVRLRESP",
+                    RSSTRESC = a$adrs$AVALC, RSDTC = iso(a$adrs$ADT)),
+    ae = data.frame(USUBJID = "p1", AESER = "Y", AESTDTC = iso(a$adae$ASTDT)),
+    cm = data.frame(USUBJID = "p1", CMDECOD = "ASPIRIN",
+                    CMSTDTC = iso(a$adcm$ASTDT), CMENDTC = iso(a$adcm$AENDT))
+  )
+  cols <- c("USUBJID", "start", "end", "colour", "lane", "mark", "strip",
+            "label", "event_wk", "event", "ongoing", "days", "dose", "ARM",
+            "BOR", "weeks", "status")
+  want <- swimmer_frame(a, con_meds = TRUE)[cols]
+  got <- swimmer_frame(sdtm, con_meds = TRUE, parameter = "OVRLRESP")
+  expect_identical(got[cols], want)
+  expect_true("Serious AE" %in% got$event)
+  expect_true("Aspirin" %in% got$label)
+  # The same as a dm, with upper-case names.
+  up <- do.call(dm::dm, stats::setNames(sdtm, toupper(names(sdtm))))
+  expect_identical(swimmer_frame(up, con_meds = TRUE,
+                                 parameter = "OVRLRESP")[cols], want)
+  expect_identical(swimmer_drugs(up), swimmer_drugs(a))
+  # The gear's Tables row names each table as the input does.
+  m <- swimmer_mapping(sdtm)
+  expect_identical(vapply(m$roles, `[[`, "", "table"),
+                   c("DM", "EX", "RS", "AE", "CM"))
+  expect_true(all(vapply(m$roles, `[[`, NA, "found")))
+  expect_identical(unlist(lapply(m$roles, `[[`, "missing")), character())
+  expect_identical(m$parameters, "OVRLRESP")
+  expect_identical(swimmer_mapping(a)$roles[[1L]]$table, "ADSL")
+})

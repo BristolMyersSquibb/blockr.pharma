@@ -264,19 +264,21 @@ SWIMMER_ROLES <- list(
        cols = list("USUBJID", c("ARM", "TRT01A", "ACTARM"), "TRTSDT")),
   list(role = "Doses", table = "adex", need = TRUE,
        cols = list("USUBJID", c("EXTRT", "CMDECOD"),
-                   c("ASTDT", "EXSTDT", "ASTDTM"))),
+                   c("ASTDT", "ASTDTM"))),
   list(role = "Response", table = "adrs", need = TRUE,
        cols = list("USUBJID", "PARAMCD", c("ADT", "ADTM"), "AVALC")),
   list(role = "Serious AEs", table = "adae", need = FALSE,
-       cols = list("AESER", c("ASTDT", "AESTDT"))),
+       cols = list("AESER", "ASTDT")),
   list(role = "Con meds", table = "adcm", need = FALSE,
-       cols = list(c("CMDECOD", "CMTRT"), c("ASTDT", "CMSTDT")))
+       cols = list(c("CMDECOD", "CMTRT"), "ASTDT"))
 )
 
 #' What the swimmer finds in its input
 #'
 #' Per role, whether its table is there and which columns it lacks, and the
-#' ADRS parameters, for the gear's Tables row. Names match without case.
+#' ADRS parameters, for the gear's Tables row. Names match without case;
+#' tables and columns may be named as the patient profile allows (`dm`,
+#' `ex`, `rs`, `ae`, `cm`; SDTM columns such as `EXSTDTC`).
 #'
 #' @param data The swimmer's input dm.
 #' @return A list: `roles` (role, table, found, columns, missing, need) and
@@ -286,13 +288,18 @@ swimmer_mapping <- function(data) {
   tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
   if (!is.list(tabs) || is.data.frame(tabs)) tabs <- list()
   names(tabs) <- tolower(names(tabs))
+  raw <- names(tabs)
+  tabs <- pp_normalize_tables(tabs)$tables
   roles <- lapply(SWIMMER_ROLES, function(r) {
     tb <- tabs[[r$table]]
     have <- if (is.null(tb)) character() else toupper(names(tb))
     miss <- vapply(r$cols, function(alt) {
       if (any(alt %in% have)) "" else alt[[1L]]
     }, "")
-    list(role = r$role, table = toupper(r$table), found = !is.null(tb),
+    # A table found under its SDTM-style name is reported by that name.
+    alias <- pp_table_catalog()[[r$table]]
+    name <- c(if (!r$table %in% raw) alias[alias %in% raw], r$table)[[1L]]
+    list(role = r$role, table = toupper(name), found = !is.null(tb),
          need = r$need,
          columns = vapply(r$cols, `[[`, "", 1L),
          missing = if (is.null(tb)) character() else miss[nzchar(miss)])
