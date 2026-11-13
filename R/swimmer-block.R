@@ -323,8 +323,9 @@ swimmer_mapping <- function(data) {
     name <- c(if (!r$table %in% raw) alias[alias %in% raw], r$table)[[1L]]
     list(role = r$role, table = toupper(name), found = !is.null(tb),
          need = r$need,
-         columns = vapply(r$cols, `[[`, "", 1L),
-         missing = if (is.null(tb)) character() else miss[nzchar(miss)])
+         columns = as.list(vapply(r$cols, `[[`, "", 1L)),
+         missing = as.list(if (is.null(tb)) character() else
+           miss[nzchar(miss)]))
   })
   adrs <- tabs[["adrs"]]
   pc <- if (!is.null(adrs)) swimmer_col(as.data.frame(adrs), "PARAMCD")

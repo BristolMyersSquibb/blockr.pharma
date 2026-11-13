@@ -238,7 +238,7 @@ test_that("swimmer_mapping() says which tables and columns it found", {
   tabs$adrs$ADT <- NULL
   m2 <- swimmer_mapping(tabs[c("adsl", "adrs")])
   expect_false(m2$roles[[2L]]$found)
-  expect_identical(m2$roles[[3L]]$missing, "ADT")
+  expect_identical(m2$roles[[3L]]$missing, list("ADT"))
   expect_identical(swimmer_mapping(NULL)$parameters, character())
 })
 

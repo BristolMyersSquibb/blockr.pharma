@@ -84,9 +84,14 @@
       el('td', null, tr, r.role);
       el('td', r.found ? null : (r.need ? 'is-bad' : 'is-off'), tr,
          r.found ? r.table : r.table + (r.need ? ' missing' : ' (optional, absent)'));
-      el('td', null, tr, (r.columns || []).join(', '));
-      const ok = r.found ? !(r.missing || []).length : !r.need;
-      el('td', ok ? 'is-ok' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : '!');
+      // A one-element vector may arrive as a plain string.
+      const cols = [].concat(r.columns || []);
+      const miss = [].concat(r.missing || []);
+      el('td', null, tr, cols.join(', '));
+      const ok = r.found ? !miss.length : !r.need;
+      // An optional role whose columns are absent is off, not wrong.
+      const off = !ok && !r.need;
+      el('td', ok ? 'is-ok' : off ? 'is-off' : 'is-bad', tr, ok ? (r.found ? '✓' : '') : off ? '' : '!');
     }
 
     if (hasParams) drawParam(host, ctx, params, param);
