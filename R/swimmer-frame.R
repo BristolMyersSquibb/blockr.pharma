@@ -952,15 +952,20 @@ SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 # What each colour level stands for in the data, for the board's scale map
 # (see timeline_frame()): a response is its ADRS `AVALC`, a drug its ADEX
 # `EXTRT` and a con med its `CMDECOD`. swimmer_drug_name() titled names that
-# were all capitals, so a drug is keyed as written and in capitals.
+# were all capitals, so a drug is keyed as written and in capitals. A study
+# map may carry the response vocabulary as BEST_OVERALL_RESPONSE or as a
+# `response` column instead; the first the map binds wins.
 swimmer_scale_keys <- function(lv, resp, drugs, cm) {
-  key <- function(x, var) {
+  key <- function(x, vars) {
     x <- intersect(x, lv)
     x <- setdiff(x, "Other")
-    data.frame(level = c(x, x), var = rep(var, 2L * length(x)),
-               key = c(x, toupper(x)), stringsAsFactors = FALSE)
+    do.call(rbind, lapply(vars, function(var) {
+      data.frame(level = c(x, x), var = rep(var, 2L * length(x)),
+                 key = c(x, toupper(x)), stringsAsFactors = FALSE)
+    }))
   }
-  k <- rbind(key(resp, "AVALC"), key(drugs, "EXTRT"), key(cm, "CMDECOD"))
+  k <- rbind(key(resp, TL_SCALE_VARS$response), key(drugs, "EXTRT"),
+             key(cm, "CMDECOD"))
   k[!duplicated(k), , drop = FALSE]
 }
 

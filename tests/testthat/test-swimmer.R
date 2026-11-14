@@ -566,7 +566,8 @@ test_that("a colour the board's scale map sets wins for responses and drugs", {
   skip_if_not_installed("blockr.theme")
   f <- swimmer_frame(swim_adam())
   k <- attr(f$colour, "blockr_scale_keys")
-  expect_identical(unique(k$var[k$level == "PR"]), "AVALC")
+  expect_identical(unique(k$var[k$level == "PR"]),
+                   c("AVALC", "BEST_OVERALL_RESPONSE", "response"))
   map <- blockr.theme::new_scale_map(
     blockr.theme::scale_binding("AVALC", color = c(PR = "#00ff00")),
     blockr.theme::scale_binding("EXTRT", color = c("DRUG X" = "#0000ff"))
@@ -577,4 +578,12 @@ test_that("a colour the board's scale map sets wins for responses and drugs", {
   expect_identical(got[["PR"]], "#00ff00")
   expect_identical(got[["Drug x"]], "#0000ff")
   expect_identical(got[["SD"]], own[["SD"]])
+  # A study map that names the vocabulary otherwise.
+  for (var in c("BEST_OVERALL_RESPONSE", "response")) {
+    map <- blockr.theme::new_scale_map(
+      blockr.theme::scale_binding(var, color = c(PR = "#FFD700"))
+    )
+    got <- blockr.viz:::groups_level_colors(map, "colour", lv, f$colour)
+    expect_identical(got[["PR"]], "#FFD700")
+  }
 })
