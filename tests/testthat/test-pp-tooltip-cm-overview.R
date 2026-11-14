@@ -167,7 +167,7 @@ test_that("an overview AE bar says severity and seriousness only", {
   data <- overview_series()$`Adverse Events`$data
   tip <- data[[1]]$tip
   expect_identical(tip$head, "Headache")
-  expect_identical(tip$color, "#DC2626")
+  expect_identical(tip$color, "#8B0000")
   expect_null(tip$sub)
   # A one-day event is one "Day" row.
   expect_identical(tip_rows(tip),

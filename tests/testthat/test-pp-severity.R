@@ -102,7 +102,7 @@ test_that("AE gantt colors grade-coded severity without a map", {
   )
   bars <- chart$x$opts$series[[1]]$data
   cols <- vapply(bars, function(b) b$itemStyle$color, "")
-  expect_setequal(cols, c("#c49102", "#FF0000"))
+  expect_setequal(cols, c("#c49102", "#8B0000"))
 })
 
 test_that("severity legend lists grades in order with Grade labels", {

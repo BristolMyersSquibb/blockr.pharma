@@ -47,11 +47,11 @@ test_that("overview uses board severity colors when injected", {
 
 test_that("overview falls back to built-in constants without a map", {
   js <- overview_js()
-  expect_match(js, "rgba(220,38,38,0.7)", fixed = TRUE)  # SEVERE default
+  expect_match(js, "rgba(139,0,0,0.7)", fixed = TRUE)  # SEVERE default
   expect_match(js, "rgba(202,138,4,0.7)", fixed = TRUE)  # MILD default
   expect_identical(
     overview_tip_colors(settings = list(roles = list(severity = "AESEV"))),
-    "#DC2626"
+    "#8B0000"
   )
 })
 

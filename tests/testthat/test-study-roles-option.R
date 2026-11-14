@@ -171,6 +171,6 @@ test_that("a declared severity flows through role resolution to consumers", {
   bars <- chart$x$opts$series[[1]]$data
   expect_identical(
     vapply(bars, function(b) b$itemStyle$color, ""),
-    "#DC2626"  # SEVERE word constant, not the grade-3 color
+    "#8B0000"  # SEVERE word constant, not the grade-3 color
   )
 })

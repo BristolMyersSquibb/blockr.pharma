@@ -74,9 +74,9 @@ pp_sev_column <- function(cols, sev_var = NULL) {
 # and so that any other view coloring the same levels has one palette to
 # match against rather than inventing a second.
 pp_sev_colors <- c(
-  MILD = "#CA8A04", MODERATE = "#D97706", SEVERE = "#DC2626",
+  MILD = "#CA8A04", MODERATE = "#D97706", SEVERE = "#8B0000",
   "1" = "#43978D", "2" = "#264D59", "3" = "#c49102",
-  "4" = "#D46C4E", "5" = "#FF0000"
+  "4" = "#D46C4E", "5" = "#8B0000"
 )
 
 #' Built-in color for a severity level
