@@ -74,7 +74,7 @@ see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}. \co
 \item{search, download}{The search field and the download button.}
 
 \item{...}{The settings by name, as in \code{script_values} (\code{layers},
-\code{order_by}, \code{ae_terms}, ...), and arguments for
+\code{ae_terms}, \code{ae_colour}, ...), and arguments for
 \code{\link[blockr.core:new_block]{blockr.core::new_block()}}.}
 }
 \value{

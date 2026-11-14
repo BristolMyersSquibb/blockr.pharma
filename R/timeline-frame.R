@@ -220,6 +220,12 @@ tl_cm_colour_value <- function(x) {
 TL_PATIENT_COLS <- c("TRT01A", "TRT01P", "ARM", "ACTARM", "SEX", "AGE",
                      "AGEGR1", "RACE")
 
+# The frame's own columns, which a patient column of the same name would
+# overwrite: those of tl_finish() and the dates tl_subjects() reads.
+TL_FRAME_OWN <- c("USUBJID", "Row", "Start", "End", "Colour", "Type",
+                  "Details", "Days", "Event", "TRTSDT", "TRTEDT", "LSTALVDT",
+                  "DTHDT", "RANDDT", "T0")
+
 # Colours by source: warm for AEs (as the AE timeline had them), blues for con
 # meds, greys for treatment.
 TL_CM_BLUES <- c("#1f4e8c", "#3f6fb0", "#6b93c9", "#9db8de", "#2f7f9e",
@@ -259,11 +265,17 @@ tl_tables <- function(data, show = TL_SHOW) {
 }
 
 # One row per patient: day 1, last dose, last contact, death and the patient
-# columns. From ADSL, else the first ADAE row of each patient.
-tl_subjects <- function(tb, group, origin) {
+# columns. From ADSL, else the first ADAE row of each patient. `all_cols`:
+# every column of the source is a patient column (but those the frame uses
+# for its own), not only the usual ones.
+tl_subjects <- function(tb, group, origin, all_cols = FALSE) {
   src <- tb$adsl %||% tb$adae[!duplicated(tb$adae$USUBJID), , drop = FALSE]
   # A grouping column the data lacks leaves the arm empty.
   pcols <- intersect(unique(c(group, TL_PATIENT_COLS)), names(src))
+  if (all_cols) {
+    pcols <- unique(c(pcols, setdiff(names(src), TL_FRAME_OWN)))
+    pcols <- pcols[!startsWith(pcols, ".")]
+  }
   n <- nrow(src)
   na_date <- rep(as.Date(NA), n)
   date <- function(nm) aet_date(aet_col(src, nm)) %||% na_date

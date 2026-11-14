@@ -37,8 +37,11 @@ tables of the layers drawn.}
 
 \item{layers}{Any of \code{"Response"}, \code{"Treatment"}, \code{"Discontinuation and death"}, \code{"Adverse events"} and \code{"Con meds"}.}
 
-\item{group}{The ADSL column shown as the arm. Empty: the arm of the
-board's "study_roles" option, else \code{ACTARM}, \code{TRT01A} or \code{ARM}.}
+\item{group}{The ADSL column the patients are grouped by, in \code{.arm}, as
+\code{\link[=patient_timeline_groups]{patient_timeline_groups()}} offers them; \code{"(none)"}: no grouping.
+Empty: the population filter's \code{Group} column when ADSL has one, else
+the arm of the board's "study_roles" option, else \code{ACTARM}, \code{TRT01A} or
+\code{ARM}. Every ADSL column is on each patient's record.}
 
 \item{response}{The ADRS parameter of the overall response.}
 

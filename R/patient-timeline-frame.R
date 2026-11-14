@@ -44,8 +44,11 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   tables of the layers drawn.
 #' @param layers Any of `"Response"`, `"Treatment"`, `"Discontinuation and
 #'   death"`, `"Adverse events"` and `"Con meds"`.
-#' @param group The ADSL column shown as the arm. Empty: the arm of the
-#'   board's "study_roles" option, else `ACTARM`, `TRT01A` or `ARM`.
+#' @param group The ADSL column the patients are grouped by, in `.arm`, as
+#'   [patient_timeline_groups()] offers them; `"(none)"`: no grouping.
+#'   Empty: the population filter's `Group` column when ADSL has one, else
+#'   the arm of the board's "study_roles" option, else `ACTARM`, `TRT01A` or
+#'   `ARM`. Every ADSL column is on each patient's record.
 #' @param response The ADRS parameter of the overall response.
 #' @param ae_colour The field that colours the AEs: a column of ADAE as
 #'   [timeline_colour_fields()] lists them, or `"one colour"`. `"study
@@ -137,7 +140,7 @@ patient_timeline_frame <- function(data,
   opt$scale_map <- scale_map
   opt$cmfield <- tl_cm_field(tb$adcm, tl_cm_colour_value(cm_colour))
   group <- pt_group(group, roles, tb$adsl)
-  sl <- tl_subjects(tb, group, opt$origin)
+  sl <- tl_subjects(tb, group, opt$origin, all_cols = TRUE)
   cutoff <- aet_date(cutoff)
   if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- tl_cutoff(tb, sl)
   cutoff <- cutoff[[1L]]
@@ -219,6 +222,12 @@ patient_timeline_frame <- function(data,
   # The section an opened row is listed under (the table's row_sections).
   open <- !is.na(out$Row) & out$.lane %in% c("Adverse events", "Con meds")
   out$.section <- ifelse(open, as.character(out$.lane), NA_character_)
+  # The patient columns' labels name them in the column picker and headers;
+  # subsetting the patients on the way dropped them.
+  for (nm in intersect(attr(sl, "pcols"), names(tb$adsl))) {
+    lab <- attr(tb$adsl[[nm]], "label", exact = TRUE)
+    if (!is.null(lab) && nm %in% names(out)) attr(out[[nm]], "label") <- lab
+  }
   pt_with_records(out, records, sl)
 }
 
@@ -255,15 +264,57 @@ pt_tables <- function(data, layers) {
   out
 }
 
-# The arm column: the setting, else the study's declared arm, else the first
-# usual one ADSL has.
+# The column the patients are grouped by: the setting (`PT_NO_GROUP`: none),
+# else the population filter's `Group`, else the study's arm
+# (pt_arm_column()).
 pt_group <- function(group, roles, adsl) {
   group <- as.character(unlist(group %||% character()))
   group <- group[!is.na(group) & nzchar(trimws(group))]
-  if (length(group)) return(trimws(group[[1L]]))
+  if (length(group)) {
+    group <- trimws(group[[1L]])
+    if (identical(group, PT_NO_GROUP)) return(NULL)
+    return(group)
+  }
+  if ("Group" %in% names(adsl)) return("Group")
+  pt_arm_column(roles, adsl)
+}
+
+# The study's arm: the declared one, else the first usual one ADSL has.
+pt_arm_column <- function(roles, adsl) {
   if (length(roles$arm) && nzchar(roles$arm)) return(roles$arm)
   hit <- intersect(c("ACTARM", "TRT01A", "ARM"), names(adsl))
   if (length(hit)) hit[[1L]]
+}
+
+# The "Group by" value of no grouping.
+PT_NO_GROUP <- "(none)"
+
+#' What the patient timeline can group its patients by
+#'
+#' The "Group by" choices of the patient timeline's gear: the population
+#' filter's `Group` column when ADSL has one, the study's arm, then every
+#' other ADSL column, and no grouping. Each named by the column's label and
+#' name.
+#'
+#' @param data The block's input dm.
+#' @param roles The study's roles ([patient_timeline_roles()]).
+#' @return A named character vector, the first the default.
+#' @export
+patient_timeline_groups <- function(data, roles = NULL) {
+  adsl <- tryCatch(pt_tables(data, "Treatment")$adsl, error = function(e) NULL)
+  cols <- names(adsl)
+  first <- c(if ("Group" %in% cols) "Group", pt_arm_column(roles, adsl))
+  cols <- unique(c(first, setdiff(cols, c("USUBJID", TL_FRAME_OWN))))
+  lab <- vapply(cols, function(nm) {
+    l <- attr(adsl[[nm]], "label", exact = TRUE)
+    if (identical(nm, "Group")) return("Group (population filter)")
+    if (is.character(l) && length(l) == 1L && nzchar(l) && l != nm) {
+      paste0(l, " (", nm, ")")
+    } else {
+      nm
+    }
+  }, "")
+  stats::setNames(c(cols, PT_NO_GROUP), c(lab, "No grouping"))
 }
 
 # The study's roles from the board's "study_roles" option, NULL outside a
@@ -519,4 +570,94 @@ pt_reason_levels <- function(ev) {
   if (!length(why)) return(character())
   tab <- table(why)
   names(tab)[order(-tab, names(tab))]
+}
+
+# --- order -----------------------------------------------------------------
+
+# The listing columns the patients can be sorted by, and how: the summary of
+# patient_timeline_columns() named, its value per patient and its direction.
+PT_SORTS <- list(
+  `Days on treatment` = list(f = function(d) d$.days_trt, fn = "max",
+                             desc = TRUE),
+  `Best response` = list(f = function(d) match(d$.bor, SWIMMER_BOR),
+                         fn = "min", desc = FALSE),
+  Status = list(f = function(d) d$.status, fn = "first", desc = FALSE),
+  AEs = list(f = function(d) d$.ae %in% 1, fn = "sum", desc = TRUE),
+  Ongoing = list(f = function(d) d$.ae_open %in% 1, fn = "sum", desc = TRUE),
+  Serious = list(f = function(d) d$.ae_ser %in% 1, fn = "sum", desc = TRUE),
+  `Worst AE` = list(f = function(d) as.integer(d$.worst), fn = "max",
+                    desc = TRUE),
+  `Con meds` = list(f = function(d) d$.cm %in% 1, fn = "sum", desc = TRUE),
+  `New on treatment` = list(f = function(d) d$.cm_new %in% 1, fn = "sum",
+                            desc = TRUE)
+)
+
+# The column each saved "Sort patients by" now sorts by.
+PT_ORDER_COLUMNS <- c(
+  "days on treatment" = "Days on treatment", "number of AEs" = "AEs",
+  "worst AE" = "Worst AE", "best response" = "Best response",
+  "ongoing AEs" = "Ongoing", "number of con meds" = "Con meds"
+)
+
+#' Sort the patient timeline's patients by a listing column
+#'
+#' The last step of the patient timeline's prepare script: the patients in
+#' the order of the first listing column, each patient's records kept
+#' together and in order. The gear sets `by` to that column, so a column the
+#' script adds sorts too.
+#'
+#' @param frame The frame of [patient_timeline_frame()], with any columns
+#'   the script adds.
+#' @param by A listing column of the gear ("AEs", "Worst AE", ...; counts,
+#'   days and the worst AE largest first, the best response best first) or
+#'   a column of `frame` (its first value per patient, smallest or first
+#'   level first). Empty, or a column the frame lacks: by patient.
+#' @return `frame`, its rows reordered.
+#' @export
+patient_timeline_sort <- function(frame, by = "") {
+  by <- as.character(unlist(by %||% ""))[1L]
+  id <- as.character(frame$USUBJID)
+  if (!length(id)) return(frame)
+  ids <- unique(id)
+  first_of <- function(x) {
+    has <- !is.na(x)
+    x[has][match(ids, id[has])]
+  }
+  per <- function(x, fn) {
+    if (fn == "first") return(first_of(x))
+    x <- as.numeric(x)
+    v <- vapply(split(x, factor(id, levels = ids)), function(z) {
+      z <- z[!is.na(z)]
+      if (!length(z)) return(NA_real_)
+      switch(fn, sum = sum(z), max = max(z), min = min(z))
+    }, numeric(1L))
+    unname(v)
+  }
+  s <- if (!is.na(by) && nzchar(by)) PT_SORTS[[by]]
+  key <- if (!is.null(s)) {
+    v <- per(s$f(frame), s$fn)
+    if (s$desc) {
+      if (is.numeric(v)) -v else stats::setNames(-xtfrm(v), NULL)
+    } else {
+      v
+    }
+  } else if (!is.na(by) && nzchar(by) && by %in% names(frame)) {
+    x <- frame[[by]]
+    v <- first_of(x)
+    if (is.factor(x)) as.integer(factor(v, levels = levels(x))) else v
+  }
+  ord <- if (is.null(key)) order(ids) else order(key, ids, na.last = TRUE)
+  o <- order(match(id, ids[ord]), seq_along(id))
+  out <- frame[o, , drop = FALSE]
+  # `[` drops a column's label and colour attributes, and the frame's own.
+  for (nm in names(frame)) {
+    at <- attributes(frame[[nm]])
+    at <- at[setdiff(names(at), c("names", "dim", "dimnames"))]
+    if (length(at)) attributes(out[[nm]]) <- c(attributes(out[[nm]]), at[
+      setdiff(names(at), names(attributes(out[[nm]])))])
+  }
+  keep <- setdiff(names(attributes(frame)), c("names", "row.names", "class"))
+  for (a in keep) attr(out, a) <- attr(frame, a)
+  rownames(out) <- NULL
+  out
 }

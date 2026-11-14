@@ -10,11 +10,14 @@ patient_timeline_gear(preset = c("safety", "efficacy"))
 patient_timeline_summaries(preset = c("safety", "efficacy"))
 }
 \arguments{
-\item{preset}{\code{"safety"} or \code{"efficacy"}: which listing columns are
-ticked.}
+\item{preset}{\code{"safety"} or \code{"efficacy"}: which listing columns a new
+block shows.}
 }
 \value{
-A \code{viz_table_gear}.
+A \code{viz_table_gear}. Its Patients tab groups the patients
+("Group by") and picks the listing columns, in order: those of the
+timeline, then every column with one value per patient (ADSL and what
+the prepare script adds). The first sorts the patients.
 
 \code{patient_timeline_summaries()}: the summaries of a new patient
 timeline, the preset's listing columns and the timeline.

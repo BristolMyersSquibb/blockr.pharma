@@ -48,7 +48,7 @@
 #'   see [blockr.viz::new_table_block()]. `NULL`: clicks do nothing.
 #' @param search,download The search field and the download button.
 #' @param ... The settings by name, as in `script_values` (`layers`,
-#'   `order_by`, `ae_terms`, ...), and arguments for
+#'   `ae_terms`, `ae_colour`, ...), and arguments for
 #'   [blockr.core::new_block()].
 #' @return A table block of class `patient_timeline_block`, with the
 #'   preset's class first.
@@ -77,17 +77,26 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   dots[TL_RETIRED] <- NULL
   script_values[TL_RETIRED] <- NULL
   summaries <- tl_summaries_migrate(summaries)
-  own <- intersect(names(dots), PT_SETTINGS)
+  own <- intersect(names(dots), c(PT_SETTINGS, PT_RETIRED))
   script_values[own] <- dots[own]
+  dots[PT_RETIRED] <- NULL
   sv <- utils::modifyList(def$values,
                           tl_colour_values_migrate(script_values))
   subtitle <- timeline_subtitle_migrate(subtitle)
   sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
   if (is.null(summaries)) summaries <- patient_timeline_summaries(preset)
+  summaries <- pt_columns_migrate(summaries, sv$order_by)
+  sv$order_by <- NULL
+  # An empty "Group by" is the default, the first choice.
+  if (!length(sv$group) || !any(nzchar(as.character(unlist(sv$group))))) {
+    sv$group <- NULL
+  }
+  sv$sort_col <- pt_sort_col(summaries)
   if (is.null(title)) title <- def$title
   ctor <- paste0("new_", preset, "_timeline_block")
   dots[c(own, "ctor", "ctor_pkg", "class", "gear", "by", "layout",
-         "group_rows", "sort_by", "missing", "preset", "row_sections")] <- NULL
+         "group_rows", "sort_by", "missing", "preset", "row_sections",
+         "row_groups")] <- NULL
   if (is.null(dots$block_name)) dots$block_name <- def$title
   do.call(blockr.viz::new_table_block, c(
     list(
@@ -95,6 +104,7 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
       by = c("USUBJID", "Row"),
       group_rows = "summary",
       row_sections = ".section",
+      row_groups = ".arm",
       open = match.arg(open, c("none", "all")),
       summaries = summaries,
       missing = "drop",
@@ -174,24 +184,26 @@ PT_SETTINGS <- c(
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "doses", "trt_colour",
 
-  "origin", "cutoff", "ongoing", "order_by"
+  "origin", "cutoff", "ongoing", "sort_col"
 )
 
-# What a preset sets: layers, sort, title and the listing columns ticked
-# (none: the patient and the timeline; the gear offers the rest).
+# A setting a saved board may still carry: "Sort patients by" is now the
+# first listing column (pt_columns_migrate()).
+PT_RETIRED <- "order_by"
+
+# What a preset sets: layers, title and the listing columns shown, the
+# first of which sorts the patients (the gear offers the rest).
 PT_PRESETS <- list(
   efficacy = list(
     title = "Efficacy timeline",
     values = list(layers = c("Response", "Treatment",
-                             "Discontinuation and death"),
-                  order_by = "days on treatment"),
-    columns = character()
+                             "Discontinuation and death")),
+    columns = "Days on treatment"
   ),
   safety = list(
     title = "Safety timeline",
-    values = list(layers = c("Adverse events", "Discontinuation and death"),
-                  order_by = "number of AEs"),
-    columns = character()
+    values = list(layers = c("Adverse events", "Discontinuation and death")),
+    columns = "AEs"
   )
 )
 
@@ -212,13 +224,16 @@ patient_timeline_script <- function() {
   flag <- function(name, value, label) {
     paste0(name, " <- ", value, "  #| flag(label = \"", label, "\")")
   }
-  args <- PT_SETTINGS
+  args <- setdiff(PT_SETTINGS, "sort_col")
   paste(
     sel("layers", c("Adverse events", "Discontinuation and death"),
         PT_LAYERS, "Layers", multiple = TRUE),
-    paste0("group <- \"\"  #| text(label = \"Arm column (ADSL)\", ",
-           "placeholder = \"the study's arm\")"),
     "roles <- blockr.pharma::patient_timeline_roles()",
+    "gv <- blockr.pharma::patient_timeline_groups(data, roles)",
+    paste0("group <- factor(gv[1], levels = gv)  #| select(label = ",
+           "\"Group by\", labels = names(gv))"),
+    paste0("sort_col <- \"\"  #| text(label = \"Sorted by\", ",
+           "placeholder = \"patient\")"),
     "pv <- blockr.pharma::timeline_colour_fields(data, \"rs\")",
     paste0("response <- factor(pv[1], levels = pv)  #| select(label = ",
            "\"Colour by\", labels = names(pv))"),
@@ -248,10 +263,11 @@ patient_timeline_script <- function() {
            "placeholder = \"automatic\")"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
-    sel("order_by", "number of AEs", PT_ORDER, "Sort patients by"),
-    paste0("blockr.pharma::patient_timeline_frame(data, ",
+    paste0("frame <- blockr.pharma::patient_timeline_frame(data, ",
            paste0(args, " = ", args, collapse = ", "),
            ", roles = roles, scale_map = blockr.pharma::timeline_scale_map())"),
+    "# A column added here with one value per patient is a listing column.",
+    "blockr.pharma::patient_timeline_sort(frame, sort_col)",
     sep = "\n"
   )
 }
@@ -266,9 +282,12 @@ patient_timeline_subtitle <- function() {
 
 #' The patient timeline's gear
 #'
-#' @param preset `"safety"` or `"efficacy"`: which listing columns are
-#'   ticked.
-#' @return A `viz_table_gear`.
+#' @param preset `"safety"` or `"efficacy"`: which listing columns a new
+#'   block shows.
+#' @return A `viz_table_gear`. Its Patients tab groups the patients
+#'   ("Group by") and picks the listing columns, in order: those of the
+#'   timeline, then every column with one value per patient (ADSL and what
+#'   the prepare script adds). The first sorts the patients.
 #' @export
 patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
   preset <- match.arg(preset)
@@ -276,7 +295,7 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
     tabs = list(
       Data = list(Tables = "mapping", Layers = "layers",
                   Time = c("origin", "cutoff", "ongoing")),
-      Patients = list(Rows = c("order_by", "group"), Columns = "columns"),
+      Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(
         Response = "response",
         Treatment = c("treatment_as", "doses", "trt_colour"),
@@ -295,18 +314,27 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
     columns = patient_timeline_columns(preset),
     info = patient_timeline_mapping,
     open = "Data",
-    deps = list(pharma_gear_dep())
+    deps = list(pharma_gear_dep()),
+    pick_by = "USUBJID",
+    pick_skip = TL_FRAME_OWN,
+    sort_value = "sort_col",
+    columns_note = paste(
+      "The first column sorts the patients. Columns with several values per",
+      "patient (AE term, dose, visit) are not listed: make a per-patient",
+      "value in the prepare script to show one."
+    )
   )
 }
 
-# The listing columns the gear offers, the preset's ticked.
+# The listing columns the gear offers first, the preset's on. The arm is the
+# group heading; ADSL's columns, the age and sex among them, follow from the
+# data.
 patient_timeline_columns <- function(preset = "safety") {
   on <- PT_PRESETS[[preset]]$columns
   sum_of <- function(col) {
     list(type = "simple", func = "sum", col = col, show = "number")
   }
   cols <- list(
-    Arm = list(type = "field", col = ".arm"),
     `Days on treatment` = list(type = "simple", func = "max",
                                col = ".days_trt", show = "number"),
     `Best response` = list(type = "field", col = ".bor"),
@@ -320,9 +348,7 @@ patient_timeline_columns <- function(preset = "safety") {
                     "levels(.worst)[max(as.integer(.worst), na.rm = TRUE)]")
     ),
     `Con meds` = sum_of(".cm"),
-    `New on treatment` = sum_of(".cm_new"),
-    Age = list(type = "field", col = "AGE"),
-    Sex = list(type = "field", col = "SEX")
+    `New on treatment` = sum_of(".cm_new")
   )
   Map(function(s, nm) {
     s$on <- nm %in% on
@@ -337,7 +363,7 @@ patient_timeline_columns <- function(preset = "safety") {
 patient_timeline_summaries <- function(preset = c("safety", "efficacy")) {
   preset <- match.arg(preset)
   cols <- patient_timeline_columns(preset)
-  on <- Filter(function(s) isTRUE(s$on), cols)
+  on <- cols[PT_PRESETS[[preset]]$columns]
   c(unname(Map(function(s, nm) {
     s$on <- NULL
     s$name <- nm
@@ -382,4 +408,51 @@ patient_timeline_mapping <- function(data) {
 pt_colour_line <- function(name, value, pool) {
   paste0(name, " <- factor(", value, ", levels = ", pool, ")  #| select(",
          "label = \"Colour by\", labels = names(", pool, "))")
+}
+
+# A saved board's listing columns as the picker holds them: the arm goes
+# (the group heading names it), a field over an ADSL column is optional (a
+# study without the column leaves it out), and the column the saved "Sort
+# patients by" named, when it has one, comes first, added if it was not
+# shown.
+pt_columns_migrate <- function(summaries, order_by = NULL) {
+  if (!is.list(summaries)) return(summaries)
+  summaries <- Filter(function(s) {
+    !(is.list(s) && identical(s$type, "field") && identical(s$col, ".arm"))
+  }, summaries)
+  summaries <- lapply(summaries, function(s) {
+    if (is.list(s) && identical(s$type, "field") && is.character(s$col) &&
+          !startsWith(s$col, ".")) {
+      s$optional <- TRUE
+    }
+    s
+  })
+  ob <- as.character(unlist(order_by))
+  col <- if (length(ob)) unname(PT_ORDER_COLUMNS[ob[[1L]]])
+  if (!length(col) || is.na(col)) return(summaries)
+  nm <- vapply(summaries, function(s) as.character(s$name %||% "")[1L], "")
+  at <- which(nm == col)
+  first <- if (length(at)) {
+    summaries[at[[1L]]]
+  } else {
+    s <- patient_timeline_columns()[[col]]
+    s$on <- NULL
+    s$name <- col
+    list(s)
+  }
+  c(first, if (length(at)) summaries[-at[[1L]]] else summaries)
+}
+
+# The script value the gear sets to the first listing column: its name for
+# one of the timeline's, the data column for a field over one, else empty.
+pt_sort_col <- function(summaries) {
+  own <- names(patient_timeline_columns())
+  for (s in summaries) {
+    if (!is.list(s)) next
+    nm <- as.character(s$name %||% "")[1L]
+    if (nm %in% own) return(nm)
+    if (identical(s$type, "field") && is.character(s$col)) return(s$col)
+    return("")
+  }
+  ""
 }
