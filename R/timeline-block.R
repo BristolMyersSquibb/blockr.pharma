@@ -66,9 +66,11 @@ new_timeline_block <- function(summaries = NULL,
                                download = TRUE,
                                ...) {
   dots <- table_state_drop(list(...), new_timeline_block)
-  # Boards saved while time could be in weeks.
-  dots$unit <- NULL
-  script_values$unit <- NULL
+  # Boards saved while time could be in weeks, or with settings since
+  # removed (TL_RETIRED).
+  dots[c("unit", TL_RETIRED)] <- NULL
+  script_values[c("unit", TL_RETIRED)] <- NULL
+  summaries <- tl_summaries_migrate(summaries)
   own <- intersect(names(dots), TIMELINE_SETTINGS)
   script_values[own] <- dots[own]
   script_values <- timeline_migrate(script_values)
@@ -112,11 +114,25 @@ new_timeline_block <- function(summaries = NULL,
   ))
 }
 
+# Settings since removed, which saved boards may still carry: the dose labels
+# on the treatment bars and the row cap before "Other con meds".
+TL_RETIRED <- c("dose_labels", "max_lanes")
+
+# Saved listing columns and swimlane without what the swimlane no longer
+# reads (the dose labels' `bar_label`).
+tl_summaries_migrate <- function(summaries) {
+  if (!is.list(summaries)) return(summaries)
+  lapply(summaries, function(s) {
+    if (is.list(s)) s$bar_label <- NULL
+    s
+  })
+}
+
 # The timeline's own settings: its prepare script's values.
 TIMELINE_SETTINGS <- c(
   "show", "group", "ae_records", "ae_show", "ae_colour", "ae_lanes",
   "serious", "death", "cm_records", "cm_colour", "cm_lanes", "cm_prior",
-  "trt_colour", "dose_labels", "max_lanes", "origin", "cutoff", "ongoing",
+  "trt_colour", "origin", "cutoff", "ongoing",
   "order_by"
 )
 
@@ -175,9 +191,6 @@ timeline_script <- function() {
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
-    flag("dose_labels", "TRUE", "Dose labels on the bars"),
-    paste0("max_lanes <- 12  #| number(min = 1, max = 40, step = 1, ",
-           "label = \"Rows before \\\"Other con meds\\\"\")"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -236,8 +249,8 @@ timeline_gear <- function() {
         `Adverse events` = c("ae_records", "ae_show", "ae_colour", "ae_lanes",
                              "serious", "death"),
         `Con meds` = c("cm_records", "cm_colour", "cm_lanes", "cm_prior"),
-        Treatment = c("trt_colour", "dose_labels"),
-        `Open rows` = c("open_rows", "max_lanes"),
+        Treatment = "trt_colour",
+        `Open rows` = "open_rows",
         Timeline = "lane_width"
       ),
       Titles = "titles",
@@ -303,7 +316,7 @@ timeline_lane <- function() {
   list(type = "spans", name = "Study time", x = "Start", xend = "End",
        color = "Colour", label = ".label",
        tooltip = c("Type", "Details", "Days"), lane = ".lane",
-       open = ".open", seg_style = ".style", bar_label = ".bar_label",
+       open = ".open", seg_style = ".style",
        event_x = ".event_x", event_shape = "Event", overlap = "worst",
        parent_lanes = TRUE)
 }

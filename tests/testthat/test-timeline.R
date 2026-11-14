@@ -69,7 +69,8 @@ test_that("AEs and treatment by default, one record per AE and dose period", {
   expect_identical(trt$Row[trt$USUBJID == "A"], c("Drug", "Drug"))
   expect_identical(as.character(trt$Colour[trt$USUBJID == "A"]),
                    c("54 mg", "81 mg"))
-  expect_identical(trt$.bar_label[trt$USUBJID == "A"], c("54 mg", "81 mg"))
+  # No dose written on the bars.
+  expect_false(".bar_label" %in% names(f))
   expect_false(any(f$.lane %in% "Con meds"))
   # The treatment's greys run light to dark with the dose.
   cols <- attr(f$Colour, "blockr_colors")
@@ -154,15 +155,32 @@ test_that("con meds: uncoded names, clipped starts, before or on treatment", {
   expect_setequal(as.character(ind$Colour), c("Prophylaxis", "Headache"))
 })
 
-test_that("con meds past max_lanes rows fold into Other con meds", {
+test_that("an opened patient lists every con med, no Other row", {
   tb <- tl_toy()
-  f <- timeline_frame(tb, show = TL_SHOW, max_lanes = 5)
-  rows <- unique(recs(f)$Row[recs(f)$USUBJID == "A"])
-  # Three AE rows and the drug leave room for one con-med row plus Other.
-  expect_true("Other con meds" %in% rows)
-  expect_length(rows, 5L)
-  expect_false("Other con meds" %in%
-                 recs(timeline_frame(tb, show = TL_SHOW))$Row)
+  tb$adcm <- data.frame(USUBJID = "A", CMDECOD = sprintf("DRUG %02d", 1:15),
+                        CMTRT = "x", ASTDY = 2, AENDY = 6,
+                        stringsAsFactors = FALSE)
+  f <- timeline_frame(tb, show = TL_SHOW)
+  rows <- unique(recs(f, "Con meds")$Row)
+  expect_length(rows, 15L)
+  expect_false("Other con meds" %in% rows)
+})
+
+test_that("boards saved with the dose labels or the row cap restore", {
+  lane <- timeline_lane()
+  lane$bar_label <- ".bar_label"
+  old <- new_timeline_block(
+    script_values = list(dose_labels = FALSE, max_lanes = 5),
+    summaries = list(lane)
+  )
+  st <- board_round_trip(old, tl_toy())$saved
+  expect_null(st$script_values$dose_labels)
+  expect_null(st$script_values$max_lanes)
+  expect_null(st$summaries[[1L]]$bar_label)
+  pt <- new_safety_timeline_block(script_values = list(dose_labels = TRUE,
+                                                       max_lanes = 3))
+  sv <- blockr.core::blockr_ser(pt)$payload$script_values
+  expect_false(any(c("dose_labels", "max_lanes") %in% names(sv)))
 })
 
 test_that("a name used by two sources stays two rows", {

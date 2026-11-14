@@ -50,9 +50,6 @@
 #' @param trt_colour `"dose level"` (more than five doses fall into dose
 #'   ranges), `"drug"` (more than five fold into "Other drug") or `"one
 #'   colour"`.
-#' @param dose_labels Write the dose on the treatment bars.
-#' @param max_lanes Rows per opened patient before the rest of the con meds
-#'   fold into "Other con meds".
 #' @param origin Day 1 is the `"first dose"` (`TRTSDT`) or `"randomisation"`
 #'   (`RANDDT`).
 #' @param cutoff The data cutoff, a date. `NULL` or `NA`: the last date in
@@ -93,8 +90,6 @@ timeline_frame <- function(data,
                            cm_lanes = "coded name",
                            cm_prior = "clipped at the start",
                            trt_colour = "dose level",
-                           dose_labels = TRUE,
-                           max_lanes = 12,
                            origin = "first dose",
                            cutoff = NULL,
                            ongoing = "last contact",
@@ -115,8 +110,6 @@ timeline_frame <- function(data,
     cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
-    dose_labels = isTRUE(as.logical(dose_labels)),
-    max_lanes = max(1L, as.integer(max_lanes %||% 12L)[1L], na.rm = TRUE),
     origin = arg(origin, TL_ORIGIN),
     ongoing = arg(ongoing, c("last contact", "data cutoff")),
     order_by = arg(order_by, TL_ORDER)
@@ -155,7 +148,6 @@ timeline_frame <- function(data,
   sl <- sl[sl$USUBJID %in% ids, , drop = FALSE]
   attr(sl, "pcols") <- pcols
   parts <- lapply(parts, function(p) tl_keep(p, p$USUBJID %in% sl$USUBJID))
-  if ("cm" %in% names(parts)) parts$cm <- tl_fold(parts, opt$max_lanes)
   parts <- tl_unique_rows(parts)
   rec <- tl_bind(parts)
   out <- tl_bind(list(rec, tl_event_rows(rec, sl, opt),
@@ -321,7 +313,7 @@ TL_COLS <- list(
   USUBJID = NA_character_, Row = NA_character_, .src = NA_character_,
   Start = NA_real_, End = NA_real_, .open = FALSE, .colour = NA_character_,
   .style = NA_character_, .label = NA_character_, Type = NA_character_,
-  Details = NA_character_, Days = NA_character_, .bar_label = NA_character_,
+  Details = NA_character_, Days = NA_character_,
   .event_x = NA_real_, .event = NA_character_, .ae = NA_real_,
   .ae_open = NA_real_, .ae_ser = NA_real_, .worst = NA_character_,
   .fatal = FALSE, .cm = NA_real_, .cm_new = NA_real_, .days_trt = NA_real_,
@@ -552,8 +544,6 @@ tl_treatment <- function(adex, sl, opt, cutoff) {
     Start = aet_day(ex$start, sl$T0[i]), End = aet_day(ex$end, sl$T0[i]),
     .label = ex$drug, Type = rep("Treatment", n),
     Details = ifelse(nzchar(dose), dose, NA_character_),
-    .bar_label = if (opt$dose_labels) ifelse(nzchar(dose), dose,
-                                             NA_character_),
     .dose = ex$dose, .dose_txt = dose, .unit = ex$unit
   )
   p <- tl_keep(p, is.finite(p$Start))
@@ -619,31 +609,6 @@ tl_axis_start <- function(parts) {
   s <- unlist(lapply(parts, function(p) p$Start))
   s <- s[is.finite(s)]
   min(c(1, s))
-}
-
-# Con meds past `max_lanes` rows of a patient fold into "Other con meds": the
-# rows of the other sources come first, then a patient's con meds by first
-# start until the rows are used up. Each patient's own count.
-tl_fold <- function(parts, max_lanes) {
-  cm <- parts$cm
-  key <- paste(cm$USUBJID, cm$Row, sep = "\r")
-  first <- tapply(cm$Start, key, min)
-  k <- data.frame(key = names(first), first = as.numeric(first),
-                  stringsAsFactors = FALSE)
-  k$id <- cm$USUBJID[match(k$key, key)]
-  k <- k[order(k$id, k$first, k$key), , drop = FALSE]
-  k$rank <- seq_len(nrow(k)) - match(k$id, k$id) + 1L
-  others <- unlist(lapply(parts[setdiff(names(parts), "cm")], function(p) {
-    unique(paste(p$USUBJID, p$Row, sep = "\r"))
-  }), use.names = FALSE)
-  used <- table(factor(sub("\r.*", "", others), levels = unique(k$id)))
-  n_cm <- table(factor(k$id, levels = unique(k$id)))
-  room <- pmax(0L, max_lanes - as.integer(used[k$id]))
-  over <- as.integer(n_cm[k$id]) > room
-  # One row goes to "Other con meds" when they do not all fit.
-  fold <- over & k$rank > pmax(0L, room - 1L)
-  cm$Row[key %in% k$key[fold]] <- "Other con meds"
-  cm
 }
 
 # A row name used by two sources of one patient gets the source added, so
@@ -778,7 +743,7 @@ tl_finish <- function(out, sl, opt, group) {
   keep <- c("USUBJID", "Row", ".arm", pcols, ".ae", ".ae_open", ".ae_ser",
             ".worst", ".cm", ".cm_new", ".days_trt", "Start", "End",
             ".open", "Colour", ".lane", ".style", ".label", "Type",
-            "Details", "Days", ".bar_label", ".event_x", "Event",
+            "Details", "Days", ".event_x", "Event",
             opt$extra)
   out[, keep, drop = FALSE]
 }

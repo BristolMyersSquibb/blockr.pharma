@@ -18,8 +18,6 @@ timeline_frame(
   cm_lanes = "coded name",
   cm_prior = "clipped at the start",
   trt_colour = "dose level",
-  dose_labels = TRUE,
-  max_lanes = 12,
   origin = "first dose",
   cutoff = NULL,
   ongoing = "last contact",
@@ -63,11 +61,6 @@ legend can show (see \code{\link[=timeline_frame]{timeline_frame()}}'s details).
 
 \item{trt_colour}{\code{"dose level"} (more than five doses fall into dose
 ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one colour"}.}
-
-\item{dose_labels}{Write the dose on the treatment bars.}
-
-\item{max_lanes}{Rows per opened patient before the rest of the con meds
-fold into "Other con meds".}
 
 \item{origin}{Day 1 is the \code{"first dose"} (\code{TRTSDT}) or \code{"randomisation"}
 (\code{RANDDT}).}

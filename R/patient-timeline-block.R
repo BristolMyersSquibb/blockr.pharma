@@ -73,6 +73,9 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   preset <- match.arg(preset)
   def <- PT_PRESETS[[preset]]
   dots <- table_state_drop(list(...), new_patient_timeline_block)
+  dots[TL_RETIRED] <- NULL
+  script_values[TL_RETIRED] <- NULL
+  summaries <- tl_summaries_migrate(summaries)
   own <- intersect(names(dots), PT_SETTINGS)
   script_values[own] <- dots[own]
   sv <- utils::modifyList(def$values, script_values)
@@ -168,7 +171,7 @@ PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "doses", "trt_colour",
-  "dose_labels",
+
   "origin", "cutoff", "ongoing", "order_by"
 )
 
@@ -236,7 +239,6 @@ patient_timeline_script <- function() {
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
     sel("doses", "Gaps and cuts", PT_DOSES, "Doses shown as"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Bars coloured by"),
-    flag("dose_labels", "TRUE", "Dose labels on the bars"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -273,7 +275,7 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
       Patients = list(Rows = c("order_by", "group"), Columns = "columns"),
       Lanes = list(
         Response = "response",
-        Treatment = c("treatment_as", "doses", "trt_colour", "dose_labels"),
+        Treatment = c("treatment_as", "doses", "trt_colour"),
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),
         `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",

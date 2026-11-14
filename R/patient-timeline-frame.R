@@ -28,8 +28,6 @@ PT_LAYERS <- c("Response", "Treatment", "Discontinuation and death",
 PT_AE_COLOUR <- c("study severity", "grade", "severity", "one colour")
 PT_TRT_DRAW <- c("lines per drug", "bars by dose")
 PT_DOSES <- c("Gaps and cuts", "Plain")
-# Drugs with a lane of their own; the rest share "Other" (as the swimmer).
-PT_MAX_DRUGS <- 4L
 # The layers drawn as full bars under the drug lanes, the first the main one.
 PT_FULL_LANES <- c("Response", "Adverse events", "Con meds")
 PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
@@ -67,8 +65,6 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   AEs"`, `"number of events"`, `"worst AE"`, `"best response"`, `"first
 #'   progression"`, `"ongoing AEs"`, `"first onset"`, `"number of con meds"`
 #'   and `"subject"`.
-#' @param max_lanes Not used: an opened patient lists every con med. Kept so
-#'   saved boards that set it restore.
 #' @param roles The study's roles, as [patient_timeline_roles()] reads them
 #'   from the board. `NULL`: none declared.
 #' @inheritParams timeline_frame
@@ -98,8 +94,6 @@ patient_timeline_frame <- function(data,
                                    treatment_as = "lines per drug",
                                    doses = "Gaps and cuts",
                                    trt_colour = "dose level",
-                                   dose_labels = TRUE,
-                                   max_lanes = 12,
                                    origin = "first dose",
                                    cutoff = NULL,
                                    ongoing = "last contact",
@@ -123,7 +117,6 @@ patient_timeline_frame <- function(data,
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
     treatment_as = arg(treatment_as, PT_TRT_DRAW),
     doses = arg(doses, PT_DOSES),
-    dose_labels = isTRUE(as.logical(dose_labels)),
     origin = arg(origin, TL_ORIGIN),
     ongoing = arg(ongoing, c("last contact", "data cutoff")),
     order_by = arg(order_by, PT_ORDER),
@@ -476,7 +469,8 @@ pt_drug_lines <- function(tb, sl, opt, cutoff) {
   on_at <- if (is.na(cutoff)) max(ex$end, na.rm = TRUE) else cutoff
   ex$on <- swimmer_ongoing(ex, on_at) &
     is.na(ss$TRTEDT[match(ex$USUBJID, ss$USUBJID)])
-  ex <- swimmer_fold(ex, PT_MAX_DRUGS, t0)
+  # Every drug has its lane: swimmer_fold() only orders study drugs.
+  ex <- swimmer_fold(ex, Inf, t0)
   d <- swimmer_drug_rows(ex, t0, opt$doses, on_at)
   if (is.null(d) || !length(d$USUBJID)) return(NULL)
   d <- tl_keep(d, !is.na(d$start))
