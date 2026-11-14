@@ -198,8 +198,14 @@ test_that("treatment draws a line per drug, or bars by dose", {
 test_that("the reason tag sits on the lane of the last drug", {
   f <- patient_timeline_frame(pt_toy(), layers = c("Treatment",
                                                    "Discontinuation and death"))
-  tag <- f[!is.na(f$.tag), ]
+  tag <- f[!is.na(f$.tag) & !f$Event %in% "Dose change", ]
   expect_identical(as.character(tag$.lane), "Drug")
+  # The drug's dose change is a tag on its lane too, with the new dose.
+  ch <- f[f$Event %in% "Dose change", ]
+  expect_identical(unique(as.character(ch$.lane)), "Drug")
+  expect_identical(c(ch$USUBJID, ch$.tag), c("A", "81"))
+  expect_identical(ch$Details, "Drug, 54 mg to 81 mg")
+  expect_identical(attr(f$.tag, "label"), "Tag")
   # Without treatment drawn it marks the patient row.
   f <- patient_timeline_frame(pt_toy())
   expect_true(is.na(f$.lane[!is.na(f$.tag)]))

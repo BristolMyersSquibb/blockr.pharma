@@ -32,7 +32,7 @@ new_swimmer_block(
 the frame (\code{duration}, days on treatment), and its direction.}
 
 \item{script_values}{The swimmer's settings, by name: \code{doses}
-(\code{"Gaps and cuts"} or \code{"Plain"}), \code{reasons} (the tag for the reason off
+(\code{"Gaps and dose changes"} or \code{"Plain"}), \code{reasons} (the tag for the reason off
 treatment), \code{drugs}, \code{cutoff} (a date,
 \code{NA} for the last date in the data), \code{con_meds}, \code{max_lanes}, \code{events},
 \code{parameter} (the ADRS PARAMCDs of the response bars, the first the main

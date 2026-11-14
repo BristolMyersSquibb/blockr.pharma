@@ -80,6 +80,9 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   own <- intersect(names(dots), c(PT_SETTINGS, PT_RETIRED))
   script_values[own] <- dots[own]
   dots[PT_RETIRED] <- NULL
+  if (!is.null(script_values$doses)) {
+    script_values$doses <- swimmer_doses_value(script_values$doses)
+  }
   sv <- utils::modifyList(def$values,
                           tl_colour_values_migrate(script_values))
   subtitle <- timeline_subtitle_migrate(subtitle)
@@ -256,7 +259,7 @@ patient_timeline_script <- function() {
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
-    sel("doses", "Gaps and cuts", PT_DOSES, "Doses shown as"),
+    sel("doses", "Gaps and dose changes", PT_DOSES, "Doses shown as"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",

@@ -44,7 +44,7 @@
 #' @param sort_by,sort_dir Row order: a listing column or a numeric column of
 #'   the frame (`duration`, days on treatment), and its direction.
 #' @param script_values The swimmer's settings, by name: `doses`
-#'   (`"Gaps and cuts"` or `"Plain"`), `reasons` (the tag for the reason off
+#'   (`"Gaps and dose changes"` or `"Plain"`), `reasons` (the tag for the reason off
 #'   treatment), `drugs`, `cutoff` (a date,
 #'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
 #'   `parameter` (the ADRS PARAMCDs of the response bars, the first the main
@@ -84,9 +84,7 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
   own <- intersect(names(dots), SWIMMER_SETTINGS)
   if (length(own)) script_values[own] <- dots[own]
   if (!is.null(script_values$doses)) {
-    d <- as.character(script_values$doses)
-    if (d %in% c("Exceptions", "Dots")) d <- "Gaps and cuts"
-    script_values$doses <- match.arg(d, c("Gaps and cuts", "Plain"))
+    script_values$doses <- swimmer_doses_value(script_values$doses)
   }
   if (!is.null(dots$group)) by <- c(dots$group, "USUBJID")
   dots[c(own, "group", "ctor", "ctor_pkg", "class", "gear", "max_lanes")] <- NULL
@@ -166,8 +164,9 @@ swimmer_script <- function(max_lanes = 4L) {
     paste0("parameter <- factor(pv[1], levels = pv)  #| select(label = ",
            "\"Response (ADRS PARAMCD)\", multiple = TRUE)"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
-    paste0("doses <- factor(\"Gaps and cuts\", levels = c(\"Gaps and cuts\", ",
-           "\"Plain\"))  #| select(label = \"Doses on the drug lines\")"),
+    paste0("doses <- factor(\"Gaps and dose changes\", levels = ",
+           "c(\"Gaps and dose changes\", \"Plain\"))  #| select(label = ",
+           "\"Doses on the drug lines\")"),
     paste0("reasons <- TRUE  #| flag(label = ",
            "\"Discontinuation reason where the drug lines stop\")"),
     "con_meds <- FALSE  #| flag(label = \"Con meds as lanes\")",

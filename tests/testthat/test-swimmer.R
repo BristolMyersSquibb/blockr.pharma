@@ -52,51 +52,72 @@ test_that("swimmer_frame builds response, lanes, events and listing", {
                                                     "blockr_colors"))))
 })
 
-test_that("cycle drugs: a gap for a skipped cycle, thinner after a cut", {
+test_that("cycle drugs: a gap for a skipped cycle, a piece per dose", {
   f <- swimmer_frame(swim_adam())
-  y <- f[f$USUBJID == "p1" & f$lane %in% "Drug Y", ]
-  # Doses on days 1, 22, 50 (7 late), 71, then 92 skipped, 113 cut to 50 mg:
-  # one piece to the skipped cycle, a gap, a thinner piece to a cycle on.
+  y <- f[f$USUBJID == "p1" & f$lane %in% "Drug Y" & is.na(f$event), ]
+  # Doses on days 1, 22, 50 (7 late), 71, then 92 skipped, 113 at 50 mg:
+  # one piece to the skipped cycle, a gap, a piece at 50 mg to a cycle on,
+  # one width throughout.
   expect_equal(y$start, c(1, 113))
   expect_equal(y$end, c(92, 134))
-  expect_identical(y$mark, c(NA, "thinner"))
-  expect_identical(unique(y$tip), paste0(
-    "Drug Y, 75 mg every 21 days \u00b7 Day 1 to 134, 5 doses, 1 late, ",
-    "1 cycle skipped, cut to 50 mg on day 113"
+  expect_true(all(is.na(y$mark)))
+  course <- " · Course: day 1 to 134, 5 doses, 1 late, 1 cycle skipped"
+  expect_identical(y$tip, c(
+    paste0("Drug Y, 75 mg every 21 days · Day 1 to 92, 4 doses, ",
+           "1 late", course),
+    paste0("Drug Y, 50 mg every 21 days · Day 113 to 134, 1 dose, ",
+           "from 75 mg", course)
   ))
-  # Daily Drug X: thinner from its cut, its arrow (ongoing).
-  x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x", ]
-  expect_identical(x$mark, c(NA, "thinner"))
+  # The change: a tag with the new dose where it starts.
+  ch <- f[f$USUBJID == "p1" & f$event %in% "Dose change", ]
+  cy <- ch[ch$lane %in% "Drug Y", ]
+  expect_equal(cy$event_day, 113)
+  expect_identical(cy$tag, "50")
+  expect_identical(cy$tip, "Dose change, day 113 · Drug Y, 75 mg to 50 mg")
+  # Daily Drug X: its own dose per piece, its arrow (ongoing).
+  x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x" & is.na(f$event), ]
+  expect_true(all(is.na(x$mark)))
   expect_equal(x$start[[2]], 51)
   expect_true(any(x$ongoing, na.rm = TRUE))
-  expect_match(x$tip[[1]], "cut to 50 mg on day 51$")
-  # The old styles read as gaps and cuts; plain draws the bar alone.
+  expect_identical(x$tip[[1]], "Drug x, 100 mg · Day 1 to 50")
+  expect_identical(x$tip[[2]], "Drug x, 50 mg · Day 51 to ongoing, from 100 mg")
+  expect_equal(ch$event_day[ch$lane %in% "Drug x"], 51)
+  # The old styles read as gaps and dose changes; plain draws the bar alone,
+  # no tags, its doses as a range.
   expect_identical(swimmer_frame(swim_adam(), doses = "Exceptions"), f)
+  expect_identical(swimmer_frame(swim_adam(), doses = "Gaps and cuts"), f)
   plain <- swimmer_frame(swim_adam(), doses = "Plain")
   py <- plain[plain$USUBJID == "p1" & plain$lane %in% "Drug Y", ]
   expect_equal(c(py$start, py$end), c(1, 134))
-  expect_true(all(is.na(plain$mark)))
+  expect_match(py$tip, "^Drug Y, 50 to 75 mg every 21 days")
+  expect_false(any(plain$event %in% "Dose change"))
 })
 
-test_that("a cut back to the first dose is no cut", {
+test_that("a dose back up is a change like any other, never a cut", {
   a <- swim_adam()
   # Drug X: 100 mg, then up to 150, then back to 100.
   a$adex <- rbind(a$adex[1:2, ], a$adex[2, ], a$adex[-(1:2), ])
   a$adex$ASTDT[2:3] <- as.Date("2024-01-01") + c(50, 80)
   a$adex$AENDT[2] <- as.Date("2024-01-01") + 79
   a$adex$EXDOSE[2:3] <- c(150, 100)
-  x <- swimmer_frame(a)
-  x <- x[x$USUBJID == "p1" & x$lane %in% "Drug x", ]
+  f <- swimmer_frame(a)
+  x <- f[f$USUBJID == "p1" & f$lane %in% "Drug x", ]
   expect_false(any(grepl("cut", x$tip)))
   expect_true(all(is.na(x$mark)))
+  pc <- x[is.na(x$event), ]
+  expect_match(pc$tip[[2]], "^Drug x, 150 mg .*, from 100 mg$")
+  expect_match(pc$tip[[3]], "^Drug x, 100 mg .*, from 150 mg$")
+  expect_identical(x$tag[x$event %in% "Dose change"], c("150", "100"))
 })
 
-test_that("a dose of zero draws a hairline", {
+test_that("a dose of zero is a piece at 0 mg, the line the same width", {
   a <- swim_adam()
   a$adex$EXDOSE[2] <- 0
   x <- swimmer_frame(a)
   x <- x[x$USUBJID == "p1" & x$lane %in% "Drug x", ]
-  expect_identical(x$mark, c(NA, "hairline"))
+  expect_true(all(is.na(x$mark)))
+  expect_identical(x$tag[x$event %in% "Dose change"], "0")
+  expect_match(x$tip[is.na(x$event)][[2]], "^Drug x, 0 mg .*, from 100 mg$")
 })
 
 test_that("the discontinuation reason is a tag where the drug lines stop", {
@@ -104,12 +125,14 @@ test_that("the discontinuation reason is a tag where the drug lines stop", {
   d <- function(x) as.Date("2024-01-01") + x
   a$adsl$TRTEDT <- d(c(NA, 60, 30))
   a$adsl$DCTREAS <- c(NA, "ADVERSE EVENT", NA)
+  # One dose per drug: no dose-change tags.
+  a$adex$EXDOSE <- ifelse(a$adex$EXTRT == "Drug Y", 75, 100)
   f <- swimmer_frame(a)
   tg <- f[!is.na(f$tag), ]
   expect_identical(tg$USUBJID, "p2")
   expect_identical(tg$tag, "AE")
   expect_identical(as.character(tg$event), "Adverse event")
-  expect_identical(attr(f$tag, "label"), "Discontinuation reason")
+  expect_identical(attr(f$tag, "label"), "Tag")
   expect_identical(as.character(tg$lane), "Drug x")
   expect_equal(tg$event_day, 61)
   expect_identical(tg$tip, "Discontinued, day 61 \u00b7 Adverse event")
@@ -308,7 +331,8 @@ test_that("the frame draws study days and only the events asked for", {
   expect_false("Serious AE" %in% f$event)
   expect_true("Serious AE" %in% swimmer_frame(a, events = NULL)$event)
   ev <- swimmer_frame(a, events = "Death")
-  expect_true(all(is.na(ev$event) | ev$event == "Death"))
+  # Tags (reasons, dose changes) are no events: the setting leaves them.
+  expect_true(all(is.na(ev$event) | ev$event == "Death" | !is.na(ev$tag)))
   expect_true(all(c("AGE", "SEX", "dose_level") %in% names(f)))
 })
 
@@ -362,7 +386,7 @@ test_that("a board saved with weeks restores in days", {
   expect_null(lane$strip)
   expect_null(lane$tooltip)
   expect_identical(c(lane$tip, lane$event_tag, lane$size), c("tip", "tag", "lg"))
-  expect_identical(p$script_values$doses, "Gaps and cuts")
+  expect_identical(p$script_values$doses, "Gaps and dose changes")
 })
 
 test_that("an end of treatment closes a study drug and ends the time on it", {
@@ -484,7 +508,7 @@ test_that("a board restores the swimmer with its settings", {
   expect_s3_class(rt$block, "swimmer_block")
   expect_identical(rt$restored$sort_by, "duration")
   expect_identical(as.character(rt$restored$script_values$doses),
-                   "Gaps and cuts")
+                   "Gaps and dose changes")
 })
 
 test_that("several response parameters draw a full bar each, the first the main one", {
