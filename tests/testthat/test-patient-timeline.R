@@ -238,3 +238,17 @@ test_that("a board restores the patient timeline with its layers", {
   expect_identical(as.character(unlist(rt$restored$script_values$layers)),
                    c("Adverse events", "Con meds"))
 })
+
+test_that("the response follows a study map under any of its names", {
+  f <- patient_timeline_frame(pt_toy(), layers = "Response")
+  viz <- asNamespace("blockr.viz")
+  own <- attr(f$Colour, "blockr_colors")
+  for (var in c("AVALC", "BEST_OVERALL_RESPONSE", "response")) {
+    map <- blockr.theme::new_scale_map(
+      blockr.theme::scale_binding(var, color = c(PR = "#FFD700"))
+    )
+    got <- viz$groups_theme_keyed(own, map, f$Colour)
+    expect_identical(got[["PR"]], "#FFD700")
+    expect_identical(got[["CR"]], own[["CR"]])
+  }
+})

@@ -192,11 +192,14 @@ TL_OTHER <- c("Other class", "Other indication", "Other", "Other drug",
 
 # The data variables a colour level stands for, for the board's scale map:
 # a level's key is its value in the variable the record came from, and the
-# map may bind either spelling.
+# map may bind either spelling. A response read is ADRS `AVALC`; a study map
+# may carry the same vocabulary as the best overall response or as a
+# swimmer's `response` column, and the first the map binds wins.
 TL_SCALE_VARS <- list(grade = c("ATOXGR", "AETOXGR"),
                       severity = c("ASEV", "AESEV"), class = "CMCLAS",
                       indication = "CMINDC", drug = c("EXTRT", "CMDECOD"),
-                      response = "AVALC")
+                      response = c("AVALC", "BEST_OVERALL_RESPONSE",
+                                   "response"))
 
 # Boards saved before the con-med colour default changed name the old one.
 tl_cm_colour_value <- function(x) {
