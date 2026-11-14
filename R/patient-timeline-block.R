@@ -76,6 +76,7 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   own <- intersect(names(dots), PT_SETTINGS)
   script_values[own] <- dots[own]
   sv <- utils::modifyList(def$values, script_values)
+  subtitle <- timeline_subtitle_migrate(subtitle)
   sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
   if (is.null(summaries)) summaries <- patient_timeline_summaries(preset)
   if (is.null(title)) title <- def$title
@@ -254,7 +255,7 @@ patient_timeline_script <- function() {
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 patient_timeline_subtitle <- function() {
-  "{@layers} in study days, sorted by {@order_by}"
+  "{@layers} in study days"
 }
 
 #' The patient timeline's gear

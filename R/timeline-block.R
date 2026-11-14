@@ -72,7 +72,9 @@ new_timeline_block <- function(summaries = NULL,
   own <- intersect(names(dots), TIMELINE_SETTINGS)
   script_values[own] <- dots[own]
   script_values <- timeline_migrate(script_values)
-  subtitle <- sub("by study {@unit}", "in study days", subtitle, fixed = TRUE)
+  subtitle <- timeline_subtitle_migrate(
+    sub("by study {@unit}", "in study days", subtitle, fixed = TRUE)
+  )
   if (!is.null(script_values$show)) {
     script_values$show <- intersect(TL_SHOW,
                                     as.character(unlist(script_values$show)))
@@ -133,6 +135,14 @@ timeline_migrate <- function(sv) {
   sv
 }
 
+# A saved subtitle without its sort clause: the table sorts by a click on a
+# column header, so the order is not a word on the face.
+timeline_subtitle_migrate <- function(subtitle) {
+  if (!is.character(subtitle) || length(subtitle) != 1L) return(subtitle)
+  out <- sub("^ *sorted by \\{@order_by\\},? *", "", subtitle)
+  gsub(",? *sorted by \\{@order_by\\}", "", out)
+}
+
 #' The timeline's prepare script
 #'
 #' Declares the timeline's settings, which its gear shows as rows, then calls
@@ -189,8 +199,7 @@ timeline_script <- function() {
 #' @export
 timeline_subtitle <- function() {
   cl <- timeline_clauses()
-  paste0("{@show} in study days, one stripe per patient, ",
-         paste(cl[c("order_by", "cutoff")], collapse = ", "))
+  paste0("{@show} in study days, one stripe per patient, ", cl[["cutoff"]])
 }
 
 #' The clauses the timeline's settings put in its subtitle
@@ -206,7 +215,6 @@ timeline_clauses <- function() {
     cm_records = "con meds {@cm_records}",
     cm_colour = "con meds by {@cm_colour}",
     trt_colour = "treatment by {@trt_colour}",
-    order_by = "sorted by {@order_by}",
     cutoff = "cutoff {@cutoff}"
   )
 }

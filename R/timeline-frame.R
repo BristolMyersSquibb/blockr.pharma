@@ -773,6 +773,8 @@ tl_finish <- function(out, sl, opt, group) {
   }
   attr(out$USUBJID, "label") <- "Patient"
   attr(out$Row, "label") <- "Row"
+  # An event's tooltip names its position by this label, as the swimmer's.
+  attr(out$.event_x, "label") <- "Study day"
   keep <- c("USUBJID", "Row", ".arm", pcols, ".ae", ".ae_open", ".ae_ser",
             ".worst", ".cm", ".cm_new", ".days_trt", "Start", "End",
             ".open", "Colour", ".lane", ".style", ".label", "Type",

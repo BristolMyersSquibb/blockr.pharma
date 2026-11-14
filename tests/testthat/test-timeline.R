@@ -448,6 +448,8 @@ test_that("boards saved with weeks or the old defaults restore", {
   expect_identical(sv$cm_colour, "before or on treatment")
   expect_false(grepl("unit", st$subtitle))
   expect_match(st$subtitle, "in study days")
+  # The sort is a header click, not a subtitle word.
+  expect_false(grepl("sorted by", st$subtitle))
   # A board with AEs keeps its sort by AEs.
   expect_identical(timeline_migrate(list(order_by = "number of AEs"))$order_by,
                    "number of AEs")

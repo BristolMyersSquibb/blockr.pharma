@@ -335,3 +335,34 @@ test_that("two episodes of one AE term read as two bars when opened", {
     expect_length(tr$Dizziness, 1L)
   }
 })
+
+test_that("no tooltip names a field by its raw column name", {
+  m <- pt_model(PT_LAYERS)
+  cell <- m$cells$cols[[length(m$cells$cols)]]
+  lane_tips <- unlist(lapply(cell$sl, function(ls) {
+    lapply(ls, function(l) c(l$t, l$et))
+  }))
+  tips <- c(unlist(cell$tips), unlist(cell$et), lane_tips)
+  expect_true(length(tips) > 0L)
+  # "Name: value" parts after the head; none named by a dotted column.
+  parts <- unlist(strsplit(tips, " \u00b7 ", fixed = FALSE))
+  names <- sub(":.*$", "", parts[grepl(":", parts)])
+  expect_false(any(startsWith(trimws(names), ".")), info = paste(names,
+                                                                 collapse = ", "))
+  expect_true(any(grepl("Study day: ", tips, fixed = TRUE)))
+  # The timeline block's frame too.
+  f <- timeline_frame(pt_toy())
+  expect_identical(attr(f$.event_x, "label"), "Study day")
+})
+
+test_that("the subtitle does not name the sort", {
+  expect_false(grepl("order_by", patient_timeline_subtitle()))
+  expect_false(grepl("order_by", timeline_subtitle()))
+  expect_false("order_by" %in% names(timeline_clauses()))
+  b <- new_safety_timeline_block(
+    subtitle = "{@layers} in study days, sorted by {@order_by}"
+  )
+  expect_identical(blockr.core::blockr_ser(b)$payload$subtitle,
+                   "{@layers} in study days")
+  expect_identical(timeline_subtitle_migrate("sorted by {@order_by}, x"), "x")
+})
