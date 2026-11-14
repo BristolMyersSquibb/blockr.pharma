@@ -167,20 +167,21 @@ PT_SETTINGS <- c(
   "origin", "cutoff", "ongoing", "order_by"
 )
 
-# What a preset sets: layers, sort, title and the listing columns ticked.
+# What a preset sets: layers, sort, title and the listing columns ticked
+# (none: the patient and the timeline; the gear offers the rest).
 PT_PRESETS <- list(
   efficacy = list(
     title = "Efficacy timeline",
     values = list(layers = c("Response", "Treatment",
                              "Discontinuation and death"),
                   order_by = "days on treatment"),
-    columns = c("Arm", "Best response")
+    columns = character()
   ),
   safety = list(
     title = "Safety timeline",
     values = list(layers = c("Adverse events", "Discontinuation and death"),
                   order_by = "number of AEs"),
-    columns = c("Arm", "AEs", "Worst AE")
+    columns = character()
   )
 )
 

@@ -148,9 +148,10 @@ test_that("the presets are classes and menu entries of their own", {
   sv <- blockr.core::blockr_ser(e)$payload$script_values
   expect_identical(sv$layers, c("Response", "Treatment",
                                 "Discontinuation and death"))
-  nm <- vapply(blockr.core::blockr_ser(e)$payload$summaries,
-               function(s) s$name %||% "", "")
-  expect_true(all(c("Arm", "Best response") %in% nm))
+  # No listing columns ticked: the patient and the timeline.
+  types <- vapply(blockr.core::blockr_ser(e)$payload$summaries,
+                  function(s) s$type, "")
+  expect_identical(types, "spans")
 })
 
 test_that("the script's settings are its controls and run the frame", {
