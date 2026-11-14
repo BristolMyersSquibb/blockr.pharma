@@ -14,7 +14,7 @@ new_patient_timeline_block(
   title = NULL,
   subtitle = patient_timeline_subtitle(),
   caption = getOption("blockr.viz.default_caption"),
-  drill = NULL,
+  drill = "auto",
   drill_target = "",
   drill_table = "",
   search = TRUE,
@@ -29,7 +29,7 @@ new_efficacy_timeline_block(
   title = NULL,
   subtitle = patient_timeline_subtitle(),
   caption = getOption("blockr.viz.default_caption"),
-  drill = NULL,
+  drill = "auto",
   drill_target = "",
   drill_table = "",
   search = TRUE,
@@ -44,7 +44,7 @@ new_safety_timeline_block(
   title = NULL,
   subtitle = patient_timeline_subtitle(),
   caption = getOption("blockr.viz.default_caption"),
-  drill = NULL,
+  drill = "auto",
   drill_target = "",
   drill_table = "",
   search = TRUE,
@@ -67,8 +67,9 @@ sort, the listing columns and the title.}
 \item{title, subtitle, caption}{Text above and below the block. \code{NULL}
 title: the preset's.}
 
-\item{drill, drill_target, drill_table}{A click on a patient filters another
-block; see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}.}
+\item{drill, drill_target, drill_table}{A click on a patient selects it, which
+narrows the AE records under the table icon, or filters another block;
+see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}. \code{NULL}: clicks do nothing.}
 
 \item{search, download}{The search field and the download button.}
 

@@ -43,8 +43,9 @@
 #'   [patient_timeline_frame()] for each.
 #' @param title,subtitle,caption Text above and below the block. `NULL`
 #'   title: the preset's.
-#' @param drill,drill_target,drill_table A click on a patient filters another
-#'   block; see [blockr.viz::new_table_block()].
+#' @param drill,drill_target,drill_table A click on a patient selects it, which
+#'   narrows the AE records under the table icon, or filters another block;
+#'   see [blockr.viz::new_table_block()]. `NULL`: clicks do nothing.
 #' @param search,download The search field and the download button.
 #' @param ... The settings by name, as in `script_values` (`layers`,
 #'   `order_by`, `ae_terms`, ...), and arguments for
@@ -64,7 +65,7 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
                                        caption = getOption(
                                          "blockr.viz.default_caption"
                                        ),
-                                       drill = NULL,
+                                       drill = "auto",
                                        drill_target = "",
                                        drill_table = "",
                                        search = TRUE,
@@ -129,7 +130,7 @@ new_efficacy_timeline_block <- function(summaries = NULL,
                                         caption = getOption(
                                           "blockr.viz.default_caption"
                                         ),
-                                        drill = NULL,
+                                        drill = "auto",
                                         drill_target = "",
                                         drill_table = "",
                                         search = TRUE,
@@ -153,7 +154,7 @@ new_safety_timeline_block <- function(summaries = NULL,
                                       caption = getOption(
                                         "blockr.viz.default_caption"
                                       ),
-                                      drill = NULL,
+                                      drill = "auto",
                                       drill_target = "",
                                       drill_table = "",
                                       search = TRUE,

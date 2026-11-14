@@ -144,6 +144,7 @@ patient_timeline_frame <- function(data,
   sl <- aet_cap_at(sl, cutoff)
 
   parts <- list()
+  records <- NULL
   if ("Response" %in% layers && !is.null(tb$adrs)) {
     parts$resp <- tl_response(tb$adrs, sl, opt, cutoff)
   }
@@ -153,6 +154,7 @@ patient_timeline_frame <- function(data,
     ae <- ae[pp_find_match(ae, pt_picks(ae_terms, PP_AE_LEVELS),
                            PP_AE_SEARCH), , drop = FALSE]
     parts$ae <- tl_ae(ae, sl, opt, cutoff)
+    records <- pt_ae_records(ae, opt, roles)
   }
   if ("Treatment" %in% layers) {
     parts$trt <- if (identical(opt$treatment_as, "lines per drug")) {
@@ -217,7 +219,7 @@ patient_timeline_frame <- function(data,
   # The section an opened row is listed under (the table's row_sections).
   open <- !is.na(out$Row) & out$.lane %in% c("Adverse events", "Con meds")
   out$.section <- ifelse(open, as.character(out$.lane), NA_character_)
-  out
+  pt_with_records(out, records, sl)
 }
 
 # --- inputs ----------------------------------------------------------------
