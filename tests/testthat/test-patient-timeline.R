@@ -289,3 +289,49 @@ test_that("an opened patient lists every con med", {
   expect_length(rows, 15L)
   expect_false("Other con meds" %in% rows)
 })
+
+test_that("two episodes of one AE term read as two bars when opened", {
+  # Diarrhoea on days 10-20 and 18-30 (overlapping), again 32-40, and
+  # Dizziness 10-15, starting with the first.
+  d <- pt_toy()
+  d$adae <- data.frame(
+    USUBJID = "A", AEDECOD = c("DIARRHOEA", "DIARRHOEA", "DIARRHOEA",
+                               "DIZZINESS"),
+    AEBODSYS = "GASTROINTESTINAL DISORDERS",
+    AESEV = c("MILD", "MODERATE", "MILD", "MILD"), AESER = "N",
+    TRTEMFL = "Y", ASTDY = c(10, 18, 32, 10), AENDY = c(20, 30, 40, 15),
+    stringsAsFactors = FALSE
+  )
+  viz <- asNamespace("blockr.viz")
+  # Each row's tracks: its main lane, then its full bars, as segment lists.
+  tracks <- function(layers) {
+    b <- new_safety_timeline_block(layers = layers)
+    spec <- viz$viz_block_spec("table")
+    p <- blockr.core::blockr_ser(b)$payload
+    p <- p[intersect(names(p), names(spec$args))]
+    p[c("layout", "by", "group_rows", "missing", "sort_by")] <-
+      list("groups", c("USUBJID", "Row"), "summary", "drop", "data")
+    st <- viz$table_normalize(viz$viz_check(spec, p))
+    m <- viz$table_model_groups(st, patient_timeline_frame(d, layers = layers))
+    cell <- m$cells$cols[[length(m$cells$cols)]]
+    out <- lapply(seq_along(m$cells$label), function(i) {
+      full <- Filter(function(l) isTRUE(l$f), cell$sl[[i]] %||% list())
+      c(list(list(s = cell$segs[[i]], t = cell$tips[[i]])),
+        lapply(full, function(l) list(s = l$s, t = l$t)))
+    })
+    out <- lapply(out, function(x) Filter(function(k) length(k$s), x))
+    stats::setNames(out, m$cells$label)
+  }
+  # AEs alone (the main lane), and under the response (a full bar).
+  for (layers in list("Adverse events", c("Response", "Adverse events"))) {
+    tr <- tracks(layers)
+    # Diarrhoea opens into two tracks: days 10-20 with 32-40, and 18-30.
+    expect_length(tr$Diarrhoea, 2L)
+    expect_identical(lengths(lapply(tr$Diarrhoea, `[[`, "s")), c(2L, 1L))
+    tips <- unlist(lapply(tr$Diarrhoea, `[[`, "t"))
+    for (days in c("Day 10 to 20", "Day 18 to 30", "Day 32 to 40")) {
+      expect_true(any(grepl(days, tips, fixed = TRUE)), info = days)
+    }
+    expect_length(tr$Dizziness, 1L)
+  }
+})

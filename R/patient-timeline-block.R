@@ -346,6 +346,9 @@ patient_timeline_lane <- function() {
   l$lane_full <- ".full"
   l$lane_size <- "md"
   l$x_unit <- "Day"
+  # Two episodes of one AE term (or con med) that overlap: two bars on the
+  # opened row, each whole with its own tooltip.
+  l$inner_overlap <- "stack"
   l
 }
 
