@@ -185,9 +185,8 @@ new_safety_timeline_block <- function(summaries = NULL,
 PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
-  "cm_lanes", "cm_prior", "treatment_as", "doses", "trt_colour",
-
-  "origin", "cutoff", "ongoing", "sort_col"
+  "cm_lanes", "cm_prior", "treatment_as", "doses", "dose_tags",
+  "trt_colour", "origin", "cutoff", "ongoing", "sort_col"
 )
 
 # A setting a saved board may still carry: "Sort patients by" is now the
@@ -259,7 +258,8 @@ patient_timeline_script <- function() {
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
-    sel("doses", "Gaps and dose changes", PT_DOSES, "Doses shown as"),
+    sel("doses", "Gaps", PT_DOSES, "Doses shown as"),
+    flag("dose_tags", "FALSE", "Tag dose changes"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
@@ -301,7 +301,7 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
       Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(
         Response = "response",
-        Treatment = c("treatment_as", "doses", "trt_colour"),
+        Treatment = c("treatment_as", "doses", "dose_tags", "trt_colour"),
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),
         `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",

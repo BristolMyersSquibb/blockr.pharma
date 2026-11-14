@@ -21,7 +21,8 @@ patient_timeline_frame(
   cm_terms = NULL,
   cm_prior = "clipped at the start",
   treatment_as = "lines per drug",
-  doses = "Gaps and dose changes",
+  doses = "Gaps",
+  dose_tags = FALSE,
   trt_colour = "dose level",
   origin = "first dose",
   cutoff = NULL,
@@ -83,10 +84,12 @@ colour, as the swimmer draws it. \code{"bars by dose"}: each drug's dose
 records as bars coloured by \code{trt_colour}, as the timeline draws them.
 Either way each drug has a lane of its own.}
 
-\item{doses}{With lines per drug: \code{"Gaps and dose changes"} shows skipped
-cycles as gaps and each change of dose as a small tag with the new dose,
-\code{"Plain"} one solid line. Either way each piece's tooltip gives its own
-dose. The old \code{"Gaps and cuts"} reads as \code{"Gaps and dose changes"}.}
+\item{doses}{With lines per drug: \code{"Gaps"} shows skipped cycles as gaps,
+\code{"Plain"} a drug in cycles as one bar. Either way each piece's tooltip
+gives its own dose. The old \code{"Gaps and cuts"} reads as \code{"Gaps"}.}
+
+\item{dose_tags}{With lines per drug and \code{"Gaps"}, a small tag with the
+new dose where a drug's dose changes.}
 
 \item{trt_colour}{\code{"dose level"} (more than five doses fall into dose
 ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one colour"}.}

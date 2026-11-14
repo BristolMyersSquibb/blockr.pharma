@@ -200,7 +200,12 @@ test_that("the reason tag sits on the lane of the last drug", {
                                                    "Discontinuation and death"))
   tag <- f[!is.na(f$.tag) & !f$Event %in% "Dose change", ]
   expect_identical(as.character(tag$.lane), "Drug")
-  # The drug's dose change is a tag on its lane too, with the new dose.
+  # Tagged on request, the drug's dose change is a tag on its lane too,
+  # with the new dose.
+  expect_false(any(f$Event %in% "Dose change"))
+  f <- patient_timeline_frame(pt_toy(), layers = c("Treatment",
+                                                   "Discontinuation and death"),
+                              dose_tags = TRUE)
   ch <- f[f$Event %in% "Dose change", ]
   expect_identical(unique(as.character(ch$.lane)), "Drug")
   expect_identical(c(ch$USUBJID, ch$.tag), c("A", "81"))

@@ -6,9 +6,9 @@
 #              assessment to the next different one, on the main lane (lane
 #              NA), coloured by the response read
 #   exposure   ADEX, one lane per drug, coloured by the drug: pieces of a
-#              bar, a skipped cycle a gap between them, a change of dose a
-#              new piece with a tagged "Dose change" event, by the `doses`
-#              setting
+#              bar, a skipped cycle a gap between them (the `doses`
+#              setting), a change of dose a new piece and, with
+#              `dose_tags`, a tagged "Dose change" event
 #   events     first progression, serious AEs (ADAE) and death on the main
 #              lane; the discontinuation reason as a short tag (`tag`) where
 #              the drug lines stop
@@ -31,12 +31,13 @@
 #'   (con meds, with `con_meds = TRUE`). Names match case-insensitively.
 #'   SDTM-style names work as in the patient profile: `dm`, `ex`, `rs`, `ae`
 #'   and `cm`, and SDTM columns such as `EXSTDTC` or `RFXSTDTC`.
-#' @param doses How a drug lane shows its doses: `"Gaps and dose changes"`
-#'   (a skipped cycle leaves a gap, a change of dose is a small tag with the
-#'   new dose; late doses only in the tooltip) or `"Plain"` (the bar alone).
-#'   Either way the line keeps one width and each piece's tooltip gives its
-#'   own dose. The old `"Gaps and cuts"`, `"Exceptions"` and `"Dots"` read
-#'   as `"Gaps and dose changes"`.
+#' @param doses How a drug lane shows its doses: `"Gaps"` (a skipped cycle
+#'   leaves a gap, a change of dose starts a new piece; late doses only in
+#'   the tooltip) or `"Plain"` (a drug in cycles as one bar). Either way the
+#'   line keeps one width and each piece's tooltip gives its own dose. The
+#'   old `"Gaps and cuts"`, `"Exceptions"` and `"Dots"` read as `"Gaps"`.
+#' @param dose_tags With `"Gaps"`, a small tag with the new dose where a
+#'   drug's dose changes.
 #' @param con_meds Draw con meds from `adcm` as lanes too.
 #' @param max_lanes Lanes per patient before drugs fold into one grey
 #'   "Other" lane, listed on hover. Study drugs (`adex`) keep theirs.
@@ -54,7 +55,7 @@
 #' @return A data frame, one record per drawn piece; see the source for the
 #'   columns.
 #' @export
-swimmer_frame <- function(data, doses = "Gaps and dose changes",
+swimmer_frame <- function(data, doses = "Gaps", dose_tags = FALSE,
                           con_meds = FALSE,
                           max_lanes = 4L, parameter = "OVR", cutoff = NULL,
                           drugs = NULL,
@@ -113,7 +114,7 @@ swimmer_frame <- function(data, doses = "Gaps and dose changes",
   ex <- swimmer_clip_cm(ex, t0, fu, cutoff)
   ex <- swimmer_fold(ex, max_lanes, t0)
 
-  drug <- swimmer_drug_rows(ex, t0, doses, cutoff)
+  drug <- swimmer_drug_rows(ex, t0, doses, cutoff, isTRUE(dose_tags))
   # With several parameters each is a full bar named by its PARAMCD, the
   # first the main one, each with its own progression.
   lane <- if (length(more)) parameter[[1L]] else NA_character_
@@ -659,11 +660,11 @@ swimmer_fmt_dose <- function(dose, unit) {
 # grey on the "Other" lane; a drug given in cycles (swimmer_every()) runs from
 # the first dose to a cycle after the last, a skipped cycle leaving a gap; any
 # other drug draws its dose periods, daily doses merged. A change of dose
-# starts a new piece, and with "Gaps and dose changes" a tagged event too.
+# starts a new piece, and with "Gaps" and `tags` a tagged event too.
 # Each piece's tooltip gives its own dose. All patients and
 # drugs at once; the records come out by drug and patient as the drugs first
 # appear in `ex`.
-swimmer_drug_rows <- function(ex, t0, doses, cutoff) {
+swimmer_drug_rows <- function(ex, t0, doses, cutoff, tags = FALSE) {
   if (!nrow(ex)) return(NULL)
   gr <- swimmer_groups(ex)
   x <- ex[gr$o, , drop = FALSE]
@@ -679,9 +680,9 @@ swimmer_drug_rows <- function(ex, t0, doses, cutoff) {
   pieces <- c(
     swimmer_other_rows(x, which(other[g]), s, e, tt, gr),
     swimmer_period_rows(x, which(!other[g] & is.na(every[g])), s, e, tt,
-                        dose, gr, doses),
+                        dose, gr, doses, tags),
     swimmer_admin_rows(x, which(!is.na(every[g])), s, tt, dose, gr,
-                       every[g], doses, cutoff)
+                       every[g], doses, cutoff, tags)
   )
   swimmer_bind_in(lapply(pieces, `[[`, "rows"), lapply(pieces, `[[`, "g"),
                   lapply(pieces, `[[`, "at"))
@@ -691,12 +692,13 @@ swimmer_drug_rows <- function(ex, t0, doses, cutoff) {
 # group.
 swimmer_piece <- function(rows, g, at) list(list(rows = rows, g = g, at = at))
 
-# The doses drawn as a drug's line splits: the doses option's values, the
-# old ones read as the first.
-SWIMMER_DOSES <- c("Gaps and dose changes", "Plain")
+# How a drug's line shows its doses: the doses option's values, the old
+# ones read as the first.
+SWIMMER_DOSES <- c("Gaps", "Plain")
 swimmer_doses_value <- function(x) {
   x <- as.character(x)[1L]
-  if (x %in% c("Exceptions", "Dots", "Gaps and cuts")) x <- SWIMMER_DOSES[[1L]]
+  old <- c("Exceptions", "Dots", "Gaps and cuts", "Gaps and dose changes")
+  if (x %in% old) x <- SWIMMER_DOSES[[1L]]
   match.arg(x, SWIMMER_DOSES)
 }
 
@@ -745,9 +747,10 @@ swimmer_other_rows <- function(x, i, s, e, tt, gr) {
 # Drugs given in dose periods. Daily administrations (start = end, two or
 # more) first become periods: a run of the same dose without a gap is one,
 # ending at its last day. Each piece's tooltip gives its own dose and, after
-# a change, the dose before; with "Gaps and dose changes" a change is also a
+# a change, the dose before; with "Gaps" and `tags` a change is also a
 # tagged event.
-swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses) {
+swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses,
+                                tags = FALSE) {
   if (!length(i)) return(list())
   g <- gr$g
   daily <- tabulate(g[i], gr$n) >= 2L &
@@ -778,7 +781,7 @@ swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses) {
     x$USUBJID[k], start = st, end = en, colour = x$drug[k], lane = x$lane[k],
     label = x$drug[k], ongoing = last & open, tip = tip
   ), gk, 10L)
-  if (!identical(doses, SWIMMER_DOSES[[1L]])) return(out)
+  if (!tags || !identical(doses, SWIMMER_DOSES[[1L]])) return(out)
   ch <- which(fr$changed)
   c(out, swimmer_piece(
     swimmer_change_rows(x[k, , drop = FALSE], ch, st[ch], raw[ch],
@@ -804,12 +807,13 @@ swimmer_dose_range <- function(raw, txt, gi, ng) {
 }
 
 # Drugs given in cycles: from the first dose to a cycle after the last (to
-# the cutoff while ongoing). With "Gaps and dose changes", one piece per
-# dose up to the next, a skipped cycle cut out, then touching pieces of the
-# same dose joined: each such run says its dose, its days and its doses,
-# and a change of dose is a tagged event. `every`: the interval of each
+# the cutoff while ongoing). With "Gaps", one piece per dose up to the
+# next, a skipped cycle cut out, then touching pieces of the same dose
+# joined: each such run says its dose, its days and its doses, and with
+# `tags` a change of dose is a tagged event. `every`: the interval of each
 # sorted record's drug.
-swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
+swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff,
+                               tags = FALSE) {
   if (!length(i)) return(list())
   g <- gr$g[i]
   d <- s[i]
@@ -886,7 +890,7 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff) {
     sub("^Day ", "", swimmer_day_txt(xl[gi[rf]], ongoing[gi[rf]])), ", ",
     course[gi[rf]]
   )
-  ch <- which(fr$changed)
+  ch <- if (tags) which(fr$changed) else integer()
   c(
     swimmer_piece(swimmer_rows(
       xi$USUBJID[rf], start = x0[rf], end = en, colour = xi$drug[rf],

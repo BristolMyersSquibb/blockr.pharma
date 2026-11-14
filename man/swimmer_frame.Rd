@@ -6,7 +6,8 @@
 \usage{
 swimmer_frame(
   data,
-  doses = "Gaps and dose changes",
+  doses = "Gaps",
+  dose_tags = FALSE,
   con_meds = FALSE,
   max_lanes = 4L,
   parameter = "OVR",
@@ -23,12 +24,14 @@ and \code{adrs} and, optional, \code{adae} (serious AEs as events) and \code{adc
 SDTM-style names work as in the patient profile: \code{dm}, \code{ex}, \code{rs}, \code{ae}
 and \code{cm}, and SDTM columns such as \code{EXSTDTC} or \code{RFXSTDTC}.}
 
-\item{doses}{How a drug lane shows its doses: \code{"Gaps and dose changes"}
-(a skipped cycle leaves a gap, a change of dose is a small tag with the
-new dose; late doses only in the tooltip) or \code{"Plain"} (the bar alone).
-Either way the line keeps one width and each piece's tooltip gives its
-own dose. The old \code{"Gaps and cuts"}, \code{"Exceptions"} and \code{"Dots"} read
-as \code{"Gaps and dose changes"}.}
+\item{doses}{How a drug lane shows its doses: \code{"Gaps"} (a skipped cycle
+leaves a gap, a change of dose starts a new piece; late doses only in
+the tooltip) or \code{"Plain"} (a drug in cycles as one bar). Either way the
+line keeps one width and each piece's tooltip gives its own dose. The
+old \code{"Gaps and cuts"}, \code{"Exceptions"} and \code{"Dots"} read as \code{"Gaps"}.}
+
+\item{dose_tags}{With \code{"Gaps"}, a small tag with the new dose where a
+drug's dose changes.}
 
 \item{con_meds}{Draw con meds from \code{adcm} as lanes too.}
 

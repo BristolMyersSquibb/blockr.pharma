@@ -44,9 +44,10 @@
 #' @param sort_by,sort_dir Row order: a listing column or a numeric column of
 #'   the frame (`duration`, days on treatment), and its direction.
 #' @param script_values The swimmer's settings, by name: `doses`
-#'   (`"Gaps and dose changes"` or `"Plain"`), `reasons` (the tag for the reason off
-#'   treatment), `drugs`, `cutoff` (a date,
-#'   `NA` for the last date in the data), `con_meds`, `max_lanes`, `events`,
+#'   (`"Gaps"` or `"Plain"`), `dose_tags` (a tag at each dose change),
+#'   `reasons` (the tag for the reason off treatment), `drugs`, `cutoff` (a
+#'   date, `NA` for the last date in the data), `con_meds`, `max_lanes`,
+#'   `events`,
 #'   `parameter` (the ADRS PARAMCDs of the response bars, the first the main
 #'   one; with more than one, each is a full bar named by its code).
 #' @param title,subtitle,caption Text above and below the block. The subtitle
@@ -121,8 +122,8 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
 }
 
 # The swimmer's own settings: its prepare script's values.
-SWIMMER_SETTINGS <- c("doses", "drugs", "cutoff", "con_meds", "max_lanes",
-                      "events", "reasons", "parameter")
+SWIMMER_SETTINGS <- c("doses", "dose_tags", "drugs", "cutoff", "con_meds",
+                      "max_lanes", "events", "reasons", "parameter")
 
 # A saved board names the frame's old columns: a listing column of `weeks`,
 # the lane's events at `event_wk`, its hover strip and tooltip fields. The
@@ -164,9 +165,9 @@ swimmer_script <- function(max_lanes = 4L) {
     paste0("parameter <- factor(pv[1], levels = pv)  #| select(label = ",
            "\"Response (ADRS PARAMCD)\", multiple = TRUE)"),
     "drugs <- factor(lv, levels = lv)  #| select(label = \"Drugs drawn\")",
-    paste0("doses <- factor(\"Gaps and dose changes\", levels = ",
-           "c(\"Gaps and dose changes\", \"Plain\"))  #| select(label = ",
-           "\"Doses on the drug lines\")"),
+    paste0("doses <- factor(\"Gaps\", levels = c(\"Gaps\", \"Plain\"))",
+           "  #| select(label = \"Doses on the drug lines\")"),
+    "dose_tags <- FALSE  #| flag(label = \"Tag dose changes\")",
     paste0("reasons <- TRUE  #| flag(label = ",
            "\"Discontinuation reason where the drug lines stop\")"),
     "con_meds <- FALSE  #| flag(label = \"Con meds as lanes\")",
@@ -175,7 +176,8 @@ swimmer_script <- function(max_lanes = 4L) {
     paste0("events <- factor(", swimmer_levels(c("Progression", "Death")),
            ", levels = ", swimmer_levels(SWIMMER_EVENTS),
            ")  #| select(label = \"Events\")"),
-    paste0("blockr.pharma::swimmer_frame(data, doses = doses, drugs = drugs, ",
+    paste0("blockr.pharma::swimmer_frame(data, doses = doses, ",
+           "dose_tags = dose_tags, drugs = drugs, ",
            "cutoff = cutoff, con_meds = con_meds, max_lanes = max_lanes, ",
            "events = events, reasons = reasons, parameter = parameter)"),
     sep = "\n"
@@ -234,7 +236,7 @@ swimmer_gear <- function() {
                   Time = "cutoff"),
       Patients = list(Rows = c("group", "sort"), Columns = "columns"),
       Lanes = list(
-        `Drug lines` = c("drugs", "doses", "reasons", "con_meds",
+        `Drug lines` = c("drugs", "doses", "dose_tags", "reasons", "con_meds",
                          "max_lanes"),
         `Response bar` = "events",
         Swimlane = "lane_width"
