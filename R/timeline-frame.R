@@ -832,7 +832,8 @@ tl_colour_factor <- function(out, opt) {
     drug <- identical(s, "Treatment") && !is.null(pal)
     ord <- if (drug) names(pal)[names(pal) %in% v] else tl_level_order(s, v)
     lv <- c(lv, ord)
-    col <- c(col, if (drug) unname(pal[ord]) else tl_palette(s, ord))
+    col <- c(col, if (drug) unname(pal[ord]) else
+      tl_palette(s, ord, opt$ae_palette))
   }
   f <- factor(out$.colour, levels = unique(lv))
   attr(f, "blockr_colors") <- stats::setNames(col, lv)[unique(lv)]
@@ -869,12 +870,13 @@ tl_level_order <- function(src, v) {
   c(fixed[fixed %in% v], sort(rest), TL_OTHER[TL_OTHER %in% v])
 }
 
-tl_palette <- function(src, lv) {
+# `ae`: the AE colours by level, AET_COLOURS by default.
+tl_palette <- function(src, lv, ae = NULL) {
   n <- length(lv)
   switch(
     src,
     AE = {
-      p <- AET_COLOURS[lv]
+      p <- (ae %||% AET_COLOURS)[lv]
       p[is.na(p)] <- "#e07b39"
       unname(p)
     },

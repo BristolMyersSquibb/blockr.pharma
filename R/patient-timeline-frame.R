@@ -128,6 +128,7 @@ patient_timeline_frame <- function(data,
     src_order = c("Response", "Treatment", "AE", "CM"),
     lanes = c("Treatment", PT_FULL_LANES),
     full_lanes = PT_FULL_LANES,
+    ae_palette = pt_ae_palette(),
     extra = c(".tag", ".bor", ".status", ".full")
   )
   tb <- pt_tables(data, layers)
@@ -276,6 +277,17 @@ patient_timeline_roles <- function() {
 }
 
 # --- AEs: colour and term picks ---------------------------------------------
+
+# The patient profile's severity colours (pp_sev_colors), under the
+# timeline's level names: what both draw where the board's scale map does not
+# bind the severity column.
+pt_ae_palette <- function() {
+  c(Mild = pp_sev_colors[["MILD"]], Moderate = pp_sev_colors[["MODERATE"]],
+    Severe = pp_sev_colors[["SEVERE"]],
+    stats::setNames(unname(pp_sev_colors[as.character(1:5)]),
+                    paste("Grade", 1:5)),
+    AE = AET_COLOURS[["AE"]])
+}
 
 # Which column colours the AEs. "study severity" resolves the column as the
 # patient profile does (pp_sev_column()) and copies it to where tl_ae()

@@ -112,6 +112,9 @@ test_that("the study's severity column and arm win", {
   roles <- list(severity = "ATOXGR", arm = "TRT01A")
   f <- patient_timeline_frame(pt_toy(), roles = roles)
   expect_identical(levels(f$Colour), c("Grade 1", "Grade 2", "Grade 3"))
+  # The profile's colours, as it draws the same grades.
+  expect_identical(unname(attr(f$Colour, "blockr_colors")),
+                   unname(pp_sev_colors[c("1", "2", "3")]))
   arm <- f$.arm[is.na(f$Row) & is.na(f$.event_x)]
   expect_true("Drug 54 mg" %in% arm)
   expect_error(patient_timeline_frame(pt_toy(),
