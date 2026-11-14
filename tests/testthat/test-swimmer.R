@@ -207,19 +207,23 @@ test_that("drugs and cutoff narrow the frame", {
   expect_false(grepl("cutoff", swimmer_subtitle(), fixed = TRUE))
 })
 
-test_that("the swimmer is in the menu and saves and restores as itself", {
-  # Its own uid: one taken from the table's class would replace viz's Table.
-  expect_true("swimmer_block" %in% blockr.core::list_blocks())
+test_that("the swimmer is out of the menu and saves and restores as itself", {
+  # The efficacy timeline replaces it; viz's Table keeps its own entry.
+  expect_false("swimmer_block" %in% blockr.core::list_blocks())
+  expect_false("timeline_block" %in% blockr.core::list_blocks())
   tbl <- blockr.core:::get_registry_entry("table_block")
   expect_identical(attr(tbl, "ctor_name"), "new_table_block")
 
-  blk <- blockr.core::create_block("swimmer_block")
+  blk <- expect_no_warning(new_swimmer_block())
   expect_identical(class(blk)[1:2], c("swimmer_block", "table_block"))
   expect_identical(blockr.core::block_name(blk), "Efficacy swimmer")
   ctor <- attr(blk, "ctor")
   expect_identical(attr(ctor, "fun"), "new_swimmer_block")
   expect_identical(attr(ctor, "pkg"), "blockr.pharma")
-  expect_identical(blockr.core::block_metadata(blk)$id, "swimmer_block")
+  meta <- blockr.core::block_metadata(blk)
+  expect_identical(meta$name, "Efficacy Swimmer")
+  expect_identical(meta$icon, "bar-chart-steps")
+  expect_no_warning(new_timeline_block())
 
   # What a board saves: the swimmer's arguments, its script left out.
   blk <- new_swimmer_block(doses = "Plain", group = "BOR")

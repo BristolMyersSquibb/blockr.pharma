@@ -90,6 +90,12 @@ new_swimmer_block <- function(by = c("ARM", "USUBJID"),
   }
   if (!is.null(dots$group)) by <- c(dots$group, "USUBJID")
   dots[c(own, "group", "ctor", "ctor_pkg", "class", "gear", "max_lanes")] <- NULL
+  if (is.null(dots$block_metadata)) {
+    dots$block_metadata <- retired_block_metadata(
+      "Efficacy Swimmer",
+      "One row per patient: response over time, drug lanes with doses."
+    )
+  }
   if (is.null(dots$block_name)) dots$block_name <- "Efficacy swimmer"
   do.call(blockr.viz::new_table_block, c(
     list(

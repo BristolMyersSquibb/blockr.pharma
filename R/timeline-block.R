@@ -87,6 +87,12 @@ new_timeline_block <- function(summaries = NULL,
   }
   dots[c(own, "ctor", "ctor_pkg", "class", "gear", "by", "layout",
          "group_rows", "sort_by", "missing")] <- NULL
+  if (is.null(dots$block_metadata)) {
+    dots$block_metadata <- retired_block_metadata(
+      "Timeline",
+      "One row per patient: adverse events, con meds and treatment over time."
+    )
+  }
   if (is.null(dots$block_name)) dots$block_name <- "Timeline"
   do.call(blockr.viz::new_table_block, c(
     list(

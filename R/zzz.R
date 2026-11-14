@@ -227,74 +227,10 @@ register_pharma_blocks <- function() {
   # groups layout); new_ae_heatmap_block() only builds one, so it has no
   # registry entry of its own.
   #
-  # The swimmer is a table block of its own class (swimmer_block) that saves
-  # and restores under new_swimmer_block(), so its uid comes from its class.
-  register_blocks(
-    "new_swimmer_block",
-    name = "Efficacy Swimmer",
-    uid = "swimmer_block",
-    description = paste0(
-      "One row per patient: response over time, drug lanes with doses, ",
-      "from a CDISC dm."
-    ),
-    category = "table",
-    icon = "bar-chart-steps",
-    guidance = paste0(
-      "Takes a dm of ADaM tables as they are: ADSL, ADEX, ADRS (overall ",
-      "response by visit, PARAMCD OVR) and, optional, ADAE (serious AEs) ",
-      "and ADCM (con meds). Link it from the CDISC dm block or a filter ",
-      "below it; it needs no prep blocks. It draws one row per patient with ",
-      "the response as a bar in study days, a lane per drug above it, ",
-      "arrows for drugs ongoing at the cutoff and a tag for the ",
-      "discontinuation reason."
-    ),
-    # Plain descriptions, not arg specs: core checks specs against the
-    # formals of the block's own constructor, new_table_block().
-    # Plain descriptions, not arg specs: core checks specs against the
-    # constructor's formals, and these settings travel through `...`.
-    arguments = list(c(
-      doses = "How a drug lane shows its doses: Gaps and cuts, or Plain.",
-      reasons = "Tag the discontinuation reason where the drug lines stop.",
-      con_meds = "Draw con meds from ADCM as lanes too (TRUE/FALSE).",
-      group = "ADSL column grouping the rows, default ARM.",
-      cutoff = "The data cutoff, a date; NA for the last date in the data."
-    )),
-    package = utils::packageName(),
-    overwrite = TRUE
-  )
-  # The timeline is a table block of its own class (timeline_block), as the
-  # swimmer is.
-  register_blocks(
-    "new_timeline_block",
-    name = "Timeline",
-    uid = "timeline_block",
-    description = paste0(
-      "One row per patient: adverse events, con meds and treatment over ",
-      "time, opening into a row per term, from a CDISC dm."
-    ),
-    category = "table",
-    icon = "bar-chart-steps",
-    guidance = paste0(
-      "Takes a dm of ADaM tables as they are: ADSL and any of ADAE, ADCM ",
-      "and ADEX. Link it from the CDISC dm block or a filter below it; it ",
-      "needs no prep blocks. Each patient is one stripe per source, the ",
-      "worst level active that day; a click opens the patient into a row ",
-      "per AE term, con med and drug."
-    ),
-    arguments = list(c(
-      show = paste("What to draw: any of \"Adverse events\", \"Con meds\",",
-                   "\"Treatment\"."),
-      ae_colour = "AE colour: grade or severity, severity, grade, one colour.",
-      cm_colour = paste("Con-med colour: class, else before or on",
-                        "treatment; before or on treatment; indication;",
-                        "one colour."),
-      unit = "The time axis: days or weeks since day 1.",
-      group = "ADSL column shown as the arm, default TRT01A.",
-      cutoff = "The data cutoff, a date; NA for the last date in the data."
-    )),
-    package = utils::packageName(),
-    overwrite = TRUE
-  )
+  # The old swimmer (new_swimmer_block()) and timeline (new_timeline_block())
+  # have no menu entry: the efficacy and safety timelines replace them. Saved
+  # boards still restore them through their constructors.
+  #
   # The patient timeline's two presets, each a class and an entry of its own
   # (see new_patient_timeline_block()).
   pt_args <- list(c(
