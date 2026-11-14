@@ -162,7 +162,8 @@ new_safety_timeline_block <- function(summaries = NULL,
 PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
-  "cm_lanes", "cm_prior", "trt_colour", "dose_labels", "max_lanes",
+  "cm_lanes", "cm_prior", "treatment_as", "doses", "trt_colour",
+  "dose_labels", "max_lanes",
   "origin", "cutoff", "ongoing", "order_by"
 )
 
@@ -226,7 +227,9 @@ patient_timeline_script <- function() {
     sel("cm_lanes", "coded name", names(TL_CM_LANES), "Open into one row per"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
-    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
+    sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
+    sel("doses", "Gaps and cuts", PT_DOSES, "Doses shown as"),
+    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Bars coloured by"),
     flag("dose_labels", "TRUE", "Dose labels on the bars"),
     paste0("max_lanes <- 12  #| number(min = 1, max = 40, step = 1, ",
            "label = \"Rows before \\\"Other con meds\\\"\")"),
@@ -266,13 +269,13 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
       Patients = list(Rows = c("order_by", "group"), Columns = "columns"),
       Lanes = list(
         Response = "response",
-        Treatment = c("trt_colour", "dose_labels"),
+        Treatment = c("treatment_as", "doses", "trt_colour", "dose_labels"),
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),
         `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",
                        "cm_prior"),
         `Open rows` = c("open_rows", "max_lanes"),
-        Timeline = "lane_width"
+        Timeline = c("lane_width", "lane_track")
       ),
       Titles = "titles",
       Interaction = list(`Drill-down` = "drill",
@@ -332,9 +335,13 @@ patient_timeline_summaries <- function(preset = c("safety", "efficacy")) {
   }, on, names(on))), list(patient_timeline_lane()))
 }
 
+# The timeline's lane, with reason tags, the drugs as the swimmer's 5px lines
+# and the response, AE and con-med stripes as full bars under them.
 patient_timeline_lane <- function() {
   l <- timeline_lane()
   l$event_tag <- ".tag"
+  l$lane_full <- ".full"
+  l$lane_size <- "md"
   l
 }
 

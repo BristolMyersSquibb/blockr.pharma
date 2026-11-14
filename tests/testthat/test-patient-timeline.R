@@ -81,7 +81,7 @@ test_that("the efficacy layers draw response runs, progression and treatment", {
   r <- f[f$.lane %in% "Response" & is.finite(f$Start), ]
   a <- r[r$USUBJID == "A", ]
   expect_identical(as.character(a$Colour), c("Not assessed", "PR", "PD"))
-  expect_true(all(c("Response", "Treatment") %in% levels(droplevels(f$.lane))))
+  expect_true(all(c("Response", "Drug") %in% levels(droplevels(f$.lane))))
   pr <- f[f$Event %in% "Progression" & is.na(f$Row), ]
   expect_identical(pr$USUBJID, "A")
   # Best response and status on the patient record.
@@ -101,6 +101,8 @@ test_that("any combination of layers works, colours stay within 15", {
       f <- patient_timeline_frame(pt_toy(), layers = set)
       expect_lte(nlevels(f$Colour), 15L)
       drawn <- levels(droplevels(f$.lane))
+      # Treatment draws a lane per drug.
+      drawn[drawn %in% c("Drug", "Placebo")] <- "Treatment"
       expect_true(all(drawn %in% set))
     }
   }
@@ -174,12 +176,52 @@ test_that("the table draws a stripe per layer and opens into rows", {
   expect_null(m$prep$err)
   r <- m$prep$rows
   spans <- length(m$cells$cols)
-  sl <- m$cells$cols[[spans]]$sl[[which(r$.label == "A")]]
+  cell <- m$cells$cols[[spans]]
+  a <- which(r$.label == "A")
+  # The drug a thin lane, the AE and con-med stripes full bars under the
+  # response, which is the main lane.
+  sl <- cell$sl[[a]]
   expect_identical(vapply(sl, function(l) l$n, ""),
-                   c("Response", "Treatment", "Adverse events", "Con meds"))
+                   c("Drug", "Adverse events", "Con meds"))
+  expect_identical(vapply(sl, function(l) isTRUE(l$f), NA),
+                   c(FALSE, TRUE, TRUE))
+  expect_gt(length(cell$segs[[a]]), 0L)
   kids <- r$.label[!r$.is_parent & r$.parent == "A"]
   expect_identical(kids, c("Response", "Drug", "Headache", "Nausea",
                            "Paracetamol"))
+})
+
+test_that("treatment draws a line per drug, or bars by dose", {
+  f <- patient_timeline_frame(pt_toy(), layers = c("Response", "Treatment"))
+  d <- f[f$.lane %in% "Drug", ]
+  # One line from the first dose, cut from 54 to 81 mg: a step up, so solid.
+  expect_identical(unique(d$USUBJID), c("A", "C"))
+  expect_identical(levels(f$.lane)[1:2], c("Drug", "Placebo"))
+  expect_false(any(f$.full[f$.lane %in% c("Drug", "Placebo")]))
+  expect_true(all(f$.full[f$.lane %in% "Response"]))
+  # The swimmer's drug colours.
+  pal <- attr(f$Colour, "blockr_colors")
+  expect_identical(unname(pal[c("Drug", "Placebo")]),
+                   c(SWIMMER_DRUGS[[1L]], "#8f9bb3"))
+  # C is on treatment at the cutoff: its line stays open.
+  expect_true(any(d$.open[d$USUBJID == "C"]))
+  # Bars by dose: the timeline's dose levels, each drug on its lane.
+  b <- patient_timeline_frame(pt_toy(), layers = c("Response", "Treatment"),
+                              treatment_as = "bars by dose")
+  expect_true(all(c("54 mg", "81 mg") %in% levels(b$Colour)))
+  expect_identical(sort(unique(as.character(b$.lane[b$Type %in%
+                                                      "Treatment"]))),
+                   c("Drug", "Placebo"))
+})
+
+test_that("the reason tag sits on the lane of the last drug", {
+  f <- patient_timeline_frame(pt_toy(), layers = c("Treatment",
+                                                   "Discontinuation and death"))
+  tag <- f[!is.na(f$.tag), ]
+  expect_identical(as.character(tag$.lane), "Drug")
+  # Without treatment drawn it marks the patient row.
+  f <- patient_timeline_frame(pt_toy())
+  expect_true(is.na(f$.lane[!is.na(f$.tag)]))
 })
 
 test_that("a board restores the patient timeline with its layers", {

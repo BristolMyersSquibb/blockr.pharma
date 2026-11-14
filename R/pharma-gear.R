@@ -3,8 +3,8 @@
 # in its input.
 
 # The script of the gear rows the pharma blocks register: the Tables row
-# ("mapping"), the swimlane's Width ("lane_width") and the rows at start
-# ("open_rows").
+# ("mapping"), the swimlane's Width ("lane_width") and ground
+# ("lane_track"), and the rows at start ("open_rows").
 pharma_gear_dep <- function() {
   htmltools::htmlDependency(
     name = "blockr-pharma-gear",

@@ -20,6 +20,8 @@ patient_timeline_frame(
   cm_lanes = "coded name",
   cm_terms = NULL,
   cm_prior = "clipped at the start",
+  treatment_as = "lines per drug",
+  doses = "Gaps and cuts",
   trt_colour = "dose level",
   dose_labels = TRUE,
   max_lanes = 12,
@@ -71,6 +73,14 @@ legend can show (see \code{\link[=timeline_frame]{timeline_frame()}}'s details).
 \code{"class"}.}
 
 \item{cm_prior}{Con meds that start before the axis: \code{"clipped at the start"} or \code{"hidden"}.}
+
+\item{treatment_as}{\code{"lines per drug"}: a thin line per drug in its
+colour, as the swimmer draws it. \code{"bars by dose"}: each drug's dose
+records as bars coloured by \code{trt_colour}, as the timeline draws them.
+Either way each drug has a lane of its own.}
+
+\item{doses}{With lines per drug: \code{"Gaps and cuts"} shows skipped cycles,
+delays and dose cuts on the line, \code{"Plain"} one solid line.}
 
 \item{trt_colour}{\code{"dose level"} (more than five doses fall into dose
 ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one colour"}.}

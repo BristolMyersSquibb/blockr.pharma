@@ -6,6 +6,7 @@
 //               picked response parameter is not in ADRS (the pick itself is
 //               the prepare script's `parameter` row)
 //   lane_width  the swimlane's Width
+//   lane_track  the swimlane's ground: none or a grey track
 //   open_rows   whether the patient rows start closed or open (the table's
 //               `open`)
 (function () {
@@ -116,6 +117,25 @@
   }
 
   B.viz.gear.editors.lane_width = { label: 'Width', draw: drawWidth };
+
+  // The swimlane's ground: the bars on the surface, or on the bar column's
+  // grey track (the spans column's `track`).
+  const TRACKS = [[false, 'None'], [true, 'Grey track']];
+  function drawTrack(parent, ctx) {
+    const sums = Array.isArray(ctx.values.summaries) ? ctx.values.summaries : [];
+    const lane = sums.find((s) => s && s.type === 'spans');
+    if (!lane) return;
+    const at = lane.track === true ? '1' : '0';
+    const pick = (i) => {
+      const track = TRACKS[Number(i)][0];
+      ctx.setValues({ summaries: sums.map((s) =>
+        s && s.type === 'spans' ? Object.assign({}, s, { track }) : s) });
+    };
+    const opts = TRACKS.map(([, label], i) => ({ value: String(i), label }));
+    parent.appendChild(B.segmented(opts, at, pick, { label: 'Behind the bars' }).el);
+  }
+
+  B.viz.gear.editors.lane_track = { label: 'Behind the bars', draw: drawTrack };
 
   // The patient rows at start: closed or open (the table's `open`). The
   // header's button opens and closes them all either way.
