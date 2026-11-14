@@ -140,9 +140,7 @@ TIMELINE_SETTINGS <- c(
 # a board sorted by AEs that shows none (the old default sort) sorts by the
 # con meds it shows.
 timeline_migrate <- function(sv) {
-  if (!is.null(sv$cm_colour)) {
-    sv$cm_colour <- tl_cm_colour_value(sv$cm_colour)
-  }
+  sv <- tl_colour_values_migrate(sv)
   show <- as.character(unlist(sv$show %||% c("Adverse events", "Treatment")))
   if (identical(as.character(unlist(sv$order_by)), "number of AEs") &&
         !"Adverse events" %in% show) {
@@ -178,16 +176,18 @@ timeline_script <- function() {
   paste(
     sel("show", c("Adverse events", "Treatment"), TL_SHOW, "Draw"),
     "group <- \"TRT01A\"  #| text(label = \"Arm column (ADSL)\")",
-    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which AEs"),
+    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which records"),
     sel("ae_show", "all AEs", TL_AE_SHOW, "Show"),
-    sel("ae_colour", "grade or severity", TL_AE_COLOUR, "Colour by"),
-    sel("ae_lanes", "preferred term", names(TL_AE_LANES),
-        "Open into one row per"),
+    paste0("aef <- blockr.pharma::timeline_colour_fields(data, \"ae\", ",
+           "grade_first = TRUE)"),
+    pt_colour_line("ae_colour", "aef[1]", "aef"),
+    sel("ae_lanes", "preferred term", names(TL_AE_LANES), "One row per"),
     sel("serious", "outlined", TL_SERIOUS, "Serious AEs"),
     flag("death", "TRUE", "Death as a cross"),
-    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which con meds"),
-    sel("cm_colour", "before or on treatment", TL_CM_COLOUR, "Colour by"),
-    sel("cm_lanes", "coded name", names(TL_CM_LANES), "Open into one row per"),
+    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which records"),
+    "cmf <- blockr.pharma::timeline_colour_fields(data, \"cm\")",
+    pt_colour_line("cm_colour", "\"before or on treatment\"", "cmf"),
+    sel("cm_lanes", "coded name", names(TL_CM_LANES), "One row per"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
@@ -198,7 +198,8 @@ timeline_script <- function() {
         "No end runs to"),
     sel("order_by", "number of events", TL_ORDER, "Sort patients by"),
     paste0("blockr.pharma::timeline_frame(data, ",
-           paste0(args, " = ", args, collapse = ", "), ")"),
+           paste0(args, " = ", args, collapse = ", "),
+           ", scale_map = blockr.pharma::timeline_scale_map())"),
     sep = "\n"
   )
 }

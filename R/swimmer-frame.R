@@ -149,9 +149,14 @@ swimmer_frame <- function(data, doses = "Gaps and cuts", con_meds = FALSE,
 #' @export
 swimmer_parameters <- function(data) {
   tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
-  pc <- if (!is.null(tb)) swimmer_col(tb$adrs, "PARAMCD")
+  swimmer_parameters_of(tb$adrs)
+}
+
+# The response parameters of an ADRS table (swimmer_parameters()).
+swimmer_parameters_of <- function(adrs) {
+  pc <- if (!is.null(adrs)) swimmer_col(adrs, "PARAMCD")
   if (is.null(pc)) return("OVR")
-  v <- swimmer_resp_value(tb$adrs$AVALC)
+  v <- swimmer_resp_value(adrs$AVALC)
   ok <- tapply(v, as.character(pc), function(x) {
     mean(x %in% c(names(SWIMMER_RESPONSE), "NOT EVALUABLE")) > 0.8
   })

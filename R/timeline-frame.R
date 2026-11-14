@@ -31,18 +31,22 @@
 #'   `"Treatment"`.
 #' @param ae_records `"treatment-emergent"` (`TRTEMFL`) or `"all"`.
 #' @param ae_show `"all AEs"`, `"serious AEs"` or `"ongoing AEs"`.
-#' @param ae_colour `"grade or severity"` (grade when ADAE has one, else
-#'   severity), `"severity"`, `"grade"` or `"one colour"`.
+#' @param ae_colour The field that colours the AEs, a column of ADAE as
+#'   [timeline_colour_fields()] lists them (`"AETOXGR"`, `"AESEV"`,
+#'   `"AEACNA"`, ...), or `"one colour"`. A column the data lacks falls back
+#'   to the study's severity. The words of earlier versions (`"grade or
+#'   severity"`, `"grade"`, `"severity"`) still work.
 #' @param ae_lanes One row per `"preferred term"`, `"reported term"` or
 #'   `"body system"` when a patient is opened.
 #' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
 #' @param death Mark death with a cross.
 #' @param cm_records `"active on treatment"` (ends on or after the first dose,
 #'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
-#' @param cm_colour `"before or on treatment"`, `"class"`, `"indication"` or
-#'   `"one colour"`. Classes and indications keep their most common levels
-#'   and fold the rest into "Other", so the colours stay within what a
-#'   legend can show (see [timeline_frame()]'s details).
+#' @param cm_colour The field that colours the con meds: a column of ADCM
+#'   (`"CMCLAS"`, `"CMINDC"`, `"CMROUTE"`), `"before or on treatment"` or
+#'   `"one colour"`. A column keeps its most common levels and folds the
+#'   rest into "Other", so the colours stay within what a legend can show.
+#'   `"class"` and `"indication"` still work.
 #' @param cm_lanes One row per `"coded name"`, `"reported name"` or
 #'   `"class"`.
 #' @param cm_prior Con meds that start before the axis: `"clipped at the
@@ -61,6 +65,9 @@
 #'   `"ongoing AEs"`, `"first onset"`, `"number of con meds"` or
 #'   `"subject"`.
 #' @param group The patient column shown as the arm, e.g. `"TRT01A"`.
+#' @param scale_map The board's scale map ([timeline_scale_map()]): a
+#'   colour field's levels draw in the order it pins them, the last the
+#'   worst. `NULL`: their known order.
 #' @details Time is in study days. The colour column holds at most 15 levels
 #'   over all sources, the most the table draws: AEs take theirs (at most
 #'   five grades), treatment at most five, con meds what is left, at most
@@ -94,19 +101,20 @@ timeline_frame <- function(data,
                            cutoff = NULL,
                            ongoing = "last contact",
                            order_by = "number of events",
-                           group = "TRT01A") {
+                           group = "TRT01A",
+                           scale_map = NULL) {
   show <- intersect(TL_SHOW, as.character(unlist(show)))
   if (!length(show)) stop("Pick at least one thing to show.", call. = FALSE)
   arg <- function(x, choices) match.arg(as.character(x)[1L], choices)
   opt <- list(
     ae_records = arg(ae_records, TL_AE_RECORDS),
     ae_show = arg(ae_show, TL_AE_SHOW),
-    ae_colour = arg(ae_colour, TL_AE_COLOUR),
+    ae_colour = as.character(unlist(ae_colour))[1L],
     ae_lanes = arg(ae_lanes, names(TL_AE_LANES)),
     serious = arg(serious, TL_SERIOUS),
     death = isTRUE(as.logical(death)),
     cm_records = arg(cm_records, TL_CM_RECORDS),
-    cm_colour = arg(tl_cm_colour_value(cm_colour), TL_CM_COLOUR),
+    cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
     cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
@@ -119,6 +127,9 @@ timeline_frame <- function(data,
   group <- if (length(group)) group[[1L]]
 
   tb <- tl_tables(data, show)
+  opt$scale_map <- scale_map
+  if (!is.null(tb$adae)) opt$ae_field <- tl_ae_field(tb$adae, ae_colour)
+  opt$cmfield <- tl_cm_field(tb$adcm, tl_cm_colour_value(cm_colour))
   sl <- tl_subjects(tb, group, opt$origin)
   cutoff <- aet_date(cutoff)
   if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- tl_cutoff(tb, sl)
@@ -139,6 +150,8 @@ timeline_frame <- function(data,
   }
   parts <- Filter(function(p) !is.null(p) && length(p$USUBJID), parts)
   if (!length(parts)) stop("Nothing to draw.", call. = FALSE)
+  # Field orders and colours travel as attributes, which tl_keep() drops.
+  opt$field_palettes <- tl_field_palettes(parts)
   # Patients with an event (an AE or a con med) shown; treatment alone draws
   # every patient it has.
   ev <- unique(unlist(lapply(parts[intersect(c("ae", "cm"), names(parts))],
@@ -391,20 +404,29 @@ tl_ae <- function(ae, sl, opt, cutoff) {
   row <- aet_title(chr(c(lane_col, "AEDECOD", "AETERM")))
   row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
   ser <- flag("AESER")
-  by <- aet_colour_by(ae, switch(opt$ae_colour,
-                                 "grade or severity" = "grade or severity",
-                                 severity = "Severity", grade = "Grade",
-                                 "one colour" = "AE"))
+  # The field that colours the bars (tl_ae_field()): grade or severity as
+  # always, one colour, or any other column by its values.
+  fld <- opt$ae_field %||% tl_ae_field(ae, opt$ae_colour)
+  if (fld$mode %in% c("grade", "severity")) {
+    ae[[if (fld$mode == "grade") "ATOXGR" else "ASEV"]] <- ae[[fld$col]]
+  }
+  by <- switch(fld$mode, grade = "Grade", severity = "Severity", "AE")
   grade <- aet_grade(ae, by)
-  # The value behind each level, for the board's scale map.
-  svar <- switch(by, Grade = "grade", Severity = "severity", NA_character_)
-  skey <- switch(by, Grade = chr(c("ATOXGR", "AETOXGR")),
-                 Severity = chr(c("ASEV", "AESEV")), rep(NA_character_, n))
+  raw <- if (identical(fld$mode, "column")) chr(fld$col)
+  colour <- if (is.null(raw)) as.character(grade) else
+    ifelse(is.na(raw) | !nzchar(raw), "Not recorded", aet_title(raw))
+  # The value behind each level, for the board's scale map: a column's own
+  # name, or either spelling of grade and severity.
+  svar <- switch(fld$mode, grade = "grade", severity = "severity",
+                 column = fld$col, NA_character_)
+  skey <- switch(fld$mode, grade = chr(c("ATOXGR", "AETOXGR")),
+                 severity = chr(c("ASEV", "AESEV")), column = raw,
+                 rep(NA_character_, n))
   # The worst AE reads grade or severity, whatever colours the bars.
-  worst <- if (identical(by, "AE")) {
-    aet_grade(ae, aet_colour_by(ae, "grade or severity"))
-  } else {
+  worst <- if (fld$mode %in% c("grade", "severity")) {
     grade
+  } else {
+    aet_grade(ae, aet_colour_by(ae, "grade or severity"))
   }
   body <- aet_title(chr("AEBODSYS"))
   out <- aet_title(chr("AEOUT"))
@@ -413,7 +435,7 @@ tl_ae <- function(ae, sl, opt, cutoff) {
                 ifelse(is.na(out), "", paste0(", ", out)))
   p <- list(
     USUBJID = as.character(ae$USUBJID), Row = row, .src = rep("AE", n),
-    Start = days$start, End = days$end, .colour = as.character(grade),
+    Start = days$start, End = days$end, .colour = colour,
     .label = term, Type = rep("Adverse event", n), Details = det,
     .ae = rep(1, n), .ae_ser = as.numeric(ser),
     .worst = as.character(worst), .fatal = flag("AESDTH"),
@@ -429,6 +451,11 @@ tl_ae <- function(ae, sl, opt, cutoff) {
               p)
   if (identical(opt$serious, "outlined")) {
     p$.style <- ifelse(p$.ae_ser == 1, "outline", NA_character_)
+  }
+  # A column's levels in its order and colours (tl_field_order()).
+  if (identical(fld$mode, "column")) {
+    attr(p, "tl_field") <- tl_field_order(fld$col, p$.skey, p$.colour,
+                                          opt$scale_map)
   }
   p
 }
@@ -470,7 +497,9 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
                      ifelse(is.na(cls), "", paste0(
                        ifelse(is.na(ind), "", ", "), aet_title(cls)))),
     .cm = rep(1, n), .d1 = d1, .cls = aet_title(cls), .ind = ind,
-    .cls_raw = cls, .ind_raw = chr("CMINDC")
+    .cls_raw = cls, .ind_raw = chr("CMINDC"),
+    .fld_raw = if (is.null(opt$cmfield)) rep(NA_character_, n) else
+      chr(opt$cmfield)
   )
   p <- tl_keep(p, is.finite(p$Start))
   if (identical(opt$cm_records, "active on treatment")) {
@@ -488,7 +517,11 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
     p$Start <- pmax(p$Start, lo)
   }
   p <- tl_cm_colour(p, opt)
-  p[c(".d1", ".cls", ".ind", ".cls_raw", ".ind_raw")] <- NULL
+  if (!is.null(opt$cmfield)) {
+    attr(p, "tl_field") <- tl_field_order(opt$cmfield, p$.skey, p$.colour,
+                                          opt$scale_map)
+  }
+  p[c(".d1", ".cls", ".ind", ".cls_raw", ".ind_raw", ".fld_raw")] <- NULL
   p
 }
 
@@ -501,7 +534,12 @@ tl_cm_colour <- function(p, opt) {
     list(v = ifelse(is.na(x), other, x),
          svar = ifelse(is.na(x), NA_character_, var), skey = raw)
   }
-  res <- switch(
+  # A column (tl_cm_field()) colours by its values; else the words.
+  res <- if (!is.null(opt$cmfield)) {
+    by(aet_title(p$.fld_raw), p$.fld_raw,
+       switch(opt$cmfield, CMCLAS = "Other class",
+              CMINDC = "Other indication", "Other"), opt$cmfield)
+  } else switch(
     opt$cm_colour,
     "before or on treatment" = list(
       v = ifelse(p$.cm_new == 1, "Started on treatment",
@@ -788,8 +826,9 @@ tl_colour_factor <- function(out, opt) {
     room <- min(TL_MAX_CM_COLOURS,
                 TL_MAX_COLOURS - n_lv("AE") - n_lv("Treatment") -
                   n_lv("Response"))
-    other <- switch(opt$cm_colour, class = "Other class",
-                    indication = "Other indication", "Other")
+    other <- switch(opt$cmfield %||% opt$cm_colour,
+                    class = , CMCLAS = "Other class",
+                    indication = , CMINDC = "Other indication", "Other")
     v <- tl_fold_top(out$.colour[cm], max(2L, room), other)
     out$.svar[cm][v != out$.colour[cm]] <- NA_character_
     out$.colour[cm] <- v
@@ -800,10 +839,26 @@ tl_colour_factor <- function(out, opt) {
     v <- unique(out$.colour[drawn & out$.src %in% s])
     if (!length(v)) next
     drug <- identical(s, "Treatment") && !is.null(pal)
-    ord <- if (drug) names(pal)[names(pal) %in% v] else tl_level_order(s, v)
+    # A field's own order and colours (tl_field_order()); a level outside
+    # them (a fold's "Other") goes last.
+    fp <- opt$field_palettes[[s]]
+    ord <- if (drug) {
+      names(pal)[names(pal) %in% v]
+    } else if (!is.null(fp)) {
+      c(names(fp)[names(fp) %in% v], sort(setdiff(v, names(fp))))
+    } else {
+      tl_level_order(s, v)
+    }
     lv <- c(lv, ord)
-    col <- c(col, if (drug) unname(pal[ord]) else
-      tl_palette(s, ord, opt$ae_palette))
+    col <- c(col, if (drug) {
+      unname(pal[ord])
+    } else if (!is.null(fp)) {
+      p <- unname(fp[ord])
+      p[is.na(p)] <- "#b4bac3"
+      p
+    } else {
+      tl_palette(s, ord, opt$ae_palette)
+    })
   }
   f <- factor(out$.colour, levels = unique(lv))
   attr(f, "blockr_colors") <- stats::setNames(col, lv)[unique(lv)]
@@ -817,7 +872,7 @@ tl_scale_keys <- function(out) {
   k <- !is.na(out$.svar) & !is.na(out$.skey) & nzchar(out$.skey)
   k <- unique(data.frame(level = out$.colour[k], svar = out$.svar[k],
                          key = out$.skey[k], stringsAsFactors = FALSE))
-  vars <- TL_SCALE_VARS[k$svar]
+  vars <- lapply(k$svar, function(v) TL_SCALE_VARS[[v]] %||% v)
   data.frame(level = rep(k$level, lengths(vars)),
              var = unlist(vars, use.names = FALSE),
              key = rep(k$key, lengths(vars)), stringsAsFactors = FALSE)

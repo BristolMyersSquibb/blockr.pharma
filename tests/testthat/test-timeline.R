@@ -234,7 +234,9 @@ test_that("the colour default follows what ADAE has", {
   tb$adae$AETOXGR <- NULL
   n <- recs(timeline_frame(tb), "Adverse events")
   expect_true(all(n$Colour == "AE"))
-  expect_error(timeline_frame(tb, ae_colour = "severity"), "severity")
+  # A field the data lacks falls back to the study's severity, here none.
+  s <- recs(timeline_frame(tb, ae_colour = "severity"), "Adverse events")
+  expect_true(all(s$Colour == "AE"))
 })
 
 test_that("SDTM table and column names read through the profile's catalog", {
@@ -276,7 +278,8 @@ test_that("the script's settings are its controls and run the frame", {
   sc <- timeline_script()
   ex <- parse(text = sc)
   vars <- vapply(ex[-length(ex)], function(e) as.character(e[[2L]]), "")
-  expect_setequal(vars, TIMELINE_SETTINGS)
+  # The colour fields' helper lines, then the settings.
+  expect_setequal(setdiff(vars, c("aef", "cmf")), TIMELINE_SETTINGS)
   env <- new.env()
   env$data <- tl_toy()
   expect_identical(eval(ex, env), timeline_frame(tl_toy()))
@@ -340,8 +343,9 @@ test_that("a board restores the timeline with its settings", {
   expect_s3_class(rt$block, "timeline_block")
   expect_equal(plain_state(rt$restored), plain_state(rt$saved),
                ignore_attr = TRUE)
+  # The old word restores as the column it meant.
   expect_identical(as.character(rt$restored$script_values$cm_colour),
-                   "class")
+                   "CMCLAS")
 })
 
 # Patient A's con meds with one class each, and a dose per period.

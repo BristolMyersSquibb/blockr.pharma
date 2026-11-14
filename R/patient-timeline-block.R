@@ -78,7 +78,8 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   summaries <- tl_summaries_migrate(summaries)
   own <- intersect(names(dots), PT_SETTINGS)
   script_values[own] <- dots[own]
-  sv <- utils::modifyList(def$values, script_values)
+  sv <- utils::modifyList(def$values,
+                          tl_colour_values_migrate(script_values))
   subtitle <- timeline_subtitle_migrate(subtitle)
   sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
   if (is.null(summaries)) summaries <- patient_timeline_summaries(preset)
@@ -216,29 +217,31 @@ patient_timeline_script <- function() {
         PT_LAYERS, "Layers", multiple = TRUE),
     paste0("group <- \"\"  #| text(label = \"Arm column (ADSL)\", ",
            "placeholder = \"the study's arm\")"),
-    "pv <- blockr.pharma::swimmer_parameters(data)",
+    "roles <- blockr.pharma::patient_timeline_roles()",
+    "pv <- blockr.pharma::timeline_colour_fields(data, \"rs\")",
     paste0("response <- factor(pv[1], levels = pv)  #| select(label = ",
-           "\"Response (ADRS PARAMCD)\")"),
+           "\"Colour by\", labels = names(pv))"),
     "aet <- blockr.pharma::patient_timeline_terms(data, \"ae\")",
     paste0("ae_terms <- factor(character(), levels = aet)  #| select(",
            "label = \"Only these AEs\", multiple = TRUE)"),
-    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which AEs"),
+    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which records"),
     sel("ae_show", "all AEs", TL_AE_SHOW, "Show"),
-    sel("ae_colour", "study severity", PT_AE_COLOUR, "Colour by"),
-    sel("ae_lanes", "preferred term", names(TL_AE_LANES),
-        "Open into one row per"),
+    "aef <- blockr.pharma::timeline_colour_fields(data, \"ae\", roles)",
+    pt_colour_line("ae_colour", "aef[1]", "aef"),
+    sel("ae_lanes", "preferred term", names(TL_AE_LANES), "One row per"),
     sel("serious", "outlined", TL_SERIOUS, "Serious AEs"),
     "cmt <- blockr.pharma::patient_timeline_terms(data, \"cm\")",
     paste0("cm_terms <- factor(character(), levels = cmt)  #| select(",
            "label = \"Only these con meds\", multiple = TRUE)"),
-    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which con meds"),
-    sel("cm_colour", "before or on treatment", TL_CM_COLOUR, "Colour by"),
-    sel("cm_lanes", "coded name", names(TL_CM_LANES), "Open into one row per"),
+    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which records"),
+    "cmf <- blockr.pharma::timeline_colour_fields(data, \"cm\")",
+    pt_colour_line("cm_colour", "\"before or on treatment\"", "cmf"),
+    sel("cm_lanes", "coded name", names(TL_CM_LANES), "One row per"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis"),
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
     sel("doses", "Gaps and cuts", PT_DOSES, "Doses shown as"),
-    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Bars coloured by"),
+    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -247,7 +250,7 @@ patient_timeline_script <- function() {
     sel("order_by", "number of AEs", PT_ORDER, "Sort patients by"),
     paste0("blockr.pharma::patient_timeline_frame(data, ",
            paste0(args, " = ", args, collapse = ", "),
-           ", roles = blockr.pharma::patient_timeline_roles())"),
+           ", roles = roles, scale_map = blockr.pharma::timeline_scale_map())"),
     sep = "\n"
   )
 }
@@ -373,4 +376,12 @@ patient_timeline_mapping <- function(data) {
        note = paste("Names match without case. The AE severity column and",
                     "the arm come from the board's study roles when it",
                     "declares them."))
+}
+
+# A track's "Colour by" row: a select of the fields `pool` names (a helper
+# line of timeline_colour_fields()), showing their labels, storing their
+# names.
+pt_colour_line <- function(name, value, pool) {
+  paste0(name, " <- factor(", value, ", levels = ", pool, ")  #| select(",
+         "label = \"Colour by\", labels = names(", pool, "))")
 }

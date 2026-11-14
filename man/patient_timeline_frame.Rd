@@ -27,7 +27,8 @@ patient_timeline_frame(
   cutoff = NULL,
   ongoing = "last contact",
   order_by = "number of AEs",
-  roles = NULL
+  roles = NULL,
+  scale_map = NULL
 )
 }
 \arguments{
@@ -45,10 +46,11 @@ board's "study_roles" option, else \code{ACTARM}, \code{TRT01A} or \code{ARM}.}
 
 \item{ae_show}{\code{"all AEs"}, \code{"serious AEs"} or \code{"ongoing AEs"}.}
 
-\item{ae_colour}{\code{"study severity"} (the severity column of the board's
-"study_roles" option, else the first of \code{ASEV}, \code{AESEV}, \code{ATOXGR} and
-\code{AETOXGR}, as the patient profile picks it), \code{"grade"}, \code{"severity"} or
-\code{"one colour"}.}
+\item{ae_colour}{The field that colours the AEs: a column of ADAE as
+\code{\link[=timeline_colour_fields]{timeline_colour_fields()}} lists them, or \code{"one colour"}. \code{"study severity"}, and a column the data lacks: the severity column of the
+board's "study_roles" option, else the first of \code{ASEV}, \code{AESEV},
+\code{ATOXGR} and \code{AETOXGR}, as the patient profile picks it. \code{"grade"} and
+\code{"severity"} still work.}
 
 \item{ae_lanes}{One row per \code{"preferred term"}, \code{"reported term"} or
 \code{"body system"} when a patient is opened.}
@@ -62,10 +64,11 @@ disorders"). Empty: all.}
 \item{cm_records}{\code{"active on treatment"} (ends on or after the first dose,
 or ongoing) or \code{"all"} (the axis then starts 28 days before day 1).}
 
-\item{cm_colour}{\code{"before or on treatment"}, \code{"class"}, \code{"indication"} or
-\code{"one colour"}. Classes and indications keep their most common levels
-and fold the rest into "Other", so the colours stay within what a
-legend can show (see \code{\link[=timeline_frame]{timeline_frame()}}'s details).}
+\item{cm_colour}{The field that colours the con meds: a column of ADCM
+(\code{"CMCLAS"}, \code{"CMINDC"}, \code{"CMROUTE"}), \code{"before or on treatment"} or
+\code{"one colour"}. A column keeps its most common levels and folds the
+rest into "Other", so the colours stay within what a legend can show.
+\code{"class"} and \code{"indication"} still work.}
 
 \item{cm_lanes}{One row per \code{"coded name"}, \code{"reported name"} or
 \code{"class"}.}
@@ -97,6 +100,10 @@ and \code{"subject"}.}
 
 \item{roles}{The study's roles, as \code{\link[=patient_timeline_roles]{patient_timeline_roles()}} reads them
 from the board. \code{NULL}: none declared.}
+
+\item{scale_map}{The board's scale map (\code{\link[=timeline_scale_map]{timeline_scale_map()}}): a
+colour field's levels draw in the order it pins them, the last the
+worst.}
 }
 \value{
 A data frame, one record per drawn piece.

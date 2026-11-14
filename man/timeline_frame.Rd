@@ -22,7 +22,8 @@ timeline_frame(
   cutoff = NULL,
   ongoing = "last contact",
   order_by = "number of events",
-  group = "TRT01A"
+  group = "TRT01A",
+  scale_map = NULL
 )
 }
 \arguments{
@@ -36,8 +37,10 @@ tables of what is shown; or the ADAE data frame alone.}
 
 \item{ae_show}{\code{"all AEs"}, \code{"serious AEs"} or \code{"ongoing AEs"}.}
 
-\item{ae_colour}{\code{"grade or severity"} (grade when ADAE has one, else
-severity), \code{"severity"}, \code{"grade"} or \code{"one colour"}.}
+\item{ae_colour}{The field that colours the AEs, a column of ADAE as
+\code{\link[=timeline_colour_fields]{timeline_colour_fields()}} lists them (\code{"AETOXGR"}, \code{"AESEV"},
+\code{"AEACNA"}, ...), or \code{"one colour"}. A column the data lacks falls back
+to the study's severity. The words of earlier versions (\code{"grade or severity"}, \code{"grade"}, \code{"severity"}) still work.}
 
 \item{ae_lanes}{One row per \code{"preferred term"}, \code{"reported term"} or
 \code{"body system"} when a patient is opened.}
@@ -49,10 +52,11 @@ severity), \code{"severity"}, \code{"grade"} or \code{"one colour"}.}
 \item{cm_records}{\code{"active on treatment"} (ends on or after the first dose,
 or ongoing) or \code{"all"} (the axis then starts 28 days before day 1).}
 
-\item{cm_colour}{\code{"before or on treatment"}, \code{"class"}, \code{"indication"} or
-\code{"one colour"}. Classes and indications keep their most common levels
-and fold the rest into "Other", so the colours stay within what a
-legend can show (see \code{\link[=timeline_frame]{timeline_frame()}}'s details).}
+\item{cm_colour}{The field that colours the con meds: a column of ADCM
+(\code{"CMCLAS"}, \code{"CMINDC"}, \code{"CMROUTE"}), \code{"before or on treatment"} or
+\code{"one colour"}. A column keeps its most common levels and folds the
+rest into "Other", so the colours stay within what a legend can show.
+\code{"class"} and \code{"indication"} still work.}
 
 \item{cm_lanes}{One row per \code{"coded name"}, \code{"reported name"} or
 \code{"class"}.}
@@ -77,6 +81,10 @@ shown), \code{"number of AEs"}, \code{"worst AE"},
 \code{"subject"}.}
 
 \item{group}{The patient column shown as the arm, e.g. \code{"TRT01A"}.}
+
+\item{scale_map}{The board's scale map (\code{\link[=timeline_scale_map]{timeline_scale_map()}}): a
+colour field's levels draw in the order it pins them, the last the
+worst. \code{NULL}: their known order.}
 }
 \value{
 A data frame, one record per drawn piece; see the source for the

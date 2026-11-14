@@ -25,7 +25,6 @@
 # The layers, in the order their stripes stack on a patient row.
 PT_LAYERS <- c("Response", "Treatment", "Discontinuation and death",
                "Adverse events", "Con meds")
-PT_AE_COLOUR <- c("study severity", "grade", "severity", "one colour")
 PT_TRT_DRAW <- c("lines per drug", "bars by dose")
 PT_DOSES <- c("Gaps and cuts", "Plain")
 # The layers drawn as full bars under the drug lanes, the first the main one.
@@ -48,10 +47,15 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #' @param group The ADSL column shown as the arm. Empty: the arm of the
 #'   board's "study_roles" option, else `ACTARM`, `TRT01A` or `ARM`.
 #' @param response The ADRS parameter of the overall response.
-#' @param ae_colour `"study severity"` (the severity column of the board's
-#'   "study_roles" option, else the first of `ASEV`, `AESEV`, `ATOXGR` and
-#'   `AETOXGR`, as the patient profile picks it), `"grade"`, `"severity"` or
-#'   `"one colour"`.
+#' @param ae_colour The field that colours the AEs: a column of ADAE as
+#'   [timeline_colour_fields()] lists them, or `"one colour"`. `"study
+#'   severity"`, and a column the data lacks: the severity column of the
+#'   board's "study_roles" option, else the first of `ASEV`, `AESEV`,
+#'   `ATOXGR` and `AETOXGR`, as the patient profile picks it. `"grade"` and
+#'   `"severity"` still work.
+#' @param scale_map The board's scale map ([timeline_scale_map()]): a
+#'   colour field's levels draw in the order it pins them, the last the
+#'   worst.
 #' @param treatment_as `"lines per drug"`: a thin line per drug in its
 #'   colour, as the swimmer draws it. `"bars by dose"`: each drug's dose
 #'   records as bars coloured by `trt_colour`, as the timeline draws them.
@@ -98,7 +102,8 @@ patient_timeline_frame <- function(data,
                                    cutoff = NULL,
                                    ongoing = "last contact",
                                    order_by = "number of AEs",
-                                   roles = NULL) {
+                                   roles = NULL,
+                                   scale_map = NULL) {
   layers <- intersect(PT_LAYERS, as.character(unlist(layers)))
   if (!length(layers)) stop("Pick at least one layer.", call. = FALSE)
   arg <- function(x, choices) match.arg(as.character(x)[1L], choices)
@@ -106,12 +111,12 @@ patient_timeline_frame <- function(data,
   opt <- list(
     ae_records = arg(ae_records, TL_AE_RECORDS),
     ae_show = arg(ae_show, TL_AE_SHOW),
-    ae_colour = arg(ae_colour, PT_AE_COLOUR),
+    ae_colour = as.character(unlist(ae_colour))[1L],
     ae_lanes = arg(ae_lanes, names(TL_AE_LANES)),
     serious = arg(serious, TL_SERIOUS),
     death = "Discontinuation and death" %in% layers,
     cm_records = arg(cm_records, TL_CM_RECORDS),
-    cm_colour = arg(tl_cm_colour_value(cm_colour), TL_CM_COLOUR),
+    cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
     cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
@@ -129,6 +134,8 @@ patient_timeline_frame <- function(data,
     extra = c(".tag", ".bor", ".status", ".full")
   )
   tb <- pt_tables(data, layers)
+  opt$scale_map <- scale_map
+  opt$cmfield <- tl_cm_field(tb$adcm, tl_cm_colour_value(cm_colour))
   group <- pt_group(group, roles, tb$adsl)
   sl <- tl_subjects(tb, group, opt$origin)
   cutoff <- aet_date(cutoff)
@@ -141,8 +148,8 @@ patient_timeline_frame <- function(data,
     parts$resp <- tl_response(tb$adrs, sl, opt, cutoff)
   }
   if ("Adverse events" %in% layers && !is.null(tb$adae)) {
-    ae <- pt_ae_colour(tb$adae, opt, roles)
-    opt$ae_colour <- attr(ae, "pt_colour")
+    ae <- tb$adae
+    opt$ae_field <- tl_ae_field(ae, ae_colour, roles)
     ae <- ae[pp_find_match(ae, pt_picks(ae_terms, PP_AE_LEVELS),
                            PP_AE_SEARCH), , drop = FALSE]
     parts$ae <- tl_ae(ae, sl, opt, cutoff)
@@ -165,6 +172,7 @@ patient_timeline_frame <- function(data,
     if (nrow(cm)) parts$cm <- tl_cm(cm, sl, opt, cutoff, lo)
   }
   parts <- Filter(function(p) !is.null(p) && length(p$USUBJID), parts)
+  opt$field_palettes <- tl_field_palettes(parts)
   # What the response part carries besides its records; tl_keep() drops it.
   resp_events <- attr(parts$resp, "pt_events")
   resp_bor <- attr(parts$resp, "pt_bor")
@@ -292,35 +300,6 @@ pt_ae_palette <- function() {
     stats::setNames(unname(pp_sev_colors[as.character(1:5)]),
                     paste("Grade", 1:5)),
     AE = AET_COLOURS[["AE"]])
-}
-
-# Which column colours the AEs. "study severity" resolves the column as the
-# patient profile does (pp_sev_column()) and copies it to where tl_ae()
-# reads a grade (ATOXGR) or a severity (ASEV). The mode tl_ae() then takes is
-# kept as the "pt_colour" attribute.
-pt_ae_colour <- function(ae, opt, roles) {
-  mode <- switch(opt$ae_colour, grade = "grade", severity = "severity",
-                 "one colour" = "one colour", NULL)
-  if (is.null(mode)) {
-    col <- pp_sev_column(names(ae), roles$severity)
-    if (is.null(col)) {
-      mode <- "one colour"
-    } else {
-      v <- ae[[col]]
-      grade <- col %in% c("ATOXGR", "AETOXGR") ||
-        (!col %in% c("ASEV", "AESEV") &&
-           all(grepl("^[0-9]+$", stats::na.omit(as.character(v)))))
-      if (grade) {
-        ae$ATOXGR <- v
-        mode <- "grade"
-      } else {
-        ae$ASEV <- v
-        mode <- "severity"
-      }
-    }
-  }
-  attr(ae, "pt_colour") <- mode
-  ae
 }
 
 #' The terms a patient timeline can narrow its AEs or con meds to
