@@ -86,8 +86,10 @@ the response (ADRS overall response by visit, first progression marked),
 treatment (ADEX dose periods), discontinuation and death (a two-letter
 tag for the reason at the last dose, a cross at death), adverse events
 (ADAE) and con meds (ADCM). Each layer is a stripe on the patient row; a
-click opens the row into one row per response, drug, AE term and con
-med.
+click opens the row into one row per AE term and con med, each layer
+under a small title when both open. Treatment and the response stay on
+the patient row, their detail in the tooltips; with only those layers
+ticked a patient does not open.
 }
 \details{
 AEs take the severity column the board's "study_roles" option declares,

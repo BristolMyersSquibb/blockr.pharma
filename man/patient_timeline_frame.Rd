@@ -87,8 +87,8 @@ ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one col
 
 \item{dose_labels}{Write the dose on the treatment bars.}
 
-\item{max_lanes}{Rows per opened patient before the rest of the con meds
-fold into "Other con meds".}
+\item{max_lanes}{Not used: an opened patient lists every con med. Kept so
+saved boards that set it restore.}
 
 \item{origin}{Day 1 is the \code{"first dose"} (\code{TRTSDT}) or \code{"randomisation"}
 (\code{RANDDT}).}

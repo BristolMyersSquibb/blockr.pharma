@@ -2,6 +2,9 @@
 # the swimmer's layers added. One long frame, one record per thing drawn, for
 # the spans column of new_patient_timeline_block():
 #
+# Treatment and the response draw on the patient row only (no row of their
+# own); AEs and con meds open into a row per term, under a section title.
+#
 #   Treatment                  a thin lane per drug: the swimmer's drug
 #                              lines (swimmer_drug_rows()), or the
 #                              timeline's dose bars
@@ -64,6 +67,8 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   AEs"`, `"number of events"`, `"worst AE"`, `"best response"`, `"first
 #'   progression"`, `"ongoing AEs"`, `"first onset"`, `"number of con meds"`
 #'   and `"subject"`.
+#' @param max_lanes Not used: an opened patient lists every con med. Kept so
+#'   saved boards that set it restore.
 #' @param roles The study's roles, as [patient_timeline_roles()] reads them
 #'   from the board. `NULL`: none declared.
 #' @inheritParams timeline_frame
@@ -119,7 +124,6 @@ patient_timeline_frame <- function(data,
     treatment_as = arg(treatment_as, PT_TRT_DRAW),
     doses = arg(doses, PT_DOSES),
     dose_labels = isTRUE(as.logical(dose_labels)),
-    max_lanes = max(1L, as.integer(max_lanes %||% 12L)[1L], na.rm = TRUE),
     origin = arg(origin, TL_ORIGIN),
     ongoing = arg(ongoing, c("last contact", "data cutoff")),
     order_by = arg(order_by, PT_ORDER),
@@ -189,8 +193,12 @@ patient_timeline_frame <- function(data,
   sl <- sl[sl$USUBJID %in% ids, , drop = FALSE]
   attr(sl, "pcols") <- pcols
   parts <- lapply(parts, function(p) tl_keep(p, p$USUBJID %in% sl$USUBJID))
-  if ("cm" %in% names(parts)) parts$cm <- tl_fold(parts, opt$max_lanes)
   parts <- tl_unique_rows(parts)
+  # Treatment and the response draw on the patient row only: an opened
+  # patient lists its AE terms and con meds, which the stripes cannot name.
+  for (nm in intersect(c("trt", "resp"), names(parts))) {
+    parts[[nm]]$Row <- rep(NA_character_, length(parts[[nm]]$USUBJID))
+  }
   rec <- tl_bind(parts)
   extra <- list(
     if (!is.null(rec)) tl_event_rows(rec, sl, opt),
@@ -204,7 +212,11 @@ patient_timeline_frame <- function(data,
   # Death before progression, so it keeps the timeline's cross.
   opt$events <- c("Serious AE", "Fatal AE", "Death", "Progression",
                   pt_reason_levels(out$.event))
-  tl_finish(out, sl, opt, group)
+  out <- tl_finish(out, sl, opt, group)
+  # The section an opened row is listed under (the table's row_sections).
+  open <- !is.na(out$Row) & out$.lane %in% c("Adverse events", "Con meds")
+  out$.section <- ifelse(open, as.character(out$.lane), NA_character_)
+  out
 }
 
 # --- inputs ----------------------------------------------------------------
@@ -401,11 +413,8 @@ tl_response <- function(adrs, sl, opt, cutoff) {
   if (!is.null(pd)) {
     m <- length(pd$USUBJID)
     attr(p, "pt_events") <- list(
-      USUBJID = c(pd$USUBJID, pd$USUBJID),
-      Row = c(rep(NA_character_, m), rep("Response", m)),
-      .src = c(rep(NA_character_, m), rep("Response", m)),
-      .event_x = c(pd$event_day, pd$event_day),
-      .event = rep("Progression", 2L * m)
+      USUBJID = pd$USUBJID, Row = rep(NA_character_, m),
+      .event_x = pd$event_day, .event = rep("Progression", m)
     )
   }
   attr(p, "pt_bor") <- stats::setNames(swimmer_bor_of(rs, ids), ids)

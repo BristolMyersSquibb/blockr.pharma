@@ -3,8 +3,9 @@
 #
 # One row per patient with a stripe per layer drawn (response, treatment,
 # AEs, con meds; discontinuation and death as marks); a click opens the
-# patient into a row per response, drug, AE term and con med, on the same
-# axis. The table block's prepare step, patient_timeline_frame(), reads the
+# patient into a row per AE term and con med, on the same axis, each layer
+# under a small title. Treatment and the response do not open: their detail
+# is in the tooltips. The table block's prepare step, patient_timeline_frame(), reads the
 # ADaM tables from the input dm.
 #
 # Two presets build it: "efficacy" (response, treatment, discontinuation and
@@ -21,8 +22,10 @@
 #' treatment (ADEX dose periods), discontinuation and death (a two-letter
 #' tag for the reason at the last dose, a cross at death), adverse events
 #' (ADAE) and con meds (ADCM). Each layer is a stripe on the patient row; a
-#' click opens the row into one row per response, drug, AE term and con
-#' med.
+#' click opens the row into one row per AE term and con med, each layer
+#' under a small title when both open. Treatment and the response stay on
+#' the patient row, their detail in the tooltips; with only those layers
+#' ticked a patient does not open.
 #'
 #' AEs take the severity column the board's "study_roles" option declares,
 #' as the patient profile does, and both AEs and con meds can be narrowed to
@@ -78,13 +81,14 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
   if (is.null(title)) title <- def$title
   ctor <- paste0("new_", preset, "_timeline_block")
   dots[c(own, "ctor", "ctor_pkg", "class", "gear", "by", "layout",
-         "group_rows", "sort_by", "missing", "preset")] <- NULL
+         "group_rows", "sort_by", "missing", "preset", "row_sections")] <- NULL
   if (is.null(dots$block_name)) dots$block_name <- def$title
   do.call(blockr.viz::new_table_block, c(
     list(
       layout = "groups",
       by = c("USUBJID", "Row"),
       group_rows = "summary",
+      row_sections = ".section",
       open = match.arg(open, c("none", "all")),
       summaries = summaries,
       missing = "drop",
@@ -163,7 +167,7 @@ PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "doses", "trt_colour",
-  "dose_labels", "max_lanes",
+  "dose_labels",
   "origin", "cutoff", "ongoing", "order_by"
 )
 
@@ -232,8 +236,6 @@ patient_timeline_script <- function() {
     sel("doses", "Gaps and cuts", PT_DOSES, "Doses shown as"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Bars coloured by"),
     flag("dose_labels", "TRUE", "Dose labels on the bars"),
-    paste0("max_lanes <- 12  #| number(min = 1, max = 40, step = 1, ",
-           "label = \"Rows before \\\"Other con meds\\\"\")"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -275,7 +277,7 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
                              "ae_colour", "ae_lanes", "serious"),
         `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",
                        "cm_prior"),
-        `Open rows` = c("open_rows", "max_lanes"),
+        `Open rows` = "open_rows",
         Timeline = c("lane_width", "lane_track")
       ),
       Titles = "titles",
@@ -343,6 +345,7 @@ patient_timeline_lane <- function() {
   l$event_tag <- ".tag"
   l$lane_full <- ".full"
   l$lane_size <- "md"
+  l$x_unit <- "Day"
   l
 }
 

@@ -166,17 +166,21 @@ test_that("the script's settings are its controls and run the frame", {
   expect_identical(eval(ex, env), patient_timeline_frame(pt_toy()))
 })
 
-test_that("the table draws a stripe per layer and opens into rows", {
+# The table model of a patient timeline with these layers on pt_toy().
+pt_model <- function(layers) {
   viz <- asNamespace("blockr.viz")
-  b <- new_patient_timeline_block(layers = PT_LAYERS)
+  b <- new_patient_timeline_block(layers = layers)
   spec <- viz$viz_block_spec("table")
   p <- blockr.core::blockr_ser(b)$payload
   p <- p[intersect(names(p), names(spec$args))]
-  p[c("layout", "by", "group_rows", "missing", "sort_by")] <-
-    list("groups", c("USUBJID", "Row"), "summary", "drop", "data")
+  p[c("layout", "by", "group_rows", "missing", "sort_by", "row_sections")] <-
+    list("groups", c("USUBJID", "Row"), "summary", "drop", "data", ".section")
   st <- viz$table_normalize(viz$viz_check(spec, p))
-  m <- viz$table_model_groups(st, patient_timeline_frame(pt_toy(),
-                                                         layers = PT_LAYERS))
+  viz$table_model_groups(st, patient_timeline_frame(pt_toy(), layers = layers))
+}
+
+test_that("the table draws a stripe per layer and opens into rows", {
+  m <- pt_model(PT_LAYERS)
   expect_null(m$prep$err)
   r <- m$prep$rows
   spans <- length(m$cells$cols)
@@ -190,9 +194,31 @@ test_that("the table draws a stripe per layer and opens into rows", {
   expect_identical(vapply(sl, function(l) isTRUE(l$f), NA),
                    c(FALSE, TRUE, TRUE))
   expect_gt(length(cell$segs[[a]]), 0L)
+  # Opened, AE terms and con meds only, each layer under its title.
   kids <- r$.label[!r$.is_parent & r$.parent == "A"]
-  expect_identical(kids, c("Response", "Drug", "Headache", "Nausea",
-                           "Paracetamol"))
+  expect_identical(kids, c("Headache", "Nausea", "Paracetamol"))
+  title <- m$cells$title[!r$.is_parent & r$.parent == "A"]
+  expect_identical(title, c("Adverse events", NA, "Con meds"))
+  # The axis counts days.
+  ax <- asNamespace("blockr.viz")$table_groups_axis(m$prep$plan[[spans]],
+                                                     m$prep)
+  expect_match(ax$labels[[1L]], "^Day ")
+})
+
+test_that("one layer open has no title; treatment or response alone no rows", {
+  m <- pt_model(c("Response", "Adverse events"))
+  r <- m$prep$rows
+  expect_identical(r$.label[!r$.is_parent & r$.parent == "A"],
+                   c("Headache", "Nausea"))
+  expect_null(m$cells$title)
+  # Nothing opens: one row per patient, none under it.
+  for (layers in list("Treatment", "Response", c("Treatment", "Response"))) {
+    m <- pt_model(layers)
+    expect_null(m$prep$err)
+    expect_false(any(m$prep$rows$.level > 0L))
+    cell <- m$cells$cols[[length(m$cells$cols)]]
+    expect_true(any(lengths(cell$segs) > 0L) || any(lengths(cell$sl) > 0L))
+  }
 })
 
 test_that("treatment draws a line per drug, or bars by dose", {
@@ -251,4 +277,15 @@ test_that("the response follows a study map under any of its names", {
     expect_identical(got[["PR"]], "#FFD700")
     expect_identical(got[["CR"]], own[["CR"]])
   }
+})
+
+test_that("an opened patient lists every con med", {
+  d <- pt_toy()
+  d$adcm <- data.frame(USUBJID = "A", CMDECOD = sprintf("DRUG %02d", 1:15),
+                       CMTRT = "x", CMCLAS = "ANALGESICS", ASTDY = 2,
+                       AENDY = 6, stringsAsFactors = FALSE)
+  f <- patient_timeline_frame(d, layers = "Con meds")
+  rows <- unique(f$Row[!is.na(f$Row)])
+  expect_length(rows, 15L)
+  expect_false("Other con meds" %in% rows)
 })
