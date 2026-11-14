@@ -183,6 +183,15 @@ test_that("boards saved with the dose labels or the row cap restore", {
   expect_false(any(c("dose_labels", "max_lanes") %in% names(sv)))
 })
 
+test_that("overlapping AE episodes stay on one bar, also on saved boards", {
+  lane <- patient_timeline_summaries("safety")
+  expect_null(lane[[length(lane)]]$inner_overlap)
+  lane[[length(lane)]]$inner_overlap <- "stack"
+  old <- new_safety_timeline_block(summaries = lane)
+  sv <- blockr.core::blockr_ser(old)$payload$summaries
+  expect_false(identical(sv[[length(sv)]]$inner_overlap, "stack"))
+})
+
 test_that("a name used by two sources stays two rows", {
   tb <- tl_toy()
   tb$adcm$CMDECOD[[2L]] <- "HEADACHE"

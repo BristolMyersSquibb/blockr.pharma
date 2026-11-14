@@ -129,7 +129,9 @@ TL_RETIRED <- c("dose_labels", "max_lanes")
 tl_summaries_migrate <- function(summaries) {
   if (!is.list(summaries)) return(summaries)
   lapply(summaries, function(s) {
-    if (is.list(s)) s$bar_label <- NULL
+    # Overlapping episodes of one term no longer stack on two bars; the AE
+    # records under the table icon list them.
+    if (is.list(s)) s[c("bar_label", "inner_overlap")] <- NULL
     s
   })
 }

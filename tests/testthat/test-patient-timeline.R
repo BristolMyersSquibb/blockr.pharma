@@ -290,7 +290,7 @@ test_that("an opened patient lists every con med", {
   expect_false("Other con meds" %in% rows)
 })
 
-test_that("two episodes of one AE term read as two bars when opened", {
+test_that("two episodes of one AE term stay on one bar when opened", {
   # Diarrhoea on days 10-20 and 18-30 (overlapping), again 32-40, and
   # Dizziness 10-15, starting with the first.
   d <- pt_toy()
@@ -325,13 +325,10 @@ test_that("two episodes of one AE term read as two bars when opened", {
   # AEs alone (the main lane), and under the response (a full bar).
   for (layers in list("Adverse events", c("Response", "Adverse events"))) {
     tr <- tracks(layers)
-    # Diarrhoea opens into two tracks: days 10-20 with 32-40, and 18-30.
-    expect_length(tr$Diarrhoea, 2L)
-    expect_identical(lengths(lapply(tr$Diarrhoea, `[[`, "s")), c(2L, 1L))
-    tips <- unlist(lapply(tr$Diarrhoea, `[[`, "t"))
-    for (days in c("Day 10 to 20", "Day 18 to 30", "Day 32 to 40")) {
-      expect_true(any(grepl(days, tips, fixed = TRUE)), info = days)
-    }
+    # One track, cut to the worst grade: 10-18 mild, 18-30 moderate, 32-40
+    # mild. The AE records under the table icon list the episodes.
+    expect_length(tr$Diarrhoea, 1L)
+    expect_length(tr$Diarrhoea[[1L]]$s, 3L)
     expect_length(tr$Dizziness, 1L)
   }
 })
