@@ -1,49 +1,25 @@
 # The AE heatmap, built from blockr.viz's table block.
 #
+# Not exported. It exists only so boards saved between 2026-08-30 and
+# 2026-10-26, which name this constructor, still restore: blockr.core finds a
+# saved constructor in the namespace. A restore builds a table block, which
+# saves as one, and tells the user to save the board. New boards call
+# blockr.viz::new_table_block() with ae_heatmap_script() and
+# ae_heatmap_subtitle() (see `inst/examples/clinical-explorer.R`).
+#
 # A heatmap of subjects by terms is a table block in the groups layout: one
 # row per subject (grouped by arm), one column per term (a summary's
 # `facet`), each cell a count drawn as a square tile painted by the worst
-# grade (`fill`), in the compact look (`look = "compact"`). This
-# constructor turns the AE heatmap's arguments into that call. It is kept
-# so boards and code that name it keep working; the result is a table block
-# and saves as one.
-
-#' AE heatmap
-#'
-#' A subject x term matrix of adverse events: each cell shows the number of
-#' events and is painted by the worst grade. Returns a
-#' [blockr.viz::new_table_block()] in the groups layout with a tile summary;
-#' the AE defaults (subject id, preferred term, grade, the top-25 prepare
-#' script and the sentence under the title) are what this function adds.
-#'
-#' It is kept so boards saved with it restore; they save as a table block
-#' from then on. New boards call [blockr.viz::new_table_block()] directly,
-#' with [ae_heatmap_script()] and [ae_heatmap_subtitle()] (see the clinical
-#' explorer example, `inst/examples/clinical-explorer.R`).
-#'
-#' @param row Column identifying a matrix row. Default `"USUBJID"`.
-#' @param col Column identifying a matrix column. Default `"AEDECOD"`
-#'   (the preferred term).
-#' @param color Column whose worst level per cell paints it. Default
-#'   `"AETOXGR"` (CTCAE grade); `"AESEV"` works when the study carries the
-#'   word scale. Empty: cells are painted by their count.
-#' @param group Optional column grouping the rows, e.g. the treatment arm.
-#' @param top_n LEGACY. Restores as the prepare script's `top_terms` value.
-#' @param cell_numbers Show the count in each cell.
-#' @param download Offer the table for download.
-#' @param title,subtitle,caption Text above and below the matrix. The
-#'   subtitle is the sentence whose `{@top_terms}` word shows the cap.
-#' @param script The prepare script. `NULL` (the default) builds the top-n
-#'   script for `col` ([ae_heatmap_script()]).
-#' @param values The prepare script's values.
-#' @param drill,filter_column,filter_values,max_height,ctrl_target,ctrl_table,locked_roles
-#'   LEGACY, accepted so saved boards restore. A row click goes to the
-#'   board's drill filter (`drill_target = "auto"`).
-#' @param ... Forwarded to [blockr.viz::new_table_block()] (`block_name`, ...).
-#' @return A table block (class `table_block`).
-#' @examplesIf interactive()
-#' new_ae_heatmap_block(group = "TRT01A")
-#' @export
+# grade (`fill`), in the compact look (`look = "compact"`).
+#
+# Arguments, as the old block saved them: `row`, `col` (the term), `color`
+# (worst level paints the cell; empty paints by count), `group` (rows),
+# `cell_numbers`, `download`, `title`, `subtitle`, `caption`, `script` (NULL
+# builds ae_heatmap_script(col)) and `values`. `top_n` restores as the
+# script's `top_terms`. `drill`, `filter_*`, `max_height`, `ctrl_*` and
+# `locked_roles` are accepted and ignored, except `ctrl_target` and
+# `ctrl_table`, which become the drill target. `...` goes to
+# blockr.viz::new_table_block().
 new_ae_heatmap_block <- function(row = "USUBJID",
                                  col = "AEDECOD",
                                  color = "AETOXGR",

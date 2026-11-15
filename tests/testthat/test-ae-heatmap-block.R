@@ -1,35 +1,47 @@
-# new_ae_heatmap_block(): builds a blockr.viz table block (groups layout, a
-# count tile per term painted by the worst grade, compact). The contract here
-# is the translation, and that old boards restore as table blocks.
+# new_ae_heatmap_block() is not exported and stays only so boards saved with
+# it restore, as blockr.viz table blocks. New boards build the table block
+# with ae_heatmap_script() and ae_heatmap_subtitle(); heatmap_table() below
+# is that call.
 
-summary_of <- function(b) blockr.core::blockr_ser(b)$payload$summaries[[1L]]
+heatmap_table <- function(...) {
+  blockr.viz::new_table_block(
+    layout = "groups",
+    by = c("TRT01A", "USUBJID"),
+    summaries = list(list(
+      type = "simple", func = "count", show = "tile",
+      facet = "AEDECOD", fill = "AETOXGR", name = "Events"
+    )),
+    look = "compact",
+    drill = "auto",
+    drill_target = "auto",
+    title = "Adverse events by subject",
+    subtitle = ae_heatmap_subtitle(),
+    script = ae_heatmap_script("AEDECOD"),
+    script_values = list(top_terms = 25L),
+    ...
+  )
+}
 
-test_that("the block is a table block that saves as one", {
-  b <- new_ae_heatmap_block(group = "TRT01A")
-  expect_s3_class(b, "table_block")
-  sr <- blockr.core::blockr_ser(b)
-  ctor <- blockr.core::blockr_deser(sr$constructor)
-  expect_identical(blockr.core::ctor_name(ctor), "new_table_block")
-  expect_false(any(c("ctor", "ctor_pkg") %in% names(sr$payload)))
+test_that("the old constructor is not exported but restores", {
+  expect_false("new_ae_heatmap_block" %in%
+                 getNamespaceExports("blockr.pharma"))
+  expect_true(is.function(get0("new_ae_heatmap_block",
+                               asNamespace("blockr.pharma"))))
 })
 
-test_that("the AE arguments become the table's layout and summary", {
-  p <- blockr.core::blockr_ser(
-    new_ae_heatmap_block(row = "USUBJID", col = "AEDECOD", color = "AETOXGR",
-                         group = "TRT01A", cell_numbers = FALSE)
-  )$payload
-  expect_identical(p$layout, "groups")
-  expect_identical(p$by, c("TRT01A", "USUBJID"))
-  expect_identical(p$look, "compact")
-  expect_false(p$value_labels)
-  expect_identical(p$drill_target, "auto")
-  s <- summary_of(new_ae_heatmap_block(color = "AETOXGR"))
-  expect_identical(s$show, "tile")
-  expect_identical(s$facet, "AEDECOD")
-  expect_identical(s$fill, "AETOXGR")
+test_that("a restore gives the table a board builds by hand", {
+  ser <- function(b) blockr.core::blockr_ser(b)$payload
+  restore <- function(...) {
+    new_ae_heatmap_block(..., ctor = "new_ae_heatmap_block",
+                         ctor_pkg = "blockr.pharma")
+  }
+  old <- restore(group = "TRT01A", download = TRUE)
+  expect_s3_class(old, "table_block")
+  expect_identical(ser(old), ser(heatmap_table()))
   # The ConMed heatmap: no paint column, cells painted by count.
-  expect_null(summary_of(new_ae_heatmap_block(col = "CMDECOD",
-                                              color = character()))$fill)
+  cm <- ser(restore(col = "CMDECOD", color = character()))
+  expect_identical(cm$summaries[[1L]]$facet, "CMDECOD")
+  expect_null(cm$summaries[[1L]]$fill)
 })
 
 test_that("an old board restores as a table block", {
@@ -108,11 +120,6 @@ test_that("a production board's heatmap restores with the dock's names", {
     p$subtitle,
     "[Top {@top_terms} ]{label(@facet)}[, painted by worst {label(@fill)}][, by {label(@parent)}]"
   )
-  # In code blockr.viz takes the dock's `visible` too; a misspelled name is
-  # still an error.
-  expect_identical(attr(new_ae_heatmap_block(visible = "inputs"), "visible"),
-                   "inputs")
-  expect_error(new_ae_heatmap_block(colour = "AETOXGR"), "colour")
 })
 
 test_that("the default script keeps the top_n values of the block's column", {
@@ -138,7 +145,7 @@ test_that("the sentence names the table's facet and fill", {
 
 test_that("the sentence reads the cap, the grade and the arm", {
   viz <- asNamespace("blockr.viz")
-  b <- new_ae_heatmap_block(group = "TRT01A")
+  b <- heatmap_table()
   st <- blockr.core:::initial_block_state(b)
   v <- lapply(st, function(x) if (shiny::is.reactive(x)) x() else x)
   args <- viz$script_title_args(
@@ -162,7 +169,7 @@ test_that("the heatmap computes: worst grade paints, rows by burden", {
     AEDECOD = c("RASH", "RASH", "COUGH", "RASH"),
     AETOXGR = c(1, 3, 2, 1)
   )
-  b <- new_ae_heatmap_block(group = "TRT01A", script = "")
+  b <- heatmap_table()
   shiny::testServer(b$expr_server, args = list(data = shiny::reactive(d)), {
     session$flushReact()
     expect_identical(session$returned$state$layout(), "groups")
