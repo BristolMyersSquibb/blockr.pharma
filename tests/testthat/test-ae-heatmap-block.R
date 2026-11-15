@@ -177,3 +177,17 @@ test_that("the heatmap computes: worst grade paints, rows by burden", {
   expect_identical(s1[[p$plan[[rash]]$key]], 2)
   expect_identical(s1[[p$plan[[rash]]$wkey]], 3L)  # grade 3, the worst
 })
+
+test_that("only a restored heatmap tells the user it is deprecated", {
+  said <- character()
+  local_mocked_bindings(
+    get_session = function(...) structure(list(), class = "ShinySession"),
+    notify = function(msg, ...) said <<- c(said, msg),
+    .package = "blockr.core"
+  )
+  new_ae_heatmap_block()
+  expect_length(said, 0L)
+  new_ae_heatmap_block(ctor = "new_ae_heatmap_block", ctor_pkg = "blockr.pharma")
+  expect_length(said, 1L)
+  expect_match(said, "older version")
+})

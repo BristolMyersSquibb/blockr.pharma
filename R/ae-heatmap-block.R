@@ -150,6 +150,15 @@ new_ae_heatmap_block <- function(row = "USUBJID",
     list(ctor = "new_table_block", ctor_pkg = "blockr.viz")
   ))
   for (nm in names(extra)) attr(blk, nm) <- extra[[nm]]
+  # Deprecated: tell the board user, not only the log. Only when a saved
+  # board brings it back in the app, so a board that still builds it in code
+  # shows nothing. Goes with this constructor.
+  if (restore && !is.null(blockr.core::get_session())) {
+    blockr.core::notify(
+      "This board has an AE heatmap from an older version. Save the board to keep it.",
+      type = "warning", duration = NULL
+    )
+  }
   blk
 }
 
