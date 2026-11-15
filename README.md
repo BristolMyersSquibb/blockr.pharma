@@ -1,6 +1,6 @@
 # blockr.pharma
 
-Open, pharma-specific blocks for [blockr](https://blockr-org.github.io/blockr.site/).
+Open, pharma-specific blocks for [blockr](https://blockr.site).
 
 The package provides a no-code **patient profile** for clinical safety
 review on CDISC ADaM data. Point it at a `dm` of ADaM tables filtered to
