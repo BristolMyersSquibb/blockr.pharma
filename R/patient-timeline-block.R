@@ -309,7 +309,8 @@ patient_timeline_lane <- function() {
        tooltip = c("Type", "Details", "Days"), lane = ".lane",
        open = ".open", seg_style = ".style",
        event_x = ".event_x", event_shape = "Event", overlap = "worst",
-       parent_lanes = TRUE, event_tag = ".tag", lane_full = ".full",
+       parent_lanes = TRUE, event_tag = ".tag",
+       event_tag_group = ".tag_group", lane_full = ".full",
        lane_size = "md", x_unit = "Day", x_days = TRUE)
 }
 

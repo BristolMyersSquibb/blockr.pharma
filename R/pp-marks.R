@@ -6,7 +6,9 @@
 #' The ink of an event mark
 #'
 #' The colour blockr.viz's table draws its event shapes and tags in
-#' (`--vz-ev-ink`), so a death cross reads the same in both blocks.
+#' (`--vz-ev-ink`), so a death cross reads the same in both blocks. The
+#' overview draws with the theme's `--blockr-grey-600`, which this is in
+#' the light scheme; the static image and the tooltips use this.
 #' @noRd
 PP_EV_INK <- "#4b5563"
 

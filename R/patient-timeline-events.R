@@ -160,7 +160,8 @@ TL_COLS <- list(
   .ae_open = NA_real_, .ae_ser = NA_real_, .worst = NA_character_,
   .fatal = FALSE, .cm = NA_real_, .cm_new = NA_real_, .days_trt = NA_real_,
   .svar = NA_character_, .skey = NA_character_, .tag = NA_character_,
-  .bor = NA_character_, .status = NA_character_, .lane_at = NA_character_
+  .bor = NA_character_, .status = NA_character_, .lane_at = NA_character_,
+  .tag_group = NA_character_
 )
 
 tl_bind <- function(parts) {

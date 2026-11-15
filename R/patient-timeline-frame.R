@@ -178,7 +178,7 @@ patient_timeline_frame <- function(data,
     lanes = c("Treatment", PT_FULL_LANES),
     full_lanes = PT_FULL_LANES,
     ae_palette = pt_ae_palette(),
-    extra = c(".tag", ".bor", ".status", ".full")
+    extra = c(".tag", ".tag_group", ".bor", ".status", ".full")
   )
   tb <- pt_tables(data, layers)
   opt$scale_map <- scale_map
@@ -271,6 +271,11 @@ patient_timeline_frame <- function(data,
   out <- tl_finish(out, sl, opt, group)
   # The legend heads the tagged events (reasons, dose changes) with it.
   if (!is.null(out$.tag)) attr(out$.tag, "label") <- "Tag"
+  # The reason tags' legend groups, treatment first; the end-of-study tags
+  # draw inverted (the lane's event_tag_group).
+  if (!is.null(out$.tag_group)) {
+    out$.tag_group <- factor(out$.tag_group, levels = unname(PT_DISC_TYPE))
+  }
   # The section an opened row is listed under (the table's row_sections).
   open <- !is.na(out$Row) & out$.lane %in% c("Adverse events", "Con meds")
   out$.section <- ifelse(open, as.character(out$.lane), NA_character_)
@@ -554,6 +559,7 @@ pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
     list(USUBJID = sl$USUBJID[keep], .event_x = x[keep],
          .event = pt_disc_level(cat$name[keep], kind), .tag = cat$tag[keep],
          Type = rep(PT_DISC_TYPE[[kind]], sum(keep)),
+         .tag_group = rep(PT_DISC_TYPE[[kind]], sum(keep)),
          Details = why[keep])
   }
   eos_dt <- aet_date(aet_col(adsl, c("EOSDT", "RFENDT")))
@@ -586,8 +592,9 @@ pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
 PT_DISC_SHOW <- c("both", "treatment", "end of study")
 PT_DISC_TYPE <- c(trt = "Treatment discontinuation", eos = "End of study")
 
-# A reason's legend entry: the category for treatment, prefixed for the end
-# of study so the two never share an entry.
+# A reason's event level: the category for treatment, prefixed for the end
+# of study so the two never share a level. The legend shows the category
+# alone, under its group.
 pt_disc_level <- function(name, kind) {
   if (identical(kind, "eos")) paste("End of study:", name) else name
 }

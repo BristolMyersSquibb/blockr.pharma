@@ -579,7 +579,7 @@ patient_overview_viz <- new_pp_viz(
           function(params, api) {
             var p = api.coord([api.value(0), api.value(1)]);
             var x = p[0], y = p[1];
-            var ink = '%s';
+            var ink = PatientProfile.ink('--blockr-grey-600') || '%s';
             var ring = PatientProfile.ink('--blockr-color-bg-surface');
             // A tag: outlined for the treatment reason, inverted (ink box,
             // light text) for the end-of-study reason.
