@@ -1627,7 +1627,7 @@ pp_cohort_chip_style <- function(hex) {
 #' Colours for the arm levels in the cohort list
 #'
 #' The board scale map first, so an arm is the same colour in the sidebar as
-#' in every chart on the board (CEDX registers `TRT` in `cedx_scale_map()`
+#' in every chart on the board (a board's scale map registers `TRT`
 #' precisely so the assignment is stable across views). Without a map, a
 #' fixed palette keyed by the SORTED levels -- stable for one cohort, and
 #' honestly not comparable across boards, which is the argument for

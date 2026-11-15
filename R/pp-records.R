@@ -63,7 +63,7 @@ pp_prepare_findings <- function(dm_obj, table_name,
 #' The value variables a findings card can draw
 #'
 #' ADaM BDS ships several analysis values for one parameter, and the cohort
-#' views already offer all three: the CEDX board marks `AVAL`, `CHG` and
+#' views already offer all three: a demo board marks `AVAL`, `CHG` and
 #' `PCHG` as kind `value` (`transforms/column-kinds.R`), so every chart with
 #' an exposed mapping band lists them. A card draws one at a time, and this
 #' is the ladder its header pill steps through, ordered as a reader reads it:

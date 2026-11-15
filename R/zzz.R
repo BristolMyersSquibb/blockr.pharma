@@ -165,7 +165,7 @@ register_pharma_blocks <- function() {
         ),
         transform = new_arg_spec(
           "Namespaced transform function string.",
-          example = "blockr.cdex::cdex_pool_aedecod",
+          example = "mypkg::pool_aedecod",
           type = arg_string()
         ),
         note_col = new_arg_spec(
@@ -215,7 +215,7 @@ register_pharma_blocks <- function() {
         ),
         pool_transform = new_arg_spec(
           "Namespaced transform function string.",
-          example = "blockr.cdex::cdex_pool_aedecod",
+          example = "mypkg::pool_aedecod",
           type = arg_string()
         )
       )

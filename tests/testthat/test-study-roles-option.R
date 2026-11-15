@@ -60,7 +60,7 @@ test_that("the option normalizes, serializes and restores", {
 # is prose and does not fit a 232px row, ADaM already carries a capped code
 # beside it, and a study without one falls back to the arm's colour rather
 # than to an error. It cannot be derived from the label column's name --
-# CEDX declares arm = "TRT" and there is no TRTCD.
+# A demo board declares arm = "TRT" and has no TRTCD.
 test_that("the arm code resolves, and absent is legitimate", {
   cols <- c("USUBJID", "TRT", "ACTARM", "ACTARMCD", "ARMCD")
   expect_identical(pp_arm_code_column(cols, "ARMCD"), "ARMCD")

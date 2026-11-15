@@ -67,8 +67,8 @@ pp_arm_column <- function(cols, arm_var = NULL) {
 #' is a design the sidebar supports. A DECLARED column the data lacks is still
 #' an error, on the same principle as every other role.
 #'
-#' The code cannot be derived from the label column's name. CEDX declares
-#' `arm = "TRT"`, a column its adapter builds from `TRT01A`/`ACTARM`, and
+#' The code cannot be derived from the label column's name. A demo board
+#' declares `arm = "TRT"`, a column its adapter builds from `TRT01A`/`ACTARM`, and
 #' there is no `TRTCD`. It has to be its own declaration.
 #'
 #' @param cols ADSL column names.

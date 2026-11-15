@@ -29,7 +29,7 @@
 #'
 #' Read when the board carries no scale map, or none binding the response
 #' column -- the same job [pp_sev_colors] does for adverse-event severity, and
-#' the same keep-in-step relationship: CEDX's `cedx_scale_map()` declares this
+#' the same keep-in-step relationship: a board's scale map declares this
 #' palette for `BEST_OVERALL_RESPONSE`, so if the two drift the same category
 #' reads as two colors depending on whether a board has a map.
 #'

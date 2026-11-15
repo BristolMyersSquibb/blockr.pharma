@@ -8,7 +8,7 @@
 #   source(system.file("examples/clinical-explorer.R", package = "blockr.pharma"))
 #
 # It is a demo, deliberately small: 19 blocks over five views. The production
-# CDEx board it is modelled on carries about 110 blocks over ten views, most of
+# board it is modelled on carries about 110 blocks over ten views, most of
 # them clinical tables composed with an internal package. Those do not appear
 # here. Where the production board composes a table, this one uses
 # blockr.viz's table block in its variables layout, which is open and does the
