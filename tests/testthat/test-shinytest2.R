@@ -602,7 +602,8 @@ test_that("the gear opens its tray in flow, with the Display controls", {
   expect_true(js("!!document.querySelector('.pp-gear-display .blockr-segmented')"))
   expect_equal(
     unlist(js("[...document.querySelectorAll('.pp-gear-display .blockr-checkbox')].map(e => e.textContent)")),
-    c("Hide data before day \u221230", "Smooth lines")
+    c("Hide data before day \u221230", "Treatment-emergent AEs only",
+      "Smooth lines")
   )
   run_js("document.querySelector('.blockr-gear-btn[id$=pp_gear_btn]').click();")
   Sys.sleep(0.6)
