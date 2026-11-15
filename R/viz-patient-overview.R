@@ -1,6 +1,6 @@
 # Patient Profile Viz: Patient Overview
 #
-# Multi-lane overview chart (~180px) combining treatment timeline, adverse
+# Multi-lane overview chart (~130px) combining treatment timeline, adverse
 # events, and key milestones in a single compact chart.
 #
 # Lanes (each data-gated; absent tables simply drop their lane):
@@ -182,7 +182,7 @@ patient_overview_viz <- new_pp_viz(
                      CM = "Con meds", VIS = "Visits")
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
-      # Chrome plus an exact 40px per lane, so lane geometry does not shift
+      # Chrome plus an exact 22px per lane, so lane geometry does not shift
       # with the number of lanes a subject happens to have. A category axis
       # divides the grid evenly, so a treatment lane carrying three or more
       # drug slots can only get taller by making every lane taller -- which
@@ -195,7 +195,7 @@ patient_overview_viz <- new_pp_viz(
       #
       # A drug is a thin line with its name above it, so each takes about
       # 18px of the lane; past four drugs the names drop and the lines stay.
-      lane_px <- 40 + min(max(0L, length(ex_drugs) - 1L), 3L) * 18
+      lane_px <- 22 + min(max(0L, length(ex_drugs) - 1L), 3L) * 18
       chart_height <- PP_PLOT_TOP + 30 + n_lanes * lane_px
 
       # A study's arm label is data, not a literal: encode it, never paste it.
@@ -215,7 +215,7 @@ patient_overview_viz <- new_pp_viz(
           function(params, api) {
             var start = api.coord([api.value(0), api.value(2)]);
             var end   = api.coord([api.value(1), api.value(2)]);
-            var h     = api.size([0, 1])[1] * 0.5;
+            var h     = Math.max(api.size([0, 1])[1] * 0.5, 16);
             var barW  = Math.max(end[0] - start[0], 4);
             return {
               type: 'group',
@@ -876,7 +876,7 @@ patient_overview_viz <- new_pp_viz(
           renderItem = htmlwidgets::JS("
             function(params, api) {
               var p = api.coord([api.value(0), api.value(1)]);
-              var h = api.size([0, 1])[1] * 0.4;
+              var h = Math.min(api.size([0, 1])[1] * 0.8, 16);
               return {
                 type: 'rect',
                 shape: { x: p[0] - 1, y: p[1] - h / 2, width: 2, height: h },

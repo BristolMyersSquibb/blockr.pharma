@@ -197,7 +197,7 @@ pp_static_gantt <- function(bars, time_range, ref_ms = NA_real_,
 
   # Lane geometry in lane units, mirroring the pixel constants: the label
   # row sits above the bar inside its own lane (PP_GANTT_LABEL_DY /
-  # PP_GANTT_BAR_DY at a 38px lane).
+  # PP_GANTT_BAR_DY at a 28px lane).
   bars$y <- -bars$lane
   bars$xmin <- clamp_lo(bars$start)
   bars$xmax <- clamp_hi(bars$end)

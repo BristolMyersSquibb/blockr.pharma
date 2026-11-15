@@ -16,11 +16,11 @@ PP_CM_STARTED <- c(
 
 #' Mark sizes in px
 #'
-#' An AE bar is 12px and a con-med bar 7px, as on an opened timeline row; a
-#' drug is a 4px line in its colour (the timeline's drug lines, coloured by
-#' pt_drug_palette()).
+#' AE and con-med bars are 12px, as on an opened timeline row, where only
+#' the treatment is thinner: a drug is a 4px line in its colour (the
+#' timeline's drug lines, coloured by pt_drug_palette()).
 #' @noRd
-PP_CM_BAR_H <- 7
+PP_CM_BAR_H <- 12
 PP_DRUG_LINE_H <- 4
 
 #' Whether each con med started on treatment

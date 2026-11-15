@@ -366,11 +366,13 @@ PP_EXPORT_SPLIT_LINE_COLOR <- "#d1d5db"
 #' (`api.size()`) coupled them to the panel height, and a minimum panel height
 #' then stretched short charts apart.
 #' @noRd
-PP_GANTT_LANE_H <- 38
+PP_GANTT_LANE_H <- 28
 # 12px: an AE bar on an opened patient timeline row (pp-timeline-look.R).
 PP_GANTT_BAR_H <- 12
-PP_GANTT_BAR_DY <- 7
-PP_GANTT_LABEL_DY <- -10
+# Label row (11px, centred 8px above the lane centre) then the bar, 2px
+# apart, which fills 26 of the 28px and leaves the gap between lanes.
+PP_GANTT_BAR_DY <- 6
+PP_GANTT_LABEL_DY <- -8
 PP_GANTT_TOP <- PP_PLOT_TOP
 PP_GANTT_BOTTOM <- 30
 
