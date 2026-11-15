@@ -276,13 +276,42 @@ PatientProfile.part(function(ctx) {
 
   // Spans: one rect per event, in the order the source table
   // carries them, later over earlier.
-  function drawSpans(frag, spec, h) {
+  function drawSpans(frag, spec, h, top) {
     spec.split(' ').forEach(function(s) {
       var f = s.split(',');
       if (f.length < 3) return;
       frag.appendChild(el('rect', {
-        x: f[0], y: '0', width: f[1], height: h,
+        x: f[0], y: String(top), width: f[1], height: h - top,
         fill: f[2], opacity: '0.9'
+      }));
+    });
+  }
+
+  // The overview strip's exposure line, "x,w x,w", along the top. The
+  // height and gap are pp_cohort_expo_h and pp_cohort_expo_gap.
+  var EXPO_H = 2, EXPO_GAP = 1;
+  function drawExpo(frag, spec) {
+    spec.split(' ').forEach(function(s) {
+      var f = s.split(',');
+      if (f.length < 2) return;
+      frag.appendChild(el('rect', {
+        x: f[0], y: '0', width: f[1], height: String(EXPO_H),
+        fill: 'var(--blockr-pharma-cohort-expo)'
+      }));
+    });
+  }
+
+  // Death, the patient timeline's cross: ink over a ring of the surface.
+  // The same paths pp_cohort_cross_svg() draws.
+  function drawCross(frag, cx, cy) {
+    var a = 3;
+    var d = 'M' + (cx - a) + ' ' + (cy - a) + 'L' + (cx + a) + ' ' + (cy + a) +
+      'M' + (cx + a) + ' ' + (cy - a) + 'L' + (cx - a) + ' ' + (cy + a);
+    [['var(--blockr-color-bg-surface)', '4'],
+     ['var(--blockr-pharma-cohort-ev)', '1.5']].forEach(function(s) {
+      frag.appendChild(el('path', {
+        d: d, stroke: s[0], 'stroke-width': s[1],
+        'stroke-linecap': 'round', fill: 'none'
       }));
     });
   }
@@ -360,28 +389,20 @@ PatientProfile.part(function(ctx) {
     if (!svg) return;
     var frag = document.createDocumentFragment();
     var spec = row.getAttribute('data-band') || '';
-    // The row's own height, not a constant: the two kinds of strip
-    // are different heights now (8px of colour, 30px of line), and
-    // reading it off the svg is what keeps the ticks and the
-    // diamond on the edge they belong to.
+    // The row's own height, not a constant: the kinds of strip are
+    // different heights (8px of colour, 11px with the overview's exposure
+    // line, 30px of line).
     var h = parseFloat(svg.getAttribute('height')) || BAND_H;
-    if (row.getAttribute('data-band-kind') === 'series') {
+    var kind = row.getAttribute('data-band-kind');
+    if (kind === 'series') {
       drawSeries(frag, spec, row, h);
-    } else if (spec) {
-      drawSpans(frag, spec, h);
-    }
-    // End of treatment, the same diamond and the same radius the
-    // server drew.
-    var eot = row.getAttribute('data-eot');
-    if (eot) {
-      var cx = parseFloat(eot), cy = h / 2,
-          rr = Math.min(3, h / 2 + 1);
-      frag.appendChild(el('path', {
-        d: 'M' + cx + ' ' + (cy - rr) + 'L' + (cx + rr) + ' ' + cy +
-           'L' + cx + ' ' + (cy + rr) + 'L' + (cx - rr) + ' ' + cy +
-           'Z',
-        fill: 'var(--blockr-pharma-cohort-eot)'
-      }));
+    } else {
+      var top = kind === 'overview' ? EXPO_H + EXPO_GAP : 0;
+      if (spec) drawSpans(frag, spec, h, top);
+      var expo = row.getAttribute('data-expo');
+      if (expo) drawExpo(frag, expo);
+      var death = row.getAttribute('data-death');
+      if (death) drawCross(frag, parseFloat(death), h / 2);
     }
     svg.appendChild(frag);
   }

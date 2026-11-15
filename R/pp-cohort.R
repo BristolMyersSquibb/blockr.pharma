@@ -39,6 +39,10 @@
 # 12. At 30px it uses 16.6, and the row grew by two pixels to hold it.
 pp_cohort_band_h_spans <- 8L
 pp_cohort_band_h_series <- 30L
+# The overview strip: a 2px exposure line and a 1px gap over the 8px AEs.
+pp_cohort_band_h_overview <- 11L
+pp_cohort_expo_h <- 2L
+pp_cohort_expo_gap <- 1L
 
 # Kept for the callers that predate the split; a strip of unknown kind is a
 # spans one, which is what every non-findings panel declares.
@@ -46,9 +50,12 @@ pp_cohort_band_h <- pp_cohort_band_h_spans
 
 #' The strip height a band of this kind is drawn at
 #' @param kind `"series"`, `"spans"` or `"none"`.
+#' @param overview Whether the spans band is the overview's, with its
+#'   exposure line on top.
 #' @noRd
-pp_cohort_band_h_for <- function(kind) {
-  if (identical(kind, "series")) pp_cohort_band_h_series else pp_cohort_band_h_spans
+pp_cohort_band_h_for <- function(kind, overview = FALSE) {
+  if (identical(kind, "series")) return(pp_cohort_band_h_series)
+  if (isTRUE(overview)) pp_cohort_band_h_overview else pp_cohort_band_h_spans
 }
 
 #' One row per patient in the cohort
@@ -105,8 +112,10 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
     ) + 1
   }
   out <- take(out, "EOSSTT")
+  out <- take(out, "RFENDT")
   out <- take(out, "DCSREAS")
   out <- take(out, "DTHFL")
+  out <- take(out, "DTHDT")
 
   ae <- pp_cohort_ae_summary(tbls, ids, roles$severity)
   if (!is.null(ae)) {
@@ -307,9 +316,25 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
   # anything reaches, floored below. Open-ended events are excluded from the
   # maximum and then stretched to it -- including them would be circular,
   # since where they end IS the axis.
+  # Last contact, per patient, in study days: where an ongoing record ends.
+  lc_day <- pp_cohort_last_contact_day(adsl, at, ref_col, trt_end)
+
+  # The overview's strip adds the exposure line and death (pp_band_overview()).
+  overview <- isTRUE(band$overview)
+  expo <- if (overview) {
+    pp_cohort_expo(tbls, ids, adsl, at, ref_col, trt_end)
+  }
+  death <- if (overview) {
+    pp_cohort_death_day(tbls, ids, adsl, at, ref_col)
+  } else {
+    rep(NA_real_, length(ids))
+  }
+  expo_ends <- if (overview) unlist(lapply(expo, `[[`, "end")) else numeric()
+
   day0 <- suppressWarnings(min(c(ev$start, 1), na.rm = TRUE))
   if (!is.finite(day0)) day0 <- 0
-  days <- suppressWarnings(max(c(trt_end, ev$end, ev$start, 1), na.rm = TRUE))
+  days <- suppressWarnings(max(c(trt_end, ev$end, ev$start, lc_day,
+                                 expo_ends, death, 1), na.rm = TRUE))
   if (!is.finite(days) || days <= day0) days <- day0 + 1
 
   # An event with no end date is ONGOING, and runs to the end of THAT
@@ -324,8 +349,15 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
   # showed the mild pair ending at day 55, the band painted them to day 212
   # and 47 of 60 bins came out mild, burying the moderate. Same data, two
   # different-looking patients.
+  #
+  # That end is last contact (ADSL LSTALVDT, else the last dose), as the
+  # panels and the patient timeline end an ongoing record; the patient's last
+  # data day where neither is known.
   own_end <- pp_cohort_subject_end(tbls, ids, trt_end, ev)
-  ev$end[ev$open] <- own_end[match(ev$subject[ev$open], ids)]
+  has_lc <- !is.na(lc_day)
+  own_end[has_lc] <- lc_day[has_lc]
+  at_open <- match(ev$subject[ev$open], ids)
+  ev$end[ev$open] <- pmax(own_end[at_open], ev$start[ev$open])
   # A patient whose own end is unknowable keeps the axis end: an open event
   # with nothing to bound it really does run off the far side.
   ev$end[ev$open & is.na(ev$end)] <- days
@@ -338,12 +370,15 @@ pp_cohort_marks <- function(dm_obj, roles = NULL, prestudy_days = 30,
         stringsAsFactors = FALSE
       ),
       n_levels = n_levels[[i]],
-      trt_end = trt_end[[i]]
+      trt_end = trt_end[[i]],
+      expo = if (overview) expo[[i]],
+      death = death[[i]]
     )
   })
   names(subjects) <- ids
 
-  list(kind = "spans", day0 = day0, days = days, subjects = subjects,
+  list(kind = "spans", overview = overview, day0 = day0, days = days,
+       subjects = subjects,
        hits = if (!is.null(hits)) stats::setNames(hits, ids))
 }
 
@@ -404,6 +439,139 @@ pp_cohort_subject_end <- function(tbls, ids, trt_end, ev = NULL) {
   }
 
   acc
+}
+
+#' Last contact per patient, in study days
+#'
+#' ADSL `LSTALVDT`, else the last dose: [pp_last_contact()] for the cohort.
+#'
+#' @param adsl ADSL; `at` its row per patient.
+#' @param ref_col The timeline anchor column (`TRTSDT`).
+#' @param trt_end Each patient's last dose day.
+#' @return Numeric study days, `NA` where unknown.
+#' @noRd
+pp_cohort_last_contact_day <- function(adsl, at, ref_col, trt_end) {
+  ref <- if (ref_col %in% colnames(adsl)) adsl[[ref_col]][at]
+  lc <- if ("LSTALVDT" %in% colnames(adsl) && !is.null(ref)) {
+    pp_date_to_day(adsl$LSTALVDT[at], ref)
+  } else {
+    rep(NA_real_, length(at))
+  }
+  ifelse(is.na(lc), trt_end, lc)
+}
+
+#' Each patient's exposure, as day intervals
+#'
+#' The overview strip's one exposure line: every study-drug period of ADEX,
+#' whatever the drug, merged where they touch, so the line breaks only where
+#' no drug was given at all. A period without an end stops at the last dose.
+#' A patient without ADEX records is exposed from day 1 to the last dose
+#' (ADSL `TRTSDT` to `TRTEDT`).
+#'
+#' @param tbls The dm's tables; `adsl`, `at`, `ref_col` and `trt_end` as in
+#'   [pp_cohort_last_contact_day()].
+#' @param ids The patients.
+#' @return A list, one `list(start, end)` of study days per patient.
+#' @noRd
+pp_cohort_expo <- function(tbls, ids, adsl, at, ref_col, trt_end) {
+  out <- lapply(trt_end, function(te) {
+    if (is.finite(te)) list(start = 1, end = te)
+    else list(start = numeric(), end = numeric())
+  })
+  ex <- tbls[["adex"]]
+  if (is.null(ex) || !"USUBJID" %in% colnames(ex)) return(out)
+  ex <- as.data.frame(ex)
+  k <- match(as.character(ex$USUBJID), ids)
+  ex <- ex[!is.na(k), , drop = FALSE]
+  k <- k[!is.na(k)]
+  if (!nrow(ex)) return(out)
+  ref <- if (ref_col %in% colnames(adsl)) adsl[[ref_col]][at][k]
+  day <- function(day_col, date_col) {
+    native <- if (day_col %in% colnames(ex)) {
+      suppressWarnings(as.numeric(ex[[day_col]]))
+    } else {
+      rep(NA_real_, nrow(ex))
+    }
+    derived <- if (!is.null(ref) && date_col %in% colnames(ex)) {
+      pp_date_to_day(ex[[date_col]], ref)
+    } else {
+      rep(NA_real_, nrow(ex))
+    }
+    ifelse(is.na(native), derived, native)
+  }
+  s <- day("ASTDY", "ASTDT")
+  e <- day("AENDY", "AENDT")
+  e <- ifelse(is.na(e), trt_end[k], e)
+  e <- pmax(e, s, na.rm = TRUE)
+  ok <- !is.na(s)
+  if (!any(ok)) return(out)
+  # ADaM ADEX repeats each period once per parameter.
+  d <- unique(data.frame(k = k[ok], s = s[ok], e = e[ok]))
+  d <- d[order(d$k, d$s, d$e), , drop = FALSE]
+  # Merge per patient: a period that starts by the day after the running end
+  # continues the line.
+  grp <- integer(nrow(d))
+  g <- 0L
+  run_k <- -1L
+  run_e <- -Inf
+  for (j in seq_len(nrow(d))) {
+    if (d$k[[j]] != run_k || d$s[[j]] > run_e + 1) {
+      g <- g + 1L
+      run_k <- d$k[[j]]
+      run_e <- d$e[[j]]
+    } else {
+      run_e <- max(run_e, d$e[[j]])
+    }
+    grp[[j]] <- g
+  }
+  ms <- as.vector(tapply(d$s, grp, min))
+  me <- as.vector(tapply(d$e, grp, max))
+  mk <- as.vector(tapply(d$k, grp, `[`, 1L))
+  for (i in unique(mk)) {
+    sel <- mk == i
+    out[[i]] <- list(start = ms[sel], end = me[sel])
+  }
+  out
+}
+
+#' Each patient's day of death, in study days
+#'
+#' ADSL `DTHDT`, else the end of a fatal AE (`AESDTH`), as
+#' [pp_death_at()] reads it for one patient.
+#'
+#' @inheritParams pp_cohort_expo
+#' @return Numeric study days, `NA` for no death to draw.
+#' @noRd
+pp_cohort_death_day <- function(tbls, ids, adsl, at, ref_col) {
+  ref <- if (ref_col %in% colnames(adsl)) adsl[[ref_col]][at]
+  out <- if ("DTHDT" %in% colnames(adsl) && !is.null(ref)) {
+    pp_date_to_day(adsl$DTHDT[at], ref)
+  } else {
+    rep(NA_real_, length(ids))
+  }
+  ae <- tbls[["adae"]]
+  if (is.null(ae) || !all(c("USUBJID", "AESDTH") %in% colnames(ae))) {
+    return(out)
+  }
+  ae <- as.data.frame(ae)
+  f <- which(aet_flag(ae$AESDTH))
+  if (!length(f)) return(out)
+  k <- match(as.character(ae$USUBJID[f]), ids)
+  native <- if ("AENDY" %in% colnames(ae)) {
+    suppressWarnings(as.numeric(ae$AENDY[f]))
+  } else {
+    rep(NA_real_, length(f))
+  }
+  derived <- if ("AENDT" %in% colnames(ae) && !is.null(ref)) {
+    pp_date_to_day(ae$AENDT[f], ref[k])
+  } else {
+    rep(NA_real_, length(f))
+  }
+  d <- ifelse(is.na(native), derived, native)
+  use <- !is.na(k) & !is.na(d) & !duplicated(k)
+  fill <- is.na(out[k[use]])
+  out[k[use][fill]] <- d[use][fill]
+  out
 }
 
 #' Convert an analysis date to an ADaM study day
@@ -511,7 +679,11 @@ pp_cohort_span_events <- function(tbls, band, color_col = NULL, ref = NULL,
   open <- is.na(end) | (!is.na(start) & end < start)
   end[open] <- start[open]
 
-  value <- if (!is.null(color_col) && color_col %in% colnames(adae)) {
+  value <- if (identical(band$color, "started")) {
+    # Started before or on treatment, as the con-med panel colours it: on or
+    # after day 1 (pp_cm_started_on()).
+    names(PP_CM_STARTED)[ifelse(!is.na(start) & start < 1, 1L, 2L)]
+  } else if (!is.null(color_col) && color_col %in% colnames(adae)) {
     as.character(adae[[color_col]])
   } else {
     rep(NA_character_, nrow(adae))
@@ -797,6 +969,14 @@ pp_cohort_indc_color <- function(indc_colors = NULL) {
 #' @noRd
 pp_cohort_band_color <- function(band, roles, map, dm_obj) {
   switch(band$color %||% "",
+    started = function(v, sub = NULL) {
+      v <- as.character(v)
+      if (!is.na(v) && v %in% names(PP_CM_STARTED)) {
+        unname(PP_CM_STARTED[[v]])
+      } else {
+        unname(PP_CM_STARTED[[2L]])
+      }
+    },
     indication = pp_cohort_indc_color(
       pp_indc_scale_colors(map, dm_obj, roles$indication, per_patient = FALSE)
     ),
@@ -832,11 +1012,11 @@ pp_cohort_band_color <- function(band, roles, map, dm_obj) {
 #' @return An HTML string (an `<svg>`).
 #' @noRd
 pp_cohort_band_svg <- function(sub, marks, color, width = 176,
-                               height = pp_cohort_band_h, min_px = 1.5,
+                               height = NULL, min_px = 1.5,
                                smooth = TRUE) {
 
   esc <- function(x) gsub("\"", "&quot;", x, fixed = TRUE)
-  h <- height
+  h <- height %||% pp_cohort_band_h_for(marks$kind, marks$overview)
 
   parts <- c(sprintf(
     paste0('<rect x="0" y="0" width="%s" height="%s" rx="2" ',
@@ -898,28 +1078,31 @@ pp_cohort_band_svg <- function(sub, marks, color, width = 176,
         cx, h - 2.5, cx, h
       ))
     }
-    eot <- geom$eot
   } else {
     geom <- pp_cohort_band_geom(sub, marks, color, width, min_px)
+    # The overview's strip: the exposure line on top, the AEs below it.
+    top <- if (isTRUE(marks$overview)) {
+      pp_cohort_expo_h + pp_cohort_expo_gap
+    } else {
+      0
+    }
     if (length(geom$x)) {
       parts <- c(parts, sprintf(
-        '<rect x="%s" y="0" width="%s" height="%s" fill="%s" opacity="0.9"/>',
-        geom$x, geom$w, h, esc(geom$fill)
+        '<rect x="%s" y="%s" width="%s" height="%s" fill="%s" opacity="0.9"/>',
+        geom$x, top, geom$w, h - top, esc(geom$fill)
       ))
     }
-    eot <- geom$eot
-  }
-
-  # End of treatment: the one treatment fact that carries information once
-  # the study is complete. A patient still on treatment has no marker.
-  if (!is.na(eot)) {
-    cx <- eot
-    cy <- h / 2
-    r <- min(3, h / 2 + 1)
-    parts <- c(parts, sprintf(
-      '<path d="M%s %sL%s %sL%s %sL%s %sZ" fill="var(--blockr-pharma-cohort-eot)"/>',
-      cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy
-    ))
+    if (length(geom$expo_x)) {
+      parts <- c(parts, sprintf(
+        paste0('<rect x="%s" y="0" width="%s" height="%s" ',
+               'fill="var(--blockr-pharma-cohort-expo)"/>'),
+        geom$expo_x, geom$expo_w, pp_cohort_expo_h
+      ))
+    }
+    # Death, as the patient timeline's cross.
+    if (!is.na(geom$death)) {
+      parts <- c(parts, pp_cohort_cross_svg(geom$death, h / 2))
+    }
   }
 
   paste0(
@@ -942,16 +1125,30 @@ pp_cohort_x_of <- function(marks, width) {
   function(d) ((d - day0) / span) * width
 }
 
-#' The end-of-treatment marker's x, or `NA`
+#' A day's x on the strip, or `NA` when it is off the axis
 #' @noRd
-pp_cohort_eot_x <- function(sub, marks, width) {
-  te <- sub$trt_end
-  day0 <- marks$day0 %||% 0
-  if (length(te) == 1L && is.finite(te) && te > day0 && te < marks$days) {
-    round(pp_cohort_x_of(marks, width)(te), 2)
-  } else {
-    NA_real_
+pp_cohort_day_x <- function(d, marks, width) {
+  if (length(d) != 1L || !is.finite(d) || d < (marks$day0 %||% 0) ||
+        d > marks$days) {
+    return(NA_real_)
   }
+  round(pp_cohort_x_of(marks, width)(d), 2)
+}
+
+#' The death cross on a strip, as SVG
+#'
+#' The patient timeline's cross: ink over a ring of the surface colour.
+#' The client draws the same (pp-cohort.js).
+#' @noRd
+pp_cohort_cross_svg <- function(cx, cy, a = 3) {
+  d <- sprintf("M%s %sL%s %sM%s %sL%s %s", cx - a, cy - a, cx + a, cy + a,
+               cx + a, cy - a, cx - a, cy + a)
+  paste0(
+    '<path d="', d, '" stroke="var(--blockr-color-bg-surface)" ',
+    'stroke-width="4" stroke-linecap="round" fill="none"/>',
+    '<path d="', d, '" stroke="var(--blockr-pharma-cohort-ev)" ',
+    'stroke-width="1.5" stroke-linecap="round" fill="none"/>'
+  )
 }
 
 #' The spans band's geometry, before it is drawn
@@ -982,8 +1179,10 @@ pp_cohort_eot_x <- function(sub, marks, width) {
 #' once per DISTINCT severity, not once per event.
 #'
 #' @inheritParams pp_cohort_band_svg
-#' @return `list(x, w, fill, eot)` in px, the first three parallel and in
-#'   paint order; `eot` is `NA` when there is no marker to draw.
+#' @return `list(x, w, fill, expo_x, expo_w, death)` in px: the AE spans
+#'   (parallel, in paint order), the exposure line's pieces and the death
+#'   cross's x (`NA` for none). The last three are empty unless the band is
+#'   the overview's.
 #' @noRd
 pp_cohort_band_geom <- function(sub, marks, color, width = 176,
                                 min_px = 1.5) {
@@ -1045,8 +1244,20 @@ pp_cohort_band_geom <- function(sub, marks, color, width = 176,
     fill <- kf[seq_len(k)]
   }
 
-  list(x = x, w = w, fill = fill,
-       eot = pp_cohort_eot_x(sub, marks, width))
+  x_of <- pp_cohort_x_of(marks, width)
+  ex <- sub$expo
+  expo_x <- numeric()
+  expo_w <- numeric()
+  if (length(ex$start)) {
+    x0 <- pmax(x_of(ex$start), 0)
+    # A period is a day long at least: a single dose still shows.
+    x1 <- pmin(x_of(ex$end + 1), width)
+    keep <- x0 < width & x1 > 0
+    expo_x <- round(x0[keep], 2)
+    expo_w <- round(pmax(x1[keep] - x0[keep], min_px), 2)
+  }
+  list(x = x, w = w, fill = fill, expo_x = expo_x, expo_w = expo_w,
+       death = pp_cohort_day_x(sub$death %||% NA_real_, marks, width))
 }
 
 #' A monotone cubic path through a series
@@ -1126,21 +1337,17 @@ pp_monotone_path <- function(x, y) {
 #' @param smooth Whether to round the corners ([pp_monotone_path()]) or join
 #'   the points with straight segments. Follows the profile's Straight /
 #'   Smooth toggle, the same setting the panels read.
-#' @return `list(path, dot, limit, clip, clip_lo, eot)`. `path` is an SVG
+#' @return `list(path, dot, limit, clip, clip_lo)`. `path` is an SVG
 #'   `d` string, so the server SVG and the client painter share one curve
-#'   rather than each interpolating the points. `eot` is always `NA` here:
-#'   the diamond belongs on a spans band, not over a line.
+#'   rather than each interpolating the points.
 #' @noRd
 pp_cohort_series_geom <- function(sub, marks, width = 176,
                                   height = pp_cohort_band_h_series,
                                   smooth = TRUE) {
 
-  # No end-of-treatment marker on a series band. The diamond earns its place
-  # on a spans band, where it sits on flat colour; over a line it lands ON
-  # the data, and the line already ends where the patient's records do.
   none <- list(path = "", dot = numeric(), limit = NA_real_,
                limit_lo = NA_real_,
-               clip = numeric(), clip_lo = numeric(), eot = NA_real_)
+               clip = numeric(), clip_lo = numeric())
 
   ser <- sub$series
   vlo <- marks$vlo
@@ -1203,8 +1410,7 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
     limit = limit,
     limit_lo = limit_lo,
     clip = px[ser$value > vhi],
-    clip_lo = px[ser$value < vlo],
-    eot = NA_real_
+    clip_lo = px[ser$value < vlo]
   )
 }
 
@@ -1230,15 +1436,15 @@ pp_cohort_series_geom <- function(sub, marks, width = 176,
 #' has to mean the size of the cohort.
 #'
 #' @inheritParams pp_cohort_band_svg
-#' @return `list(band, eot, limit, clip, clip_lo)` -- attribute strings;
-#'   `band` is `""` for a patient with nothing to draw, which still renders
-#'   the empty track. `limit` and the clip marks are `NULL` for a spans
-#'   band, and `eot` is `NULL` for a series one.
+#' @return `list(band, expo, death, limit, clip, clip_lo)` -- attribute
+#'   strings; `band` is `""` for a patient with nothing to draw, which still
+#'   renders the empty track. `limit` and the clip marks are `NULL` for a
+#'   spans band; `expo` and `death` are `NULL` but on the overview's.
 #' @noRd
 pp_cohort_band_attr <- function(sub, marks, color, width = 176,
                                 height = NULL, min_px = 1.5,
                                 smooth = TRUE) {
-  height <- height %||% pp_cohort_band_h_for(marks$kind)
+  height <- height %||% pp_cohort_band_h_for(marks$kind, marks$overview)
   if (identical(marks$kind, "series")) {
     geom <- pp_cohort_series_geom(sub, marks, width, height, smooth)
     # The path, already interpolated. The curve is computed ONCE, here, and
@@ -1250,7 +1456,6 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
       # A one-visit series is a dot, and a zero-length path is not a
       # dependable way to say so across browsers.
       dot = if (length(geom$dot)) paste(geom$dot, collapse = ","),
-      eot = if (is.na(geom$eot)) NULL else as.character(geom$eot),
       limit = if (is.na(geom$limit)) NULL else as.character(geom$limit),
       limit_lo = if (is.na(geom$limit_lo)) {
         NULL
@@ -1267,7 +1472,10 @@ pp_cohort_band_attr <- function(sub, marks, color, width = 176,
   list(
     band = paste(geom$x, geom$w, geom$fill, sep = ",", collapse = " "),
     dot = NULL,
-    eot = if (is.na(geom$eot)) NULL else as.character(geom$eot),
+    expo = if (length(geom$expo_x)) {
+      paste(geom$expo_x, geom$expo_w, sep = ",", collapse = " ")
+    },
+    death = if (is.na(geom$death)) NULL else as.character(geom$death),
     limit = NULL,
     clip = NULL,
     clip_lo = NULL
@@ -1334,7 +1542,8 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   })
   band <- vapply(bands, function(b) b$band, character(1L))
   dot <- vapply(bands, function(b) b$dot %||% "", character(1L))
-  eot <- vapply(bands, function(b) b$eot %||% "", character(1L))
+  expo <- vapply(bands, function(b) b$expo %||% "", character(1L))
+  death <- vapply(bands, function(b) b$death %||% "", character(1L))
   limit <- vapply(bands, function(b) b$limit %||% "", character(1L))
   limit_lo <- vapply(bands, function(b) b$limit_lo %||% "", character(1L))
   clip <- vapply(bands, function(b) b$clip %||% "", character(1L))
@@ -1390,8 +1599,14 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
   )
 
   is_series <- identical(marks$kind, "series")
-  h <- pp_cohort_band_h_for(marks$kind)
-  kind <- if (is_series) " data-band-kind=\"series\"" else ""
+  h <- pp_cohort_band_h_for(marks$kind, marks$overview)
+  kind <- if (is_series) {
+    " data-band-kind=\"series\""
+  } else if (isTRUE(marks$overview)) {
+    " data-band-kind=\"overview\""
+  } else {
+    ""
+  }
 
   # The empty track, on a spans band only. There it is the treatment window
   # and the row keeps its height whether or not the band has been drawn yet.
@@ -1412,7 +1627,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       '<div class="pp-pt%s" data-usubjid="%s"',
       # Search matches the same text a reader sees, plus the arm, which is
       # not printed in full anywhere in the row.
-      ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s', kind,
+      ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s%s', kind,
       '>',
       '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
       '<span class="pp-pt-gap"></span>%s%s</div>',
@@ -1429,7 +1644,8 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     esca(tolower(paste(id, demo, arm, code))),
     esca(band),
     ifelse(nzchar(dot), sprintf(' data-dot="%s"', esca(dot)), ""),
-    ifelse(nzchar(eot), sprintf(' data-eot="%s"', esca(eot)), ""),
+    ifelse(nzchar(expo), sprintf(' data-expo="%s"', esca(expo)), ""),
+    ifelse(nzchar(death), sprintf(' data-death="%s"', esca(death)), ""),
     ifelse(nzchar(limit), sprintf(' data-limit="%s"', esca(limit)), ""),
     ifelse(nzchar(limit_lo),
            sprintf(' data-limit-lo="%s"', esca(limit_lo)), ""),
@@ -1792,8 +2008,14 @@ pp_subject_arm <- function(dm_obj, id, arm_col = NULL) {
 #' sentence under the subject id (design system, "The sentence and its
 #' slots"): the arm in full, sex and age, the days on treatment, and how many
 #' adverse events the patient has had with the worst grade among them, e.g.
-#' "Xanomeline Low Dose · F, 80 years · 27 days on treatment · 6 adverse
-#' events, worst Severe". It wraps rather than clipping in a narrow panel.
+#' "Drug A Low Dose · F, 80 years · 27 days on treatment · discontinued,
+#' end of study D46 · 6 adverse events, worst Severe". It wraps rather than
+#' clipping in a narrow panel.
+#'
+#' The disposition and death are said here rather than marked on the
+#' overview: end of study is a disposition date, mostly the day of the last
+#' dose, and the patient timeline marks neither it nor a death without a
+#' date.
 #'
 #' Every fact is dropped rather than printed empty when the study lacks the
 #' column: a sentence that does not mention days tells a reader nothing
@@ -1835,6 +2057,29 @@ pp_subject_sentence_ui <- function(frame, at, arm, color) {
   }
   dur <- val("TRTDURD")
   if (!is.null(dur)) add(esc(count(dur, "day on treatment", "days on treatment")))
+  # Study days, as the axis labels them.
+  day_of <- function(col) {
+    d <- val(col)
+    t0 <- val("TRTSDT")
+    if (is.null(d) || is.null(t0)) return(NULL)
+    dy <- pp_date_to_day(d, t0)
+    if (is.na(dy)) NULL else paste0("D", dy)
+  }
+  stt <- toupper(trimws(as.character(val("EOSSTT") %||% "")))
+  eos <- day_of("RFENDT")
+  if (identical(stt, "COMPLETED")) {
+    add("completed")
+  } else if (identical(stt, "DISCONTINUED")) {
+    add(esc(paste0("discontinued", if (!is.null(eos)) paste(", end of study", eos))))
+  } else if (!is.null(eos)) {
+    add(esc(paste("end of study", eos)))
+  }
+  dth <- day_of("DTHDT")
+  if (!is.null(dth)) {
+    add(esc(paste("died", dth)))
+  } else if (isTRUE(aet_flag(val("DTHFL") %||% NA))) {
+    add("died, date not recorded")
+  }
   n_ae <- val("AE_N")
   if (!is.null(n_ae)) {
     worst <- val("AE_WORST")

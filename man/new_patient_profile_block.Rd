@@ -12,6 +12,7 @@ new_patient_profile_block(
   timeline_mode = "rday",
   subject = NULL,
   show_prestudy = FALSE,
+  all_aes = FALSE,
   smooth = "auto",
   ...
 )
@@ -42,6 +43,11 @@ timeline starts 30 days before treatment start (the screening window,
 so baselines stay visible) -- one medication started years earlier must
 not stretch every axis to it. \code{TRUE} restores the full range, as
 unchecking "Hide data before day -30" in the gear tray does.}
+
+\item{all_aes}{Show every adverse event? By default the profile shows the
+treatment-emergent ones (ADAE \code{TRTEMFL}), as the patient timeline does;
+\code{TRUE} is unchecking "Treatment-emergent AEs only" in the gear tray. A
+study without \code{TRTEMFL} shows every AE either way.}
 
 \item{smooth}{Line smoothing for the findings value lines (labs, vitals):
 \code{"auto"} (default) draws monotone-smoothed lines -- no overshoot, the

@@ -209,31 +209,36 @@ test_that("an overview AE bar says severity and seriousness only", {
                    c(Type = "Adverse event", Days = "Day 32 to ongoing"))
 })
 
-test_that("end of study and visits give their day as the timeline does", {
-  series <- overview_series()
-  eos <- series$Milestones$data[[1]]$tip
-  expect_identical(eos$head, "End of study")
-  expect_identical(eos$color, "#2563EB")
-  expect_identical(tip_rows(eos), c(Days = "Day 101"))
-  expect_identical(tip_meta(eos, "Days"), "2020-04-10")
+test_that("death and visits give their day as the timeline does", {
+  dm_obj <- tip_overview_dm(list(DTHDT = as.Date("2020-04-10")))
+  series <- overview_series(dm_obj)
+  dth <- series$Milestones$data[[1]]$tip
+  expect_identical(dth$head, "Death")
+  expect_identical(dth$color, PP_EV_INK)
+  expect_identical(tip_rows(dth), c(Days = "Day 101"))
+  expect_identical(tip_meta(dth, "Days"), "2020-04-10")
 
-  eos <- overview_series(mode = "date")$Milestones$data[[1]]$tip
-  expect_identical(tip_rows(eos), c(Date = "2020-04-10"))
-  expect_identical(tip_meta(eos, "Date"), "D101")
+  dth <- overview_series(dm_obj, mode = "date")$Milestones$data[[1]]$tip
+  expect_identical(tip_rows(dth), c(Date = "2020-04-10"))
+  expect_identical(tip_meta(dth, "Date"), "D101")
 
   vis <- series$Visits$data[[1]]$tip
   expect_identical(vis$head, "Week 2")
   expect_identical(tip_rows(vis), c(Type = "Visit", Days = "Day 15"))
 })
 
-test_that("a death flagged without a date says where it is drawn", {
-  dm_obj <- tip_overview_dm(list(DTHFL = "Y"))
+test_that("end of study is no mark, and a death without a date is none", {
+  # As the patient timeline: the header says both.
+  expect_null(overview_series()$Milestones)
+  expect_null(overview_series(tip_overview_dm(list(DTHFL = "Y")))$Milestones)
+})
+
+test_that("the discontinuation reason is a tag at the last dose", {
+  dm_obj <- tip_overview_dm(list(DCTREAS = "WITHDRAWAL BY SUBJECT"))
   ms <- overview_series(dm_obj)$Milestones$data
-  tip <- ms[[length(ms)]]$tip
-  expect_identical(tip$head, "Death")
-  expect_identical(tip$color, "#DC2626")
-  expect_length(tip$rows, 0L)
-  expect_match(tip$note, "Date not recorded")
+  expect_identical(ms[[1]]$value[[4]], "WD")
+  expect_identical(ms[[1]]$tip$head, "Withdrawal by subject")
+  expect_identical(tip_rows(ms[[1]]$tip)[["Type"]], "Discontinuation")
 })
 
 test_that("without exposure the treatment bar names the arm and its span", {

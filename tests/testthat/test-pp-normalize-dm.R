@@ -69,8 +69,11 @@ test_that("the derived dates reach ref_ms and the time range", {
   # columns straight off the dm.
   dm_obj <- pp_normalize_dm(dm::dm(adsl = sdtm_adsl()))
   expect_false(is.na(pp_compute_ref_ms(dm_obj)))
-  expect_equal(pp_compute_time_range(dm_obj),
-               as.Date(c("2020-01-01", "2020-06-01")))
+  tr <- pp_compute_time_range(dm_obj)
+  # Last contact rides along for the open ends (pp_gantt_open_end()).
+  expect_identical(attr(tr, "last_contact"), as.Date("2020-06-01"))
+  attr(tr, "last_contact") <- NULL
+  expect_equal(tr, as.Date(c("2020-01-01", "2020-06-01")))
 })
 
 test_that("table and column normalization compose", {

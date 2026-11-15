@@ -14,8 +14,12 @@
 #   pp_band_series() -- one value series (a findings parameter), drawn as a
 #                       line with the upper reference limit as a hairline.
 #
-# A viz declares one or neither. Nothing here reads a viz id: the patient
-# overview is skipped because it declares no band, not because it is named.
+# The patient overview's strip is a spans band with more on it
+# (pp_band_overview()): the AEs, one exposure line over them and death, the
+# patient timeline's closed row in small. A strip shows what its panel
+# shows, so only the overview's carries exposure and death.
+#
+# A viz declares one or neither. Nothing here reads a viz id.
 
 #' Declare an interval band
 #'
@@ -25,15 +29,19 @@
 #'   -- see [pp_cohort_span_events()] for why a partly populated day column
 #'   must not win wholesale.
 #' @param color Role name whose resolved column colours the spans
-#'   (`"severity"`, `"indication"`), or `NULL` for one flat colour.
+#'   (`"severity"`, `"indication"`), `"started"` for started before or on
+#'   treatment (the con-med colours, [pp_cm_started_colour()]), or `NULL`
+#'   for one flat colour.
 #' @param search Columns a panel search filters the spans on, coarsest last.
 #'   `NULL` for a band no search reaches.
 #' @param open_ends Whether a missing end means "ongoing" (it runs to the
-#'   end of that patient's own data) rather than a same-day event.
+#'   patient's last contact) rather than a same-day event.
+#' @param overview Whether the strip also draws the exposure line and death
+#'   (the overview's strip, [pp_band_overview()]).
 #' @return A `pp_band` declaration.
 #' @noRd
 pp_band_spans <- function(table, start, end, color = NULL, search = NULL,
-                          open_ends = TRUE) {
+                          open_ends = TRUE, overview = FALSE) {
   stopifnot(
     is.character(table), length(table) == 1L,
     is.character(start), is.character(end),
@@ -42,7 +50,8 @@ pp_band_spans <- function(table, start, end, color = NULL, search = NULL,
   )
   structure(
     list(kind = "spans", table = table, start = start, end = end,
-         color = color, search = search, open_ends = open_ends),
+         color = color, search = search, open_ends = open_ends,
+         overview = isTRUE(overview)),
     class = c("pp_band", "list")
   )
 }
@@ -89,6 +98,22 @@ pp_band_ae <- function() {
     end = c("AENDY", "AENDT"),
     color = "severity",
     search = c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
+  )
+}
+
+#' The patient overview's band, as a declaration
+#'
+#' The AEs by severity, as the AE band, with one exposure line over them
+#' (every study drug merged, [pp_cohort_expo()]) and a cross at death. No
+#' search: the overview has no find box.
+#' @noRd
+pp_band_overview <- function() {
+  pp_band_spans(
+    table = "adae",
+    start = c("ASTDY", "ASTDT"),
+    end = c("AENDY", "AENDT"),
+    color = "severity",
+    overview = TRUE
   )
 }
 

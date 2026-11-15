@@ -174,7 +174,7 @@ test_that("treatment start/end are not redrawn as milestones", {
   expect_length(ms, 0L)
 })
 
-test_that("real milestones ride on the treatment lane, painted over the bars", {
+test_that("death and the discontinuation reason ride on the treatment lane", {
   adex <- data.frame(
     USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = 54, EXDOSU = "mg",
     ASTDT = as.Date("2020-01-01"), AENDT = as.Date("2020-06-01"),
@@ -185,6 +185,7 @@ test_that("real milestones ride on the treatment lane, painted over the bars", {
       USUBJID = "x", ACTARM = "Placebo",
       TRTSDT = as.Date("2020-01-01"), TRTEDT = as.Date("2020-06-01"),
       RFENDT = as.Date("2020-07-01"), DTHDT = as.Date("2020-08-01"),
+      DCTREAS = "ADVERSE EVENT",
       stringsAsFactors = FALSE
     ),
     adex = adex
@@ -195,7 +196,11 @@ test_that("real milestones ride on the treatment lane, painted over the bars", {
   ms <- Filter(function(s) identical(s$name, "Milestones"),
                chart$x$opts$series)[[1]]
   kinds <- vapply(ms$data, function(x) as.character(x$value[[3]]), "")
-  expect_setequal(kinds, c("eos", "death"))
+  # End of study is no mark (the header says it), as on the patient
+  # timeline; the reason is its two-letter tag.
+  expect_setequal(kinds, c("tag", "death"))
+  tag <- Filter(function(x) identical(x$value[[3]], "tag"), ms$data)[[1]]
+  expect_identical(tag$value[[4]], "AE")
   # ... on the same lane as the dose bars
   lanes <- unique(vapply(ms$data, function(x) as.numeric(x$value[[2]]), 0))
   expect_equal(lanes, 0)

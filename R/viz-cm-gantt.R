@@ -79,7 +79,9 @@ cm_gantt_viz <- new_pp_viz(
     table = "adcm",
     start = c("ASTDY", "ASTDT"),
     end = c("AENDY", "AENDT"),
-    color = "indication",
+    # Started before or on treatment, as the panel and the patient timeline
+    # colour con meds.
+    color = "started",
     search = PP_CM_SEARCH
   ),
   uses = "indication",

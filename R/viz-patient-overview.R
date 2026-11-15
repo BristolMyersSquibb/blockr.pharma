@@ -12,12 +12,13 @@
 #      worst on top
 #   4. Con meds — compact bars, started before or on treatment, as the
 #      patient timeline colours them
-#   5. Milestones — point markers: end of study, death
+#   5. Marks on the treatment lane — the discontinuation reason as a tag at
+#      the last dose and death as a cross, as the patient timeline marks them
 #   6. Visits — one tick per visit the subject attended (reconstructed from
 #      the findings tables; see pp_visit_schedule())
 #
 # Data requirements (declared via new_pp_viz()):
-#   adsl: required TRTSDT, TRTEDT; optional RFENDT, DTHDT, DTHFL
+#   adsl: required TRTSDT, TRTEDT; optional DTHDT, DCTREAS, LSTALVDT
 #   adae (optional table): ASTDT, AENDT, ASTDY, AENDY, AEDECOD, AESER
 #   adex (optional table): ASTDT, AENDT, ASTDY, AENDY, EXDOSE, EXDOSU, EXTRT,
 #         AVISIT
@@ -40,10 +41,10 @@ patient_overview_viz <- new_pp_viz(
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
   uses = c("arm", "severity"),
   optional = list(
-    adsl = c("RFENDT", "DTHDT", "DTHFL"),
+    adsl = c("DTHDT", "DCTREAS", "LSTALVDT"),
     adae = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER", "AEBODSYS",
-      "AEOUT"
+      "AEOUT", "AESDTH"
     ),
     adex = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT",
@@ -52,6 +53,9 @@ patient_overview_viz <- new_pp_viz(
     adcm = c("ASTDT", "AENDT", "ASTDY", "AENDY", "CMTRT", "CMDECOD", "CMCLAS",
              "CMINDC")
   ),
+  # The patient list's strip when the overview is on top: the AEs, one
+  # exposure line and death (pp_band_overview()).
+  band = pp_band_overview(),
   exhibit = function(dm_obj, time_range, settings = list(),
                      ref_ms = NA_real_, mode = "date") {
     pp_static_overview(dm_obj, time_range, settings, ref_ms, mode)
@@ -516,90 +520,101 @@ patient_overview_viz <- new_pp_viz(
       }
 
       # ---------------------------------------------------------------
-      # Milestones — markers ON the treatment lane. Treatment start/end are
-      # deliberately NOT among them any more: they were circles sitting under
-      # the very bar whose ends they marked. What remains genuinely happens
-      # elsewhere in time, usually after treatment stops.
+      # Marks ON the treatment lane, as the patient timeline draws them: the
+      # discontinuation reason as a two-letter tag at the last dose, and
+      # death as a cross (ADSL DTHDT, else a fatal AE's end; a death flag
+      # without a date has no position and is said in the header instead).
+      # End of study is not a mark: it is a disposition date, mostly the
+      # day of the last dose, and the timeline does not draw it either.
       # ---------------------------------------------------------------
       ms_lane <- trt_lane
       milestone_data <- list()
 
-      # End of study (blue diamond) — RFENDT is canonical, EOSDT aliased
-      if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
-        eos <- pp_tip_when(sl$RFENDT[1], NA, ref_ms, mode)
+      why <- pp_disc_reason(sl)
+      if (!is.null(why)) {
         milestone_data <- c(milestone_data, list(list(
-          value = list(pp_xval(sl$RFENDT[1], ref_ms, mode), ms_lane,
-                       "eos", pp_xlabel(sl$RFENDT[1], ref_ms, mode)),
-          tip = pp_tip_event("End of study", color = "#2563EB",
-                             days = pp_tip_day(eos))
+          value = list(trt_end, ms_lane, "tag", why$tag),
+          tip = pp_tip_event(
+            why$name, color = PP_EV_INK, type = "Discontinuation",
+            details = why$reason,
+            days = pp_tip_day(pp_tip_when(sl$TRTEDT[1], NA, ref_ms, mode))
+          )
         )))
       }
 
-      # Death (red X) — DTHDT is canonical, DTHDTC aliased
-      if ("DTHDT" %in% colnames(sl) && !is.na(sl$DTHDT[1])) {
-        dth <- pp_tip_when(sl$DTHDT[1], NA, ref_ms, mode)
+      dth <- pp_death_at(sl, if (has_adae) adae_raw)
+      if (!is.null(dth)) {
+        dth_x <- pp_xval_pref_day(
+          if (is.na(dth$date)) NULL else dth$date,
+          if (is.na(dth$day)) NULL else dth$day,
+          ref_ms, mode
+        )
         milestone_data <- c(milestone_data, list(list(
-          value = list(pp_xval(sl$DTHDT[1], ref_ms, mode), ms_lane,
-                       "death", pp_xlabel(sl$DTHDT[1], ref_ms, mode)),
-          tip = pp_tip_event("Death", color = "#DC2626",
-                             days = pp_tip_day(dth))
-        )))
-      } else if ("DTHFL" %in% colnames(sl) &&
-                  !is.na(sl$DTHFL[1]) && sl$DTHFL[1] == "Y") {
-        # Flagged without a date, so the marker sits at the end of
-        # treatment; the tooltip says so.
-        milestone_data <- c(milestone_data, list(list(
-          value = list(trt_end, ms_lane, "death", "Date unknown"),
-          tip = pp_tip("Death", color = "#DC2626",
-                       note = "Date not recorded; drawn at the end of treatment")
+          value = list(dth_x, ms_lane, "death", ""),
+          tip = pp_tip_event("Death", color = PP_EV_INK,
+                             days = pp_tip_day(
+                               pp_tip_when(dth$date, dth$day, ref_ms, mode)
+                             ))
         )))
       }
 
       ms_series <- list(
         type = "custom",
         name = "Milestones",
-        renderItem = htmlwidgets::JS("
+        renderItem = htmlwidgets::JS(sprintf("
           function(params, api) {
-            var x = api.coord([api.value(0), api.value(1)])[0];
-            var y = api.coord([api.value(0), api.value(1)])[1];
-            var kind = api.value(2);
-            var sz = 6;
-            if (kind === 'eos') {
-              return {
-                type: 'polygon',
-                shape: {
-                  points: [
-                    [x, y - sz], [x + sz, y],
-                    [x, y + sz], [x - sz, y]
-                  ]
-                },
-                style: { fill: '#2563EB', stroke: PatientProfile.ink('--blockr-color-bg-surface'), lineWidth: 1.5 }
-              };
-            } else if (kind === 'death') {
+            var p = api.coord([api.value(0), api.value(1)]);
+            var x = p[0], y = p[1];
+            var ink = '%s';
+            var ring = PatientProfile.ink('--blockr-color-bg-surface');
+            if (api.value(2) === 'tag') {
+              var font = PatientProfile.ink('--bs-body-font-family');
+              var txt = '' + api.value(3);
+              var w = echarts.format.getTextRect
+                ? echarts.format.getTextRect(txt, '700 9px ' + font).width
+                : txt.length * 6;
+              var bw = w + 6, bh = 12, bx = x + 3, by = y - bh / 2;
+              // At the right edge, the tag goes left of the last dose.
+              var cs = params.coordSys;
+              if (bx + bw > cs.x + cs.width) bx = x - 3 - bw;
               return {
                 type: 'group',
                 children: [{
-                  type: 'line',
-                  shape: { x1: x-sz, y1: y-sz, x2: x+sz, y2: y+sz },
-                  style: { stroke: '#DC2626', lineWidth: 2.5 }
+                  type: 'rect',
+                  shape: { x: bx, y: by, width: bw, height: bh, r: 2 },
+                  style: { fill: ring, stroke: ink, lineWidth: 1,
+                           shadowBlur: 0 }
                 }, {
-                  type: 'line',
-                  shape: { x1: x+sz, y1: y-sz, x2: x-sz, y2: y+sz },
-                  style: { stroke: '#DC2626', lineWidth: 2.5 }
+                  type: 'text',
+                  style: {
+                    text: txt, x: bx + bw / 2, y: y,
+                    fill: ink, fontSize: 9, fontWeight: 700,
+                    fontFamily: font,
+                    textAlign: 'center', textVerticalAlign: 'middle'
+                  }
                 }]
               };
             }
+            // The timeline's cross: 1.8px ink over a ring of the surface.
+            var a = 4.5;
+            var d = [[x - a, y - a, x + a, y + a], [x + a, y - a, x - a, y + a]];
+            var kids = [];
+            [[ring, 5.5], [ink, 1.8]].forEach(function(s) {
+              d.forEach(function(l) {
+                kids.push({
+                  type: 'line',
+                  shape: { x1: l[0], y1: l[1], x2: l[2], y2: l[3] },
+                  style: { stroke: s[0], lineWidth: s[1], lineCap: 'round' }
+                });
+              });
+            });
+            return { type: 'group', children: kids };
           }
-        "),
+        ", PP_EV_INK)),
         data = milestone_data,
         encode = list(x = 0, y = 1),
         tooltip = list(formatter = PP_TIP_FORMATTER)
       )
-
-      # Appended AFTER exposure, below -- the milestones now share a lane with
-      # the dose bars, and echarts paints in series order, so adding them here
-      # would hide a death marker under the bar it lands on (the DTHFL branch
-      # above puts one exactly there).
 
       # ---------------------------------------------------------------
       # Exposure — the treatment lane's real content when adex exists. Drug
@@ -693,13 +708,19 @@ patient_overview_viz <- new_pp_viz(
           rows <- groups[[g]]
           i <- rows[[1L]]
           x0 <- ex_x(adex[[ex_src]][i])
+          # A dose record without an end stops at the last dose (TRTEDT),
+          # and stays open only while the patient has none, as the patient
+          # timeline closes it (swimmer_close_study()).
+          ex_open <- !(ex_has_end && !is.na(ex_end(i))) &&
+            is.na(sl$TRTEDT[1])
           x1 <- if (ex_has_end && !is.na(ex_end(i))) {
             ex_x(ex_end(i))
+          } else if (!ex_open) {
+            max(trt_end, x0)
           } else {
             pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
           }
           at <- function(nm) if (nm %in% colnames(adex)) adex[[nm]][i] else NA
-          ex_open <- !(ex_has_end && !is.na(ex_end(i)))
           drug <- drug_of(i)
           name <- if (nzchar(drug)) swimmer_drug_name(drug) else "Exposure"
           col <- if (nzchar(drug) && drug %in% names(drug_col)) {

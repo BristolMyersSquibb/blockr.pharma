@@ -24,6 +24,10 @@
 #'   so baselines stay visible) -- one medication started years earlier must
 #'   not stretch every axis to it. `TRUE` restores the full range, as
 #'   unchecking "Hide data before day -30" in the gear tray does.
+#' @param all_aes Show every adverse event? By default the profile shows the
+#'   treatment-emergent ones (ADAE `TRTEMFL`), as the patient timeline does;
+#'   `TRUE` is unchecking "Treatment-emergent AEs only" in the gear tray. A
+#'   study without `TRTEMFL` shows every AE either way.
 #' @param subject USUBJID to display, as a length-1 character. Only meaningful
 #'   when the incoming dm carries more than one subject; a single-subject dm
 #'   always renders its one subject. Ignored (and cleared) when the value is
@@ -90,11 +94,13 @@ new_patient_profile_block <- function(selected = NULL,
                                               timeline_mode = "rday",
                                               subject = NULL,
                                               show_prestudy = FALSE,
+                                              all_aes = FALSE,
                                               smooth = "auto",
                                               ...) {
   timeline_mode <- match.arg(timeline_mode, c("rday", "date"))
   subject <- pp_validate_subject(subject)
   stopifnot(isTRUE(show_prestudy) || isFALSE(show_prestudy))
+  stopifnot(isTRUE(all_aes) || isFALSE(all_aes))
   smooth <- match.arg(smooth, c("auto", "off"))
 
   # `arm_var` is study-level configuration, not block state: it is the
@@ -186,7 +192,11 @@ new_patient_profile_block <- function(selected = NULL,
           r_norm_dm <- shiny::reactive({
             dm_obj <- r_data()
             if (!inherits(dm_obj, "dm")) return(NULL)
-            pp_normalize_dm(dm_obj)
+            nd <- pp_normalize_dm(dm_obj)
+            # Treatment-emergent AEs only, unless the gear says all: every
+            # panel, the header count and the strip read this one dm.
+            if (!r_all_aes()) nd <- pp_teae_only(nd)
+            nd
           })
 
           # Role resolution, once per (dm, declaration): which column is the
@@ -571,6 +581,12 @@ new_patient_profile_block <- function(selected = NULL,
           r_show_prestudy <- shiny::reactiveVal(isTRUE(show_prestudy))
           shiny::observeEvent(input$show_prestudy, {
             r_show_prestudy(isTRUE(input$show_prestudy))
+          })
+
+          # Every AE, or (the default) the treatment-emergent ones
+          r_all_aes <- shiny::reactiveVal(isTRUE(all_aes))
+          shiny::observeEvent(input$all_aes, {
+            r_all_aes(isTRUE(input$all_aes))
           })
 
           # Line smoothing for the findings value lines ("auto" = monotone,
@@ -1083,7 +1099,8 @@ new_patient_profile_block <- function(selected = NULL,
               rday = !gear_disabled,
               mode = r_timeline_mode(),
               prestudy = r_show_prestudy(),
-              smooth = r_smooth()
+              smooth = r_smooth(),
+              teae = if (pp_has_teae_flag(r_norm_dm())) !r_all_aes()
             )))
           })
 
@@ -1309,6 +1326,7 @@ new_patient_profile_block <- function(selected = NULL,
               timeline_mode = r_timeline_mode(),
               show_prestudy = r_show_prestudy(),
               smooth = r_smooth(),
+              all_aes = r_all_aes(),
               roles = r_declared(),
               scale_map = r_scale_map(),
               title = if (identical(scope, "patient")) {
@@ -1554,6 +1572,7 @@ new_patient_profile_block <- function(selected = NULL,
               timeline_mode = r_timeline_mode,
               subject = r_subject,
               show_prestudy = r_show_prestudy,
+              all_aes = r_all_aes,
               smooth = r_smooth
             )
           )
@@ -1577,7 +1596,7 @@ new_patient_profile_block <- function(selected = NULL,
     # ctrl chat can never read the input data.
     allow_empty_state = c("selected", "viz_settings", "subject"),
     external_ctrl = c("selected", "viz_settings", "timeline_mode", "subject",
-                      "show_prestudy", "smooth"),
+                      "show_prestudy", "all_aes", "smooth"),
     class = c("patient_profile_block", "dm_block"),
     ...
   )

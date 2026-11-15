@@ -14,6 +14,7 @@ PatientProfile.part(function(ctx) {
   var sidebarId = ns('pp_sidebar');
   var tlModeInputId = ns('timeline_mode');
   var prestudyInputId = ns('show_prestudy');
+  var allAesInputId = ns('all_aes');
   var smoothInputId = ns('smooth_mode');
   var gearBtnId = ns('pp_gear_btn');
   var gearTrayId = ns('pp_gear_tray');
@@ -182,12 +183,12 @@ PatientProfile.part(function(ctx) {
   }
 
   // The tray's Display section, built from R's `gear_state`: Timeline as a
-  // segmented control, then two checkboxes. The input values keep the wire
+  // segmented control, then the checkboxes. The input values keep the wire
   // format the server always read (mode "rday"/"date", show_prestudy TRUE
   // for the full history, smooth "auto"/"off"). Without a treatment start
   // (rday false) there is no relative day and no day -30 to cut at, so
   // those two are left out rather than disabled.
-  /** @param {{ rday: boolean, mode: string, prestudy: boolean, smooth: string }} st */
+  /** @param {{ rday: boolean, mode: string, prestudy: boolean, smooth: string, teae?: boolean | null }} st */
   function buildDisplay(st) {
     var host = byId(gearDisplayId);
     if (!host || !window.Blockr) return;
@@ -224,6 +225,14 @@ PatientProfile.part(function(ctx) {
           Shiny.setInputValue(prestudyInputId, !on, {priority: 'event'});
         });
       field('pp-gear-clip', [clip.el]);
+    }
+    // Only when the AEs carry a treatment-emergent flag to filter on.
+    if (st.teae === true || st.teae === false) {
+      var teae = Blockr.checkbox('Treatment-emergent AEs only', st.teae,
+        function(on) {
+          Shiny.setInputValue(allAesInputId, !on, {priority: 'event'});
+        });
+      field('pp-gear-teae', [teae.el]);
     }
     var smooth = Blockr.checkbox('Smooth lines', st.smooth !== 'off',
       function(on) {

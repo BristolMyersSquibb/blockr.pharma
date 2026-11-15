@@ -11,6 +11,7 @@ pp_patient_exhibit(
   timeline_mode = c("rday", "date"),
   show_prestudy = FALSE,
   smooth = c("auto", "off"),
+  all_aes = FALSE,
   subject = NULL,
   roles = NULL,
   scale_map = NULL,
@@ -36,6 +37,9 @@ clipping to the screening window.}
 
 \item{smooth}{Findings line smoothing, \code{"auto"} or \code{"off"} (static lines
 are straight segments either way; kept for state parity).}
+
+\item{all_aes}{Draw every adverse event? By default only the
+treatment-emergent ones (ADAE \code{TRTEMFL}), as the patient timeline does.}
 
 \item{subject}{USUBJID to scope a cohort to one patient. \code{NULL} renders
 the whole cohort.}

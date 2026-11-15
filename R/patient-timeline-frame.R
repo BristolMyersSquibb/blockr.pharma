@@ -85,7 +85,8 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   the data lacks falls back to `AEDECOD`, then `AETERM`.
 #' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
 #' @param cm_records `"active on treatment"` (ends on or after the first dose,
-#'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
+#'   or ongoing) or `"all"` (the axis then starts at day -30, as the patient
+#'   profile's does).
 #' @param cm_colour The field that colours the con meds: a column of ADCM
 #'   (`"CMCLAS"`, `"CMINDC"`, `"CMROUTE"`), `"before or on treatment"` or
 #'   `"one colour"`. A column keeps its most common levels and folds the
@@ -205,7 +206,7 @@ patient_timeline_frame <- function(data,
   }
   lo <- tl_axis_start(parts)
   if ("Con meds" %in% layers && !is.null(tb$adcm)) {
-    if (identical(opt$cm_records, "all")) lo <- min(lo, 1 - 28)
+    if (identical(opt$cm_records, "all")) lo <- min(lo, -30)
     cm <- tb$adcm
     cm <- cm[pp_find_match(cm, pt_picks(cm_terms, PP_CM_LEVELS),
                            PP_CM_SEARCH), , drop = FALSE]

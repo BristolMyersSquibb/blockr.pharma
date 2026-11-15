@@ -998,10 +998,11 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     for (rows in groups) {
       i <- rows[[1L]]
       x0 <- ex_x(adex[[ex_src]][i])
+      # Without an end, a dose stops at the last dose, as on the live lane.
       x1 <- if (ex_has_end && !is.na(ex_end(i))) {
         ex_x(ex_end(i))
       } else {
-        pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
+        max(trt_end, x0)
       }
       k <- slot_of(drug_of(i))
       yc <- if (n_slot == 1L) {
@@ -1100,29 +1101,30 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   rect_df <- do.call(rbind, acc$rects)
 
   # Points are clipped to the window explicitly, the way echarts clips them
-  # silently: a milestone past the axis (RFENDT is not among the columns
-  # the time range scans) must drop without a ggplot warning.
+  # silently: a mark past the axis must drop without a ggplot warning.
   in_window <- function(x) {
     (is.na(b[1L]) | x >= b[1L]) & (is.na(b[2L]) | x <= b[2L])
   }
 
-  # Milestones (end of study, death) on the treatment lane.
+  # The overview's marks on the treatment lane (viz-patient-overview.R):
+  # the discontinuation reason as a tag at the last dose, death as a cross.
   ms <- list()
-  if ("RFENDT" %in% colnames(sl) && !is.na(sl$RFENDT[1])) {
+  why <- pp_disc_reason(sl)
+  if (!is.null(why)) {
     ms[[length(ms) + 1L]] <- data.frame(
-      x = pp_xval(sl$RFENDT[1], ref_ms, mode), y = lane_y("TRT"),
-      kind = "eos", stringsAsFactors = FALSE
+      x = trt_end, y = lane_y("TRT"), kind = "tag", label = why$tag,
+      stringsAsFactors = FALSE
     )
   }
-  if ("DTHDT" %in% colnames(sl) && !is.na(sl$DTHDT[1])) {
+  dth <- pp_death_at(sl, adae_raw)
+  if (!is.null(dth)) {
     ms[[length(ms) + 1L]] <- data.frame(
-      x = pp_xval(sl$DTHDT[1], ref_ms, mode), y = lane_y("TRT"),
-      kind = "death", stringsAsFactors = FALSE
-    )
-  } else if ("DTHFL" %in% colnames(sl) &&
-               !is.na(sl$DTHFL[1]) && sl$DTHFL[1] == "Y") {
-    ms[[length(ms) + 1L]] <- data.frame(
-      x = trt_end, y = lane_y("TRT"), kind = "death",
+      x = pp_xval_pref_day(
+        if (is.na(dth$date)) NULL else dth$date,
+        if (is.na(dth$day)) NULL else dth$day,
+        ref_ms, mode
+      ),
+      y = lane_y("TRT"), kind = "death", label = "",
       stringsAsFactors = FALSE
     )
   }
@@ -1180,19 +1182,20 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     )
   }
   if (!is.null(ms_df) && nrow(ms_df)) {
-    eos <- ms_df[ms_df$kind == "eos", , drop = FALSE]
+    tag <- ms_df[ms_df$kind == "tag", , drop = FALSE]
     death <- ms_df[ms_df$kind == "death", , drop = FALSE]
-    if (nrow(eos)) {
-      p <- p + ggplot2::geom_point(
-        data = eos, ggplot2::aes(x = x, y = y),
-        shape = 23, size = 2.6, fill = "#2563EB", color = "white",
-        stroke = 0.6
+    if (nrow(tag)) {
+      p <- p + ggplot2::geom_label(
+        data = tag, ggplot2::aes(x = x, y = y, label = label),
+        hjust = -0.1, size = 2.2, fontface = "bold", color = PP_EV_INK,
+        fill = "white",
+        label.padding = ggplot2::unit(0.08, "lines")
       )
     }
     if (nrow(death)) {
       p <- p + ggplot2::geom_point(
         data = death, ggplot2::aes(x = x, y = y),
-        shape = 4, size = 2.6, color = "#DC2626", stroke = 1.2
+        shape = 4, size = 2.6, color = PP_EV_INK, stroke = 1.2
       )
     }
   }

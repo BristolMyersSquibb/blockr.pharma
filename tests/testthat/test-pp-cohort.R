@@ -362,9 +362,10 @@ test_that("the row ships the band's geometry, and it matches the drawn one", {
     expect_match(from_svg[[i]], paste0('fill="', f[[3]]), fixed = TRUE)
   }
 
-  # S-2 stopped early, S-1 did not: the marker is its own attribute
-  expect_null(attr$eot)
-  expect_false(is.null(pp_cohort_band_attr(m$subjects[["S-2"]], m, col)$eot))
+  # An AE strip carries no treatment mark: exposure and death are the
+  # overview strip's
+  expect_null(attr$expo)
+  expect_null(attr$death)
 
   # A patient with no events ships an empty band, not a missing one: the row
   # still renders the track.
@@ -429,14 +430,47 @@ test_that("merging a span that starts LEFT of the one before keeps its left", {
   expect_equal(g$x[[1]] + g$w[[1]], x_of(max(ev$end)), tolerance = 0.02)
 })
 
-test_that("the end-of-treatment diamond is drawn only when it ended early", {
+test_that("no strip draws an end-of-treatment diamond", {
   d <- cohort_dm(test_adsl(), test_adae())
   m <- pp_cohort_marks(d, pp_resolve_roles(d, list(arm = "ACTARM")))
   col <- pp_cohort_sev_color(NULL)
-  # S-2 stopped at day 30 of a 180-day axis
-  expect_match(pp_cohort_band_svg(m$subjects[["S-2"]], m, col), "<path")
-  # S-1 ran to the end of the axis, so there is nothing to mark
-  expect_false(grepl("<path", pp_cohort_band_svg(m$subjects[["S-1"]], m, col)))
+  expect_false(grepl("<path", pp_cohort_band_svg(m$subjects[["S-2"]], m, col)))
+})
+
+test_that("the overview strip draws one exposure line and death", {
+  adsl <- test_adsl()
+  adsl$DTHDT <- as.Date(c(NA, NA, NA))
+  adsl$DTHDT[[2]] <- adsl$TRTEDT[[2]] + 2
+  # Two drugs for S-1, overlapping, and a hold where neither was given
+  adex <- data.frame(
+    USUBJID = c("S-1", "S-1", "S-1", "S-1"),
+    EXTRT = c("A", "A", "B", "A"),
+    ASTDY = c(1, 21, 15, 61),
+    AENDY = c(20, 40, 30, 80),
+    stringsAsFactors = FALSE
+  )
+  d <- dm::dm(adsl = adsl, adae = test_adae(), adex = adex)
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
+  m <- pp_cohort_marks(d, roles, band = pp_band_overview())
+  expect_true(m$overview)
+  # Merged across drugs: 1..40, then 61..80
+  e1 <- m$subjects[["S-1"]]$expo
+  expect_equal(e1$start, c(1, 61))
+  expect_equal(e1$end, c(40, 80))
+  # No ADEX records: first to last dose
+  e2 <- m$subjects[["S-2"]]$expo
+  expect_equal(e2$start, 1)
+  expect_equal(e2$end, m$subjects[["S-2"]]$trt_end)
+  expect_false(is.na(m$subjects[["S-2"]]$death))
+
+  col <- pp_cohort_sev_color(NULL)
+  a1 <- pp_cohort_band_attr(m$subjects[["S-1"]], m, col)
+  expect_length(strsplit(a1$expo, " ")[[1]], 2L)
+  a2 <- pp_cohort_band_attr(m$subjects[["S-2"]], m, col)
+  expect_false(is.null(a2$death))
+  svg <- pp_cohort_band_svg(m$subjects[["S-2"]], m, col)
+  expect_match(svg, 'height="11"', fixed = TRUE)
+  expect_match(svg, "cohort-ev", fixed = TRUE)
 })
 
 test_that("sorting offers only keys the data supports, and signals descend", {
@@ -756,14 +790,12 @@ test_that("a study with neither days nor dates has no AE timeline", {
   expect_length(m$subjects, 3L)
 })
 
-test_that("the medications strip colours by indication, as the CM panel does", {
-  # The strip drew every medication grey: its band declared no colour role,
-  # so the severity resolver saw an empty value. The panel colours by
-  # indication, per patient, and falls back to one medication colour.
+test_that("the medications strip colours started before or on treatment", {
+  # As the CM panel's legend and the patient timeline colour con meds.
   adcm <- data.frame(
     USUBJID = c("S-1", "S-1", "S-2", "S-2"),
     CMTRT = c("A", "B", "C", "D"),
-    ASTDY = c(2, 10, 3, 8),
+    ASTDY = c(-20, 10, 3, 8),
     AENDY = c(6, 14, 5, 12),
     CMINDC = c("PAIN", "HYPERTENSION", "PAIN", "PAIN"),
     stringsAsFactors = FALSE
@@ -772,17 +804,9 @@ test_that("the medications strip colours by indication, as the CM panel does", {
   roles <- pp_resolve_roles(d, list(arm = "ACTARM"))
   band <- cm_gantt_viz$band
   m <- pp_cohort_marks(d, roles, band = band)
-  expect_identical(m$subjects[["S-1"]]$n_levels, 2L)
-  expect_identical(m$subjects[["S-2"]]$n_levels, 1L)
-
   col <- pp_cohort_band_color(band, roles, NULL, d)
   s1 <- pp_cohort_band_geom(m$subjects[["S-1"]], m, col)$fill
+  expect_identical(s1, unname(PP_CM_STARTED))
   s2 <- pp_cohort_band_geom(m$subjects[["S-2"]], m, col)$fill
-
-  # S-1 carries two indications: the colours the panel resolves for S-1
-  panel <- pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-1"), "CMINDC")
-  expect_identical(s1, unname(panel[c("PAIN", "HYPERTENSION")]))
-  # S-2 carries one, so the panel draws its single medication colour
-  expect_null(pp_indc_scale_colors(NULL, pp_scope_subject(d, "S-2"), "CMINDC"))
-  expect_true(all(s2 == PP_CM_COLOR))
+  expect_true(all(s2 == PP_CM_STARTED[["Started on treatment"]]))
 })

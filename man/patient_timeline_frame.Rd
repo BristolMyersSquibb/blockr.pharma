@@ -67,7 +67,8 @@ disorders"). Empty: all.}
 \item{serious}{\code{"outlined"}, \code{"marked at onset"} or \code{"unmarked"}.}
 
 \item{cm_records}{\code{"active on treatment"} (ends on or after the first dose,
-or ongoing) or \code{"all"} (the axis then starts 28 days before day 1).}
+or ongoing) or \code{"all"} (the axis then starts at day -30, as the patient
+profile's does).}
 
 \item{cm_colour}{The field that colours the con meds: a column of ADCM
 (\code{"CMCLAS"}, \code{"CMINDC"}, \code{"CMROUTE"}), \code{"before or on treatment"} or

@@ -7,13 +7,14 @@
 
 /* --- Layout -------------------------------- */
 /* The cohort strip's ink, as local tokens (design system, "Token grammar"):
-   the track and the end-of-treatment mark and the limits are UI and read
-   meaning tokens; the line and the reference range are data colours, the
-   findings panel's line and its normal range. */
+   the track, the exposure line, the death cross and the limits are UI and
+   read meaning tokens; the line and the reference range are data colours,
+   the findings panel's line and its normal range. */
 .pp-layout {
   --blockr-pharma-cohort-track: var(--blockr-color-bg-hover);
   --blockr-pharma-cohort-limit: var(--blockr-color-border-strong);
-  --blockr-pharma-cohort-eot: var(--blockr-color-text-muted);
+  --blockr-pharma-cohort-expo: var(--blockr-color-text-muted);
+  --blockr-pharma-cohort-ev: var(--blockr-color-text-muted);
   --blockr-pharma-cohort-clip: var(--blockr-color-border-danger);
   --blockr-pharma-cohort-line: #0072b2;
   --blockr-pharma-cohort-ref: color-mix(in srgb, #059669 10%, transparent);

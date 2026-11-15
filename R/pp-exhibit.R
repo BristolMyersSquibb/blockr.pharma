@@ -125,6 +125,8 @@ pp_viz_exhibit_settings <- function(viz, viz_settings, roles, dm_obj,
 #'   clipping to the screening window.
 #' @param smooth Findings line smoothing, `"auto"` or `"off"` (static lines
 #'   are straight segments either way; kept for state parity).
+#' @param all_aes Draw every adverse event? By default only the
+#'   treatment-emergent ones (ADAE `TRTEMFL`), as the patient timeline does.
 #' @param subject USUBJID to scope a cohort to one patient. `NULL` renders
 #'   the whole cohort.
 #' @param roles Declared study roles (the `"study_roles"` board option
@@ -147,6 +149,7 @@ pp_patient_exhibit <- function(data,
                                timeline_mode = c("rday", "date"),
                                show_prestudy = FALSE,
                                smooth = c("auto", "off"),
+                               all_aes = FALSE,
                                subject = NULL,
                                roles = NULL,
                                scale_map = NULL,
@@ -173,6 +176,7 @@ pp_patient_exhibit <- function(data,
   }
 
   nd <- pp_normalize_dm(data)
+  if (!isTRUE(all_aes)) nd <- pp_teae_only(nd)
   ids <- pp_subject_ids(nd)
   if (length(ids) == 0L) {
     message("[pp exhibit] no subjects in the dm; nothing to render")
@@ -463,6 +467,9 @@ pp_report_call <- function(x, var, ...) {
   }
   if (isTRUE(state("show_prestudy"))) {
     args$show_prestudy <- TRUE
+  }
+  if (isTRUE(state("all_aes"))) {
+    args$all_aes <- TRUE
   }
   sm <- state("smooth")
   if (is.character(sm) && length(sm) == 1L && !identical(sm, "auto")) {

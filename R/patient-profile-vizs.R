@@ -393,9 +393,10 @@ pp_gantt_height <- function(n_lanes) {
 #' the single most important case as a resolved same-day blip, and the tooltip
 #' compounds it by falling back to the start label ("D12 -> D12").
 #'
-#' So an open event runs to the edge of the visible window and says so. The
-#' bar is clipped there by `renderItem`, which is the correct reading: the
-#' event continues past what is on screen.
+#' So an open event runs on, to the patient's last contact (ADSL
+#' `LSTALVDT`, else the last dose; [pp_last_contact()]) when the range
+#' carries one, as the patient timeline runs it, else to the edge of the
+#' visible window. Either way the bar ends in the ongoing caret.
 #'
 #' Falls back to a one-day stub only on an unbounded axis, where there is no
 #' edge to run to.
@@ -407,6 +408,10 @@ pp_gantt_height <- function(n_lanes) {
 #' @noRd
 pp_gantt_open_end <- function(s, time_range, ref_ms = NA_real_,
                               mode = "date", day_unit = 86400000) {
+  lc <- attr(time_range, "last_contact")
+  if (length(lc) == 1L && !is.na(lc)) {
+    return(pmax(pp_xval(lc, ref_ms, mode), s + day_unit))
+  }
   b <- pp_x_bounds(time_range, ref_ms, mode)
   if (anyNA(b)) return(s + day_unit)
   pmax(b[2L], s + day_unit)
@@ -791,8 +796,18 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
     all_dates <- c(all_dates, from_days)
   }
 
+  # Last contact closes every record without an end (pp_gantt_open_end()),
+  # so the axis reaches it. One patient's range: the first ADSL row is it.
+  sl_nm <- pp_subject_tbl_name(names(tbls))
+  sl <- if (!is.null(sl_nm)) as.data.frame(tbls[[sl_nm]])
+  one <- !is.null(sl) && length(unique(as.character(sl$USUBJID))) == 1L
+  lc <- if (one) pp_last_contact(sl) else as.Date(NA)
+  if (!is.na(lc)) all_dates <- c(all_dates, lc)
+
   if (length(all_dates) == 0) return(NULL)
-  as.Date(c(min(all_dates), max(all_dates)), origin = "1970-01-01")
+  out <- as.Date(c(min(all_dates), max(all_dates)), origin = "1970-01-01")
+  attr(out, "last_contact") <- lc
+  out
 }
 
 
