@@ -91,6 +91,31 @@ test_that("reasons under other names are found by their labels", {
   expect_false("DCTREAS" %in% names(only$tables$adsl))
 })
 
+test_that("a treatment disposition is the treatment reason", {
+  # As a study may ship it: the study reason under DSTERM without a label,
+  # the treatment reason labelled as a disposition, and a death column
+  # that also holds "ADVERSE EVENT".
+  d <- disc_toy(list(
+    DSTERM = c("WITHDRAWAL BY SUBJECT", NA, NA),
+    DDTRTCOD = c("ADVERSE EVENT", NA, NA),
+    DSTRTCOD = c("ADVERSE EVENT", NA, NA),
+    EOSDT = as.Date(c("2024-03-20", NA, NA))
+  ))
+  attr(d$adsl$DDTRTCOD, "label") <- "Death during Treatment"
+  attr(d$adsl$DSTRTCOD, "label") <- "Treatment Disposition"
+  out <- pp_normalize_tables(list(adsl = d$adsl))$tables$adsl
+  expect_identical(as.vector(out$DCTREAS)[[1L]], "ADVERSE EVENT")
+  expect_identical(as.vector(out$DCSREAS)[[1L]], "WITHDRAWAL BY SUBJECT")
+  tg <- disc_tags(patient_timeline_frame(d))
+  expect_identical(paste(tg$.tag, tg$Type),
+                   c("AE Treatment discontinuation", "WD End of study"))
+
+  # A death column alone is no reason.
+  d$adsl$DSTRTCOD <- NULL
+  out <- pp_normalize_tables(list(adsl = d$adsl))$tables$adsl
+  expect_false("DCTREAS" %in% names(out))
+})
+
 test_that("the profile reads the two reasons apart", {
   sl <- data.frame(
     USUBJID = "A",

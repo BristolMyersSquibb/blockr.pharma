@@ -284,8 +284,9 @@ pp_scope_subject <- function(dm_obj, subject) {
 
 # The ADaM labels of the two discontinuation reasons, for studies that name
 # the columns their own way: "Reason for Discontinuation of Treatment" and
-# "Reason for Discontinuation from Study". A free-text "specify" column and
-# a date do not count.
+# "Reason for Discontinuation from Study", or a disposition ("Treatment
+# Disposition"). A free-text "specify" column, a date and a death column
+# ("Death during Treatment") do not count.
 PP_DISC_LABELS <- list(
   DCTREAS = c(need = "treat|therap|drug|dos(e|ing)", not = "^$"),
   DCSREAS = c(need = "study", not = "treat|therap|drug|dos(e|ing)")
@@ -306,8 +307,10 @@ pp_disc_by_label <- function(df) {
     if (is.character(l) && length(l) == 1L) tolower(l) else ""
   }, "")
   txt <- vapply(df, function(x) is.character(x) || is.factor(x), NA)
-  base <- txt & grepl("reason", lab) & grepl("discon|stop", lab) &
-    !grepl("spec|other|date|text", lab)
+  base <- txt &
+    (grepl("reason", lab) & grepl("discon|stop", lab) |
+       grepl("disposition", lab)) &
+    !grepl("spec|other|date|text|death", lab)
   for (nm in names(PP_DISC_LABELS)) {
     if (nm %in% names(df)) next
     r <- PP_DISC_LABELS[[nm]]
