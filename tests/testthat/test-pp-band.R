@@ -530,7 +530,7 @@ test_that("the band follows the chips, not the card's declaration", {
 
 # --- the panel picker --------------------------------------------------------
 #
-# The catalogue reaches the client as Blockr.Pick options; a pure function of
+# The catalogue reaches the client as Blockr.Select options; a pure function of
 # the available vizs, so it needs no session.
 
 test_that("the picker lists panels by domain, then parameters by group", {
@@ -562,7 +562,7 @@ test_that("a panel carries its search keywords, a parameter none", {
   vizs$alt$search <- "liver"
   vizs$ae$search <- "toxicity events"
   opts <- pp_picker_options(vizs)
-  # The filter in blockr-pick.js matches `keywords`, so "toxicity" finds the
+  # The filter in blockr-select.js matches `keywords`, so "toxicity" finds the
   # AE panel; the card keywords stay off the parameter.
   expect_identical(opts[[1L]]$keywords, "toxicity events")
   expect_null(opts[[2L]]$keywords)

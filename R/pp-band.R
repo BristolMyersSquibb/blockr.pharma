@@ -368,7 +368,7 @@ pp_search_icon <- function() {
 
 #' The panel picker's options
 #'
-#' The catalogue as `Blockr.Pick.list()` options: the panels under their
+#' The catalogue as `Blockr.Select.list()` options: the panels under their
 #' domain, then the parameter cards under the findings group they come from.
 #' A parameter shows its code with its name as meta; a panel shows its name.
 #' Each is one viz, so the value is the viz id and a pick is a `toggle_viz`.
@@ -402,7 +402,7 @@ pp_picker_options <- function(avail) {
 
 #' The add-panel picker
 #'
-#' A host for the in-place `Blockr.Pick.list()` that pp-picker.js builds from
+#' A host for the in-place `Blockr.Select.list()` that pp-picker.js builds from
 #' `data-options`. What is on the profile comes from `sync_selected`.
 #'
 #' @param avail Named list of available `pp_viz` definitions.

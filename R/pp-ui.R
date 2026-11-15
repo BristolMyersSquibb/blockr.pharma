@@ -13,8 +13,6 @@ pp_block_ui <- function(id) {
     # stylesheets. The profile's stylesheet reads the tokens without
     # fallbacks and its scripts build on blockr-ui.js.
     blockr.ui::controls_dep(),
-    # Blockr.Pick, the multi-select on trial, for the multi words.
-    blockr.dplyr::blockr_pick_dep(),
     # The data tooltip's card (.vz-tt-*), shared with every blockr.viz chart
     # so the profile's hover cards look like theirs.
     blockr.viz::tooltip_card_dep(),
@@ -55,7 +53,7 @@ pp_block_ui <- function(id) {
         # is shut.
 
         # The panels on the profile, in order, and the catalogue folded
-        # under them: one Blockr.Pick.list, built by pp-picker.js. Above
+        # under them: one Blockr.Select.list, built by pp-picker.js. Above
         # the patients, in the same order as the cards it controls.
         shiny::uiOutput(ns("panel_picker")),
         # The patients' filter box. The panels have their own, in the picker.

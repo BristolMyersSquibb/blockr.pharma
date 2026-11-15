@@ -317,7 +317,7 @@ test_that("arrow keys walk the list in DOM order without a focus ring", {
 # ---------------------------------------------------------------------------
 
 test_that("a picked panel moves to the On list and the search stays", {
-  skip("drives the old On list; the picker is now a Blockr.Pick.list")
+  skip("drives the old On list; the picker is now a Blockr.Select.list")
   skip_if_no_app()
 
   search_clear()
@@ -365,7 +365,7 @@ test_that("a picked panel moves to the On list and the search stays", {
 # ---------------------------------------------------------------------------
 
 test_that("Enter picks the first hit and Escape clears the search", {
-  skip("drives the old On list; the picker is now a Blockr.Pick.list")
+  skip("drives the old On list; the picker is now a Blockr.Select.list")
   skip_if_no_app()
 
   ids <- shown_ids()
@@ -490,7 +490,7 @@ test_that("the cohort well fits its host when the host shrinks", {
 # ---------------------------------------------------------------------------
 
 test_that("the panel picker stays inside the sidebar in a narrow block", {
-  skip("drives the old On list; the picker is now a Blockr.Pick.list")
+  skip("drives the old On list; the picker is now a Blockr.Select.list")
   skip_if_no_app()
 
   search_clear()
@@ -650,7 +650,7 @@ test_that("the sort word opens its keys and reorders the cohort", {
 # ---------------------------------------------------------------------------
 
 test_that("dragging an On row reorders the profile", {
-  skip("drives the old On list; the picker is now a Blockr.Pick.list")
+  skip("drives the old On list; the picker is now a Blockr.Select.list")
   skip_if_no_app()
 
   search_clear()
@@ -738,7 +738,7 @@ test_that("the filter word lists the patient's terms, then the cohort's, and fil
   expect_true(any(tolower(others) %in% shown))
 
   # A pick is sent once, when the menu closes. The sidebar's panel picker is
-  # a Blockr.Pick list with the same option class, so look in the menu only.
+  # a Blockr.Select list with the same option class, so look in the menu only.
   run_js("document.querySelector('.blockr-select__dropdown .blockr-select__option').click();")
   Sys.sleep(0.3)
   expect_length(spy_inputs("-viz_ctrl"), 0)

@@ -167,7 +167,7 @@
   color: var(--blockr-color-text-muted);
 }
 
-/* The panel picker, a Blockr.Pick.list. Capped, so a long profile or an
+/* The panel picker, a Blockr.Select.list. Capped, so a long profile or an
    unfolded catalogue leaves the patients their rows; the list scrolls
    under its filter box. */
 .pp-panels {
@@ -179,17 +179,17 @@
   border-bottom: 1px solid var(--blockr-color-border-default);
 }
 
-.pp-panels > .blockr-pick--inline {
+.pp-panels > .blockr-select--list {
   max-height: 340px;
 }
 
 /* A parameter's name is the meta, and it is long: it gives way, not its
    code or the grip. */
-.pp-panels .blockr-pick__name:has(+ .blockr-select__opt-label) {
+.pp-panels .blockr-select__name:has(+ .blockr-select__opt-label) {
   flex-shrink: 0;
 }
 
-.pp-panels .blockr-pick__option .blockr-select__opt-label {
+.pp-panels .blockr-select__option .blockr-select__opt-label {
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;

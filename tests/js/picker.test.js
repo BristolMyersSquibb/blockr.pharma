@@ -1,4 +1,4 @@
-/* The sidebar: the panel picker (a Blockr.Pick.list) that sync_selected
+/* The sidebar: the panel picker (a Blockr.Select.list) that sync_selected
  * fills and that reports back through toggle_viz and reorder_viz (one
  * change) or set_viz (several), and the
  * patients' own filter box. */
@@ -41,13 +41,13 @@ const dragOnto = (h, from, onto, after) => {
 test('sync_selected puts the picks on top, in profile order', () => {
   const h = boot();
   assert.deepEqual(h.onProfile(), ON);
-  assert.match(h.text('#proxy1-pp_panels .blockr-pick__count'), /^5 of 9 on the profile/);
+  assert.match(h.text('#proxy1-pp_panels .blockr-select__count'), /^5 of 9 on the profile/);
   // A parameter shows its code, with its name as meta.
-  assert.equal(row(h, 'adlbc_all__ALB').querySelector('.blockr-pick__name').textContent, 'ALB');
+  assert.equal(row(h, 'adlbc_all__ALB').querySelector('.blockr-select__name').textContent, 'ALB');
   assert.equal(row(h, 'adlbc_all__ALB').querySelector('.blockr-select__opt-label').textContent,
     'Albumin (g/L)');
   // The rest under their groups.
-  const groups = h.qa('#proxy1-pp_panels .blockr-pick__subgroup').map((g) => g.textContent);
+  const groups = h.qa('#proxy1-pp_panels .blockr-select__subgroup').map((g) => g.textContent);
   assert.ok(groups.includes('Vital signs'));
   // Ids the catalogue does not know are left out.
   h.send('sync_selected', ON.concat(['no_such_panel']));
@@ -86,9 +86,9 @@ test('quick picks are reported together, as one set_viz', () => {
 
 test('None is one set_viz, and the profile has no All', () => {
   const h = boot();
-  const btns = h.qa('#proxy1-pp_panels .blockr-pick__bulk-btn').map((b) => b.textContent);
+  const btns = h.qa('#proxy1-pp_panels .blockr-select__bulk-btn').map((b) => b.textContent);
   assert.deepEqual(btns, ['None']);
-  h.q('#proxy1-pp_panels .blockr-pick__bulk-btn').click();
+  h.q('#proxy1-pp_panels .blockr-select__bulk-btn').click();
   h.tick(1100);
   assert.equal(h.inputs('toggle_viz').length, 0);
   assert.deepEqual(h.inputs('set_viz').map((i) => i.value), [[]]);
@@ -156,7 +156,7 @@ test('the panel picker rendering again keeps what is on the profile', () => {
   h.rendered('panel_picker');
   h.tick(0);
   assert.deepEqual(h.onProfile(), ON);
-  assert.equal(h.qa('#proxy1-pp_panels .blockr-pick').length, 1);
+  assert.equal(h.qa('#proxy1-pp_panels .blockr-select--list').length, 1);
   h.close();
 });
 

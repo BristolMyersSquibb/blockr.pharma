@@ -194,7 +194,13 @@ interface BlockrUiNamespace {
     { el: HTMLElement; set(value: string): void; get(): string };
   checkbox(label: string, checked: boolean, onChange: (checked: boolean) => void):
     { el: HTMLElement; input: HTMLInputElement; set(value: boolean): void; get(): boolean };
-  Select?: { menu?: (anchor: HTMLElement, config: object) => { close(): void } };
+  Select?: {
+    menu?: (anchor: HTMLElement, config: object) => { close(): void };
+    list?: (container: HTMLElement, config: object) => {
+      el: HTMLElement; getValue(): string[]; setValue(v: string[]): void;
+      flush(): void; destroy(): void;
+    };
+  };
 }
 
 declare var Shiny: ShinyStatic;

@@ -81,19 +81,6 @@ const BLOCKR_ICONS = (() => {
   return `(window.Blockr = window.Blockr || {}).icons = ${JSON.stringify(icons)};`;
 })();
 const BLOCKR_SELECT = read(path.join(path.dirname(blockrUiPath()), 'blockr-select.js'));
-/* Blockr.Pick, the multi-select on trial in blockr.dplyr: the panel picker
- * and the multi words. PP_BLOCKR_PICK_JS overrides. */
-function blockrPickPath() {
-  if (process.env.PP_BLOCKR_PICK_JS) return process.env.PP_BLOCKR_PICK_JS;
-  return execSync(
-    "Rscript -e \"cat(system.file('js/blockr-pick.js', package = 'blockr.dplyr'))\"",
-    { encoding: 'utf8' }
-  ).trim();
-}
-const BLOCKR_PICK = (() => {
-  const p = blockrPickPath();
-  return p ? read(p) : '';
-})();
 const PARTS = ['pp-core.js', 'pp-header.js', 'pp-cohort.js', 'pp-picker.js',
                'pp-panels.js', 'pp-slots.js'];
 const BLOCK_JS = PARTS.map((f) => read(path.join(ROOT, 'inst', 'js', f))).join('\n');
@@ -252,7 +239,6 @@ function mount(opts = {}) {
   win.eval(BLOCKR_ICONS);
   win.eval(BLOCKR_UI);
   win.eval(BLOCKR_SELECT);
-  if (BLOCKR_PICK) win.eval(BLOCKR_PICK);
   win.eval(BLOCK_JS);
   win.eval(`window.PatientProfile.mount(${JSON.stringify({
     id: NS,

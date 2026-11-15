@@ -217,9 +217,9 @@ test('a multi word holds None back, since an empty pick would be dropped', () =>
     'data-options=\'[{"value":"A"},{"value":"B"},{"value":"C"}]\'>A, B</span>');
   h.click(word(h, 'viz_slot_ae_gantt', 'items'));
   h.tick(0);
-  const list = h.q('.blockr-select__dropdown.blockr-pick__panel');
-  assert.ok(list, 'the multi word opens Blockr.Pick');
-  const none = Array.from(list.querySelectorAll('.blockr-pick__bulk-btn'))
+  const list = h.q('.blockr-select__dropdown.blockr-select__panel');
+  assert.ok(list, 'the multi word opens the multi menu');
+  const none = Array.from(list.querySelectorAll('.blockr-select__bulk-btn'))
     .find((b) => b.textContent === 'None');
   assert.equal(none.getAttribute('aria-disabled'), 'true');
   none.dispatchEvent(new h.win.Event('click', { bubbles: true }));

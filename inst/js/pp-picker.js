@@ -1,8 +1,8 @@
 // @ts-check
-/* The sidebar: the panel picker (a Blockr.Pick.list) and the patients'
+/* The sidebar: the panel picker (a Blockr.Select.list) and the patients'
  * filter box.
  *
- * Depends on: pp-core.js, Blockr.Pick (blockr.dplyr's blockr_pick_dep()).
+ * Depends on: pp-core.js, Blockr.Select (blockr.ui's controls_dep()).
  */
 PatientProfile.part(function(ctx) {
   var ns = ctx.ns;
@@ -80,9 +80,9 @@ PatientProfile.part(function(ctx) {
     var options = [];
     try { options = JSON.parse(host.getAttribute('data-options') || '[]'); }
     catch (e) { options = []; }
-    var Pick = /** @type {any} */ (window.Blockr).Pick;
-    if (!Pick || !Pick.list) return;
-    pick = Pick.list(host, {
+    var Select = window.Blockr && Blockr.Select;
+    if (!Select || !Select.list) return;
+    pick = /** @type {any} */ (Select.list(host, {
       options: options,
       selected: known,
       reorderable: true,
@@ -93,7 +93,7 @@ PatientProfile.part(function(ctx) {
       addLabel: 'Add panels',
       searchPlaceholder: 'Filter panels',
       onChange: report
-    });
+    }));
     pick.optionValues = options.map(function(o){ return o.value; });
   }
 
