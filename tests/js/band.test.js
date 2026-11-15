@@ -29,7 +29,7 @@ test('rows are watched once the list renders and drawn as they intersect', () =>
   h.close();
 });
 
-test('an events row draws one span per triplet over the track, and the end-of-treatment mark', () => {
+test('an events row draws one span per triplet over the track', () => {
   const h = mount();
   h.rendered('sidebar_cohort');
   h.tick(0);
@@ -43,11 +43,8 @@ test('an events row draws one span per triplet over the track, and the end-of-tr
     x: '26.4', y: '0', width: '18.4', height: '8', fill: '#CA8A04', opacity: '0.9'
   });
   assert.equal(rects[3].getAttribute('fill'), '#CA8A04');
-  const eot = svg.querySelector('path');
-  assert.equal(row.getAttribute('data-eot'), '46.4');
-  // A diamond centred on the end-of-treatment x at half the band height.
-  assert.equal(eot.getAttribute('d'), 'M46.4 1L49.4 4L46.4 7L43.4 4Z');
-  assert.equal(eot.getAttribute('fill'), 'var(--blockr-pharma-cohort-eot)');
+  // No end-of-treatment diamond, as on the timeline.
+  assert.equal(svg.querySelector('path'), null);
   h.close();
 });
 
