@@ -80,7 +80,7 @@ test_that("without the AE layer there are no records", {
 })
 
 test_that("a click on a patient narrows the block's records view", {
-  blk <- new_safety_timeline_block(ae_records = "all")
+  blk <- new_timeline_block(ae_records = "all")
   dat <- shiny::reactive(dm::dm(adsl = ptr_toy()$adsl,
                                 adae = ptr_toy()$adae))
   shiny::testServer(

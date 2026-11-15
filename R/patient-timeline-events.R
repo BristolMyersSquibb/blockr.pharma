@@ -21,12 +21,15 @@
 TL_SHOW <- c("Adverse events", "Con meds", "Treatment")
 TL_AE_RECORDS <- c("treatment-emergent", "all")
 TL_AE_SHOW <- c("all AEs", "serious AEs", "ongoing AEs")
-TL_AE_LANES <- c("preferred term" = "AEDECOD", "reported term" = "AETERM",
-                 "body system" = "AEBODSYS")
+# The term columns an opened patient's AEs and con meds can take a row per,
+# labelled as the AE tables label them (AE_TERM_LEVELS) and as ADCM labels
+# its columns.
+TL_AE_LANES <- c(AE_TERM_LEVELS$high, AE_TERM_LEVELS$low)
 TL_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 TL_CM_RECORDS <- c("active on treatment", "all")
-TL_CM_LANES <- c("coded name" = "CMDECOD", "reported name" = "CMTRT",
-                 "class" = "CMCLAS")
+TL_CM_LANES <- c("Standardized Medication Name" = "CMDECOD",
+                 "Reported Name of Drug, Med, or Therapy" = "CMTRT",
+                 "Medication Class" = "CMCLAS")
 TL_CM_PRIOR <- c("clipped at the start", "hidden")
 TL_TRT_COLOUR <- c("dose level", "drug", "one colour")
 TL_ORIGIN <- c("first dose", "randomisation")
@@ -226,8 +229,7 @@ tl_ae <- function(ae, sl, opt, cutoff) {
     if (is.null(v)) rep(FALSE, n) else aet_flag(v)
   }
   term <- aet_title(chr(c("AEDECOD", "AETERM")))
-  lane_col <- TL_AE_LANES[[opt$ae_lanes]]
-  row <- aet_title(chr(c(lane_col, "AEDECOD", "AETERM")))
+  row <- aet_title(chr(c(opt$ae_lanes, "AEDECOD", "AETERM")))
   row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
   ser <- flag("AESER")
   # The field that colours the bars (tl_ae_field()): grade or severity as
@@ -306,10 +308,10 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
   cls <- chr("CMCLAS")
   cls[!is.na(cls) & toupper(cls) == "UNCODED"] <- NA_character_
   row <- switch(opt$cm_lanes,
-                "coded name" = name,
-                "reported name" = swimmer_drug_name(ifelse(is.na(reported),
-                                                           coded, reported)),
-                class = aet_title(cls))
+                CMDECOD = name,
+                CMTRT = swimmer_drug_name(ifelse(is.na(reported), coded,
+                                                 reported)),
+                CMCLAS = aet_title(cls))
   row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
   # Day 1 of the patient's treatment, in the timeline's days.
   d1 <- aet_day(sl$TRTSDT[i], sl$T0[i])

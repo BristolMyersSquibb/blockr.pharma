@@ -1,6 +1,4 @@
-# The patient timeline, built from blockr.viz's table block. It replaces the
-# swimmer and the old AE and con-med timeline; boards saved with those open
-# as this block (R/retired-blocks.R).
+# The timeline, built from blockr.viz's table block.
 #
 # One row per patient with a stripe per layer drawn (response, treatment,
 # AEs, con meds; discontinuation and death as marks); a click opens the
@@ -9,14 +7,10 @@
 # is in the tooltips. The table block's prepare step,
 # patient_timeline_frame(), reads the ADaM tables from the input dm.
 #
-# Two presets build it: "efficacy" (response, treatment, discontinuation and
-# death, longest on treatment first) and "safety" (AEs, discontinuation and
-# death, most AEs first). Each preset is a constructor and a class of its
-# own (new_efficacy_timeline_block(), new_safety_timeline_block()), so each
-# has its own add-block menu entry; both save the layers they draw, so a
-# saved board restores whatever the reader ticked.
+# One block for every use: the layers a reader ticks in the gear decide what
+# it shows, and the gear's Lanes tab shows the settings of those layers only.
 
-#' Patient timeline: response, treatment, AEs and con meds
+#' Timeline: response, treatment, AEs and con meds per patient
 #'
 #' One row per patient on a study-day axis, with any combination of layers:
 #' the response (ADRS overall response by visit, first progression marked),
@@ -28,22 +22,18 @@
 #' the patient row, their detail in the tooltips; with only those layers
 #' ticked a patient does not open.
 #'
-#' AEs take the severity column the board's "study_roles" option declares,
-#' as the patient profile does, and both AEs and con meds can be narrowed to
-#' picked terms at any coding level. Colours follow the board's scale map.
+#' A new block draws the AEs and discontinuation and death, with no listing
+#' columns, the patients in ID order. AEs take the severity column the
+#' board's "study_roles" option declares, as the patient profile does, and
+#' both AEs and con meds can be narrowed to picked terms at any coding level.
+#' Colours follow the board's scale map.
 #'
-#' `new_efficacy_timeline_block()` and `new_safety_timeline_block()` are the
-#' two presets of the add-block menu.
-#'
-#' @param preset `"safety"` or `"efficacy"`: the defaults of the layers, the
-#'   sort, the listing columns and the title.
 #' @param summaries The listing columns and the timeline; see
-#'   [blockr.viz::new_table_block()]. `NULL`: those of the preset.
+#'   [blockr.viz::new_table_block()]. `NULL`: the timeline alone.
 #' @param open Patient rows at start: `"none"` or `"all"` open.
 #' @param script_values The settings, by name; see
 #'   [patient_timeline_frame()] for each.
-#' @param title,subtitle,caption Text above and below the block. `NULL`
-#'   title: the preset's.
+#' @param title,subtitle,caption Text above and below the block.
 #' @param drill,drill_target,drill_table A click on a patient selects it, which
 #'   narrows the AE records under the table icon, or filters another block;
 #'   see [blockr.viz::new_table_block()]. `NULL`: clicks do nothing.
@@ -51,57 +41,45 @@
 #' @param ... The settings by name, as in `script_values` (`layers`,
 #'   `ae_terms`, `ae_colour`, ...), and arguments for
 #'   [blockr.core::new_block()].
-#' @return A table block of class `patient_timeline_block`, with the
-#'   preset's class first.
+#' @return A table block of class `timeline_block`.
 #' @examplesIf interactive()
-#' new_patient_timeline_block("efficacy",
-#'                            layers = c("Response", "Adverse events"))
+#' new_timeline_block(layers = c("Response", "Treatment"))
 #' @export
-new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
-                                       summaries = NULL,
-                                       open = "none",
-                                       script_values = list(),
-                                       title = NULL,
-                                       subtitle = patient_timeline_subtitle(),
-                                       caption = getOption(
-                                         "blockr.viz.default_caption"
-                                       ),
-                                       drill = "auto",
-                                       drill_target = "",
-                                       drill_table = "",
-                                       search = TRUE,
-                                       download = TRUE,
-                                       ...) {
-  preset <- match.arg(preset)
-  def <- PT_PRESETS[[preset]]
-  dots <- table_state_drop(list(...), new_patient_timeline_block)
-  dots[TL_RETIRED] <- NULL
-  script_values[TL_RETIRED] <- NULL
-  summaries <- tl_summaries_migrate(summaries)
-  own <- intersect(names(dots), c(PT_SETTINGS, PT_RETIRED))
+new_timeline_block <- function(summaries = NULL,
+                               open = "none",
+                               script_values = list(),
+                               title = "Timeline",
+                               subtitle = patient_timeline_subtitle(),
+                               caption = getOption(
+                                 "blockr.viz.default_caption"
+                               ),
+                               drill = "auto",
+                               drill_target = "",
+                               drill_table = "",
+                               search = TRUE,
+                               download = TRUE,
+                               ...) {
+  dots <- table_state_drop(list(...), new_timeline_block)
+  own <- intersect(names(dots), PT_SETTINGS)
   script_values[own] <- dots[own]
-  dots[PT_RETIRED] <- NULL
   if (!is.null(script_values$doses)) {
     script_values$doses <- swimmer_doses_value(script_values$doses)
   }
-  sv <- utils::modifyList(def$values,
-                          tl_colour_values_migrate(script_values))
-  subtitle <- timeline_subtitle_migrate(subtitle)
-  sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
-  if (is.null(summaries)) summaries <- patient_timeline_summaries(preset)
-  summaries <- pt_columns_migrate(summaries, sv$order_by)
-  sv$order_by <- NULL
+  sv <- tl_colour_values_migrate(script_values)
+  if (!is.null(sv$layers)) {
+    sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
+  }
+  if (is.null(summaries)) summaries <- patient_timeline_summaries()
+  summaries <- pt_columns_clean(summaries)
   # An empty "Group by" is the default, the first choice.
   if (!length(sv$group) || !any(nzchar(as.character(unlist(sv$group))))) {
     sv$group <- NULL
   }
   sv$sort_col <- pt_sort_col(summaries)
-  if (is.null(title)) title <- def$title
-  ctor <- paste0("new_", preset, "_timeline_block")
   dots[c(own, "ctor", "ctor_pkg", "class", "gear", "by", "layout",
-         "group_rows", "sort_by", "missing", "preset", "row_sections",
+         "group_rows", "sort_by", "missing", "row_sections",
          "row_groups")] <- NULL
-  if (is.null(dots$block_name)) dots$block_name <- def$title
+  if (is.null(dots$block_name)) dots$block_name <- "Timeline"
   do.call(blockr.viz::new_table_block, c(
     list(
       layout = "groups",
@@ -125,114 +103,18 @@ new_patient_timeline_block <- function(preset = c("safety", "efficacy"),
       script_values = sv
     ),
     dots,
-    list(gear = patient_timeline_gear(preset),
-         class = c(paste0(preset, "_timeline_block"),
-                   "patient_timeline_block"),
-         ctor = ctor, ctor_pkg = "blockr.pharma")
+    list(gear = patient_timeline_gear(), class = "timeline_block",
+         ctor = "new_timeline_block", ctor_pkg = "blockr.pharma")
   ))
 }
 
-# The presets' constructors. A board saves a block by its constructor's
-# arguments, so each takes all of them.
-#' @rdname new_patient_timeline_block
-#' @export
-new_efficacy_timeline_block <- function(summaries = NULL,
-                                        open = "none",
-                                        script_values = list(),
-                                        title = NULL,
-                                        subtitle = patient_timeline_subtitle(),
-                                        caption = getOption(
-                                          "blockr.viz.default_caption"
-                                        ),
-                                        drill = "auto",
-                                        drill_target = "",
-                                        drill_table = "",
-                                        search = TRUE,
-                                        download = TRUE,
-                                        ...) {
-  new_patient_timeline_block(
-    "efficacy", summaries = summaries, open = open,
-    script_values = script_values, title = title, subtitle = subtitle,
-    caption = caption, drill = drill, drill_target = drill_target,
-    drill_table = drill_table, search = search, download = download, ...
-  )
-}
-
-#' @rdname new_patient_timeline_block
-#' @export
-new_safety_timeline_block <- function(summaries = NULL,
-                                      open = "none",
-                                      script_values = list(),
-                                      title = NULL,
-                                      subtitle = patient_timeline_subtitle(),
-                                      caption = getOption(
-                                        "blockr.viz.default_caption"
-                                      ),
-                                      drill = "auto",
-                                      drill_target = "",
-                                      drill_table = "",
-                                      search = TRUE,
-                                      download = TRUE,
-                                      ...) {
-  new_patient_timeline_block(
-    "safety", summaries = summaries, open = open,
-    script_values = script_values, title = title, subtitle = subtitle,
-    caption = caption, drill = drill, drill_target = drill_target,
-    drill_table = drill_table, search = search, download = download, ...
-  )
-}
-
-# The patient timeline's settings: its prepare script's values.
+# The timeline's settings: its prepare script's values.
 PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "doses", "dose_tags",
   "trt_colour", "origin", "cutoff", "ongoing", "sort_col"
 )
-
-# A setting a saved board may still carry: "Sort patients by" is now the
-# first listing column (pt_columns_migrate()).
-PT_RETIRED <- "order_by"
-
-# What a preset sets: layers, title and the listing columns shown, the
-# first of which sorts the patients (the gear offers the rest).
-PT_PRESETS <- list(
-  efficacy = list(
-    title = "Efficacy timeline",
-    values = list(layers = c("Response", "Treatment",
-                             "Discontinuation and death")),
-    columns = "Days on treatment"
-  ),
-  safety = list(
-    title = "Safety timeline",
-    values = list(layers = c("Adverse events", "Discontinuation and death")),
-    columns = "AEs"
-  )
-)
-
-# Settings since removed, which saved boards may still carry: the dose labels
-# on the treatment bars and the row cap before "Other con meds".
-TL_RETIRED <- c("dose_labels", "max_lanes")
-
-# Saved listing columns and swimlane without what the swimlane no longer
-# reads (the dose labels' `bar_label`).
-tl_summaries_migrate <- function(summaries) {
-  if (!is.list(summaries)) return(summaries)
-  lapply(summaries, function(s) {
-    # Overlapping episodes of one term no longer stack on two bars; the AE
-    # records under the table icon list them.
-    if (is.list(s)) s[c("bar_label", "inner_overlap")] <- NULL
-    s
-  })
-}
-
-# A saved subtitle without its sort clause: the table sorts by a click on a
-# column header, so the order is not a word on the face.
-timeline_subtitle_migrate <- function(subtitle) {
-  if (!is.character(subtitle) || length(subtitle) != 1L) return(subtitle)
-  out <- sub("^ *sorted by \\{@order_by\\},? *", "", subtitle)
-  gsub(",? *sorted by \\{@order_by\\}", "", out)
-}
 
 #' The patient timeline's prepare script
 #'
@@ -243,18 +125,26 @@ timeline_subtitle_migrate <- function(subtitle) {
 #' @return The script, one string.
 #' @export
 patient_timeline_script <- function() {
-  sel <- function(name, value, levels, label, multiple = FALSE) {
+  # A lane setting names the layer switch it shows under: a row of the
+  # gear's Lanes tab and a word of the subtitle only while its layer is drawn.
+  when <- function(on) if (is.null(on)) "" else paste0(", when = \"", on, "\"")
+  sel <- function(name, value, levels, label, multiple = FALSE, on = NULL) {
     paste0(name, " <- factor(", chr_code(value), ", levels = ",
            chr_code(levels), ")  #| select(label = \"", label, "\"",
-           if (multiple) ", multiple = TRUE", "", ")")
+           if (multiple) ", multiple = TRUE", "", when(on), ")")
   }
-  flag <- function(name, value, label) {
-    paste0(name, " <- ", value, "  #| flag(label = \"", label, "\")")
+  flag <- function(name, value, label, on = NULL) {
+    paste0(name, " <- ", value, "  #| flag(label = \"", label, "\"",
+           when(on), ")")
   }
   args <- setdiff(PT_SETTINGS, "sort_col")
   paste(
     sel("layers", c("Adverse events", "Discontinuation and death"),
         PT_LAYERS, "Layers", multiple = TRUE),
+    "rs_on <- \"Response\" %in% layers",
+    "trt_on <- \"Treatment\" %in% layers",
+    "ae_on <- \"Adverse events\" %in% layers",
+    "cm_on <- \"Con meds\" %in% layers",
     "roles <- blockr.pharma::patient_timeline_roles()",
     "gv <- blockr.pharma::patient_timeline_groups(data, roles)",
     paste0("group <- factor(gv[1], levels = gv)  #| select(label = ",
@@ -263,29 +153,35 @@ patient_timeline_script <- function() {
            "placeholder = \"patient\")"),
     "pv <- blockr.pharma::timeline_colour_fields(data, \"rs\")",
     paste0("response <- factor(pv[1], levels = pv)  #| select(label = ",
-           "\"Colour by\", labels = names(pv))"),
+           "\"Colour by\", labels = names(pv), when = \"rs_on\")"),
     "aet <- blockr.pharma::patient_timeline_terms(data, \"ae\")",
     paste0("ae_terms <- factor(character(), levels = aet)  #| select(",
-           "label = \"Only these AEs\", multiple = TRUE)"),
-    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which records"),
-    sel("ae_show", "all AEs", TL_AE_SHOW, "Show"),
+           "label = \"Only these AEs\", multiple = TRUE, when = \"ae_on\")"),
+    sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which records",
+        on = "ae_on"),
+    sel("ae_show", "all AEs", TL_AE_SHOW, "Show", on = "ae_on"),
     "aef <- blockr.pharma::timeline_colour_fields(data, \"ae\", roles)",
-    pt_colour_line("ae_colour", "aef[1]", "aef"),
-    sel("ae_lanes", "preferred term", names(TL_AE_LANES), "One row per"),
-    sel("serious", "outlined", TL_SERIOUS, "Serious AEs"),
+    pt_colour_line("ae_colour", "aef[1]", "aef", "ae_on"),
+    "ael <- blockr.pharma::timeline_lane_choices(data, \"ae\")",
+    pt_lane_line("ae_lanes", "ael", "ae_on"),
+    sel("serious", "outlined", TL_SERIOUS, "Serious AEs", on = "ae_on"),
     "cmt <- blockr.pharma::patient_timeline_terms(data, \"cm\")",
     paste0("cm_terms <- factor(character(), levels = cmt)  #| select(",
-           "label = \"Only these con meds\", multiple = TRUE)"),
-    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which records"),
+           "label = \"Only these con meds\", multiple = TRUE, ",
+           "when = \"cm_on\")"),
+    sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which records",
+        on = "cm_on"),
     "cmf <- blockr.pharma::timeline_colour_fields(data, \"cm\")",
-    pt_colour_line("cm_colour", "\"before or on treatment\"", "cmf"),
-    sel("cm_lanes", "coded name", names(TL_CM_LANES), "One row per"),
+    pt_colour_line("cm_colour", "\"before or on treatment\"", "cmf", "cm_on"),
+    "cml <- blockr.pharma::timeline_lane_choices(data, \"cm\")",
+    pt_lane_line("cm_lanes", "cml", "cm_on"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
-        "Started before the axis"),
-    sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as"),
-    sel("doses", "Gaps", PT_DOSES, "Doses shown as"),
-    flag("dose_tags", "FALSE", "Tag dose changes"),
-    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by"),
+        "Started before the axis", on = "cm_on"),
+    sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as",
+        on = "trt_on"),
+    sel("doses", "Gaps", PT_DOSES, "Doses shown as", on = "trt_on"),
+    flag("dose_tags", "FALSE", "Tag dose changes", on = "trt_on"),
+    sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by", on = "trt_on"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -305,29 +201,32 @@ chr_code <- function(x) {
   paste0("c(", paste0("\"", x, "\"", collapse = ", "), ")")
 }
 
-#' The patient timeline's sentence under the title
+#' The timeline's sentence under the title
+#'
+#' The layers, then the level the AEs and con meds open into, each only
+#' while that layer is drawn. Each is a word to click.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 patient_timeline_subtitle <- function() {
-  "{@layers} in study days"
+  "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]"
 }
 
-#' The patient timeline's gear
+#' The timeline's gear
 #'
-#' @param preset `"safety"` or `"efficacy"`: which listing columns a new
-#'   block shows.
 #' @return A `viz_table_gear`. Its Patients tab groups the patients
 #'   ("Group by") and picks the listing columns, in order: those of the
 #'   timeline, then every column with one value per patient (ADSL and what
 #'   the prepare script adds). The first sorts the patients.
 #' @export
-patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
-  preset <- match.arg(preset)
+patient_timeline_gear <- function() {
   blockr.viz::table_gear(
     tabs = list(
-      Data = list(Tables = "mapping", Layers = "layers",
-                  Time = c("origin", "cutoff", "ongoing")),
+      # What to draw comes first; the Lanes tab shows the settings of the
+      # layers drawn only (the script's `when` switches).
+      Data = list(Layers = "layers",
+                  Time = c("origin", "cutoff", "ongoing"),
+                  Tables = "mapping"),
       Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(
         Response = "response",
@@ -344,7 +243,7 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
                          `Reader tools` = c("search", "download")),
       Script = list(`Prepare script` = "script")
     ),
-    columns = patient_timeline_columns(preset),
+    columns = patient_timeline_columns(),
     info = patient_timeline_mapping,
     open = "Data",
     deps = list(pharma_gear_dep()),
@@ -359,11 +258,10 @@ patient_timeline_gear <- function(preset = c("safety", "efficacy")) {
   )
 }
 
-# The listing columns the gear offers first, the preset's on. The arm is the
+# The listing columns the gear offers first, none of them on. The arm is the
 # group heading; ADSL's columns, the age and sex among them, follow from the
 # data.
-patient_timeline_columns <- function(preset = "safety") {
-  on <- PT_PRESETS[[preset]]$columns
+patient_timeline_columns <- function() {
   sum_of <- function(col) {
     list(type = "simple", func = "sum", col = col, show = "number")
   }
@@ -383,30 +281,24 @@ patient_timeline_columns <- function(preset = "safety") {
     `Con meds` = sum_of(".cm"),
     `New on treatment` = sum_of(".cm_new")
   )
-  Map(function(s, nm) {
-    s$on <- nm %in% on
+  lapply(cols, function(s) {
+    s$on <- FALSE
     s
-  }, cols, names(cols))
+  })
 }
 
 #' @rdname patient_timeline_gear
-#' @return `patient_timeline_summaries()`: the summaries of a new patient
-#'   timeline, the preset's listing columns and the timeline.
+#' @return `patient_timeline_summaries()`: the summaries of a new timeline,
+#'   the timeline alone with no listing columns.
 #' @export
-patient_timeline_summaries <- function(preset = c("safety", "efficacy")) {
-  preset <- match.arg(preset)
-  cols <- patient_timeline_columns(preset)
-  on <- cols[PT_PRESETS[[preset]]$columns]
-  c(unname(Map(function(s, nm) {
-    s$on <- NULL
-    s$name <- nm
-    s
-  }, on, names(on))), list(patient_timeline_lane()))
+patient_timeline_summaries <- function() {
+  list(patient_timeline_lane())
 }
 
 # The spans column: a stripe per layer on the patient row, cut to the worst
 # level where records overlap, reason tags, the drugs as thin lines and the
-# response, AE and con-med stripes as full bars under them.
+# response, AE and con-med stripes as full bars under them. The axis reads
+# in study days as the patient profile's does: D1, no day 0.
 patient_timeline_lane <- function() {
   list(type = "spans", name = "Study time", x = "Start", xend = "End",
        color = "Colour", label = ".label",
@@ -414,7 +306,7 @@ patient_timeline_lane <- function() {
        open = ".open", seg_style = ".style",
        event_x = ".event_x", event_shape = "Event", overlap = "worst",
        parent_lanes = TRUE, event_tag = ".tag", lane_full = ".full",
-       lane_size = "md", x_unit = "Day")
+       lane_size = "md", x_unit = "Day", x_days = TRUE)
 }
 
 # What the patient timeline reads, per role (see pharma_mapping()).
@@ -447,42 +339,36 @@ patient_timeline_mapping <- function(data) {
 # A track's "Colour by" row: a select of the fields `pool` names (a helper
 # line of timeline_colour_fields()), showing their labels, storing their
 # names.
-pt_colour_line <- function(name, value, pool) {
+pt_colour_line <- function(name, value, pool, on) {
   paste0(name, " <- factor(", value, ", levels = ", pool, ")  #| select(",
-         "label = \"Colour by\", labels = names(", pool, "))")
+         "label = \"Colour by\", labels = names(", pool, "), when = \"", on,
+         "\")")
 }
 
-# A saved board's listing columns as the picker holds them: the arm goes
-# (the group heading names it), a field over an ADSL column is optional (a
-# study without the column leaves it out), and the column the saved "Sort
-# patients by" named, when it has one, comes first, added if it was not
-# shown.
-pt_columns_migrate <- function(summaries, order_by = NULL) {
+# A track's "Open into one row per" row: a select of the term columns `pool`
+# names (a helper line of timeline_lane_choices()), showing their labels,
+# storing the column. The first choice the data has that is the default.
+pt_lane_line <- function(name, pool, on) {
+  paste0(name, " <- factor(", pool, "[attr(", pool, ", \"default\")], ",
+         "levels = ", pool, ")  #| select(label = \"Open into one row per\", ",
+         "labels = names(", pool, "), when = \"", on, "\")")
+}
+
+# The listing columns as the picker holds them: the arm goes (the group
+# heading names it), and a field over an ADSL column is optional (a study
+# without the column leaves it out).
+pt_columns_clean <- function(summaries) {
   if (!is.list(summaries)) return(summaries)
   summaries <- Filter(function(s) {
     !(is.list(s) && identical(s$type, "field") && identical(s$col, ".arm"))
   }, summaries)
-  summaries <- lapply(summaries, function(s) {
+  lapply(summaries, function(s) {
     if (is.list(s) && identical(s$type, "field") && is.character(s$col) &&
           !startsWith(s$col, ".")) {
       s$optional <- TRUE
     }
     s
   })
-  ob <- as.character(unlist(order_by))
-  col <- if (length(ob)) unname(PT_ORDER_COLUMNS[ob[[1L]]])
-  if (!length(col) || is.na(col)) return(summaries)
-  nm <- vapply(summaries, function(s) as.character(s$name %||% "")[1L], "")
-  at <- which(nm == col)
-  first <- if (length(at)) {
-    summaries[at[[1L]]]
-  } else {
-    s <- patient_timeline_columns()[[col]]
-    s$on <- NULL
-    s$name <- col
-    list(s)
-  }
-  c(first, if (length(at)) summaries[-at[[1L]]] else summaries)
 }
 
 # The script value the gear sets to the first listing column: its name for

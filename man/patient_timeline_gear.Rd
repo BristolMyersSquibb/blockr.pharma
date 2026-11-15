@@ -3,15 +3,11 @@
 \name{patient_timeline_gear}
 \alias{patient_timeline_gear}
 \alias{patient_timeline_summaries}
-\title{The patient timeline's gear}
+\title{The timeline's gear}
 \usage{
-patient_timeline_gear(preset = c("safety", "efficacy"))
+patient_timeline_gear()
 
-patient_timeline_summaries(preset = c("safety", "efficacy"))
-}
-\arguments{
-\item{preset}{\code{"safety"} or \code{"efficacy"}: which listing columns a new
-block shows.}
+patient_timeline_summaries()
 }
 \value{
 A \code{viz_table_gear}. Its Patients tab groups the patients
@@ -19,9 +15,9 @@ A \code{viz_table_gear}. Its Patients tab groups the patients
 timeline, then every column with one value per patient (ADSL and what
 the prepare script adds). The first sorts the patients.
 
-\code{patient_timeline_summaries()}: the summaries of a new patient
-timeline, the preset's listing columns and the timeline.
+\code{patient_timeline_summaries()}: the summaries of a new timeline,
+the timeline alone with no listing columns.
 }
 \description{
-The patient timeline's gear
+The timeline's gear
 }

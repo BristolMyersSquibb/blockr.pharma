@@ -1,4 +1,4 @@
-# new_patient_timeline_block() and its frame, patient_timeline_frame(): the
+# new_timeline_block() and its frame, patient_timeline_frame(): the
 # timeline's layers with the swimmer's response and discontinuation added.
 
 test_that("the safety default draws AEs with death and the reason tag", {
@@ -84,28 +84,83 @@ test_that("AEs and con meds narrow to picked terms at any coding level", {
                "No con med terms")
 })
 
-test_that("the presets are classes and menu entries of their own", {
-  e <- new_efficacy_timeline_block()
-  s <- new_safety_timeline_block()
-  expect_s3_class(e, "efficacy_timeline_block")
-  expect_s3_class(e, "patient_timeline_block")
-  expect_s3_class(s, "safety_timeline_block")
-  expect_identical(blockr.core::registry_id_from_block(e),
-                   "efficacy_timeline_block")
-  expect_identical(blockr.core::registry_id_from_block(s),
-                   "safety_timeline_block")
-  sv <- blockr.core::blockr_ser(e)$payload$script_values
-  expect_identical(sv$layers, c("Response", "Treatment",
-                                "Discontinuation and death"))
-  # One listing column, which sorts the patients, then the timeline.
-  sums <- blockr.core::blockr_ser(e)$payload$summaries
-  expect_identical(vapply(sums, function(s) s$name %||% "", "")[[1L]],
-                   "Days on treatment")
-  expect_identical(vapply(sums, function(s) s$type, ""), c("simple", "spans"))
-  expect_identical(sv$sort_col, "Days on treatment")
-  ss <- blockr.core::blockr_ser(s)$payload
-  expect_identical(ss$summaries[[1L]]$name, "AEs")
-  expect_identical(ss$script_values$sort_col, "AEs")
+test_that("the timeline is one block and one menu entry", {
+  b <- new_timeline_block()
+  expect_s3_class(b, "timeline_block")
+  expect_identical(blockr.core::registry_id_from_block(b), "timeline_block")
+  reg <- blockr.core::list_blocks()
+  expect_true("timeline_block" %in% reg)
+  expect_false(any(c("efficacy_timeline_block", "safety_timeline_block") %in%
+                     reg))
+  p <- blockr.core::blockr_ser(b)$payload
+  # No listing columns: the timeline alone, the patients in ID order.
+  expect_identical(vapply(p$summaries, function(s) s$type, ""), "spans")
+  expect_identical(p$script_values$sort_col, "")
+  expect_identical(p$title, "Timeline")
+  # The layers it draws are the script's default, the AEs.
+  expect_identical(
+    as.character(eval(parse(text = patient_timeline_script())[[1L]][[3L]])),
+    c("Adverse events", "Discontinuation and death")
+  )
+  # Picked layers are kept.
+  sv <- blockr.core::blockr_ser(
+    new_timeline_block(layers = c("Treatment", "Response"))
+  )$payload$script_values
+  expect_identical(sv$layers, c("Response", "Treatment"))
+})
+
+test_that("the lane settings show only while their layer is drawn", {
+  viz <- asNamespace("blockr.viz")
+  specs <- function(layers) {
+    parsed <- viz$cb_parse(patient_timeline_script())
+    sp <- viz$cb_specs(parsed, pt_toy(), list(layers = layers))
+    off <- vapply(sp, function(s) isTRUE(s$off), NA)
+    stats::setNames(off, vapply(sp, `[[`, "", "name"))
+  }
+  off <- specs("Adverse events")
+  expect_false(any(off[c("ae_terms", "ae_lanes", "ae_colour", "serious")]))
+  expect_true(all(off[c("cm_lanes", "cm_colour", "response", "trt_colour",
+                        "doses")]))
+  expect_false(any(off[c("layers", "group", "origin", "cutoff")]))
+  off <- specs(c("Response", "Con meds"))
+  expect_true(all(off[c("ae_lanes", "trt_colour")]))
+  expect_false(any(off[c("cm_lanes", "response")]))
+})
+
+test_that("the subtitle names the term level of the layers drawn", {
+  viz <- asNamespace("blockr.viz")
+  word <- function(layers, values = list()) {
+    parsed <- viz$cb_parse(patient_timeline_script())
+    sp <- viz$cb_specs(parsed, pt_toy(),
+                       c(list(layers = layers), values))
+    args <- viz$script_title_args(list(), sp,
+                                  c(list(layers = layers), values))
+    viz$resolve_title_template(patient_timeline_subtitle(), data.frame(),
+                               args)
+  }
+  expect_identical(word("Adverse events"),
+                   "Adverse events in study days, AEs by Dictionary-Derived Term")
+  expect_identical(
+    word(c("Adverse events", "Con meds"), list(ae_lanes = "AEBODSYS")),
+    paste("Adverse events, Con meds in study days, AEs by Body System or",
+          "Organ Class, con meds by Standardized Medication Name")
+  )
+  expect_identical(word(c("Response", "Treatment")),
+                   "Response, Treatment in study days")
+})
+
+test_that("the term levels are the columns the data has", {
+  ch <- timeline_lane_choices(pt_toy(), "ae")
+  expect_true(all(ch %in% names(pt_toy()$adae)))
+  expect_identical(unname(ch[attr(ch, "default")]), "AEDECOD")
+  expect_true("Dictionary-Derived Term" %in% names(ch))
+  cm <- timeline_lane_choices(pt_toy(), "cm")
+  expect_identical(unname(cm[attr(cm, "default")]), "CMDECOD")
+  expect_identical(names(timeline_lane_choices(list(), "cm")),
+                   names(TL_CM_LANES))
+  f <- patient_timeline_frame(pt_toy(), ae_lanes = "AEBODSYS")
+  ae_rows <- unique(f$Row[f$.src %in% "AE"])
+  expect_true(all(toupper(ae_rows) %in% toupper(pt_toy()$adae$AEBODSYS)))
 })
 
 test_that("the script's settings are its controls and run the frame", {
@@ -120,7 +175,7 @@ test_that("the script's settings are its controls and run the frame", {
 # The table model of a patient timeline with these layers on pt_toy().
 pt_model <- function(layers) {
   viz <- asNamespace("blockr.viz")
-  b <- new_patient_timeline_block(layers = layers)
+  b <- new_timeline_block(layers = layers)
   spec <- viz$viz_block_spec("table")
   p <- blockr.core::blockr_ser(b)$payload
   p <- p[intersect(names(p), names(spec$args))]
@@ -150,10 +205,12 @@ test_that("the table draws a stripe per layer and opens into rows", {
   expect_identical(kids, c("Headache", "Nausea", "Paracetamol"))
   title <- m$cells$title[!r$.is_parent & r$.parent == "A"]
   expect_identical(title, c("Adverse events", NA, "Con meds"))
-  # The axis counts days.
+  # The axis counts study days as the patient profile does: D1, no day 0.
   ax <- asNamespace("blockr.viz")$table_groups_axis(m$prep$plan[[spans]],
                                                      m$prep)
-  expect_match(ax$labels[[1L]], "^Day ")
+  expect_true("D1" %in% ax$labels)
+  expect_false("D0" %in% ax$labels)
+  expect_true(all(startsWith(ax$labels, "D")))
 })
 
 test_that("one layer open has no title; treatment or response alone no rows", {
@@ -217,10 +274,10 @@ test_that("the reason tag sits on the lane of the last drug", {
 })
 
 test_that("a board restores the patient timeline with its layers", {
-  blk <- new_safety_timeline_block(layers = c("Adverse events", "Con meds"),
-                                   ae_terms = "Preferred term: Headache")
+  blk <- new_timeline_block(layers = c("Adverse events", "Con meds"),
+                            ae_terms = "Preferred term: Headache")
   rt <- board_round_trip(blk, pt_toy())
-  expect_s3_class(rt$block, "safety_timeline_block")
+  expect_s3_class(rt$block, "timeline_block")
   expect_equal(plain_state(rt$restored), plain_state(rt$saved),
                ignore_attr = TRUE)
   expect_identical(as.character(unlist(rt$restored$script_values$layers)),
@@ -267,7 +324,7 @@ test_that("two episodes of one AE term stay on one bar when opened", {
   viz <- asNamespace("blockr.viz")
   # Each row's tracks: its main lane, then its full bars, as segment lists.
   tracks <- function(layers) {
-    b <- new_safety_timeline_block(layers = layers)
+    b <- new_timeline_block(layers = layers)
     spec <- viz$viz_block_spec("table")
     p <- blockr.core::blockr_ser(b)$payload
     p <- p[intersect(names(p), names(spec$args))]
@@ -312,22 +369,7 @@ test_that("no tooltip names a field by its raw column name", {
 })
 
 test_that("the subtitle does not name the sort", {
-  expect_false(grepl("order_by", patient_timeline_subtitle()))
-  b <- new_safety_timeline_block(
-    subtitle = "{@layers} in study days, sorted by {@order_by}"
-  )
-  expect_identical(blockr.core::blockr_ser(b)$payload$subtitle,
-                   "{@layers} in study days")
-  expect_identical(timeline_subtitle_migrate("sorted by {@order_by}, x"), "x")
-})
-
-test_that("overlapping AE episodes stay on one bar, also on saved boards", {
-  lane <- patient_timeline_summaries("safety")
-  expect_null(lane[[length(lane)]]$inner_overlap)
-  lane[[length(lane)]]$inner_overlap <- "stack"
-  old <- new_safety_timeline_block(summaries = lane)
-  sv <- blockr.core::blockr_ser(old)$payload$summaries
-  expect_false(identical(sv[[length(sv)]]$inner_overlap, "stack"))
+  expect_false(grepl("order_by|sort", patient_timeline_subtitle()))
 })
 
 test_that("per-patient summaries group the records once", {

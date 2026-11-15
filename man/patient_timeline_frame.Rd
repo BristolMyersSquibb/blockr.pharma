@@ -12,12 +12,12 @@ patient_timeline_frame(
   ae_records = "treatment-emergent",
   ae_show = "all AEs",
   ae_colour = "study severity",
-  ae_lanes = "preferred term",
+  ae_lanes = "AEDECOD",
   ae_terms = NULL,
   serious = "outlined",
   cm_records = "active on treatment",
   cm_colour = "before or on treatment",
-  cm_lanes = "coded name",
+  cm_lanes = "CMDECOD",
   cm_terms = NULL,
   cm_prior = "clipped at the start",
   treatment_as = "lines per drug",
@@ -56,8 +56,9 @@ board's "study_roles" option, else the first of \code{ASEV}, \code{AESEV},
 \code{ATOXGR} and \code{AETOXGR}, as the patient profile picks it. \code{"grade"} and
 \code{"severity"} still work.}
 
-\item{ae_lanes}{One row per \code{"preferred term"}, \code{"reported term"} or
-\code{"body system"} when a patient is opened.}
+\item{ae_lanes}{The ADAE column an opened patient has one row per:
+\code{"AEDECOD"} and any column \code{\link[=timeline_lane_choices]{timeline_lane_choices()}} offers. A column
+the data lacks falls back to \code{AEDECOD}, then \code{AETERM}.}
 
 \item{ae_terms, cm_terms}{Only the AEs or con meds matching any of these,
 as \code{\link[=patient_timeline_terms]{patient_timeline_terms()}} offers them ("Body system: Cardiac
@@ -74,8 +75,8 @@ or ongoing) or \code{"all"} (the axis then starts 28 days before day 1).}
 rest into "Other", so the colours stay within what a legend can show.
 \code{"class"} and \code{"indication"} still work.}
 
-\item{cm_lanes}{One row per \code{"coded name"}, \code{"reported name"} or
-\code{"class"}.}
+\item{cm_lanes}{The ADCM column an opened patient has one row per:
+\code{"CMDECOD"} (the reported name where uncoded), \code{"CMTRT"} or \code{"CMCLAS"}.}
 
 \item{cm_prior}{Con meds that start before the axis: \code{"clipped at the start"} or \code{"hidden"}.}
 
@@ -119,7 +120,7 @@ A data frame, one record per drawn piece.
 }
 \description{
 Turns ADSL, ADRS, ADEX, ADAE and ADCM into the long frame the patient
-timeline block draws (\code{\link[=new_patient_timeline_block]{new_patient_timeline_block()}}). It is that block's
+timeline block draws (\code{\link[=new_timeline_block]{new_timeline_block()}}). It is that block's
 prepare step and needs no prep of its inputs. Tables and columns may be
 named as the patient profile allows.
 }

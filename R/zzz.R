@@ -227,53 +227,38 @@ register_pharma_blocks <- function() {
   # groups layout); new_ae_heatmap_block() only builds one, so it has no
   # registry entry of its own.
   #
-  # The patient timeline's two presets, each a class and an entry of its own
-  # (see new_patient_timeline_block()).
-  pt_args <- list(c(
-    layers = paste("What to draw: any of \"Response\", \"Treatment\",",
-                   "\"Discontinuation and death\", \"Adverse events\",",
-                   "\"Con meds\"."),
-    order_by = paste("Patient order: days on treatment, number of AEs,",
-                     "worst AE, best response, first progression, ..."),
-    ae_terms = paste("Only these AEs, as \"Body system: Cardiac",
-                     "disorders\" or \"Preferred term: Nausea\"."),
-    group = "ADSL column shown as the arm; empty for the study's arm.",
-    cutoff = "The data cutoff, a date; NA for the last date in the data."
-  ))
-  pt_guidance <- paste0(
-    "Takes a dm of ADaM tables as they are: ADSL and any of ADRS, ADEX, ",
-    "ADAE and ADCM. Link it from the CDISC dm block or a filter below it; ",
-    "it needs no prep blocks. Each patient is one stripe per layer; a ",
-    "click opens the patient into a row per response, drug, AE term and ",
-    "con med. Any combination of layers can be drawn."
-  )
+  # The timeline: one entry, its layers picked in the gear.
   register_blocks(
-    "new_efficacy_timeline_block",
-    name = "Efficacy timeline",
-    uid = "efficacy_timeline_block",
+    "new_timeline_block",
+    name = "Timeline",
+    uid = "timeline_block",
     description = paste0(
-      "One row per patient: response, treatment, discontinuation and ",
-      "death over time; AEs and con meds on request."
+      "One row per patient over study days: response, treatment, AEs and ",
+      "con meds, opening into a row per term."
     ),
     category = "table",
     icon = "bar-chart-steps",
-    guidance = pt_guidance,
-    arguments = pt_args,
-    package = utils::packageName(),
-    overwrite = TRUE
-  )
-  register_blocks(
-    "new_safety_timeline_block",
-    name = "Safety timeline",
-    uid = "safety_timeline_block",
-    description = paste0(
-      "One row per patient: AEs over time, opening into a row per term; ",
-      "response, treatment and con meds on request."
+    guidance = paste0(
+      "Takes a dm of ADaM tables as they are: ADSL and any of ADRS, ADEX, ",
+      "ADAE and ADCM. Link it from the CDISC dm block or a filter below it; ",
+      "it needs no prep blocks. Each patient is one stripe per layer; a ",
+      "click opens the patient into a row per AE term and con med. Any ",
+      "combination of layers can be drawn: AEs for safety, the response and ",
+      "treatment for efficacy, con meds on their own."
     ),
-    category = "table",
-    icon = "bar-chart-steps",
-    guidance = pt_guidance,
-    arguments = pt_args,
+    arguments = list(c(
+      layers = paste("What to draw: any of \"Response\", \"Treatment\",",
+                     "\"Discontinuation and death\", \"Adverse events\",",
+                     "\"Con meds\"."),
+      ae_terms = paste("Only these AEs, as \"Body system: Cardiac",
+                       "disorders\" or \"Preferred term: Nausea\"."),
+      ae_lanes = paste("ADAE column an opened patient has one row per:",
+                       "AEDECOD (default), AEBODSYS, AETERM, ..."),
+      cm_lanes = paste("ADCM column an opened patient has one row per:",
+                       "CMDECOD (default), CMTRT or CMCLAS."),
+      group = "ADSL column shown as the arm; empty for the study's arm.",
+      cutoff = "The data cutoff, a date; NA for the last date in the data."
+    )),
     package = utils::packageName(),
     overwrite = TRUE
   )

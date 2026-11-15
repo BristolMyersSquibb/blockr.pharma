@@ -1,5 +1,5 @@
 # The patient timeline's frame: one long frame, one record per thing drawn,
-# for the spans column of new_patient_timeline_block(). The AE, con-med and
+# for the spans column of new_timeline_block(). The AE, con-med and
 # dose-bar records come from R/patient-timeline-events.R, the response and
 # drug lines from R/patient-timeline-efficacy.R.
 #
@@ -37,7 +37,7 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #' Patient timeline frame from ADaM
 #'
 #' Turns ADSL, ADRS, ADEX, ADAE and ADCM into the long frame the patient
-#' timeline block draws ([new_patient_timeline_block()]). It is that block's
+#' timeline block draws ([new_timeline_block()]). It is that block's
 #' prepare step and needs no prep of its inputs. Tables and columns may be
 #' named as the patient profile allows.
 #'
@@ -80,8 +80,9 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   from the board. `NULL`: none declared.
 #' @param ae_records `"treatment-emergent"` (`TRTEMFL`) or `"all"`.
 #' @param ae_show `"all AEs"`, `"serious AEs"` or `"ongoing AEs"`.
-#' @param ae_lanes One row per `"preferred term"`, `"reported term"` or
-#'   `"body system"` when a patient is opened.
+#' @param ae_lanes The ADAE column an opened patient has one row per:
+#'   `"AEDECOD"` and any column [timeline_lane_choices()] offers. A column
+#'   the data lacks falls back to `AEDECOD`, then `AETERM`.
 #' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
 #' @param cm_records `"active on treatment"` (ends on or after the first dose,
 #'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
@@ -90,8 +91,8 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   `"one colour"`. A column keeps its most common levels and folds the
 #'   rest into "Other", so the colours stay within what a legend can show.
 #'   `"class"` and `"indication"` still work.
-#' @param cm_lanes One row per `"coded name"`, `"reported name"` or
-#'   `"class"`.
+#' @param cm_lanes The ADCM column an opened patient has one row per:
+#'   `"CMDECOD"` (the reported name where uncoded), `"CMTRT"` or `"CMCLAS"`.
 #' @param cm_prior Con meds that start before the axis: `"clipped at the
 #'   start"` or `"hidden"`.
 #' @param trt_colour With bars by dose: `"dose level"` (more than five doses
@@ -123,12 +124,12 @@ patient_timeline_frame <- function(data,
                                    ae_records = "treatment-emergent",
                                    ae_show = "all AEs",
                                    ae_colour = "study severity",
-                                   ae_lanes = "preferred term",
+                                   ae_lanes = "AEDECOD",
                                    ae_terms = NULL,
                                    serious = "outlined",
                                    cm_records = "active on treatment",
                                    cm_colour = "before or on treatment",
-                                   cm_lanes = "coded name",
+                                   cm_lanes = "CMDECOD",
                                    cm_terms = NULL,
                                    cm_prior = "clipped at the start",
                                    treatment_as = "lines per drug",
@@ -148,12 +149,12 @@ patient_timeline_frame <- function(data,
     ae_records = arg(ae_records, TL_AE_RECORDS),
     ae_show = arg(ae_show, TL_AE_SHOW),
     ae_colour = as.character(unlist(ae_colour))[1L],
-    ae_lanes = arg(ae_lanes, names(TL_AE_LANES)),
+    ae_lanes = arg(ae_lanes, unname(TL_AE_LANES)),
     serious = arg(serious, TL_SERIOUS),
     death = "Discontinuation and death" %in% layers,
     cm_records = arg(cm_records, TL_CM_RECORDS),
     cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
-    cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
+    cm_lanes = arg(cm_lanes, unname(TL_CM_LANES)),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
     treatment_as = arg(treatment_as, PT_TRT_DRAW),
@@ -418,6 +419,36 @@ patient_timeline_terms <- function(data, what = c("ae", "cm")) {
   }), use.names = FALSE)
   if (length(out)) out else paste("No", if (what == "ae") "AE" else "con med",
                                   "terms in the data")
+}
+
+#' The term columns a timeline's opened patients can take a row per
+#'
+#' The choices of the timeline's "Open into one row per" rows: for AEs the
+#' levels the AE tables offer ([ae_term_choices()]), system organ class down
+#' to the reported term; for con meds the coded and reported name and the
+#' class. Only the columns the data has are offered.
+#'
+#' @param data The block's input dm.
+#' @param what `"ae"` or `"cm"`.
+#' @return A named character vector, labels as names and columns as values,
+#'   with a `"default"` attribute: the position of the coded name
+#'   (`AEDECOD`, `CMDECOD`), else 1. With no table or none of the columns,
+#'   all of them.
+#' @export
+timeline_lane_choices <- function(data, what = c("ae", "cm")) {
+  what <- match.arg(what)
+  all <- if (identical(what, "ae")) TL_AE_LANES else TL_CM_LANES
+  tb <- tryCatch(pt_tables(data, character()), error = function(e) NULL)
+  tbl <- if (identical(what, "ae")) tb$adae else tb$adcm
+  out <- all
+  if (is.data.frame(tbl)) {
+    have <- all[toupper(all) %in% toupper(names(tbl))]
+    if (length(have)) out <- have
+  }
+  at <- match(all[[if (identical(what, "ae")) "Dictionary-Derived Term" else
+    "Standardized Medication Name"]], out)
+  attr(out, "default") <- if (is.na(at)) 1L else at
+  out
 }
 
 # Term choices back to find picks: "Body system: Cardiac disorders" is

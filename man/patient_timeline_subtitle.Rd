@@ -2,7 +2,7 @@
 % Please edit documentation in R/patient-timeline-block.R
 \name{patient_timeline_subtitle}
 \alias{patient_timeline_subtitle}
-\title{The patient timeline's sentence under the title}
+\title{The timeline's sentence under the title}
 \usage{
 patient_timeline_subtitle()
 }
@@ -10,5 +10,6 @@ patient_timeline_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-The patient timeline's sentence under the title
+The layers, then the level the AEs and con meds open into, each only
+while that layer is drawn. Each is a word to click.
 }

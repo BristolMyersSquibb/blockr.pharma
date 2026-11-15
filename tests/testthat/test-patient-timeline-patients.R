@@ -73,42 +73,35 @@ test_that("a column the script adds sorts and is offered", {
   f <- patient_timeline_frame(pt_toy())
   f$score <- ifelse(is.na(f$Row), c(A = 2, B = 1, C = 3)[f$USUBJID], NA)
   expect_identical(pt_ids(patient_timeline_sort(f, "score")), c("B", "A"))
-  g <- patient_timeline_gear("safety")
+  g <- patient_timeline_gear()
   more <- vapply(blockr.viz:::table_gear_more(g, f), `[[`, "", "name")
   expect_true(all(c("score", "TRT01A", "DCTREAS") %in% more))
   # The frame's own columns, and AE terms (several per patient), are not.
   expect_false(any(c("Row", "Type", "Details", "Event") %in% more))
 })
 
-test_that("saved listing columns become the picks, the arm dropped", {
-  b <- new_safety_timeline_block(
+test_that("listing columns become the picks, the arm dropped", {
+  b <- new_timeline_block(
     summaries = list(
       list(type = "field", col = ".arm", name = "Arm"),
       list(type = "field", col = "AGE", name = "Age"),
       patient_timeline_lane()
     ),
-    order_by = "worst AE", group = ""
+    group = ""
   )
   p <- blockr.core::blockr_ser(b)$payload
   nm <- vapply(p$summaries, function(s) s$name %||% "", "")
-  expect_identical(nm[1:2], c("Worst AE", "Age"))
-  expect_true(isTRUE(p$summaries[[2L]]$optional))
-  expect_identical(p$script_values$sort_col, "Worst AE")
-  expect_null(p$script_values$order_by)
-  expect_null(p$script_values$group)
-  # A saved group stays; a sort without a column keeps the columns.
-  b <- new_safety_timeline_block(
-    summaries = list(list(type = "field", col = "AGE", name = "Age"),
-                     patient_timeline_lane()),
-    order_by = "first onset", group = "TRT01A"
-  )
-  p <- blockr.core::blockr_ser(b)$payload
-  expect_identical(p$script_values$group, "TRT01A")
+  expect_identical(nm[[1L]], "Age")
+  expect_true(isTRUE(p$summaries[[1L]]$optional))
   expect_identical(p$script_values$sort_col, "AGE")
+  expect_null(p$script_values$group)
+  b <- new_timeline_block(group = "TRT01A")
+  expect_identical(blockr.core::blockr_ser(b)$payload$script_values$group,
+                   "TRT01A")
 })
 
 test_that("the gear has Group by and the several-picks columns", {
-  g <- patient_timeline_gear("safety")
+  g <- patient_timeline_gear()
   pat <- g$tabs[[2L]]
   expect_identical(pat$title, "Patients")
   expect_identical(unlist(lapply(pat$sections, `[[`, "keys")),
@@ -121,7 +114,7 @@ test_that("the gear has Group by and the several-picks columns", {
 
 test_that("the table heads each group of patients with its value", {
   viz <- asNamespace("blockr.viz")
-  b <- new_safety_timeline_block()
+  b <- new_timeline_block()
   spec <- viz$viz_block_spec("table")
   p <- blockr.core::blockr_ser(b)$payload
   p <- p[intersect(names(p), names(spec$args))]
