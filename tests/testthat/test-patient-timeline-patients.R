@@ -100,6 +100,27 @@ test_that("listing columns become the picks, the arm dropped", {
                    "TRT01A")
 })
 
+test_that("a saved timeline column takes this version's settings", {
+  # As a board saved before the reason tags had legend groups holds it.
+  old <- patient_timeline_lane()
+  old$event_tag_group <- NULL
+  old$tooltip <- "Type"
+  old$lane_size <- "sm"
+  old$name <- "Time on study"
+  b <- new_timeline_block(summaries = list(old))
+  lane <- blockr.core::blockr_ser(b)$payload$summaries[[1L]]
+  expect_identical(lane$event_tag_group, ".tag_group")
+  expect_identical(lane$tooltip, patient_timeline_lane()$tooltip)
+  expect_identical(lane$lane_size, "sm")
+  expect_identical(lane$name, "Time on study")
+  # A round trip through the saved state keeps it.
+  b2 <- blockr.core::blockr_deser(blockr.core::blockr_ser(b))
+  expect_identical(
+    blockr.core::blockr_ser(b2)$payload$summaries[[1L]]$event_tag_group,
+    ".tag_group"
+  )
+})
+
 test_that("the gear has Group by and the several-picks columns", {
   g <- patient_timeline_gear()
   pat <- g$tabs[[2L]]

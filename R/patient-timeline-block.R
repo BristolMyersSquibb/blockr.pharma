@@ -361,19 +361,33 @@ pt_lane_line <- function(name, pool, on) {
 
 # The listing columns as the picker holds them: the arm goes (the group
 # heading names it), and a field over an ADSL column is optional (a study
-# without the column leaves it out).
+# without the column leaves it out). The timeline column takes this
+# version's settings, so a saved board draws what a new block draws; its
+# name and lane size stay as saved.
 pt_columns_clean <- function(summaries) {
   if (!is.list(summaries)) return(summaries)
   summaries <- Filter(function(s) {
     !(is.list(s) && identical(s$type, "field") && identical(s$col, ".arm"))
   }, summaries)
   lapply(summaries, function(s) {
+    if (is.list(s) && identical(s$type, "spans")) return(pt_lane_refresh(s))
     if (is.list(s) && identical(s$type, "field") && is.character(s$col) &&
           !startsWith(s$col, ".")) {
       s$optional <- TRUE
     }
     s
   })
+}
+
+# A saved timeline column with the settings of patient_timeline_lane(),
+# keeping the ones a user can change.
+pt_lane_refresh <- function(s) {
+  lane <- patient_timeline_lane()
+  own <- setdiff(names(lane), c("name", "lane_size"))
+  s[own] <- lane[own]
+  missing <- setdiff(names(lane), names(s))
+  s[missing] <- lane[missing]
+  s
 }
 
 # The script value the gear sets to the first listing column: its name for
