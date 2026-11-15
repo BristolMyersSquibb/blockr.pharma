@@ -48,7 +48,9 @@ PatientProfile.part(function(ctx) {
     // set_viz, so the profile redraws once. R keeps the unavailable ids
     // after the ones this list offers.
     if (removed.length + added.length > 1) {
-      Shiny.setInputValue(setInputId, values.slice(), {priority: 'event'});
+      // Wrapped: Shiny turns a bare empty array into NULL, which R's
+      // observeEvent() drops, so None never reached the profile.
+      Shiny.setInputValue(setInputId, {ids: values.slice()}, {priority: 'event'});
       known = values.concat(hidden);
       sent = true;
       return;

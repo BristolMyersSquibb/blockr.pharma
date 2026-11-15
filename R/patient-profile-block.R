@@ -735,8 +735,10 @@ new_patient_profile_block <- function(selected = NULL,
           # for more than one change at a time (All, None, several picks in a
           # row), so the profile redraws once rather than once per panel. The
           # unavailable ids stay, as in a reorder.
+          # The ids come wrapped in `ids`: a bare empty list (None) would
+          # arrive as NULL and never fire this observer.
           shiny::observeEvent(input$set_viz, {
-            ids <- as.character(unlist(input$set_viz))
+            ids <- as.character(unlist(input$set_viz$ids))
             avail <- names(r_available())
             cur <- r_selected()
             r_selected(c(intersect(ids, avail), setdiff(cur, avail)))

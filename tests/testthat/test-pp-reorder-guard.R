@@ -112,11 +112,12 @@ test_that("set_viz sets the visible selection in one step", {
   shiny::testServer(blk[["expr_server"]],
                     args = list(data = function() pp_reorder_dm()), {
     session$flushReact()
-    session$setInputs(set_viz = list("ae_gantt", "nope"))
+    session$setInputs(set_viz = list(ids = list("ae_gantt", "nope")))
     session$flushReact()
     expect_equal(r_selected(), c("ae_gantt", "vital_signs"))
 
-    session$setInputs(set_viz = list())
+    # What None sends: the empty list inside `ids`, as the browser sends it.
+    session$setInputs(set_viz = list(ids = list()))
     session$flushReact()
     expect_equal(r_selected(), "vital_signs")
   })

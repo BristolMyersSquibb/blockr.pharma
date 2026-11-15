@@ -79,7 +79,7 @@ test('quick picks are reported together, as one set_viz', () => {
   // One update for the three changes, so the profile redraws once.
   assert.equal(h.inputs('toggle_viz').length, 0);
   assert.equal(h.inputs('reorder_viz').length, 0);
-  assert.deepEqual(h.inputs('set_viz').map((i) => i.value),
+  assert.deepEqual(h.inputs('set_viz').map((i) => i.value.ids),
     [ON.filter((v) => v !== 'ae_gantt').concat(['advs_all__PULSE', 'advs_all__TEMP'])]);
   h.close();
 });
@@ -91,7 +91,8 @@ test('None is one set_viz, and the profile has no All', () => {
   h.q('#proxy1-pp_panels .blockr-select__bulk-btn').click();
   h.tick(1100);
   assert.equal(h.inputs('toggle_viz').length, 0);
-  assert.deepEqual(h.inputs('set_viz').map((i) => i.value), [[]]);
+  // Wrapped, so an empty pick is not an empty array, which Shiny reads as NULL.
+  assert.deepEqual(h.inputs('set_viz').map((i) => i.value), [{ ids: [] }]);
   h.close();
 });
 
