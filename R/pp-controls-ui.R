@@ -16,7 +16,8 @@
 #'   The word is `all_word` ("all") or the picks; the sentence then says how
 #'   many of the patient's records are left. The control's `noun` puts a
 #'   count in front ("6 events"): of records, or with `count = "lanes"` of
-#'   the lanes the chart draws ("4 medications").
+#'   the lanes the chart draws ("4 medications"), named by the control's
+#'   `lane_values(tbl, col)` where the chart names them its own way.
 #' * `toggle`: a checkbox, labelled with the control's label.
 #'
 #' A control's `phrase` places its word, `"by {}"` for the lanes; the default
@@ -268,7 +269,15 @@ pp_find_word <- function(viz, viz_id, param, ctrl, dm_obj, settings) {
   # the chart draws (a medication given twenty times is one medication).
   noun <- ctrl$noun
   prefix <- if (!is.null(noun)) {
-    n <- if (identical(ctrl$count, "lanes")) length(tt) else nrow(tbl)
+    n <- if (!identical(ctrl$count, "lanes")) {
+      nrow(tbl)
+    } else if (is.function(ctrl$lane_values)) {
+      # The lanes as the chart draws them, where it names them its own way
+      # (an uncoded con med takes its reported name).
+      length(unique(ctrl$lane_values(tbl, col)))
+    } else {
+      length(tt)
+    }
     paste(n, if (n == 1L) noun[[1L]] else noun[[length(noun)]])
   }
   list(prefix = prefix, word = word)

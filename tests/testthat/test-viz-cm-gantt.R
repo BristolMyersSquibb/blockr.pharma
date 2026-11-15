@@ -47,58 +47,65 @@ test_that("lanes prefer the coded name and fall back per row", {
   expect_true(any(grepl("PROPHYLAXIS", tips)))
 })
 
-test_that("bars take the indication colors the block resolved", {
-  tr <- as.Date(c("2020-01-01", "2020-06-01"))
-  roles <- list(indication = "CMINDC")
+test_that("bars are coloured as the patient timeline colours con meds", {
+  tr <- as.Date(c("2019-10-01", "2020-06-01"))
   bar_cols <- function(chart) {
-    vapply(chart$x$opts$series[[1]]$data, function(b) b$itemStyle$color, "")
-  }
-  badges <- function(chart) {
-    vapply(chart$x$opts$series[[1]]$data,
-           function(b) as.character(b$value[[13]]), "")
-  }
-
-  # The resolved vector is the only source of color: this render invents none
-  # and knows no level.
-  chart <- cm_gantt_viz$render(
-    cm_dm(), time_range = tr,
-    settings = list(
-      roles = roles,
-      indc_colors = c(PROPHYLAXIS = "#111111", HEADACHE = "#222222")
+    data <- chart$x$opts$series[[1]]$data
+    stats::setNames(
+      vapply(data, function(b) b$itemStyle$color, ""),
+      vapply(data, function(b) as.character(b$value[[4]]), "")
     )
-  )
-  expect_setequal(bar_cols(chart), c("#111111", "#222222"))
-  # the tooltip badge reads the same color, never a palette of its own
-  expect_setequal(badges(chart), c("#111111", "#222222"))
+  }
+  before <- PP_CM_STARTED[["Started before treatment"]]
+  on <- PP_CM_STARTED[["Started on treatment"]]
 
-  # A row whose indication is not in the vector (blank, while others carry
-  # one) is grey -- unknown, not a category.
+  # Started before or on the first dose (ADSL TRTSDT), whatever indication
+  # colours the board resolved: they no longer colour the bars.
+  dm_obj <- cm_dm(list(ASTDT = as.Date(c("2019-11-01", "2020-03-01"))))
   chart <- cm_gantt_viz$render(
-    cm_dm(list(CMINDC = c("PROPHYLAXIS", NA))), time_range = tr,
-    settings = list(roles = roles, indc_colors = c(PROPHYLAXIS = "#111111"))
+    dm_obj, time_range = tr,
+    settings = list(roles = list(indication = "CMINDC"),
+                    indc_colors = c(PROPHYLAXIS = "#111111"))
   )
-  expect_setequal(bar_cols(chart), c("#111111", "#9ca3af"))
+  expect_identical(bar_cols(chart)[["ASPIRIN"]], before)
+  expect_identical(bar_cols(chart)[["PARACETAMOL"]], on)
 
-  # No colors resolved (the block skipped it) -> the single medication color,
-  # and no badge, so the tooltip keeps its plain "Indication:" line.
-  chart <- cm_gantt_viz$render(cm_dm(), time_range = tr,
-                               settings = list(roles = roles))
-  expect_identical(unique(bar_cols(chart)), "#0891B2")
-  expect_identical(unique(badges(chart)), "")
-
-  # No indication role at all (a study without CMINDC): unchanged behaviour.
-  chart <- cm_gantt_viz$render(cm_dm(), time_range = tr)
-  expect_identical(unique(bar_cols(chart)), "#0891B2")
+  # The study day decides where the record carries one.
+  dm_obj <- cm_dm(list(ASTDY = c(5L, -3L)))
+  chart <- cm_gantt_viz$render(dm_obj, time_range = tr, mode = "rday",
+                               ref_ms = pp_xval(as.Date("2020-01-01")))
+  expect_identical(bar_cols(chart)[["ASPIRIN"]], on)
+  expect_identical(bar_cols(chart)[["PARACETAMOL"]], before)
 })
 
-test_that("the indication legend reads the same resolved vector", {
+test_that("the legend names the two colours the patient's records carry", {
+  html <- as.character(cm_gantt_viz$legend_ui(cm_dm(), list()))
+  expect_match(html, "Started on treatment")
+  expect_no_match(html, "Started before treatment")
   html <- as.character(cm_gantt_viz$legend_ui(
-    cm_dm(), list(indc_colors = c(PROPHYLAXIS = "#111111"))
+    cm_dm(list(ASTDT = as.Date(c("2019-11-01", "2020-03-01")))), list()
   ))
-  expect_match(html, "Prophylaxis")
-  expect_match(html, "#111111", fixed = TRUE)
-  # nothing resolved -> no legend
-  expect_null(cm_gantt_viz$legend_ui(cm_dm(), list()))
+  expect_match(html, "Started before treatment")
+  expect_match(html, PP_CM_STARTED[["Started before treatment"]],
+               fixed = TRUE)
+})
+
+test_that("an uncoded con med takes a lane of its reported name", {
+  chart <- cm_gantt_viz$render(
+    cm_dm(list(CMDECOD = c("ASPIRIN", "UNCODED"))),
+    time_range = as.Date(c("2020-01-01", "2020-06-01"))
+  )
+  expect_identical(unlist(chart$x$opts$yAxis$data),
+                   c("ASPIRIN", "PARACETAMOL"))
+})
+
+test_that("lanes come in order of first onset", {
+  chart <- cm_gantt_viz$render(
+    cm_dm(list(CMDECOD = c("ZINC", "ASPIRIN"),
+               ASTDT = as.Date(c("2020-02-01", "2020-03-01")))),
+    time_range = as.Date(c("2020-01-01", "2020-06-01"))
+  )
+  expect_identical(unlist(chart$x$opts$yAxis$data), c("ZINC", "ASPIRIN"))
 })
 
 test_that("the medication period feeds the shared time range", {
@@ -222,4 +229,11 @@ test_that("a chart of one lane still sends its axis as an array", {
     as.character(htmlwidgets:::toJSON(one$x$opts$yAxis$data)),
     "[\"ASPIRIN\"]"
   )
+})
+
+test_that("the header counts uncoded con meds by their reported names", {
+  dm_obj <- cm_dm(list(CMDECOD = c("UNCODED", "UNCODED")))
+  ctrl <- cm_gantt_viz$controls$find
+  w <- pp_find_word(cm_gantt_viz, "cm_gantt", "find", ctrl, dm_obj, list())
+  expect_identical(w$prefix, "2 medications")
 })

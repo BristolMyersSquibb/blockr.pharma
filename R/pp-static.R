@@ -318,7 +318,7 @@ pp_static_ae_gantt <- function(dm_obj, time_range, settings = list(),
   # pp-lanes.R): the printed twin groups its rows the way the screen does.
   lane_col <- pp_lane_column(tbl, PP_AE_LANES, settings$lanes, "AEDECOD")
   lane_lab <- pp_lane_values(tbl, lane_col %||% "AEDECOD", "AEDECOD")
-  terms <- sort(unique(lane_lab))
+  terms <- pp_lanes_by_onset(lane_lab, spans[1L, ])
   lane <- match(lane_lab, terms) - 1L
   first_of_lane <- !duplicated(lane[order(lane, spans[1L, ])])[
     order(order(lane, spans[1L, ]))
@@ -393,27 +393,17 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
   # Lane granularity follows the panel's own "Lanes" setting (see
   # pp-lanes.R): the printed twin groups its rows the way the screen does.
   lane_col <- pp_lane_column(tbl, PP_CM_LANES, settings$lanes, "CMDECOD")
-  lane_lab <- pp_lane_values(tbl, lane_col %||% "CMTRT", "CMTRT")
-  meds <- sort(unique(lane_lab))
+  lane_lab <- pp_cm_lane_values(tbl, lane_col %||% "CMTRT")
+  meds <- pp_lanes_by_onset(lane_lab, spans[1L, ])
   lane <- match(lane_lab, meds) - 1L
   first_of_lane <- !duplicated(lane[order(lane, spans[1L, ])])[
     order(order(lane, spans[1L, ]))
   ]
 
-  # Indication colors, same precedence as the interactive bars: the injected
-  # scale-map colors when they resolve, one medication color otherwise, grey
-  # for rows carrying no indication while others do.
-  default_color <- PP_CM_COLOR
-  indc_col <- settings$roles$indication
-  has_indc <- !is.null(indc_col) && indc_col %in% colnames(tbl)
-  indc_hex <- if (has_indc) settings$indc_colors else NULL
-  fill <- if (is.null(indc_hex) || !length(indc_hex)) {
-    rep(default_color, nrow(tbl))
-  } else {
-    indc <- as.character(tbl[[indc_col]])
-    ifelse(indc %in% names(indc_hex),
-           unname(unlist(indc_hex)[indc]), "#9ca3af")
-  }
+  # Started before or on treatment, as the interactive bars.
+  fill <- pp_cm_started_colour(pp_cm_started_on(
+    tbl, pp_cm_trtsdt(dm::dm_get_tables(dm_obj))
+  ))
 
   bars <- data.frame(
     start = spans[1L, ], end = spans[2L, ], lane = lane,
@@ -927,7 +917,18 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   }
   has_vis <- nrow(visits) > 0
 
-  lanes <- c("TRT", if (has_adae) "AE", if (has_vis) "VIS")
+  has_adcm <- "adcm" %in% names(tbls)
+  cm_use_day <- FALSE
+  if (has_adcm) {
+    adcm_raw <- as.data.frame(tbls[["adcm"]])
+    cm_use_day <- identical(mode, "rday") && "ASTDY" %in% colnames(adcm_raw)
+    cm_src <- if (cm_use_day) "ASTDY" else "ASTDT"
+    has_adcm <- cm_src %in% colnames(adcm_raw) &&
+      any(!is.na(adcm_raw[[cm_src]]))
+  }
+
+  lanes <- c("TRT", if (has_adae) "AE", if (has_adcm) "CM",
+             if (has_vis) "VIS")
   lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
   lane_y <- function(nm) -lane_idx[[nm]]
 
@@ -958,8 +959,8 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     )
   }
 
-  # Exposure -- the treatment lane's real content when adex exists, one slot
-  # per drug so a combination regimen's same-day infusions sit side by side.
+  # Exposure -- the treatment lane's real content when adex exists: a thin
+  # line per drug in its colour, a slot each, as on screen.
   if (has_adex) {
     adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
     ex_has_end <- if (ex_use_day) "AENDY" %in% colnames(adex) else
@@ -992,7 +993,8 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     }
     band <- 0.9
     slot_h <- band / n_slot
-    half_h <- if (n_slot == 1L) 0.225 else max(slot_h * 0.4, 0.04)
+    half_h <- 0.05
+    drug_col <- pt_drug_palette(ex_drugs)
     for (rows in groups) {
       i <- rows[[1L]]
       x0 <- ex_x(adex[[ex_src]][i])
@@ -1007,8 +1009,13 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
       } else {
         lane_y("TRT") + band / 2 - slot_h * (k + 0.5)
       }
-      add_rect(x0, x1, yc, half_h,
-               pp_alpha("#2563EB", 0.25), pp_alpha("#2563EB", 0.55))
+      d <- drug_of(i)
+      hex <- if (d %in% names(drug_col)) {
+        unname(drug_col[[d]])
+      } else {
+        SWIMMER_DRUGS[[1L]]
+      }
+      add_rect(x0, x1, yc, half_h, hex, NA, 0)
     }
   }
 
@@ -1035,6 +1042,14 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
         if (ae_use_day) v else NULL, ref_ms, mode
       )
     }
+    # The worst drawn last, as on screen.
+    if (has_sev) {
+      v <- toupper(as.character(adae[[sev_col]]))
+      r <- match(v, c("MILD", "MODERATE", "SEVERE"))
+      g <- suppressWarnings(as.integer(v))
+      adae <- adae[order(ifelse(is.na(r), ifelse(is.na(g), 0L, g), r)), ,
+                   drop = FALSE]
+    }
     for (i in seq_len(nrow(adae))) {
       s <- ae_x(adae[[ae_src]][i])
       e <- if (ae_has_end && !is.na(ae_end(i))) {
@@ -1048,13 +1063,37 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
       } else {
         "#9ca3af"
       }
-      add_rect(s, e, lane_y("AE"), 0.225,
-               pp_alpha(hex, 0.7), pp_alpha(hex, 0.9))
-      if (has_ser && identical(toupper(as.character(adae$AESER[i])), "Y")) {
-        # The serious strip: a thin red bar along the top edge, same mark as
-        # the interactive lane.
-        add_rect(s, e, lane_y("AE") + 0.2, 0.025, "#DC2626", NA, 0)
+      ser <- has_ser && identical(toupper(as.character(adae$AESER[i])), "Y")
+      # Serious: the dark outline, same mark as the interactive lane.
+      add_rect(s, e, lane_y("AE"), 0.15, hex,
+               if (ser) "#111827" else NA, if (ser) 0.6 else 0)
+    }
+  }
+
+  # Con meds lane: started before or on treatment, as on screen.
+  if (has_adcm) {
+    adcm <- adcm_raw[!is.na(adcm_raw[[cm_src]]), , drop = FALSE]
+    cm_has_end <- if (cm_use_day) "AENDY" %in% colnames(adcm) else
+      "AENDT" %in% colnames(adcm)
+    cm_end <- function(i) if (cm_use_day) adcm$AENDY[i] else adcm$AENDT[i]
+    cm_x <- function(v) {
+      pp_xval_pref_day(
+        if (cm_use_day) NULL else v,
+        if (cm_use_day) v else NULL, ref_ms, mode
+      )
+    }
+    on <- pp_cm_started_on(adcm, sl$TRTSDT[1])
+    for (i in order(on)) {
+      s <- cm_x(adcm[[cm_src]][i])
+      e <- if (cm_has_end && !is.na(cm_end(i))) {
+        cm_x(cm_end(i))
+      } else {
+        pp_gantt_open_end(s, time_range, ref_ms, mode, day_unit)
       }
+      if (!is.na(b[2L]) && s > b[2L]) next
+      if (!is.na(b[1L]) && e < b[1L]) next
+      add_rect(s, e, lane_y("CM"), 0.15, pp_cm_started_colour(on[[i]]),
+               NA, 0)
     }
   }
 

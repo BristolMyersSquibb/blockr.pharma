@@ -5,11 +5,15 @@
 #
 # Lanes (each data-gated; absent tables simply drop their lane):
 #   1. Treatment — green bar from TRTSDT to TRTEDT with arm label
-#   2. Exposure — dosing-period bars from adex, one slot per drug, labelled
-#      with the dose
-#   3. Adverse Events — compact overlapping bars colored by severity
-#   4. Milestones — point markers: treatment start/end, end of study, death
-#   5. Visits — one tick per visit the subject attended (reconstructed from
+#   2. Exposure — a thin line per drug in its colour, the drug's name above
+#      it and its dose in the tooltip, as the patient timeline draws
+#      treatment (pp-timeline-look.R)
+#   3. Adverse Events — compact overlapping bars colored by severity, the
+#      worst on top
+#   4. Con meds — compact bars, started before or on treatment, as the
+#      patient timeline colours them
+#   5. Milestones — point markers: end of study, death
+#   6. Visits — one tick per visit the subject attended (reconstructed from
 #      the findings tables; see pp_visit_schedule())
 #
 # Data requirements (declared via new_pp_viz()):
@@ -31,7 +35,7 @@ patient_overview_viz <- new_pp_viz(
   domain = "Treatment",
   icon = "capsule",
   color = "#059669",
-  description = "Treatment, exposure, adverse events, visits & milestones",
+  description = "Treatment, adverse events, con meds, visits & milestones",
   tables = "adsl",
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
   uses = c("arm", "severity"),
@@ -43,7 +47,8 @@ patient_overview_viz <- new_pp_viz(
     adex = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT",
       "AVISIT"
-    )
+    ),
+    adcm = c("ASTDT", "AENDT", "ASTDY", "AENDY", "CMTRT", "CMDECOD")
   ),
   exhibit = function(dm_obj, time_range, settings = list(),
                      ref_ms = NA_real_, mode = "date") {
@@ -123,6 +128,18 @@ patient_overview_viz <- new_pp_viz(
         }
       }
 
+      # Con-med lane, same date-or-day gating.
+      has_adcm <- "adcm" %in% names(tbls)
+      cm_use_day <- FALSE
+      if (has_adcm) {
+        adcm_raw <- as.data.frame(tbls[["adcm"]])
+        cm_use_day <- identical(mode, "rday") &&
+          "ASTDY" %in% colnames(adcm_raw)
+        cm_src <- if (cm_use_day) "ASTDY" else "ASTDT"
+        has_adcm <- cm_src %in% colnames(adcm_raw) &&
+          any(!is.na(adcm_raw[[cm_src]]))
+      }
+
       # Visit ruler: reconstructed from the findings tables; anchors every
       # other lane to when the subject was actually seen.
       visits <- pp_visit_schedule(tbls)
@@ -152,9 +169,10 @@ patient_overview_viz <- new_pp_viz(
       #
       # Short lane labels are what let the shared gutter (PP_GRID_LEFT) stay
       # narrow. Tooltips on each item still carry the full context.
-      lanes <- c("TRT", if (has_adae) "AE", if (has_vis) "VIS")
+      lanes <- c("TRT", if (has_adae) "AE", if (has_adcm) "CM",
+                 if (has_vis) "VIS")
       lane_full <- c(TRT = "Treatment", AE = "Adverse Events",
-                     VIS = "Visits")
+                     CM = "Con meds", VIS = "Visits")
       lane_idx <- stats::setNames(seq_along(lanes) - 1L, lanes)
       n_lanes <- length(lanes)
       # Chrome plus an exact 40px per lane, so lane geometry does not shift
@@ -167,7 +185,10 @@ patient_overview_viz <- new_pp_viz(
       # is two or three drugs, but a basket protocol can name a dozen, and an
       # overview that grows to 500px stops being an overview. Past the cap the
       # slots thin out instead. Everything is still drawn and still hoverable.
-      lane_px <- 40 + min(max(0L, length(ex_drugs) - 2L), 3L) * 10
+      #
+      # A drug is a thin line with its name above it, so each takes about
+      # 18px of the lane; past four drugs the names drop and the lines stay.
+      lane_px <- 40 + min(max(0L, length(ex_drugs) - 1L), 3L) * 18
       chart_height <- PP_PLOT_TOP + 30 + n_lanes * lane_px
 
       # A study's arm label is data, not a literal: encode it, never paste it.
@@ -177,7 +198,7 @@ patient_overview_viz <- new_pp_viz(
       # Treatment envelope — FALLBACK ONLY (no adex). Carries the arm label,
       # which is why it is worth drawing at all when it is all we have; with
       # exposure present the arm is a click away in the subject picker header
-      # and the dose bars have their own text to show.
+      # and each drug line carries its name.
       # ---------------------------------------------------------------
       trt_lane <- lane_idx[["TRT"]]
       trt_series <- list(
@@ -276,8 +297,9 @@ patient_overview_viz <- new_pp_viz(
           v <- grDevices::col2rgb(hex)
           sprintf("rgba(%d,%d,%d,%s)", v[1L], v[2L], v[3L], alpha)
         }
-        sev_fill_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.7"))
-        sev_stroke_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "0.9"))
+        # Solid, as on the AE panel and the timeline.
+        sev_fill_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "1"))
+        sev_stroke_js <- js_color_map(vapply(sev_hex, rgba, "", alpha = "1"))
 
         ae_end <- function(i) if (ae_use_day) adae$AENDY[i] else adae$AENDT[i]
         ae_x <- function(v) {
@@ -291,6 +313,17 @@ patient_overview_viz <- new_pp_viz(
           if (ae_use_day) pp_day_label(v) else pp_xlabel(v, ref_ms, mode)
         }
 
+        # The worst drawn last, so it shows where AEs overlap, as on the
+        # patient timeline's stripe.
+        sev_rank <- function(v) {
+          v <- toupper(as.character(v))
+          r <- match(v, c("MILD", "MODERATE", "SEVERE"))
+          g <- suppressWarnings(as.integer(v))
+          ifelse(is.na(r), ifelse(is.na(g), 0L, g), r)
+        }
+        if (has_sev) {
+          adae <- adae[order(sev_rank(adae[[sev_col]])), , drop = FALSE]
+        }
         ae_data <- lapply(seq_len(nrow(adae)), function(i) {
           s <- ae_x(adae[[ae_src]][i])
           # A missing AENDT means the AE was still running at data cut --
@@ -317,7 +350,8 @@ patient_overview_viz <- new_pp_viz(
           at <- function(nm) if (nm %in% colnames(adae)) adae[[nm]][i] else NA
           # Severity and seriousness only: the AE panel carries the rest.
           list(
-            value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab),
+            value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab,
+                         !(has_end && !is.na(ae_end(i)))),
             tip = pp_tip(
               pp_tip_case(term),
               color = if (sev %in% names(sev_hex)) sev_hex[[sev]] else "#9ca3af",
@@ -346,7 +380,7 @@ patient_overview_viz <- new_pp_viz(
             function(params, api) {
               var start = api.coord([api.value(0), api.value(2)]);
               var end   = api.coord([api.value(1), api.value(2)]);
-              var h     = api.size([0, 1])[1] * 0.45;
+              var h     = %d;
               var barW  = Math.max(end[0] - start[0], 4);
               // echarts coerces numeric-looking dims, so a CTCAE grade
               // arrives as a number here: stringify before any string op.
@@ -363,27 +397,130 @@ patient_overview_viz <- new_pp_viz(
                   width: barW, height: h,
                   r: Math.min(2, h / 4, barW / 2)
                 },
-                style: { fill: fill, stroke: stroke, lineWidth: 1 }
+                // Serious: the dark outline of the AE panel and the
+                // timeline; severity keeps the fill.
+                style: ser === 'Y'
+                  ? { fill: fill, stroke: '#111827', lineWidth: 1.5 }
+                  : { fill: fill }
               }];
-              if (ser === 'Y') {
+              if (api.value(8)) {
+                var cy = start[1], a = Math.max(h * 0.42, 3);
+                var ax = start[0] + barW + 2;
                 children.push({
-                  type: 'rect',
-                  shape: {
-                    x: start[0], y: start[1] - h/2,
-                    width: barW, height: 2
-                  },
-                  style: { fill: '#DC2626' }
+                  type: 'polyline',
+                  shape: { points: [[ax, cy - a], [ax + a, cy], [ax, cy + a]] },
+                  style: { fill: 'none', stroke: fill, lineWidth: 1.6,
+                           lineCap: 'round', lineJoin: 'round' }
                 });
               }
               return { type: 'group', children: children };
             }
-          ", sev_fill_js, sev_stroke_js)),
+          ", PP_GANTT_BAR_H, sev_fill_js, sev_stroke_js)),
           data = ae_data,
           encode = list(x = list(0, 1), y = 2),
           tooltip = list(formatter = PP_TIP_FORMATTER)
         )
 
         all_series <- c(all_series, list(ae_series))
+      }
+
+      # ---------------------------------------------------------------
+      # Con meds lane (omitted when adcm missing): compact bars, started
+      # before or on treatment, as the patient timeline colours them.
+      # ---------------------------------------------------------------
+      if (has_adcm) {
+        adcm <- adcm_raw[!is.na(adcm_raw[[cm_src]]), , drop = FALSE]
+        cm_lane <- lane_idx[["CM"]]
+        cm_has_end <- if (cm_use_day) {
+          "AENDY" %in% colnames(adcm)
+        } else {
+          "AENDT" %in% colnames(adcm)
+        }
+        cm_end <- function(i) if (cm_use_day) adcm$AENDY[i] else adcm$AENDT[i]
+        cm_x <- function(v) {
+          pp_xval_pref_day(
+            if (cm_use_day) NULL else v,
+            if (cm_use_day) v else NULL,
+            ref_ms, mode
+          )
+        }
+        day_unit <- if (identical(mode, "rday")) 1 else 86400000
+        cm_on <- pp_cm_started_on(adcm, sl$TRTSDT[1])
+        cm_name <- pp_cm_lane_values(
+          adcm, if ("CMDECOD" %in% colnames(adcm)) "CMDECOD" else "CMTRT"
+        )
+        cm_data <- lapply(seq_len(nrow(adcm)), function(i) {
+          s <- cm_x(adcm[[cm_src]][i])
+          open <- !(cm_has_end && !is.na(cm_end(i)))
+          e <- if (open) {
+            pp_gantt_open_end(s, time_range, ref_ms, mode, day_unit)
+          } else {
+            cm_x(cm_end(i))
+          }
+          col <- pp_cm_started_colour(cm_on[[i]])
+          at <- function(nm) if (nm %in% colnames(adcm)) adcm[[nm]][i] else NA
+          list(
+            value = list(s, e, cm_lane, col, open),
+            tip = pp_tip(
+              pp_tip_case(cm_name[[i]]), color = col,
+              rows = c(
+                list(pp_tip_row("Started", if (cm_on[[i]]) {
+                  "On treatment"
+                } else {
+                  "Before treatment"
+                })),
+                pp_tip_span(
+                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                  open = open
+                )
+              )
+            )
+          )
+        })
+        # Started on treatment drawn last, over the long prior meds.
+        cm_data <- cm_data[order(cm_on)]
+
+        cm_series <- list(
+          type = "custom",
+          name = "Con meds",
+          renderItem = htmlwidgets::JS(sprintf("
+            function(params, api) {
+              var start = api.coord([api.value(0), api.value(2)]);
+              var end   = api.coord([api.value(1), api.value(2)]);
+              var h     = %d;
+              var barW  = Math.max(end[0] - start[0], 4);
+              var cs    = params.coordSys;
+              var rect  = echarts.graphic.clipRectByRect(
+                { x: start[0], y: start[1] - h / 2, width: barW, height: h },
+                { x: cs.x, y: cs.y, width: cs.width, height: cs.height }
+              );
+              if (!rect) return;
+              var fill = api.value(3);
+              var children = [{
+                type: 'rect',
+                shape: Object.assign({}, rect, { r: %s }),
+                style: { fill: fill }
+              }];
+              if (api.value(4)) {
+                var cy = rect.y + rect.height / 2, a = Math.max(h * 0.42, 3);
+                var ax = rect.x + rect.width + 2;
+                children.push({
+                  type: 'polyline',
+                  shape: { points: [[ax, cy - a], [ax + a, cy], [ax, cy + a]] },
+                  style: { fill: 'none', stroke: fill, lineWidth: 1.6,
+                           lineCap: 'round', lineJoin: 'round' }
+                });
+              }
+              return { type: 'group', children: children };
+            }
+          ", PP_GANTT_BAR_H, pp_mark_radius_js("rect.height", "rect.width"))),
+          data = cm_data,
+          encode = list(x = list(0, 1), y = 2),
+          tooltip = list(formatter = PP_TIP_FORMATTER)
+        )
+
+        all_series <- c(all_series, list(cm_series))
       }
 
       # ---------------------------------------------------------------
@@ -473,8 +610,8 @@ patient_overview_viz <- new_pp_viz(
       # above puts one exactly there).
 
       # ---------------------------------------------------------------
-      # Exposure — the treatment lane's real content when adex exists. Dose
-      # bars say everything the envelope did and the holds besides.
+      # Exposure — the treatment lane's real content when adex exists. Drug
+      # lines say everything the envelope did and the holds besides.
       # ---------------------------------------------------------------
       if (has_adex) {
         adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
@@ -499,16 +636,6 @@ patient_overview_viz <- new_pp_viz(
             if (ex_use_day) v else NULL,
             ref_ms, mode
           )
-        }
-        # `visit` is the label of the SAME dosing record, printed as the study
-        # wrote it. An infusion filed as CYCLE 1 DAY 8 and given a day late
-        # reads "2014-01-09 (CYCLE 1 DAY 8)": both facts, neither invented.
-        ex_lab <- function(v, visit = NA) {
-          if (ex_use_day) {
-            pp_day_label(v, visit)
-          } else {
-            pp_xlabel(v, ref_ms, mode, visit)
-          }
         }
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
@@ -541,7 +668,34 @@ patient_overview_viz <- new_pp_viz(
         }
         n_slot <- max(length(ex_drugs), 1L)
 
-        ex_data <- lapply(groups, function(rows) {
+        # Each drug in its colour, in its slot, as the patient timeline draws
+        # treatment: the timeline's drug palette (pt_drug_palette()) and its
+        # names (swimmer_drug_name()).
+        drug_col <- pt_drug_palette(ex_drugs)
+        # Its dose before, for the tooltip, where the dose changed.
+        g_drug <- vapply(groups, function(r) drug_of(r[[1L]]), "")
+        g_start <- vapply(groups, function(r) {
+          as.numeric(ex_x(adex[[ex_src]][r[[1L]]]))
+        }, 0)
+        g_dose <- vapply(groups, function(r) {
+          d <- unique(vapply(r, dose_of, character(1L)))
+          paste(d[nzchar(d)], collapse = " · ")
+        }, "")
+        prev_dose <- rep("", length(groups))
+        first_of_drug <- rep(FALSE, length(groups))
+        for (d in unique(g_drug)) {
+          k <- which(g_drug == d)
+          k <- k[order(g_start[k])]
+          first_of_drug[k[[1L]]] <- TRUE
+          if (length(k) > 1L) {
+            prev <- g_dose[k[-length(k)]]
+            chg <- prev != g_dose[k[-1L]]
+            prev_dose[k[-1L]][chg] <- prev[chg]
+          }
+        }
+
+        ex_data <- lapply(seq_along(groups), function(g) {
+          rows <- groups[[g]]
           i <- rows[[1L]]
           x0 <- ex_x(adex[[ex_src]][i])
           x1 <- if (ex_has_end && !is.na(ex_end(i))) {
@@ -549,35 +703,28 @@ patient_overview_viz <- new_pp_viz(
           } else {
             pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
           }
-          # The visit belongs to the administration, so it rides on the start
-          # label only; a dosing period's end date was never a visit.
-          s_lab <- ex_lab(adex[[ex_src]][i], opt_chr(adex, "AVISIT", i))
-          e_lab <- if (ex_has_end && !is.na(ex_end(i))) {
-            ex_lab(ex_end(i))
-          } else {
-            PP_ONGOING_LABEL
-          }
-          # Every distinct dose the grouped rows carry, not the first one: a
-          # study recording the same administration in two units (an amount
-          # and a per-weight regimen) states both, and both are the answer to
-          # "what did this patient get".
-          doses <- unique(vapply(rows, dose_of, character(1L)))
-          doses <- doses[nzchar(doses)]
           at <- function(nm) if (nm %in% colnames(adex)) adex[[nm]][i] else NA
           ex_open <- !(ex_has_end && !is.na(ex_end(i)))
+          drug <- drug_of(i)
+          name <- if (nzchar(drug)) swimmer_drug_name(drug) else "Exposure"
+          col <- if (nzchar(drug) && drug %in% names(drug_col)) {
+            unname(drug_col[[drug]])
+          } else {
+            SWIMMER_DRUGS[[1L]]
+          }
           list(
             value = list(
-              x0, x1, ex_lane, if (length(doses)) doses[[1L]] else "",
-              drug_of(i), s_lab, e_lab,
-              n_slot, slot_of(drug_of(i)),
-              paste(doses, collapse = " \u00b7 ")
+              x0, x1, ex_lane, n_slot, slot_of(drug), col,
+              if (first_of_drug[[g]]) name else "", ex_open
             ),
             tip = pp_tip(
-              if (nzchar(drug_of(i))) pp_tip_case(drug_of(i)) else "Exposure",
-              color = "#2563EB",
+              name, color = col,
               rows = c(
                 list(pp_tip_row(pp_tip_name(adex_raw, "EXDOSE", "Dose"),
-                                paste(doses, collapse = " \u00b7 "))),
+                                g_dose[[g]]),
+                     if (nzchar(prev_dose[[g]])) {
+                       pp_tip_row("Dose before", prev_dose[[g]])
+                     }),
                 pp_tip_span(
                   pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
                   pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
@@ -589,69 +736,64 @@ patient_overview_viz <- new_pp_viz(
             )
           )
         })
-        names(ex_data) <- NULL
 
         ex_series <- list(
           type = "custom",
           name = "Exposure",
-          renderItem = htmlwidgets::JS("
+          renderItem = htmlwidgets::JS(sprintf("
             function(params, api) {
               var start = api.coord([api.value(0), api.value(2)]);
               var end   = api.coord([api.value(1), api.value(2)]);
               var laneH = api.size([0, 1])[1];
-              var n     = Math.max(+api.value(7) || 1, 1);
-              var k     = +api.value(8) || 0;
-              // One drug keeps the lane it always had; a combination splits
-              // it into a slot each, so same-day infusions sit side by side
-              // and both can be hovered.
-              var band = laneH * 0.9;
-              var slot = band / n;
-              var h    = (n === 1) ? laneH * 0.45 : Math.max(slot - 2, 3);
-              var yc   = (n === 1) ? start[1]
-                                   : start[1] - band / 2 + slot * (k + 0.5);
-              // A single-day infusion is a hairline at study scale; 6px is
-              // the difference between a hover target and a rumour.
-              var barW  = Math.max(end[0] - start[0], 6);
+              var n     = Math.max(+api.value(3) || 1, 1);
+              var k     = +api.value(4) || 0;
+              var col   = api.value(5);
+              var name  = api.value(6);
+              var open  = !!api.value(7);
+              var cs    = params.coordSys;
+              // A slot per drug; the line sits low in it, the drug's name
+              // above it, at the left of its first line.
+              var band  = laneH * 0.9;
+              var slot  = band / n;
+              var yc    = start[1] - band / 2 + slot * (k + 0.5);
+              var named = slot >= 16;
+              var h     = %d;
+              var y     = named ? yc + 4 : yc;
+              var barW  = Math.max(end[0] - start[0], 2);
               var children = [{
                 type: 'rect',
-                shape: {
-                  x: start[0], y: yc - h/2,
-                  width: barW, height: h,
-                  // h floors at 3px for a multi-drug combination, where a flat
-                  // 2px would be two thirds of the height, i.e. a capsule --
-                  // the semantic mark for a soft boundary. h/4 keeps it a
-                  // rectangle at every slot count.
-                  r: Math.min(2, h / 4, barW / 2)
-                },
-                style: {
-                  fill: 'rgba(37,99,235,0.25)',
-                  stroke: 'rgba(37,99,235,0.55)',
-                  lineWidth: 1
-                }
+                shape: { x: start[0], y: y - h / 2, width: barW, height: h },
+                style: { fill: col }
               }];
-              // Dose text when the bar has room for it. echarts coerces
-              // numeric-looking dims, so stringify before use.
-              var dose = '' + (api.value(3) == null ? '' : api.value(3));
-              if (dose && barW > 46 && h >= 12) {
+              if (open) {
+                var a  = 3;
+                var ax = start[0] + barW + 2;
+                children.push({
+                  type: 'polyline',
+                  shape: { points: [[ax, y - a], [ax + a, y], [ax, y + a]] },
+                  style: { fill: 'none', stroke: col, lineWidth: 1.6,
+                           lineCap: 'round', lineJoin: 'round' }
+                });
+              }
+              if (named && name) {
+                var tx = Math.max(start[0], cs.x + 2);
                 children.push({
                   type: 'text',
                   style: {
-                    text: dose,
-                    x: start[0] + barW / 2,
-                    y: yc,
-                    fill: '#1e40af',
-                    fontSize: 10,
-                    fontWeight: 600,
+                    text: name,
+                    x: tx,
+                    y: y - 9,
+                    fill: PatientProfile.ink('--blockr-color-text-muted'),
+                    fontSize: 11,
                     fontFamily: PatientProfile.ink('--bs-body-font-family'),
-                    textAlign: 'center',
                     textVerticalAlign: 'middle',
-                    truncate: { outerWidth: barW - 8 }
+                    truncate: { outerWidth: cs.x + cs.width - tx }
                   }
                 });
               }
               return { type: 'group', children: children };
             }
-          "),
+          ", PP_DRUG_LINE_H)),
           data = ex_data,
           encode = list(x = list(0, 1), y = 2),
           tooltip = list(formatter = PP_TIP_FORMATTER)

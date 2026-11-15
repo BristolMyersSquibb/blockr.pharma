@@ -40,15 +40,15 @@ test_that("overview uses board severity colors when injected", {
     sev_colors = c(SEVERE = "#123456", MILD = "#654321")
   )
   js <- overview_js(settings = settings)
-  expect_match(js, "rgba(18,52,86,0.7)", fixed = TRUE)   # fill from #123456
-  expect_match(js, "rgba(217,119,6,0.7)", fixed = TRUE)  # MODERATE keeps default
+  expect_match(js, "rgba(18,52,86,1)", fixed = TRUE)   # fill from #123456
+  expect_match(js, "rgba(217,119,6,1)", fixed = TRUE)  # MODERATE keeps default
   expect_identical(overview_tip_colors(settings = settings), "#123456")
 })
 
 test_that("overview falls back to built-in constants without a map", {
   js <- overview_js()
-  expect_match(js, "rgba(139,0,0,0.7)", fixed = TRUE)  # SEVERE default
-  expect_match(js, "rgba(202,138,4,0.7)", fixed = TRUE)  # MILD default
+  expect_match(js, "rgba(139,0,0,1)", fixed = TRUE)  # SEVERE default
+  expect_match(js, "rgba(202,138,4,1)", fixed = TRUE)  # MILD default
   expect_identical(
     overview_tip_colors(settings = list(roles = list(severity = "AESEV"))),
     "#8B0000"
@@ -59,14 +59,14 @@ test_that("overview colors grade-coded severity (AETOXGR)", {
   dm_obj <- pp_overview_dm(sev = c(AETOXGR = "3"))
   settings <- list(roles = list(severity = "AETOXGR"))
   js <- overview_js(settings = settings, dm_obj = dm_obj)
-  expect_match(js, "rgba(196,145,2,0.7)", fixed = TRUE)  # grade 3 default fill
+  expect_match(js, "rgba(196,145,2,1)", fixed = TRUE)  # grade 3 default fill
   expect_identical(overview_tip_colors(settings = settings, dm_obj = dm_obj),
                    "#c49102")
 
   # Injected board colors override by grade level, as for word levels.
   settings$sev_colors <- c("3" = "#123456")
   js <- overview_js(settings = settings, dm_obj = dm_obj)
-  expect_match(js, "rgba(18,52,86,0.7)", fixed = TRUE)
+  expect_match(js, "rgba(18,52,86,1)", fixed = TRUE)
   expect_identical(overview_tip_colors(settings = settings, dm_obj = dm_obj),
                    "#123456")
 })

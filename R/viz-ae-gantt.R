@@ -206,7 +206,10 @@ ae_gantt_viz <- new_pp_viz(
       # board can name a level the current study lacks).
       lane_col <- pp_lane_column(tbl, PP_AE_LANES, settings$lanes, "AEDECOD")
       tbl$..lane <- pp_lane_values(tbl, lane_col %||% "AEDECOD", "AEDECOD")
-      terms <- sort(unique(tbl$..lane))
+      # By first onset, as the patient timeline lists an opened patient's AEs.
+      terms <- pp_lanes_by_onset(
+        tbl$..lane, vapply(seq_len(nrow(tbl)), function(i) bar_span(i)[1L], 0)
+      )
 
       # One label per lane, drawn on the lane's earliest bar: the lane *is*
       # the grouping, so repeating it on every bar of the lane is noise.

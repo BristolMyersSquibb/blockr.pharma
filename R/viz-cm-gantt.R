@@ -20,18 +20,16 @@
 # rather than which product. See pp-lanes.R. The tooltip always names the
 # medication, at every lane setting.
 #     roles    — indication (the resolved column arrives as
-#                settings$roles$indication, its colors as
-#                settings$indc_colors)
+#                settings$roles$indication; the tooltip names it)
 #
 # Lanes are labelled above their bars, exactly like the AE gantt, and for
 # the same reason: the shared left margin (PP_GRID_LEFT) fits only a few
 # characters and medication names collide well before that.
 #
-# Bars are colored by indication (why the medication was given), the way the
-# AE gantt colors by severity. The colors come from blockr.theme -- the
-# board's scale-map binding for the indication column, else the theme's
-# categorical palette -- and this file knows neither the levels nor the hexes;
-# see pp-indication.R, including when the coloring is skipped entirely.
+# Bars are coloured as the patient timeline colours con meds by default:
+# started before or on treatment (pp-timeline-look.R), so one patient reads
+# the same in both blocks. Lanes come in order of first onset, a lane per
+# coded name with the reported name where the dictionary left it uncoded.
 
 #' Concomitant medications visualization definition
 #' @noRd
@@ -71,6 +69,7 @@ cm_gantt_viz <- new_pp_viz(
       title = "Show",
       noun = c("medication", "medications"),
       count = "lanes",
+      lane_values = pp_cm_lane_values,
       columns = PP_CM_SEARCH,
       levels = PP_CM_LEVELS
     )),
@@ -85,7 +84,12 @@ cm_gantt_viz <- new_pp_viz(
   ),
   uses = "indication",
   legend_ui = function(dm_obj, settings) {
-    pp_indc_legend_ui(settings$indc_colors)
+    tbls <- dm::dm_get_tables(dm_obj)
+    cm <- tbls[["adcm"]]
+    if (is.null(cm) || !nrow(cm)) return(NULL)
+    pp_cm_started_legend_ui(
+      pp_cm_started_on(as.data.frame(cm), pp_cm_trtsdt(tbls))
+    )
   },
   exhibit = function(dm_obj, time_range, settings = list(),
                      ref_ms = NA_real_, mode = "date") {
@@ -130,7 +134,7 @@ cm_gantt_viz <- new_pp_viz(
     # table must not blank its labels). This is the tooltip's title at every
     # lane setting -- grouping by class must not cost the bar its identity.
     name_col <- if ("CMDECOD" %in% colnames(tbl)) "CMDECOD" else "CMTRT"
-    tbl$..med <- pp_lane_values(tbl, name_col, "CMTRT")
+    tbl$..med <- pp_cm_lane_values(tbl, name_col)
 
     # Lanes come from whichever coding level the user is reading at; the
     # coded name unless the header pill says otherwise, and a level this
@@ -138,7 +142,7 @@ cm_gantt_viz <- new_pp_viz(
     # could have produced it is data-conditional, so a saved board can name
     # a level the current study lacks).
     lane_col <- pp_lane_column(tbl, PP_CM_LANES, settings$lanes, "CMDECOD")
-    tbl$..lane <- pp_lane_values(tbl, lane_col %||% "CMTRT", "CMTRT")
+    tbl$..lane <- pp_cm_lane_values(tbl, lane_col %||% "CMTRT")
 
     has_end <- if (use_day) {
       "AENDY" %in% colnames(tbl)
@@ -187,7 +191,11 @@ cm_gantt_viz <- new_pp_viz(
     if (nrow(tbl) == 0) {
       return(pp_empty_chart("No medication records in this time range"))
     }
-    meds <- sort(unique(tbl$..lane))
+    # By first onset, as the patient timeline lists an opened patient's con
+    # meds.
+    meds <- pp_lanes_by_onset(
+      tbl$..lane, vapply(seq_len(nrow(tbl)), function(i) bar_span(i)[1L], 0)
+    )
 
     # One label per lane, drawn on the lane's earliest bar (see ae_gantt).
     lane_first <- vapply(meds, function(med) {
@@ -204,18 +212,8 @@ cm_gantt_viz <- new_pp_viz(
     has_indc <- !is.null(indc_col) && indc_col %in% colnames(tbl)
     indc_at <- function(i) if (has_indc) opt_chr(tbl, indc_col, i) else ""
 
-    # Indication colors, resolved ONCE in the block (settings$indc_colors,
-    # via blockr.theme) and read here and by the legend, so the two cannot
-    # disagree. Absent -- no indication column, or levels the theme palette
-    # cannot tell apart -- the panel keeps its single medication color rather
-    # than greying every bar; grey is for the rows that carry no indication
-    # while others do.
-    default_color <- PP_CM_COLOR
-    indc_hex <- if (has_indc) settings$indc_colors else NULL
-    bar_color <- function(indc) {
-      if (is.null(indc_hex) || !length(indc_hex)) return(default_color)
-      if (indc %in% names(indc_hex)) unname(indc_hex[[indc]]) else "#9ca3af"
-    }
+    # Started before or on treatment, as the legend reads it.
+    started_on <- pp_cm_started_on(tbl, pp_cm_trtsdt(tbls))
 
     bar_data <- lapply(seq_len(nrow(tbl)), function(i) {
       span <- bar_span(i)
@@ -240,7 +238,7 @@ cm_gantt_viz <- new_pp_viz(
       }
       lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
       indc <- indc_at(i)
-      col <- bar_color(indc)
+      col <- pp_cm_started_colour(started_on[[i]])
       at <- function(nm) if (nm %in% colnames(tbl)) tbl[[nm]][i] else NA
       # A dictionary's "UNCODED" is not a name: the tooltip heads with the
       # reported one instead, and drops a class of the same word.
@@ -254,12 +252,10 @@ cm_gantt_viz <- new_pp_viz(
         reported <- ""
       }
       list(
-        # Value 12 is the bar's color when the bars are colored by
-        # indication, and empty when they are uniformly colored.
         value = list(s, e, lane, med, dose,
                      opt_chr(tbl, "CMROUTE", i), opt_chr(tbl, "CMCLAS", i),
                      indc, s_lab, e_lab, lab,
-                     is_ongoing(i), if (length(indc_hex)) col else ""),
+                     is_ongoing(i), col),
         tip = pp_tip(
           pp_tip_case(head), color = col, sub = pp_tip_case(klass),
           rows = c(
@@ -287,7 +283,8 @@ cm_gantt_viz <- new_pp_viz(
     series_list <- list(list(
       type = "custom",
       name = "Concomitant Medications",
-      renderItem = pp_gantt_render_item(10, ongoing_idx = 11),
+      renderItem = pp_gantt_render_item(10, ongoing_idx = 11,
+                                        bar_h = PP_CM_BAR_H),
       encode = list(x = list(0, 1), y = 2),
       data = bar_data,
       tooltip = list(formatter = PP_TIP_FORMATTER)

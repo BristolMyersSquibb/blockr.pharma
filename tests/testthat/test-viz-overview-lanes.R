@@ -31,7 +31,19 @@ series_names <- function(chart) {
   vapply(chart$x$opts$series, `[[`, character(1L), "name")
 }
 
-test_that("the exposure lane draws deduped dosing periods with the dose", {
+ov_exposure <- function(chart) {
+  Filter(function(s) identical(s$name, "Exposure"), chart$x$opts$series)[[1]]
+}
+
+# A drug bar's value: x0, x1, lane, slots, slot, colour, name (on the drug's
+# first bar only), open.
+ex_val <- function(d, k) d$value[[k]]
+ex_tip_rows <- function(d) {
+  stats::setNames(vapply(d$tip$rows, function(r) r$value, ""),
+                  vapply(d$tip$rows, function(r) r$label, ""))
+}
+
+test_that("the exposure lane draws deduped dosing periods, doses in the tip", {
   adex <- data.frame(
     USUBJID = "x",
     EXTRT = "XANOMELINE", EXDOSE = c(54, 54, 81), EXDOSU = "mg",
@@ -45,17 +57,30 @@ test_that("the exposure lane draws deduped dosing periods with the dose", {
   # Exposure IS the treatment lane -- not a second one beside it
   expect_setequal(unlist(chart$x$opts$yAxis$data), "TRT")
 
-  ex <- Filter(function(s) identical(s$name, "Exposure"),
-               chart$x$opts$series)[[1]]
+  ex <- ov_exposure(chart)
   # the two identical parameterized rows collapse into one period
   expect_length(ex$data, 2L)
-  doses <- vapply(ex$data, function(d) as.character(d$value[[4]]), "")
+  doses <- vapply(ex$data, function(d) ex_tip_rows(d)[["Dose"]], "")
   expect_setequal(doses, c("54 mg", "81 mg"))
+  # The dose before, where it changed, as the timeline's tooltip says it.
+  expect_identical(ex_tip_rows(ex$data[[2]])[["Dose before"]], "54 mg")
+  expect_false("Dose before" %in% names(ex_tip_rows(ex$data[[1]])))
 })
 
-ov_exposure <- function(chart) {
-  Filter(function(s) identical(s$name, "Exposure"), chart$x$opts$series)[[1]]
-}
+test_that("a drug is a thin line in its timeline colour, named once", {
+  adex <- data.frame(
+    USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = c(54, 81), EXDOSU = "mg",
+    ASTDT = as.Date(c("2020-01-01", "2020-03-01")),
+    AENDT = as.Date(c("2020-02-28", "2020-06-01")),
+    stringsAsFactors = FALSE
+  )
+  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
+  cols <- vapply(ex$data, ex_val, "", 6L)
+  expect_setequal(cols, unname(pt_drug_palette("XANOMELINE")[[1]]))
+  expect_identical(vapply(ex$data, ex_val, "", 7L), c("Xanomeline", ""))
+  expect_match(ex$renderItem, sprintf("var h     = %d;", PP_DRUG_LINE_H),
+               fixed = TRUE)
+})
 
 test_that("a combination regimen draws both drugs, in a slot each", {
   # Same day, same dose string. Keying periods on (start, end, dose) made
@@ -71,13 +96,14 @@ test_that("a combination regimen draws both drugs, in a slot each", {
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
 
   expect_length(ex$data, 2L)
-  drugs <- vapply(ex$data, function(d) as.character(d$value[[5]]), "")
-  expect_setequal(drugs, c("STUDY DRUG A", "STUDY DRUG B"))
-  # Same lane, different slot within it -- so both are hoverable
-  expect_setequal(vapply(ex$data, function(d) d$value[[3]], numeric(1L)), 0)
-  expect_setequal(vapply(ex$data, function(d) d$value[[9]], integer(1L)),
-                  c(0L, 1L))
-  expect_true(all(vapply(ex$data, function(d) d$value[[8]], integer(1L)) == 2L))
+  heads <- vapply(ex$data, function(d) d$tip$head, "")
+  # Named as the patient timeline names its drug lanes.
+  expect_setequal(heads, swimmer_drug_name(c("STUDY DRUG A", "STUDY DRUG B")))
+  # Same lane, different slot and colour within it -- so both are hoverable
+  expect_setequal(vapply(ex$data, ex_val, numeric(1L), 3L), 0)
+  expect_setequal(vapply(ex$data, ex_val, integer(1L), 5L), c(0L, 1L))
+  expect_true(all(vapply(ex$data, ex_val, integer(1L), 4L) == 2L))
+  expect_length(unique(vapply(ex$data, ex_val, "", 6L)), 2L)
 })
 
 test_that("one drug keeps the single slot it always had", {
@@ -87,8 +113,8 @@ test_that("one drug keeps the single slot it always had", {
     stringsAsFactors = FALSE
   )
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
-  expect_equal(ex$data[[1]]$value[[8]], 1L)
-  expect_equal(ex$data[[1]]$value[[9]], 0L)
+  expect_equal(ex_val(ex$data[[1]], 4L), 1L)
+  expect_equal(ex_val(ex$data[[1]], 5L), 0L)
 })
 
 test_that("one administration recorded in two units reports both", {
@@ -102,9 +128,7 @@ test_that("one administration recorded in two units reports both", {
   )
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
   expect_length(ex$data, 1L)
-  expect_equal(as.character(ex$data[[1]]$value[[10]]), "800 mg · 10 mg/kg")
-  # The bar itself is labelled with the first, which is what fits in it
-  expect_equal(as.character(ex$data[[1]]$value[[4]]), "800 mg")
+  expect_equal(ex_tip_rows(ex$data[[1]])[["Dose"]], "800 mg \u00b7 10 mg/kg")
 })
 
 test_that("a dose bar reports the visit its own row names", {
@@ -116,18 +140,9 @@ test_that("a dose bar reports the visit its own row names", {
     stringsAsFactors = FALSE
   )
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
-  expect_equal(as.character(ex$data[[1]]$value[[6]]), "2020-01-09 (CYCLE 1 DAY 8)")
-})
-
-test_that("a dosing row's own label is printed, cycle or not", {
-  adex <- data.frame(
-    USUBJID = "x", EXTRT = "XANOMELINE", EXDOSE = 54, EXDOSU = "mg",
-    AVISIT = "WEEK 2",
-    ASTDT = as.Date("2020-01-09"), AENDT = as.Date("2020-01-09"),
-    stringsAsFactors = FALSE
-  )
-  ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
-  expect_equal(as.character(ex$data[[1]]$value[[6]]), "2020-01-09 (WEEK 2)")
+  rows <- ex_tip_rows(ex$data[[1]])
+  expect_equal(rows[["Visit"]], "Cycle 1 day 8")
+  expect_equal(rows[["Day"]], "2020-01-09")
 })
 
 test_that("exposure present -> no envelope bar drawn beside it", {

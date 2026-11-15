@@ -367,7 +367,8 @@ PP_EXPORT_SPLIT_LINE_COLOR <- "#d1d5db"
 #' then stretched short charts apart.
 #' @noRd
 PP_GANTT_LANE_H <- 38
-PP_GANTT_BAR_H <- 14
+# 12px: an AE bar on an opened patient timeline row (pp-timeline-look.R).
+PP_GANTT_BAR_H <- 12
 PP_GANTT_BAR_DY <- 7
 PP_GANTT_LABEL_DY <- -10
 PP_GANTT_TOP <- PP_PLOT_TOP
@@ -381,6 +382,8 @@ pp_gantt_height <- function(n_lanes) {
 
 #' `renderItem` for the gantt charts. `label_idx` is the index in the encoded
 #' value vector carrying the lane term (written once, on the lane's first bar).
+#' `bar_h` is the bar's height in px: the AE bar's by default, PP_CM_BAR_H for
+#' con meds.
 #' @noRd
 #' Where an event with no end date stops
 #'
@@ -444,7 +447,8 @@ pp_mark_radius_js <- function(h = "h", w = "barW") {
   sprintf("Math.min(%d, (%s) / 4, (%s) / 2)", PP_MARK_RADIUS, h, w)
 }
 
-pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
+pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL,
+                                 bar_h = PP_GANTT_BAR_H) {
   # An open-ended bar gets a caret at the window edge. Without it the bar just
   # ends where the axis ends, which reads as "resolved on the last day shown"
   # -- the same misreading in a different place.
@@ -521,7 +525,7 @@ pp_gantt_render_item <- function(label_idx, ongoing_idx = NULL) {
       }
       return { type: 'group', children: children };
     }
-  ", ongoing_js, PP_GANTT_BAR_H, PP_GANTT_BAR_DY,
+  ", ongoing_js, as.integer(bar_h), PP_GANTT_BAR_DY,
      # Clamp against the CLIPPED box, not the nominal bar: an event running off
      # the window edge is cut by clipRectByRect(), and a 2px radius on the
      # 1px sliver that survives would round it into a dot.

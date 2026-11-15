@@ -36,13 +36,15 @@ tip_cm_dm <- function() {
   dm::dm(adcm = adcm)
 }
 
-cm_tips <- function(mode = "rday", settings = list()) {
-  chart <- cm_gantt_viz$render(tip_cm_dm(), tip_tr, settings, tip_ref, mode)
+cm_tips <- function(mode = "rday", settings = list(), dm_obj = tip_cm_dm()) {
+  chart <- cm_gantt_viz$render(dm_obj, tip_tr, settings, tip_ref, mode)
   bars <- chart$x$opts$series[[1]]$data
   tips <- lapply(bars, function(b) b$tip)
   names(tips) <- vapply(bars, function(b) as.character(b$value[[4]]), "")
   list(tips = tips, series = chart$x$opts$series[[1]])
 }
+
+cm_tips_of <- function(dm_obj) cm_tips(dm_obj = dm_obj)$tips
 
 test_that("a medication bar names the drug, its class, indication and dose", {
   out <- cm_tips(settings = list(
@@ -54,7 +56,8 @@ test_that("a medication bar names the drug, its class, indication and dose", {
   tip <- out$tips[["DONEPEZIL HYDROCHLORIDE"]]
   expect_identical(tip$head, "Donepezil hydrochloride")
   expect_identical(tip$sub, "Nervous system")
-  expect_identical(tip$color, "#111111")
+  # Coloured as the patient timeline colours con meds, not by indication.
+  expect_identical(tip$color, PP_CM_STARTED[["Started on treatment"]])
   expect_identical(
     tip_rows(tip),
     c(Indication = "Primary study condition", Dose = "5 mg, oral",
@@ -62,9 +65,17 @@ test_that("a medication bar names the drug, its class, indication and dose", {
   )
   expect_identical(tip_meta(tip, "From"), "2020-03-18")
   expect_identical(tip_meta(tip, "To"), "31 days")
+})
 
-  # The bar without an indication is grey, and so is its swatch.
-  expect_identical(out$tips[["PARACETAMOL"]]$color, "#9ca3af")
+test_that("a medication started before day 1 takes the timeline's lighter blue", {
+  dm_obj <- tip_cm_dm()
+  cm <- dm::dm_get_tables(dm_obj)$adcm
+  cm$ASTDY[2] <- -40L
+  tips <- cm_tips_of(dm::dm(adcm = cm))
+  expect_identical(tips[["PARACETAMOL"]]$color,
+                   PP_CM_STARTED[["Started before treatment"]])
+  expect_identical(tips[["DONEPEZIL HYDROCHLORIDE"]]$color,
+                   PP_CM_STARTED[["Started on treatment"]])
 })
 
 test_that("a medication tooltip drops what the record does not carry", {
@@ -74,11 +85,12 @@ test_that("a medication tooltip drops what the record does not carry", {
   tip <- tips[["PARACETAMOL"]]
   expect_identical(tip$head, "Paracetamol")
   expect_null(tip$sub)
-  expect_identical(tip$color, PP_CM_COLOR)
+  expect_identical(tip$color, PP_CM_STARTED[["Started on treatment"]])
   expect_identical(tip_rows(tip), c(Dose = "Oral", Day = "D32"))
 
-  # "UNCODED" is no name: the reported one heads, and no class is claimed.
-  tip <- tips[["UNCODED"]]
+  # "UNCODED" is no name: the reported one names the bar and heads the
+  # tooltip, and no class is claimed.
+  tip <- tips[["TYLENOL"]]
   expect_identical(tip$head, "Tylenol")
   expect_null(tip$sub)
   expect_identical(tip_rows(tip),
@@ -155,7 +167,8 @@ test_that("every overview series draws its tooltip from the tip", {
 test_that("a dose bar names the treatment and the dose", {
   tip <- overview_series()$Exposure$data[[1]]$tip
   expect_identical(tip$head, "Xanomeline")
-  expect_identical(tip$color, "#2563EB")
+  # The drug's colour on the patient timeline.
+  expect_identical(tip$color, unname(pt_drug_palette("XANOMELINE")[[1]]))
   expect_identical(
     tip_rows(tip),
     c(Dose = "54 mg", From = "D15", To = "D42", Visit = "Week 2")
@@ -165,7 +178,10 @@ test_that("a dose bar names the treatment and the dose", {
 
 test_that("an overview AE bar says severity and seriousness only", {
   data <- overview_series()$`Adverse Events`$data
-  tip <- data[[1]]$tip
+  # The worst is drawn last, over the others.
+  tips <- lapply(data, `[[`, "tip")
+  expect_identical(vapply(tips, `[[`, "", "head"), c("Nausea", "Headache"))
+  tip <- tips[[2]]
   expect_identical(tip$head, "Headache")
   expect_identical(tip$color, "#8B0000")
   expect_null(tip$sub)
@@ -174,7 +190,7 @@ test_that("an overview AE bar says severity and seriousness only", {
                    c(Severity = "Severe", Serious = "Yes", Day = "D10"))
   expect_identical(tip_meta(tip, "Day"), "2020-01-10")
 
-  tip <- data[[2]]$tip
+  tip <- tips[[1]]
   expect_identical(tip$color, "#CA8A04")
   expect_identical(tip_rows(tip),
                    c(Severity = "Mild", From = "D32", To = "ongoing"))
