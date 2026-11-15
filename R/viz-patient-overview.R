@@ -18,7 +18,8 @@
 #      the findings tables; see pp_visit_schedule())
 #
 # Data requirements (declared via new_pp_viz()):
-#   adsl: required TRTSDT, TRTEDT; optional DTHDT, DCTREAS, LSTALVDT
+#   adsl: required TRTSDT, TRTEDT; optional DTHDT, DCTREAS, DCSREAS, EOSDT,
+#         LSTALVDT
 #   adae (optional table): ASTDT, AENDT, ASTDY, AENDY, AEDECOD, AESER
 #   adex (optional table): ASTDT, AENDT, ASTDY, AENDY, EXDOSE, EXDOSU, EXTRT,
 #         AVISIT
@@ -41,7 +42,7 @@ patient_overview_viz <- new_pp_viz(
   requires = list(adsl = c("TRTSDT", "TRTEDT")),
   uses = c("arm", "severity"),
   optional = list(
-    adsl = c("DTHDT", "DCTREAS", "LSTALVDT"),
+    adsl = c("DTHDT", "DCTREAS", "DCSREAS", "EOSDT", "LSTALVDT"),
     adae = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER", "AEBODSYS",
       "AEOUT", "AESDTH"
@@ -521,11 +522,11 @@ patient_overview_viz <- new_pp_viz(
 
       # ---------------------------------------------------------------
       # Marks ON the treatment lane, as the patient timeline draws them: the
-      # discontinuation reason as a two-letter tag at the last dose, and
-      # death as a cross (ADSL DTHDT, else a fatal AE's end; a death flag
-      # without a date has no position and is said in the header instead).
-      # End of study is not a mark: it is a disposition date, mostly the
-      # day of the last dose, and the timeline does not draw it either.
+      # treatment discontinuation reason as a two-letter tag at the last
+      # dose, the end-of-study reason as an inverted tag at the end of
+      # study, and death as a cross (ADSL DTHDT, else a fatal AE's end; a
+      # death flag without a date has no position and is said in the header
+      # instead).
       # ---------------------------------------------------------------
       ms_lane <- trt_lane
       milestone_data <- list()
@@ -538,6 +539,19 @@ patient_overview_viz <- new_pp_viz(
             why$name, color = PP_EV_INK, type = "Discontinuation",
             details = why$reason,
             days = pp_tip_day(pp_tip_when(sl$TRTEDT[1], NA, ref_ms, mode))
+          )
+        )))
+      }
+
+      eos <- pp_eos_reason(sl)
+      if (!is.null(eos)) {
+        milestone_data <- c(milestone_data, list(list(
+          value = list(pp_xval(eos$date, ref_ms, mode), ms_lane, "eos",
+                       eos$tag),
+          tip = pp_tip_event(
+            eos$name, color = PP_EV_INK, type = "End of study",
+            details = eos$reason,
+            days = pp_tip_day(pp_tip_when(eos$date, NA, ref_ms, mode))
           )
         )))
       }
@@ -567,7 +581,10 @@ patient_overview_viz <- new_pp_viz(
             var x = p[0], y = p[1];
             var ink = '%s';
             var ring = PatientProfile.ink('--blockr-color-bg-surface');
-            if (api.value(2) === 'tag') {
+            // A tag: outlined for the treatment reason, inverted (ink box,
+            // light text) for the end-of-study reason.
+            if (api.value(2) === 'tag' || api.value(2) === 'eos') {
+              var inv = api.value(2) === 'eos';
               var font = PatientProfile.ink('--bs-body-font-family');
               var txt = '' + api.value(3);
               var w = echarts.format.getTextRect
@@ -582,13 +599,13 @@ patient_overview_viz <- new_pp_viz(
                 children: [{
                   type: 'rect',
                   shape: { x: bx, y: by, width: bw, height: bh, r: 2 },
-                  style: { fill: ring, stroke: ink, lineWidth: 1,
-                           shadowBlur: 0 }
+                  style: { fill: inv ? ink : ring, stroke: ink,
+                           lineWidth: 1, shadowBlur: 0 }
                 }, {
                   type: 'text',
                   style: {
                     text: txt, x: bx + bw / 2, y: y,
-                    fill: ink, fontSize: 9, fontWeight: 700,
+                    fill: inv ? ring : ink, fontSize: 9, fontWeight: 700,
                     fontFamily: font,
                     textAlign: 'center', textVerticalAlign: 'middle'
                   }

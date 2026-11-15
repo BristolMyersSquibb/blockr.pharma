@@ -1107,13 +1107,22 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   }
 
   # The overview's marks on the treatment lane (viz-patient-overview.R):
-  # the discontinuation reason as a tag at the last dose, death as a cross.
+  # the treatment discontinuation reason as a tag at the last dose, the
+  # end-of-study reason as an inverted tag at the end of study, death as a
+  # cross.
   ms <- list()
   why <- pp_disc_reason(sl)
   if (!is.null(why)) {
     ms[[length(ms) + 1L]] <- data.frame(
       x = trt_end, y = lane_y("TRT"), kind = "tag", label = why$tag,
       stringsAsFactors = FALSE
+    )
+  }
+  eos <- pp_eos_reason(sl)
+  if (!is.null(eos)) {
+    ms[[length(ms) + 1L]] <- data.frame(
+      x = pp_xval(eos$date, ref_ms, mode), y = lane_y("TRT"), kind = "eos",
+      label = eos$tag, stringsAsFactors = FALSE
     )
   }
   dth <- pp_death_at(sl, adae_raw)
@@ -1184,6 +1193,16 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   if (!is.null(ms_df) && nrow(ms_df)) {
     tag <- ms_df[ms_df$kind == "tag", , drop = FALSE]
     death <- ms_df[ms_df$kind == "death", , drop = FALSE]
+    eos <- ms_df[ms_df$kind == "eos", , drop = FALSE]
+    # End of study: the tag inverted, ink box with light text.
+    if (nrow(eos)) {
+      p <- p + ggplot2::geom_label(
+        data = eos, ggplot2::aes(x = x, y = y, label = label),
+        hjust = -0.1, size = 2.2, fontface = "bold", color = "white",
+        fill = PP_EV_INK,
+        label.padding = ggplot2::unit(0.08, "lines")
+      )
+    }
     if (nrow(tag)) {
       p <- p + ggplot2::geom_label(
         data = tag, ggplot2::aes(x = x, y = y, label = label),

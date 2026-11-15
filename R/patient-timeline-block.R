@@ -15,7 +15,8 @@
 #' One row per patient on a study-day axis, with any combination of layers:
 #' the response (ADRS overall response by visit, first progression marked),
 #' treatment (ADEX dose periods), discontinuation and death (a two-letter
-#' tag for the reason at the last dose, a cross at death), adverse events
+#' tag for why treatment stopped at the last dose, one for why the patient
+#' left the study at the end of study, a cross at death), adverse events
 #' (ADAE) and con meds (ADCM). Each layer is a stripe on the patient row; a
 #' click opens the row into one row per AE term and con med, each layer
 #' under a small title when both open. Treatment and the response stay on
@@ -113,7 +114,7 @@ PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "doses", "dose_tags",
-  "trt_colour", "origin", "cutoff", "ongoing", "sort_col"
+  "trt_colour", "disc_show", "origin", "cutoff", "ongoing", "sort_col"
 )
 
 #' The patient timeline's prepare script
@@ -145,6 +146,7 @@ patient_timeline_script <- function() {
     "trt_on <- \"Treatment\" %in% layers",
     "ae_on <- \"Adverse events\" %in% layers",
     "cm_on <- \"Con meds\" %in% layers",
+    "dth_on <- \"Discontinuation and death\" %in% layers",
     "roles <- blockr.pharma::patient_timeline_roles()",
     "gv <- blockr.pharma::patient_timeline_groups(data, roles)",
     paste0("group <- factor(gv[1], levels = gv)  #| select(label = ",
@@ -182,6 +184,7 @@ patient_timeline_script <- function() {
     sel("doses", "Gaps", PT_DOSES, "Doses shown as", on = "trt_on"),
     flag("dose_tags", "FALSE", "Tag dose changes", on = "trt_on"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by", on = "trt_on"),
+    sel("disc_show", "both", PT_DISC_SHOW, "Reasons tagged", on = "dth_on"),
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
@@ -231,6 +234,7 @@ patient_timeline_gear <- function() {
       Lanes = list(
         Response = "response",
         Treatment = c("treatment_as", "doses", "dose_tags", "trt_colour"),
+        `Discontinuation and death` = "disc_show",
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),
         `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",

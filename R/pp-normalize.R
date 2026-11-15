@@ -88,9 +88,10 @@ pp_column_catalog <- function() {
       TRTEDT = d("RFXENDTC", "RFENDTC"),
       RFENDT = d("EOSDT", "RFENDTC"),
       DTHDT  = d("DTHDTC"),
-      # Why treatment stopped: the study discontinuation reason, else the
-      # disposition term, when the study ships no treatment reason.
-      DCTREAS = i("DCSREAS", "DSDECOD", "DSTERM")
+      # Why the patient left the study. The treatment reason (DCTREAS) has
+      # no stand-in here: the study reason never fills it. Both are also
+      # found by their labels, see pp_disc_by_label().
+      DCSREAS = i("DCDECOD", "DSDECOD", "DSTERM")
     ),
     adae = list(
       ASTDT    = d("ASTDTC", "AESTDTC"),
@@ -228,6 +229,11 @@ pp_normalize_tables <- function(tbls) {
       }
       changed <- TRUE
     }
+    if (identical(tbl_name, "adsl")) {
+      n0 <- ncol(df)
+      df <- pp_disc_by_label(df)
+      changed <- changed || ncol(df) > n0
+    }
     tbls[[tbl_name]] <- df
   }
 
@@ -274,4 +280,39 @@ pp_scope_subject <- function(dm_obj, subject) {
     dplyr::dplyr_row_slice(df, which(as.character(df$USUBJID) %in% subject))
   })
   do.call(dm::dm, scoped)
+}
+
+# The ADaM labels of the two discontinuation reasons, for studies that name
+# the columns their own way: "Reason for Discontinuation of Treatment" and
+# "Reason for Discontinuation from Study". A free-text "specify" column and
+# a date do not count.
+PP_DISC_LABELS <- list(
+  DCTREAS = c(need = "treat|therap|drug|dos(e|ing)", not = "^$"),
+  DCSREAS = c(need = "study", not = "treat|therap|drug|dos(e|ing)")
+)
+
+#' Find the discontinuation reasons by their labels
+#'
+#' Fills ADSL `DCTREAS` and `DCSREAS`, when missing, from the first
+#' character column whose label says it is that reason. Each is found by its
+#' own label only.
+#'
+#' @param df ADSL, a data frame.
+#' @return `df`, with the columns found added.
+#' @noRd
+pp_disc_by_label <- function(df) {
+  lab <- vapply(df, function(x) {
+    l <- attr(x, "label", exact = TRUE)
+    if (is.character(l) && length(l) == 1L) tolower(l) else ""
+  }, "")
+  txt <- vapply(df, function(x) is.character(x) || is.factor(x), NA)
+  base <- txt & grepl("reason", lab) & grepl("discon|stop", lab) &
+    !grepl("spec|other|date|text", lab)
+  for (nm in names(PP_DISC_LABELS)) {
+    if (nm %in% names(df)) next
+    r <- PP_DISC_LABELS[[nm]]
+    hit <- which(base & grepl(r[["need"]], lab) & !grepl(r[["not"]], lab))
+    if (length(hit)) df[[nm]] <- df[[hit[[1L]]]]
+  }
+  df
 }

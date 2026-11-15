@@ -47,7 +47,8 @@ A table block of class \code{timeline_block}.
 One row per patient on a study-day axis, with any combination of layers:
 the response (ADRS overall response by visit, first progression marked),
 treatment (ADEX dose periods), discontinuation and death (a two-letter
-tag for the reason at the last dose, a cross at death), adverse events
+tag for why treatment stopped at the last dose, one for why the patient
+left the study at the end of study, a cross at death), adverse events
 (ADAE) and con meds (ADCM). Each layer is a stripe on the patient row; a
 click opens the row into one row per AE term and con med, each layer
 under a small title when both open. Treatment and the response stay on

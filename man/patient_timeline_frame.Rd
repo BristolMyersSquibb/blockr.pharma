@@ -27,6 +27,7 @@ patient_timeline_frame(
   origin = "first dose",
   cutoff = NULL,
   ongoing = "last contact",
+  disc_show = "both",
   order_by = "number of AEs",
   roles = NULL,
   scale_map = NULL
@@ -105,6 +106,11 @@ the data.}
 
 \item{ongoing}{A record without an end runs to \code{"last contact"}
 (\code{LSTALVDT}, else the last dose) or the \code{"data cutoff"}.}
+
+\item{disc_show}{The discontinuation reasons tagged: \code{"both"},
+\code{"treatment"} (ADSL \code{DCTREAS}, at the last dose) or \code{"end of study"}
+(\code{DCSREAS}, at \code{EOSDT}, else \code{RFENDT}). Each is read from its own
+column, or a column labelled as that reason.}
 
 \item{order_by}{Patient order, one of \code{"days on treatment"}, \code{"number of AEs"}, \code{"number of events"}, \code{"worst AE"}, \code{"best response"}, \code{"first progression"}, \code{"ongoing AEs"}, \code{"first onset"}, \code{"number of con meds"}
 and \code{"subject"}.}

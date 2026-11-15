@@ -13,8 +13,10 @@
 #                              from its first assessment to the next
 #                              different one, as on the swimmer; the first
 #                              progression as a mark
-#   Discontinuation and death  death as a cross, the discontinuation reason
-#                              as a two-letter tag at the last dose
+#   Discontinuation and death  death as a cross, the treatment
+#                              discontinuation reason as a two-letter tag
+#                              at the last dose, the end-of-study reason at
+#                              the end of study
 #   Adverse events             as on the timeline, coloured by the study's
 #                              severity column (the "study_roles" board
 #                              option, as the patient profile reads it)
@@ -105,6 +107,10 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   the data.
 #' @param ongoing A record without an end runs to `"last contact"`
 #'   (`LSTALVDT`, else the last dose) or the `"data cutoff"`.
+#' @param disc_show The discontinuation reasons tagged: `"both"`,
+#'   `"treatment"` (ADSL `DCTREAS`, at the last dose) or `"end of study"`
+#'   (`DCSREAS`, at `EOSDT`, else `RFENDT`). Each is read from its own
+#'   column, or a column labelled as that reason.
 #' @details Time is in study days. The colour column holds at most 15 levels
 #'   over all layers, the most the table draws. Each level carries its
 #'   default colour (`blockr_colors`) and the data variable and value it
@@ -139,6 +145,7 @@ patient_timeline_frame <- function(data,
                                    origin = "first dose",
                                    cutoff = NULL,
                                    ongoing = "last contact",
+                                   disc_show = "both",
                                    order_by = "number of AEs",
                                    roles = NULL,
                                    scale_map = NULL) {
@@ -153,6 +160,7 @@ patient_timeline_frame <- function(data,
     ae_lanes = arg(ae_lanes, unname(TL_AE_LANES)),
     serious = arg(serious, TL_SERIOUS),
     death = "Discontinuation and death" %in% layers,
+    disc_show = arg(disc_show, PT_DISC_SHOW),
     cm_records = arg(cm_records, TL_CM_RECORDS),
     cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
     cm_lanes = arg(cm_lanes, unname(TL_CM_LANES)),
@@ -251,7 +259,9 @@ patient_timeline_frame <- function(data,
     if (!is.null(trt_events)) {
       tl_keep(trt_events, trt_events$USUBJID %in% sl$USUBJID)
     },
-    if (opt$death) pt_disc_rows(tb$adsl, sl, parts$trt),
+    if (opt$death) {
+      pt_disc_rows(tb$adsl, sl, parts$trt, opt$disc_show, cutoff)
+    },
     pt_patient_rows(sl, opt, resp_bor)
   )
   out <- tl_bind(c(list(rec), extra))
@@ -520,22 +530,66 @@ tl_response <- function(adrs, sl, opt, cutoff) {
 
 # --- discontinuation, patient records ---------------------------------------
 
-# The discontinuation reason (ADSL DCTREAS) as a tag at the last dose, in
-# the swimmer's categories (swimmer_reason_category()). A patient still on
-# treatment, or one whose reason is death, has none. With treatment drawn,
-# the tag sits on the lane of the drug that ended last, as on the swimmer.
-pt_disc_rows <- function(adsl, sl, trt = NULL) {
-  why <- swimmer_reason(aet_col(adsl, "DCTREAS"))
-  if (is.null(why)) return(NULL)
-  why <- why[match(sl$USUBJID, as.character(adsl$USUBJID))]
-  cat <- swimmer_reason_category(why)
-  x <- aet_day(sl$TRTEDT, sl$T0)
-  keep <- !is.na(cat$tag) & is.finite(x)
-  if (!any(keep)) return(NULL)
-  ids <- sl$USUBJID[keep]
-  list(USUBJID = ids, .event_x = x[keep],
-       .event = cat$name[keep], .tag = cat$tag[keep],
-       .lane_at = pt_last_lane(trt, ids))
+# The discontinuation reasons as two-letter tags, in the swimmer's
+# categories (swimmer_reason_category()): why treatment stopped (ADSL
+# DCTREAS) at the last dose, and why the patient left the study (DCSREAS) at
+# the end of study (EOSDT, else RFENDT). Each is read from its own column.
+# A completed or ongoing disposition, or a death, has no tag; an end-of-study
+# tag that repeats the treatment reason's category is left out. With
+# treatment drawn, the tags sit on the lane of the drug that ended last, as
+# on the swimmer. `show` is one of PT_DISC_SHOW.
+pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
+                         cutoff = NA) {
+  at <- match(sl$USUBJID, as.character(adsl$USUBJID))
+  one <- function(col, date, kind) {
+    raw <- aet_col(adsl, col)
+    why <- swimmer_reason(raw)
+    if (is.null(why)) return(NULL)
+    why <- why[at]
+    cat <- swimmer_reason_category(why)
+    x <- aet_day(date, sl$T0)
+    keep <- !is.na(cat$tag) & is.finite(x)
+    if (!is.na(cutoff)) keep <- keep & !is.na(date) & date <= cutoff
+    if (!any(keep)) return(NULL)
+    list(USUBJID = sl$USUBJID[keep], .event_x = x[keep],
+         .event = pt_disc_level(cat$name[keep], kind), .tag = cat$tag[keep],
+         Type = rep(PT_DISC_TYPE[[kind]], sum(keep)),
+         Details = why[keep])
+  }
+  eos_dt <- aet_date(aet_col(adsl, c("EOSDT", "RFENDT")))
+  out <- list(
+    trt = if (show %in% c("both", "treatment")) {
+      one("DCTREAS", sl$TRTEDT, "trt")
+    },
+    eos = if (show %in% c("both", "end of study") && !is.null(eos_dt)) {
+      one("DCSREAS", eos_dt[at], "eos")
+    }
+  )
+  if (!is.null(out$trt) && !is.null(out$eos)) {
+    e <- out$eos
+    k <- match(e$USUBJID, out$trt$USUBJID)
+    same <- out$trt$.tag[k] == e$.tag
+    same[is.na(same)] <- FALSE
+    out$eos <- if (all(same)) NULL else lapply(e, `[`, !same)
+  }
+  out <- Filter(Negate(is.null), out)
+  if (!length(out)) return(NULL)
+  rows <- lapply(names(out[[1L]]), function(nm) {
+    unlist(lapply(out, `[[`, nm), use.names = FALSE)
+  })
+  rows <- stats::setNames(rows, names(out[[1L]]))
+  rows$.lane_at <- pt_last_lane(trt, rows$USUBJID)
+  rows
+}
+
+# Which discontinuation reasons the timeline tags.
+PT_DISC_SHOW <- c("both", "treatment", "end of study")
+PT_DISC_TYPE <- c(trt = "Treatment discontinuation", eos = "End of study")
+
+# A reason's legend entry: the category for treatment, prefixed for the end
+# of study so the two never share an entry.
+pt_disc_level <- function(name, kind) {
+  if (identical(kind, "eos")) paste("End of study:", name) else name
 }
 
 # Per patient in `ids`, the lane of its treatment record that ends last; NA
@@ -657,13 +711,15 @@ pt_patient_rows <- function(sl, opt, bor = NULL) {
   p
 }
 
-# The discontinuation categories drawn, the most frequent first.
+# The discontinuation categories drawn, the treatment reasons before the
+# end-of-study ones, each the most frequent first.
 pt_reason_levels <- function(ev) {
   ev <- ev[!is.na(ev)]
-  why <- setdiff(ev, c("Serious AE", "Fatal AE", "Progression", "Death"))
+  why <- ev[!ev %in% c("Serious AE", "Fatal AE", "Progression", "Death")]
   if (!length(why)) return(character())
   tab <- table(why)
-  names(tab)[order(-tab, names(tab))]
+  eos <- startsWith(names(tab), pt_disc_level("", "eos"))
+  names(tab)[order(eos, -tab, names(tab))]
 }
 
 # --- order -----------------------------------------------------------------

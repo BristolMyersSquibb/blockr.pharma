@@ -66,21 +66,43 @@ pp_death_undated <- function(sl, ae = NULL) {
 
 #' Why treatment stopped
 #'
-#' ADSL `DCTREAS` (normalized from `DCSREAS`, `DSDECOD`, ...) in the patient
-#' timeline's categories ([swimmer_reason_category()]): a two-letter tag and
+#' ADSL `DCTREAS` (or a column labelled as the treatment discontinuation
+#' reason; never the study reason) in the patient timeline's categories ([swimmer_reason_category()]): a two-letter tag and
 #' the reason as a reader says it. A completed or ongoing disposition, a
 #' death, or no reason gives none.
 #'
 #' @param sl ADSL rows; the first is read.
 #' @return `list(tag, name, reason)`, or `NULL`.
 #' @noRd
-pp_disc_reason <- function(sl) {
-  if (is.null(sl) || !nrow(sl) || !"DCTREAS" %in% colnames(sl)) return(NULL)
-  why <- swimmer_reason(sl$DCTREAS[1L])
+pp_disc_reason <- function(sl, col = "DCTREAS") {
+  if (is.null(sl) || !nrow(sl) || !col %in% colnames(sl)) return(NULL)
+  why <- swimmer_reason(sl[[col]][1L])
   if (is.null(why) || is.na(why)) return(NULL)
   cat <- swimmer_reason_category(why)
   if (is.na(cat$tag[[1L]])) return(NULL)
   list(tag = cat$tag[[1L]], name = cat$name[[1L]], reason = why)
+}
+
+#' Why the patient left the study
+#'
+#' ADSL `DCSREAS` (or `DCDECOD`, `DSDECOD`, a column labelled as the study
+#' discontinuation reason) as [pp_disc_reason()] reads the treatment reason,
+#' with its date: `EOSDT`, else `RFENDT`. `NULL` without a reason or a
+#' date, and when it repeats the treatment reason's category.
+#'
+#' @param sl ADSL rows; the first is read.
+#' @return `list(tag, name, reason, date)`, or `NULL`.
+#' @noRd
+pp_eos_reason <- function(sl) {
+  why <- pp_disc_reason(sl, "DCSREAS")
+  if (is.null(why)) return(NULL)
+  dt <- pp_sl_date(sl, "EOSDT")
+  if (is.na(dt)) dt <- pp_sl_date(sl, "RFENDT")
+  if (is.na(dt)) return(NULL)
+  trt <- pp_disc_reason(sl)
+  if (!is.null(trt) && identical(trt$tag, why$tag)) return(NULL)
+  why$date <- dt
+  why
 }
 
 #' Keep the treatment-emergent AEs

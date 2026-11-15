@@ -803,6 +803,9 @@ pp_compute_time_range <- function(dm_obj, ref_col = NULL) {
   one <- !is.null(sl) && length(unique(as.character(sl$USUBJID))) == 1L
   lc <- if (one) pp_last_contact(sl) else as.Date(NA)
   if (!is.na(lc)) all_dates <- c(all_dates, lc)
+  # The end-of-study tag (pp_eos_reason()) is on the axis too.
+  eos <- if (one) pp_eos_reason(sl)
+  if (!is.null(eos)) all_dates <- c(all_dates, eos$date)
 
   if (length(all_dates) == 0) return(NULL)
   out <- as.Date(c(min(all_dates), max(all_dates)), origin = "1970-01-01")
