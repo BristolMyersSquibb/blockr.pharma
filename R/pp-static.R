@@ -411,7 +411,7 @@ pp_static_cm_gantt <- function(dm_obj, time_range, settings = list(),
     ongoing = vapply(seq_len(nrow(tbl)), function(i) {
       !(has_end && !is.na(end_at(i)))
     }, logical(1L)),
-    label = ifelse(first_of_lane, pp_term_label(lane_lab), ""),
+    label = ifelse(first_of_lane, pp_cm_lane_label(lane_lab, lane_col), ""),
     stringsAsFactors = FALSE
   )
   pp_static_gantt(bars, time_range, ref_ms, mode)

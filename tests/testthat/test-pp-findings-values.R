@@ -135,7 +135,7 @@ test_that("a findings point reports the visit its own row names", {
 
 test_that("a study without AVISIT keeps the date it always had", {
   tt <- tips(render_findings_card(neut_adlb()))
-  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
+  expect_identical(tip_values(tt[[1]])[["Date"]], "2024-01-05")
   expect_false("Visit" %in% names(tip_values(tt[[1]])))
 })
 
@@ -147,21 +147,21 @@ test_that("a lab point reports the day on treatment its own row carries", {
   adlb <- neut_adlb(ADY = c(5, 36, 65),
                     AVISIT = c("CYCLE 1 DAY 1", "Cycle 2, Day 8", "UNSCHEDULED"))
   tt <- tips(render_findings_card(adlb))
-  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
-  expect_identical(tip_metas(tt[[1]])[["Day"]], "D5")
-  expect_identical(tip_metas(tt[[3]])[["Day"]], "D65")
+  expect_identical(tip_values(tt[[1]])[["Date"]], "2024-01-05")
+  expect_identical(tip_metas(tt[[1]])[["Date"]], "D5")
+  expect_identical(tip_metas(tt[[3]])[["Date"]], "D65")
   expect_identical(tip_values(tt[[3]])[["Visit"]], "Unscheduled")
 
   tt <- tips(render_findings_card(adlb, mode = "rday"))
-  expect_identical(tip_values(tt[[3]])[["Day"]], "D65")
-  expect_identical(tip_metas(tt[[3]])[["Day"]], "2024-03-05")
+  expect_identical(tip_values(tt[[3]])[["Days"]], "Day 65")
+  expect_identical(tip_metas(tt[[3]])[["Days"]], "2024-03-05")
 })
 
 test_that("LBDY reaches the tooltip as the day", {
   # SDTM ships the day as LBDY; pp_column_catalog() maps it onto ADY, so a
   # raw-SDTM study gets the same line an ADaM one does.
   tt <- tips(render_findings_card(neut_adlb(LBDY = c(5, 36, 65))))
-  expect_identical(tip_metas(tt[[2]])[["Day"]], "D36")
+  expect_identical(tip_metas(tt[[2]])[["Date"]], "D36")
 })
 
 test_that("a study shipping no *DY takes the day from the axis reference", {
@@ -170,14 +170,14 @@ test_that("a study shipping no *DY takes the day from the axis reference", {
   # 2024-01-01, so the draw on 2024-01-05 is D5.
   ref_ms <- as.numeric(as.POSIXct(as.Date("2024-01-01"))) * 1000
   tt <- tips(render_findings_card(neut_adlb(), ref_ms = ref_ms))
-  expect_identical(tip_metas(tt[[1]])[["Day"]], "D5")
+  expect_identical(tip_metas(tt[[1]])[["Date"]], "D5")
 })
 
 test_that("no *DY and no reference leaves the tooltip as it was", {
   # Nothing to report is reported as nothing: no invented day.
   tt <- tips(render_findings_card(neut_adlb()))
-  expect_identical(tip_values(tt[[1]])[["Day"]], "2024-01-05")
-  expect_identical(tip_metas(tt[[1]])[["Day"]], "")
+  expect_identical(tip_values(tt[[1]])[["Date"]], "2024-01-05")
+  expect_identical(tip_metas(tt[[1]])[["Date"]], "")
 })
 
 # ---------------------------------------------------------------------------

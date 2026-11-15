@@ -15,7 +15,7 @@ pp_block_ui <- function(id) {
     blockr.ui::controls_dep(),
     # Blockr.Pick, the multi-select on trial, for the multi words.
     blockr.dplyr::blockr_pick_dep(),
-    # The data tooltip's card (.dd-tt-*), shared with every blockr.viz chart
+    # The data tooltip's card (.vz-tt-*), shared with every blockr.viz chart
     # so the profile's hover cards look like theirs.
     blockr.viz::tooltip_card_dep(),
     # As an htmlDependency, NOT a raw tags$link to the resource path: the

@@ -5,17 +5,19 @@
 # pp-core.js. The content is then testable where it is decided, and the look
 # lives in one place for every chart.
 #
-# The look is blockr.viz's (chart.js tipHead / tipRow, the design system's
-# chart tooltip): a 13px/600 headline with a 10px swatch in the colour of
-# the thing pointed at, then 12px rows with the name muted on the left and
-# the value on the right at 500 with tabular figures. Names, not codes;
-# days as the timeline shows them, with the other form as muted meta; spans
-# written From / To with the duration after the end, one day as "Day".
+# The look and the wording are the patient timeline's (blockr.viz's table
+# tooltip, tooltip.css .vz-tt-*): a 13px/600 headline with a 10px swatch in
+# the colour of the thing pointed at, a muted line naming that colour's
+# level, then 12px "Name: value" rows with the name muted on the left and
+# the value on the right at 500 with tabular figures. An event says its
+# Type, its Details and its Days ("Day 16 to 168", the duration as muted
+# meta), as the timeline's segments do. Only the hovered item's own fields.
 #
 # pp_tip()          -- one tooltip
 # pp_tip_row()      -- one row, or NULL when there is nothing to say
 # pp_tip_when()     -- a record's day and date, main and meta by timeline mode
-# pp_tip_span()     -- the From / To (or Day) rows of an interval
+# pp_tip_span()     -- the Days row of an interval
+# pp_tip_day()      -- the Days row of a point
 # pp_tip_case()     -- sentence case for a study's capitals
 # pp_tip_num()      -- a measured value, three significant figures
 # pp_tip_name()     -- a column's label, else the tooltip's word for it
@@ -92,33 +94,65 @@ pp_tip_when <- function(date = NA, day = NA, ref_ms = NA_real_,
     main <- if (nzchar(date_lab)) date_lab else day_lab
     meta <- if (nzchar(date_lab)) day_lab else ""
   }
-  list(main = main, meta = meta, day = day, date = date)
+  list(main = main, meta = meta, day = day, date = date, mode = mode)
 }
 
-#' The rows of an interval
+# A day, as the timeline writes it after "Day": "D16" read as "16".
+pp_tip_day_num <- function(when) sub("^D", "", when$main)
+
+#' The Days row of a point
 #'
-#' "From" and "To" with the duration after the end, as blockr.viz's timeline
-#' writes a span; a one-day span is a single "Day" row, and an open end
-#' reads "ongoing".
+#' "Days: Day 15" with the date as muted meta in relative-day mode, "Date"
+#' with the day after it in date mode.
+#'
+#' @param when A [pp_tip_when()] result.
+#' @return A row, or `NULL`.
+#' @noRd
+pp_tip_day <- function(when) {
+  if (!nzchar(when$main)) return(NULL)
+  if (pp_tip_is_day(when)) {
+    pp_tip_row("Days", paste("Day", pp_tip_day_num(when)), when$meta)
+  } else {
+    pp_tip_row("Date", when$main, when$meta)
+  }
+}
+
+# Whether a when's main form is a study day.
+pp_tip_is_day <- function(when) grepl("^D-?[0-9]", when$main)
+
+#' The Days row of an interval
+#'
+#' One row, as the timeline writes a segment's days: "Day 16 to 168", "Day
+#' 44 to ongoing", "Day 10" for one day, with the duration as muted meta. In
+#' date mode the row is "Dates" and reads the dates the same way.
 #'
 #' @param from,to [pp_tip_when()] results for the two ends.
 #' @param open Whether the end is missing (ongoing).
 #' @param end_inside Whether the end day belongs to the span. An event's
 #'   last day does; a response held "until" the next assessment does not,
 #'   since that day is the next response's first.
-#' @return A list of rows.
+#' @param after Text after the days, as the timeline's ", from 54 mg".
+#' @return A list of one row, or an empty list.
 #' @noRd
-pp_tip_span <- function(from, to, open = FALSE, end_inside = TRUE) {
+pp_tip_span <- function(from, to, open = FALSE, end_inside = TRUE,
+                        after = NULL) {
   if (!nzchar(from$main)) return(list())
-  if (isTRUE(open)) {
-    return(list(pp_tip_row("From", from$main, from$meta),
-                pp_tip_row("To", PP_ONGOING_LABEL)))
+  day <- pp_tip_is_day(from)
+  lab <- function(w) if (day) pp_tip_day_num(w) else w$main
+  single <- !isTRUE(open) && (!nzchar(to$main) || identical(from$main, to$main))
+  value <- if (isTRUE(open)) {
+    paste(lab(from), "to", PP_ONGOING_LABEL)
+  } else if (single) {
+    lab(from)
+  } else {
+    paste(lab(from), "to", lab(to))
   }
-  if (!nzchar(to$main) || identical(from$main, to$main)) {
-    return(list(pp_tip_row("Day", from$main, from$meta)))
-  }
-  list(pp_tip_row("From", from$main, from$meta),
-       pp_tip_row("To", to$main, pp_tip_days(from, to, end_inside)))
+  if (day) value <- paste("Day", value)
+  after <- pp_tip_str(after)
+  if (nzchar(after)) value <- paste0(value, ", ", after)
+  meta <- if (isTRUE(open) || single) "" else pp_tip_days(from, to, end_inside)
+  label <- if (day) "Days" else if (single) "Date" else "Dates"
+  list(pp_tip_row(label, value, meta))
 }
 
 #' A span's length, counting the end day when it belongs to the span
@@ -216,3 +250,71 @@ pp_tip_str <- function(x) {
 PP_TIP_FORMATTER <- htmlwidgets::JS(
   "function(p) { return PatientProfile.tip(p); }"
 )
+
+#' An event's tooltip, in the patient timeline's parts
+#'
+#' The headline and swatch, a muted line naming the colour's level ("Severe",
+#' "Started on treatment"), then "Type", "Details" and any rows of the
+#' event's own, and the Days row last, as a timeline segment reads.
+#'
+#' @param head,color The headline and its swatch.
+#' @param level What the colour stands for, or `NULL`.
+#' @param type "Adverse event", "Con med", "Treatment", "Visit".
+#' @param details Parts of the Details row; empty ones drop.
+#' @param days The [pp_tip_span()] or [pp_tip_day()] row(s).
+#' @param rows Further rows, between Details and Days.
+#' @return A tooltip, as [pp_tip()].
+#' @noRd
+pp_tip_event <- function(head, color = NULL, level = NULL, type = NULL,
+                         details = character(), days = list(),
+                         rows = list()) {
+  details <- vapply(details, pp_tip_str, "", USE.NAMES = FALSE)
+  details <- details[nzchar(details)]
+  if (!is.list(days) || !is.null(days$label)) days <- list(days)
+  pp_tip(
+    head, color = color, sub = level,
+    rows = c(
+      list(pp_tip_row("Type", type),
+           pp_tip_row("Details", paste(details, collapse = ", "))),
+      rows, days
+    )
+  )
+}
+
+#' An AE's tooltip: severity (and seriousness) as the level, body system and
+#' outcome as the details.
+#' @noRd
+pp_tip_ae <- function(term, color, sev = NULL, serious = FALSE,
+                      bodsys = NULL, outcome = NULL, days = list()) {
+  sev <- pp_tip_str(sev)
+  level <- c(if (nzchar(sev)) pp_ae_sev_word(sev),
+             if (isTRUE(serious)) "serious")
+  level <- paste(level, collapse = ", ")
+  if (nzchar(level)) {
+    level <- paste0(toupper(substr(level, 1L, 1L)), substring(level, 2L))
+  }
+  pp_tip_event(
+    pp_tip_case(term), color = color, level = level, type = "Adverse event",
+    details = c(pp_tip_case(bodsys), pp_tip_case(outcome)), days = days
+  )
+}
+
+#' A con med's tooltip: started before or on treatment as the level, the
+#' indication and class as the details, then the dose.
+#' @noRd
+pp_tip_cm <- function(name, color, on = TRUE, indication = NULL,
+                      klass = NULL, dose = NULL, reported = NULL,
+                      days = list()) {
+  indication <- pp_tip_str(indication)
+  pp_tip_event(
+    name, color = color,
+    level = if (isTRUE(on)) "Started on treatment" else
+      "Started before treatment",
+    type = "Con med",
+    details = c(if (nzchar(indication)) paste("For", tolower(indication)),
+                pp_tip_case(klass)),
+    rows = list(pp_tip_row("Dose", dose),
+                pp_tip_row("Reported as", pp_tip_case(reported))),
+    days = days
+  )
+}

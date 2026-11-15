@@ -54,17 +54,20 @@ test_that("a medication bar names the drug, its class, indication and dose", {
   expect_identical(out$series$tooltip$formatter, PP_TIP_FORMATTER)
 
   tip <- out$tips[["DONEPEZIL HYDROCHLORIDE"]]
-  expect_identical(tip$head, "Donepezil hydrochloride")
-  expect_identical(tip$sub, "Nervous system")
+  # Named as the patient timeline names a con med.
+  expect_identical(tip$head, "Donepezil Hydrochloride")
+  # The timeline's parts: the colour's level, then Type, Details, Days.
+  expect_identical(tip$sub, "Started on treatment")
   # Coloured as the patient timeline colours con meds, not by indication.
   expect_identical(tip$color, PP_CM_STARTED[["Started on treatment"]])
   expect_identical(
     tip_rows(tip),
-    c(Indication = "Primary study condition", Dose = "5 mg, oral",
-      "Reported as" = "Aricept", From = "D78", To = "D108")
+    c(Type = "Con med",
+      Details = "For primary study condition, Nervous system",
+      Dose = "5 mg, oral", "Reported as" = "Aricept",
+      Days = "Day 78 to 108")
   )
-  expect_identical(tip_meta(tip, "From"), "2020-03-18")
-  expect_identical(tip_meta(tip, "To"), "31 days")
+  expect_identical(tip_meta(tip, "Days"), "31 days")
 })
 
 test_that("a medication started before day 1 takes the timeline's lighter blue", {
@@ -84,25 +87,23 @@ test_that("a medication tooltip drops what the record does not carry", {
   # Same coded and reported name, no class, no amount, a one-day course.
   tip <- tips[["PARACETAMOL"]]
   expect_identical(tip$head, "Paracetamol")
-  expect_null(tip$sub)
   expect_identical(tip$color, PP_CM_STARTED[["Started on treatment"]])
-  expect_identical(tip_rows(tip), c(Dose = "Oral", Day = "D32"))
+  expect_identical(tip_rows(tip),
+                   c(Type = "Con med", Dose = "Oral", Days = "Day 32"))
 
   # "UNCODED" is no name: the reported one names the bar and heads the
   # tooltip, and no class is claimed.
   tip <- tips[["TYLENOL"]]
   expect_identical(tip$head, "Tylenol")
-  expect_null(tip$sub)
   expect_identical(tip_rows(tip),
-                   c(Dose = "1 TABLET", From = "D32", To = "ongoing"))
+                   c(Type = "Con med", Dose = "1 TABLET",
+                     Days = "Day 32 to ongoing"))
 })
 
-test_that("in date mode a medication's dates lead and days follow", {
+test_that("in date mode a medication's dates lead", {
   tip <- cm_tips(mode = "date")$tips[["DONEPEZIL HYDROCHLORIDE"]]
-  expect_identical(tip_rows(tip)[c("From", "To")],
-                   c(From = "2020-03-18", To = "2020-04-17"))
-  expect_identical(tip_meta(tip, "From"), "D78")
-  expect_identical(tip_meta(tip, "To"), "31 days")
+  expect_identical(tip_rows(tip)[["Dates"]], "2020-03-18 to 2020-04-17")
+  expect_identical(tip_meta(tip, "Dates"), "31 days")
 })
 
 test_that("pp_cm_tip_dose() writes one value from its parts", {
@@ -169,11 +170,23 @@ test_that("a dose bar names the treatment and the dose", {
   expect_identical(tip$head, "Xanomeline")
   # The drug's colour on the patient timeline.
   expect_identical(tip$color, unname(pt_drug_palette("XANOMELINE")[[1]]))
+  # As the timeline's drug line reads; no visit, which is the visits lane's.
   expect_identical(
     tip_rows(tip),
-    c(Dose = "54 mg", From = "D15", To = "D42", Visit = "Week 2")
+    c(Type = "Treatment", Details = "Xanomeline, 54 mg",
+      Days = "Day 15 to 42")
   )
-  expect_identical(tip_meta(tip, "To"), "28 days")
+  expect_identical(tip_meta(tip, "Days"), "28 days")
+})
+
+test_that("a placebo's zero dose is no dose", {
+  dm_obj <- tip_overview_dm()
+  tb <- dm::dm_get_tables(dm_obj)
+  tb$adex$EXTRT <- "PLACEBO"
+  tb$adex$EXDOSE <- 0
+  tip <- overview_series(do.call(dm::dm, tb))$Exposure$data[[1]]$tip
+  expect_identical(tip_rows(tip)[["Details"]], "Placebo")
+  expect_false(any(grepl("0 mg", tip_rows(tip))))
 })
 
 test_that("an overview AE bar says severity and seriousness only", {
@@ -184,16 +197,16 @@ test_that("an overview AE bar says severity and seriousness only", {
   tip <- tips[[2]]
   expect_identical(tip$head, "Headache")
   expect_identical(tip$color, "#8B0000")
-  expect_null(tip$sub)
-  # A one-day event is one "Day" row.
+  expect_identical(tip$sub, "Severe, serious")
+  # A one-day event is "Day 10".
   expect_identical(tip_rows(tip),
-                   c(Severity = "Severe", Serious = "Yes", Day = "D10"))
-  expect_identical(tip_meta(tip, "Day"), "2020-01-10")
+                   c(Type = "Adverse event", Days = "Day 10"))
 
   tip <- tips[[1]]
   expect_identical(tip$color, "#CA8A04")
+  expect_identical(tip$sub, "Mild")
   expect_identical(tip_rows(tip),
-                   c(Severity = "Mild", From = "D32", To = "ongoing"))
+                   c(Type = "Adverse event", Days = "Day 32 to ongoing"))
 })
 
 test_that("end of study and visits give their day as the timeline does", {
@@ -201,16 +214,16 @@ test_that("end of study and visits give their day as the timeline does", {
   eos <- series$Milestones$data[[1]]$tip
   expect_identical(eos$head, "End of study")
   expect_identical(eos$color, "#2563EB")
-  expect_identical(tip_rows(eos), c(Day = "D101"))
-  expect_identical(tip_meta(eos, "Day"), "2020-04-10")
+  expect_identical(tip_rows(eos), c(Days = "Day 101"))
+  expect_identical(tip_meta(eos, "Days"), "2020-04-10")
 
   eos <- overview_series(mode = "date")$Milestones$data[[1]]$tip
-  expect_identical(tip_rows(eos), c(Day = "2020-04-10"))
-  expect_identical(tip_meta(eos, "Day"), "D101")
+  expect_identical(tip_rows(eos), c(Date = "2020-04-10"))
+  expect_identical(tip_meta(eos, "Date"), "D101")
 
   vis <- series$Visits$data[[1]]$tip
   expect_identical(vis$head, "Week 2")
-  expect_identical(tip_rows(vis), c(Day = "D15"))
+  expect_identical(tip_rows(vis), c(Type = "Visit", Days = "Day 15"))
 })
 
 test_that("a death flagged without a date says where it is drawn", {
@@ -227,6 +240,6 @@ test_that("without exposure the treatment bar names the arm and its span", {
   tip <- overview_series(tip_overview_dm(adex = FALSE))$Treatment$data[[1]]$tip
   expect_identical(tip$head, "Xanomeline High Dose")
   expect_identical(tip$color, "#059669")
-  expect_identical(tip_rows(tip), c(From = "D1", To = "D91"))
-  expect_identical(tip_meta(tip, "To"), "91 days")
+  expect_identical(tip_rows(tip), c(Type = "Treatment", Days = "Day 1 to 91"))
+  expect_identical(tip_meta(tip, "Days"), "91 days")
 })

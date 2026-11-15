@@ -58,11 +58,9 @@ test_that("a response bar names its category in words and its span", {
   expect_equal(tips[[2]]$sub, "Overall response by investigator")
   # The swatch is the bar's own colour.
   expect_equal(tips[[2]]$color, chart$x$opts$series[[1]]$data[[2]]$value[[9]])
-  expect_equal(tip_rows(tips[[1]]),
-               c(From = "D32 | 2024-02-01", To = "D92 | 60 days"))
+  expect_equal(tip_rows(tips[[1]]), c(Days = "Day 32 to 92 | 60 days"))
   # The last assessment holds until the next one, which has not happened.
-  expect_equal(tip_rows(tips[[3]]),
-               c(From = "D153 | 2024-06-01", To = "ongoing"))
+  expect_equal(tip_rows(tips[[3]]), c(Days = "Day 153 to ongoing"))
   expect_true(uses_tip_formatter(chart))
 })
 
@@ -73,7 +71,7 @@ test_that("a response bar in date mode leads with the date", {
                       list(), mode = "date")
   tips <- series_tips(chart)
   expect_equal(tip_rows(tips[[1]]),
-               c(From = "2024-02-01", To = "2024-04-01 | 60 days"))
+               c(Dates = "2024-02-01 to 2024-04-01 | 60 days"))
 })
 
 test_that("a response bar cut by the window still ends at the next one", {
@@ -85,7 +83,7 @@ test_that("a response bar cut by the window still ends at the next one", {
                       list(), ref, "rday")
   tips <- series_tips(chart)
   expect_equal(tips[[1]]$head, "Partial response")
-  expect_equal(tip_rows(tips[[1]])[["To"]], "D153 | 61 days")
+  expect_equal(tip_rows(tips[[1]])[["Days"]], "Day 92 to 153 | 61 days")
 })
 
 test_that("response codes read as words, unknown ones as written", {
@@ -123,8 +121,7 @@ test_that("a cycle band says which cycle, from when, for how long", {
                             ref, "rday")
   tips <- series_tips(chart)
   expect_equal(tips[[1]]$head, "Cycle 1")
-  expect_equal(tip_rows(tips[[1]]),
-               c(From = "D1 | 2014-01-01", To = "D21 | 21 days"))
+  expect_equal(tip_rows(tips[[1]]), c(Days = "Day 1 to 21 | 21 days"))
   expect_null(tips[[1]]$note)
   expect_equal(tips[[2]]$note,
                "The Day 1 visit is missing: the start is inferred")
@@ -165,7 +162,7 @@ test_that("an ADAS-Cog point names the score, its change and its visit", {
   expect_equal(tip$color, total$lineStyle$color)
   expect_equal(tip_rows(tip), c(
     "Analysis value" = "24", "Change from baseline" = "+3",
-    Visit = "Week 8", Day = "D58 | 2014-02-27"
+    Visit = "Week 8", Days = "Day 58 | 2014-02-27"
   ))
   # Baseline has no change to state.
   expect_false("Change from baseline" %in% names(tip_rows(total$data[[1]]$tip)))

@@ -1008,5 +1008,5 @@ body.pp-dragging * {
 
 /* --- Data tooltip ------------------------------------------------------------
    The content PatientProfile.tip() draws (pp-core.js) uses blockr.viz's card
-   classes (tooltip.css .dd-tt-*, attached by pp_block_ui()); the card around
+   classes (tooltip.css .vz-tt-*, attached by pp_block_ui()); the card around
    it is pp_tooltip()'s. */

@@ -24,24 +24,47 @@ test_that("a day reads as the timeline shows it, the other form as meta", {
                    "D17")
 })
 
-test_that("a span is From and To with its length, one day is Day", {
+test_that("a span is one Days row, as the timeline writes it", {
   from <- pp_tip_when(as.Date("2013-12-02"), 78, NA, "rday")
   to <- pp_tip_when(as.Date("2014-01-01"), 108, NA, "rday")
   rows <- pp_tip_span(from, to)
-  expect_identical(vapply(rows, `[[`, "", "label"), c("From", "To"))
-  expect_identical(rows[[2]]$meta, "31 days")
+  expect_length(rows, 1L)
+  expect_identical(rows[[1]]$label, "Days")
+  expect_identical(rows[[1]]$value, "Day 78 to 108")
+  expect_identical(rows[[1]]$meta, "31 days")
 
   one <- pp_tip_span(from, from)
-  expect_length(one, 1L)
-  expect_identical(one[[1]]$label, "Day")
+  expect_identical(one[[1]]$value, "Day 78")
+  expect_null(one[[1]]$meta)
 
   open <- pp_tip_span(from, pp_tip_when(), open = TRUE)
-  expect_identical(open[[2]]$value, "ongoing")
+  expect_identical(open[[1]]$value, "Day 78 to ongoing")
+
+  after <- pp_tip_span(from, to, after = "from 54 mg")
+  expect_identical(after[[1]]$value, "Day 78 to 108, from 54 mg")
+
+  # Date mode: the dates, the duration after them.
+  rows <- pp_tip_span(pp_tip_when(as.Date("2013-12-02"), 78, NA, "date"),
+                      pp_tip_when(as.Date("2014-01-01"), 108, NA, "date"))
+  expect_identical(rows[[1]]$label, "Dates")
+  expect_identical(rows[[1]]$value, "2013-12-02 to 2014-01-01")
+})
+
+test_that("a point is a Days row, the date after it", {
+  row <- pp_tip_day(pp_tip_when(as.Date("2013-12-02"), 78, NA, "rday"))
+  expect_identical(row$label, "Days")
+  expect_identical(row$value, "Day 78")
+  expect_identical(row$meta, "2013-12-02")
+  row <- pp_tip_day(pp_tip_when(as.Date("2013-12-02"), 78, NA, "date"))
+  expect_identical(row$label, "Date")
+  expect_identical(row$value, "2013-12-02")
 })
 
 test_that("a span across treatment start counts no day zero", {
-  rows <- pp_tip_span(pp_tip_when(NA, -1), pp_tip_when(NA, 1))
-  expect_identical(rows[[2]]$meta, "2 days")
+  rows <- pp_tip_span(pp_tip_when(NA, -1, mode = "rday"),
+                      pp_tip_when(NA, 1, mode = "rday"))
+  expect_identical(rows[[1]]$value, "Day -1 to 1")
+  expect_identical(rows[[1]]$meta, "2 days")
 })
 
 test_that("capitals become sentence case, mixed case is kept", {
@@ -74,10 +97,12 @@ test_that("the AE panel carries its tooltip on each bar", {
                                "rday")
   tip <- chart$x$opts$series[[1]]$data[[1]]$tip
   expect_identical(tip$head, "Agitation")
-  expect_identical(tip$sub, "Psychiatric disorders")
+  # The timeline's parts: the colour's level, then Type, Details, Days.
+  expect_identical(tip$sub, "Severe")
   labels <- vapply(tip$rows, `[[`, "", "label")
-  expect_identical(labels, c("Severity", "From", "To", "Outcome"))
-  expect_false("Serious" %in% labels)
-  expect_identical(tip$rows[[2]]$value, "D32")
-  expect_identical(tip$rows[[3]]$value, "ongoing")
+  expect_identical(labels, c("Type", "Details", "Days"))
+  expect_identical(tip$rows[[1]]$value, "Adverse event")
+  expect_identical(tip$rows[[2]]$value,
+                   "Psychiatric disorders, Not recovered/not resolved")
+  expect_identical(tip$rows[[3]]$value, "Day 32 to ongoing")
 })

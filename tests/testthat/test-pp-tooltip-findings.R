@@ -29,7 +29,7 @@ test_that("a measured value reads name, value with unit, range with flag", {
     c("Analysis value", "190 mmHg", ""),
     c("Normal range", "90 to 140", "high"),
     c("Baseline", "160", ""),
-    c("Day", "D16", "2013-10-01"),
+    c("Days", "Day 16", "2013-10-01"),
     c("Visit", "Week 2", "")
   ))
   expect_null(tip$note)
@@ -37,7 +37,7 @@ test_that("a measured value reads name, value with unit, range with flag", {
 
 test_that("date mode puts the date first and the day after it", {
   tip <- pp_findings_tip(sysbp_row(), "AVAL", mode = "date")
-  day <- Filter(function(r) r$label == "Day", tip$rows)[[1]]
+  day <- Filter(function(r) r$label == "Date", tip$rows)[[1]]
   expect_identical(c(day$value, day$meta), c("2013-10-01", "D16"))
 })
 

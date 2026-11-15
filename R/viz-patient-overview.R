@@ -42,13 +42,15 @@ patient_overview_viz <- new_pp_viz(
   optional = list(
     adsl = c("RFENDT", "DTHDT", "DTHFL"),
     adae = c(
-      "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER"
+      "ASTDT", "AENDT", "ASTDY", "AENDY", "AEDECOD", "AESER", "AEBODSYS",
+      "AEOUT"
     ),
     adex = c(
       "ASTDT", "AENDT", "ASTDY", "AENDY", "EXDOSE", "EXDOSU", "EXTRT",
       "AVISIT"
     ),
-    adcm = c("ASTDT", "AENDT", "ASTDY", "AENDY", "CMTRT", "CMDECOD")
+    adcm = c("ASTDT", "AENDT", "ASTDY", "AENDY", "CMTRT", "CMDECOD", "CMCLAS",
+             "CMINDC")
   ),
   exhibit = function(dm_obj, time_range, settings = list(),
                      ref_ms = NA_real_, mode = "date") {
@@ -243,9 +245,9 @@ patient_overview_viz <- new_pp_viz(
         ", arm_js)),
         data = list(list(
           value = list(trt_start, trt_end, trt_lane),
-          tip = pp_tip(
-            arm_label, color = "#059669",
-            rows = pp_tip_span(
+          tip = pp_tip_event(
+            arm_label, color = "#059669", type = "Treatment",
+            days = pp_tip_span(
               pp_tip_when(sl$TRTSDT[1], NA, ref_ms, mode),
               pp_tip_when(sl$TRTEDT[1], NA, ref_ms, mode)
             )
@@ -348,26 +350,20 @@ patient_overview_viz <- new_pp_viz(
             PP_ONGOING_LABEL
           }
           at <- function(nm) if (nm %in% colnames(adae)) adae[[nm]][i] else NA
-          # Severity and seriousness only: the AE panel carries the rest.
+          # The AE panel's tooltip, as the timeline's AE segments read.
           list(
             value = list(s, e, ae_lane, term, sev, ser, s_lab, e_lab,
                          !(has_end && !is.na(ae_end(i)))),
-            tip = pp_tip(
-              pp_tip_case(term),
+            tip = pp_tip_ae(
+              term,
               color = if (sev %in% names(sev_hex)) sev_hex[[sev]] else "#9ca3af",
-              rows = c(
-                list(
-                  pp_tip_sev(adae_raw, sev_col,
-                             if (has_sev) adae[[sev_col]][i]),
-                  if (identical(ser, "Y")) {
-                    pp_tip_row(pp_tip_name(adae_raw, "AESER", "Serious"), "Yes")
-                  }
-                ),
-                pp_tip_span(
-                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-                  open = !(has_end && !is.na(ae_end(i)))
-                )
+              sev = if (has_sev) adae[[sev_col]][i],
+              serious = identical(ser, "Y"),
+              bodsys = at("AEBODSYS"), outcome = at("AEOUT"),
+              days = pp_tip_span(
+                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                open = !(has_end && !is.na(ae_end(i)))
               )
             )
           )
@@ -461,19 +457,15 @@ patient_overview_viz <- new_pp_viz(
           at <- function(nm) if (nm %in% colnames(adcm)) adcm[[nm]][i] else NA
           list(
             value = list(s, e, cm_lane, col, open),
-            tip = pp_tip(
-              pp_tip_case(cm_name[[i]]), color = col,
-              rows = c(
-                list(pp_tip_row("Started", if (cm_on[[i]]) {
-                  "On treatment"
-                } else {
-                  "Before treatment"
-                })),
-                pp_tip_span(
-                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-                  open = open
-                )
+            # The con-med panel's tooltip, as the timeline's con meds read.
+            tip = pp_tip_cm(
+              swimmer_drug_name(cm_name[[i]]), color = col, on = cm_on[[i]],
+              indication = at(settings$roles$indication %||% "CMINDC"),
+              klass = if (pp_cm_uncoded(at("CMCLAS"))) NULL else at("CMCLAS"),
+              days = pp_tip_span(
+                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                open = open
               )
             )
           )
@@ -538,8 +530,8 @@ patient_overview_viz <- new_pp_viz(
         milestone_data <- c(milestone_data, list(list(
           value = list(pp_xval(sl$RFENDT[1], ref_ms, mode), ms_lane,
                        "eos", pp_xlabel(sl$RFENDT[1], ref_ms, mode)),
-          tip = pp_tip("End of study", color = "#2563EB",
-                       rows = list(pp_tip_row("Day", eos$main, eos$meta)))
+          tip = pp_tip_event("End of study", color = "#2563EB",
+                             days = pp_tip_day(eos))
         )))
       }
 
@@ -549,8 +541,8 @@ patient_overview_viz <- new_pp_viz(
         milestone_data <- c(milestone_data, list(list(
           value = list(pp_xval(sl$DTHDT[1], ref_ms, mode), ms_lane,
                        "death", pp_xlabel(sl$DTHDT[1], ref_ms, mode)),
-          tip = pp_tip("Death", color = "#DC2626",
-                       rows = list(pp_tip_row("Day", dth$main, dth$meta)))
+          tip = pp_tip_event("Death", color = "#DC2626",
+                             days = pp_tip_day(dth))
         )))
       } else if ("DTHFL" %in% colnames(sl) &&
                   !is.na(sl$DTHFL[1]) && sl$DTHFL[1] == "Y") {
@@ -644,7 +636,10 @@ patient_overview_viz <- new_pp_viz(
         # regimen ships that unit here -- so a record carrying "10 mg/kg"
         # reaches the tooltip by being read, never by this viz dividing a
         # dose by a weight it was not given.
+        # A zero dose (placebo) is no dose to show.
         dose_of <- function(i) {
+          amt <- suppressWarnings(as.numeric(opt_chr(adex, "EXDOSE", i)))
+          if (!is.na(amt) && amt == 0) return("")
           trimws(paste(opt_chr(adex, "EXDOSE", i), opt_chr(adex, "EXDOSU", i)))
         }
         drug_of <- function(i) trimws(opt_chr(adex, "EXTRT", i))
@@ -717,21 +712,18 @@ patient_overview_viz <- new_pp_viz(
               x0, x1, ex_lane, n_slot, slot_of(drug), col,
               if (first_of_drug[[g]]) name else "", ex_open
             ),
-            tip = pp_tip(
-              name, color = col,
-              rows = c(
-                list(pp_tip_row(pp_tip_name(adex_raw, "EXDOSE", "Dose"),
-                                g_dose[[g]]),
-                     if (nzchar(prev_dose[[g]])) {
-                       pp_tip_row("Dose before", prev_dose[[g]])
-                     }),
-                pp_tip_span(
-                  pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-                  pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-                  open = ex_open
-                ),
-                list(pp_tip_row(pp_tip_name(adex_raw, "AVISIT", "Visit"),
-                                pp_tip_case(at("AVISIT"))))
+            # As the timeline's drug lines read: the drug and its dose, the
+            # days with the dose before where it changed.
+            tip = pp_tip_event(
+              name, color = col, type = "Treatment",
+              details = c(name, g_dose[[g]]),
+              days = pp_tip_span(
+                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+                open = ex_open,
+                after = if (nzchar(prev_dose[[g]])) {
+                  paste("from", prev_dose[[g]])
+                }
               )
             )
           )
@@ -829,13 +821,13 @@ patient_overview_viz <- new_pp_viz(
           when <- pp_tip_when(visits$date[i], visits$day[i], ref_ms, mode)
           list(
             value = list(x, vis_lane, visits$visit[i], x_lab),
-            tip = pp_tip(
+            tip = pp_tip_event(
               if (nzchar(pp_tip_str(visits$visit[i]))) {
                 pp_tip_case(visits$visit[i])
               } else {
                 "Visit"
               },
-              rows = list(pp_tip_row("Day", when$main, when$meta))
+              color = "#6b7280", type = "Visit", days = pp_tip_day(when)
             )
           )
         })

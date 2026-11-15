@@ -101,7 +101,7 @@
   }
   patchEcharts();
 
-  /* The data tooltip, in blockr.viz's card classes (tooltip.css .dd-tt-*,
+  /* The data tooltip, in blockr.viz's card classes (tooltip.css .vz-tt-*,
    * the same markup as its tipHead / tipRow / tipNote). R builds the content
    * as the data point's `tip` (pp-tooltip.R); this draws it: the headline
    * with a swatch in the colour of the thing pointed at, a muted line under
@@ -119,16 +119,16 @@
     var t = params && params.data && params.data.tip;
     if (!t) return '';
     var sw = t.color ?
-      '<span class="dd-tt-sw" style="background:' + esc(t.color) + '"></span>' : '';
-    var html = '<div class="dd-tt-head">' + sw + '<span>' + esc(t.head) + '</span></div>';
-    if (t.sub) html += '<div class="dd-tt-row dd-tt-label">' + esc(t.sub) + '</div>';
+      '<span class="vz-tt-sw" style="background:' + esc(t.color) + '"></span>' : '';
+    var html = '<div class="vz-tt-head">' + sw + '<span>' + esc(t.head) + '</span></div>';
+    if (t.sub) html += '<div class="vz-tt-row vz-tt-label">' + esc(t.sub) + '</div>';
     (t.rows || []).forEach(function(/** @type {PpTipRow} */ r) {
-      html += '<div class="dd-tt-row"><span class="dd-tt-label">' + esc(r.label) +
-        '</span><span class="dd-tt-value">' + esc(r.value) +
-        (r.meta ? '<span class="dd-tt-meta">' + esc(r.meta) + '</span>' : '') +
+      html += '<div class="vz-tt-row"><span class="vz-tt-label">' + esc(r.label) +
+        '</span><span class="vz-tt-value">' + esc(r.value) +
+        (r.meta ? '<span class="vz-tt-meta">' + esc(r.meta) + '</span>' : '') +
         '</span></div>';
     });
-    if (t.note) html += '<div class="dd-tt-sep"></div><div class="dd-tt-row dd-tt-label">' +
+    if (t.note) html += '<div class="vz-tt-sep"></div><div class="vz-tt-row vz-tt-label">' +
       esc(t.note) + '</div>';
     return html;
   }

@@ -605,7 +605,10 @@ pp_tooltip <- function() {
     textStyle = list(color = "var(--blockr-color-text-default)", fontSize = 12),
     extraCssText = paste0(
       "box-shadow: var(--blockr-shadow-md);",
-      "border-radius: var(--blockr-radius-lg); padding: 6px 10px;"
+      "border-radius: var(--blockr-radius-lg); padding: 6px 10px;",
+      # The timeline's hover card is at least this wide
+      # (.vz-table-lane-tip.is-card).
+      "min-width: 160px;"
     )
   )
 }
@@ -914,7 +917,7 @@ pp_findings_tip <- function(r, value = "AVAL", color = NULL,
                  if (!nzchar(range)) flag),
       pp_tip_row("Normal range", range, flag),
       pp_tip_row(nm("BASE", "Baseline"), pp_tip_num(num("BASE"))),
-      pp_tip_row("Day", when$main, when$meta),
+      pp_tip_day(when),
       pp_tip_row(nm("AVISIT", "Visit"), pp_tip_case(at("AVISIT")))
     ),
     note = note

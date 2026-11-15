@@ -99,9 +99,6 @@ cm_gantt_viz <- new_pp_viz(
                     ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
     tbl <- as.data.frame(tbls[["adcm"]])
-    # The tooltip names columns by their labels, which the row subsets below
-    # drop from a data.frame: read them off the table as it came.
-    lab_src <- tbls[["adcm"]]
 
     # Prefer the study day the data already carries; fall back to the date.
     # Date mode has no day-based fallback, so it needs ASTDT outright.
@@ -236,7 +233,11 @@ cm_gantt_viz <- new_pp_viz(
       } else {
         PP_ONGOING_LABEL
       }
-      lab <- if (i %in% lane_first) pp_term_label(tbl$..lane[i]) else ""
+      lab <- if (i %in% lane_first) {
+        pp_cm_lane_label(tbl$..lane[i], lane_col)
+      } else {
+        ""
+      }
       indc <- indc_at(i)
       col <- pp_cm_started_colour(started_on[[i]])
       at <- function(nm) if (nm %in% colnames(tbl)) tbl[[nm]][i] else NA
@@ -256,24 +257,17 @@ cm_gantt_viz <- new_pp_viz(
                      opt_chr(tbl, "CMROUTE", i), opt_chr(tbl, "CMCLAS", i),
                      indc, s_lab, e_lab, lab,
                      is_ongoing(i), col),
-        tip = pp_tip(
-          pp_tip_case(head), color = col, sub = pp_tip_case(klass),
-          rows = c(
-            list(
-              pp_tip_row(pp_tip_name(lab_src, indc_col, "Indication"),
-                         pp_tip_case(indc)),
-              pp_tip_row(pp_tip_name(lab_src, "CMDOSE", "Dose"), pp_cm_tip_dose(
-                at("CMDOSE"), opt_chr(tbl, "CMDOSU", i),
-                opt_chr(tbl, "CMROUTE", i)
-              )),
-              pp_tip_row(pp_tip_name(lab_src, "CMTRT", "Reported as"),
-                         pp_tip_case(reported))
-            ),
-            pp_tip_span(
-              pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-              pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-              open = is_ongoing(i)
-            )
+        # As the timeline's con meds read.
+        tip = pp_tip_cm(
+          swimmer_drug_name(head), color = col, on = started_on[[i]],
+          indication = indc, klass = klass,
+          dose = pp_cm_tip_dose(at("CMDOSE"), opt_chr(tbl, "CMDOSU", i),
+                                opt_chr(tbl, "CMROUTE", i)),
+          reported = reported,
+          days = pp_tip_span(
+            pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+            pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+            open = is_ongoing(i)
           )
         ),
         itemStyle = list(color = col)

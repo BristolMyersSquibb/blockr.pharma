@@ -60,11 +60,12 @@ test_that("the exposure lane draws deduped dosing periods, doses in the tip", {
   ex <- ov_exposure(chart)
   # the two identical parameterized rows collapse into one period
   expect_length(ex$data, 2L)
-  doses <- vapply(ex$data, function(d) ex_tip_rows(d)[["Dose"]], "")
-  expect_setequal(doses, c("54 mg", "81 mg"))
-  # The dose before, where it changed, as the timeline's tooltip says it.
-  expect_identical(ex_tip_rows(ex$data[[2]])[["Dose before"]], "54 mg")
-  expect_false("Dose before" %in% names(ex_tip_rows(ex$data[[1]])))
+  details <- vapply(ex$data, function(d) ex_tip_rows(d)[["Details"]], "")
+  expect_setequal(details, c("Xanomeline, 54 mg", "Xanomeline, 81 mg"))
+  # The dose before, where it changed, after the days, as the timeline's
+  # tooltip says it.
+  expect_match(ex_tip_rows(ex$data[[2]])[["Dates"]], ", from 54 mg$")
+  expect_no_match(ex_tip_rows(ex$data[[1]])[["Dates"]], "from")
 })
 
 test_that("a drug is a thin line in its timeline colour, named once", {
@@ -128,11 +129,13 @@ test_that("one administration recorded in two units reports both", {
   )
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
   expect_length(ex$data, 1L)
-  expect_equal(ex_tip_rows(ex$data[[1]])[["Dose"]], "800 mg \u00b7 10 mg/kg")
+  expect_equal(ex_tip_rows(ex$data[[1]])[["Details"]],
+               "Study Drug a, 800 mg \u00b7 10 mg/kg")
 })
 
-test_that("a dose bar reports the visit its own row names", {
-  # Filed as CYCLE 1 DAY 8, infused a day late. Both facts, neither adjusted.
+test_that("a drug line's tooltip says its own fields, no visit", {
+  # The visit belongs to the visits lane; the timeline's drug line names
+  # none either.
   adex <- data.frame(
     USUBJID = "x", EXTRT = "STUDY DRUG A", EXDOSE = 800, EXDOSU = "mg",
     AVISIT = "CYCLE 1 DAY 8",
@@ -141,8 +144,8 @@ test_that("a dose bar reports the visit its own row names", {
   )
   ex <- ov_exposure(ov_render(ov_dm(adex = adex)))
   rows <- ex_tip_rows(ex$data[[1]])
-  expect_equal(rows[["Visit"]], "Cycle 1 day 8")
-  expect_equal(rows[["Day"]], "2020-01-09")
+  expect_identical(names(rows), c("Type", "Details", "Date"))
+  expect_equal(rows[["Date"]], "2020-01-09")
 })
 
 test_that("exposure present -> no envelope bar drawn beside it", {

@@ -97,9 +97,6 @@ ae_gantt_viz <- new_pp_viz(
                    ref_ms = NA_real_, mode = "date") {
     tbls <- dm::dm_get_tables(dm_obj)
     tbl <- as.data.frame(tbls[["adae"]])
-    # The tooltip names columns by their labels, which the row subsets below
-    # drop from a data.frame: read them off the table as it came.
-    lab_src <- tbls[["adae"]]
 
     # Prefer the study day the data already carries; fall back to the date.
     # Date mode has no day-based fallback, so it needs ASTDT outright.
@@ -249,19 +246,14 @@ ae_gantt_viz <- new_pp_viz(
         list(
           value = list(s, e, lane, term, sev, bodsys, serious, outcome,
                        s_lab, e_lab, col, lab, is_ongoing(i)),
-          tip = pp_tip(
-            pp_tip_case(term), color = col, sub = pp_tip_case(bodsys),
-            rows = c(
-              list(pp_tip_sev(lab_src, sev_col, if (has_sev) sev),
-                   if (is_ser) pp_tip_row(pp_tip_name(lab_src, "AESER", "Serious"),
-                                          "Yes")),
-              pp_tip_span(
-                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-                open = is_ongoing(i)
-              ),
-              list(pp_tip_row(pp_tip_name(lab_src, "AEOUT", "Outcome"),
-                              pp_tip_case(outcome)))
+          # As the timeline's AE segments read.
+          tip = pp_tip_ae(
+            term, color = col, sev = if (has_sev) sev, serious = is_ser,
+            bodsys = bodsys, outcome = outcome,
+            days = pp_tip_span(
+              pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
+              pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
+              open = is_ongoing(i)
             )
           ),
           # Serious is a regulatory axis of its own, independent of severity:

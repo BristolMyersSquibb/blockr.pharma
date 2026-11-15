@@ -122,3 +122,16 @@ pp_cm_trtsdt <- function(tbls) {
   if (is.null(sl) || !nrow(sl) || !"TRTSDT" %in% colnames(sl)) return(NA)
   sl$TRTSDT[[1L]]
 }
+
+#' A con-med lane's label
+#'
+#' A medication's name as the patient timeline writes it
+#' (swimmer_drug_name(): "Con Med d" for "CON MED D"); a class lane in
+#' sentence case.
+#'
+#' @param x Lane values.
+#' @param lane_col The column the lanes come from, or `NULL`.
+#' @noRd
+pp_cm_lane_label <- function(x, lane_col = NULL) {
+  if (identical(lane_col, "CMCLAS")) pp_term_label(x) else swimmer_drug_name(x)
+}

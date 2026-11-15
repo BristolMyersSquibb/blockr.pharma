@@ -106,7 +106,7 @@ adas_trajectory_viz <- new_pp_viz(
                          pp_tip_num(col_at("CHG", i), signed = TRUE)),
               pp_tip_row(pp_tip_name(lab_src, "AVISIT", "Visit"),
                          pp_tip_case(col_at("AVISIT", i))),
-              pp_tip_row("Day", when$main, when$meta)
+              pp_tip_day(when)
             ))
           )
         })
