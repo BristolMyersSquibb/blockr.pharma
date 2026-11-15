@@ -309,19 +309,32 @@ test_that("no tooltip names a field by its raw column name", {
   expect_false(any(startsWith(trimws(names), ".")), info = paste(names,
                                                                  collapse = ", "))
   expect_true(any(grepl("Study day: ", tips, fixed = TRUE)))
-  # The timeline block's frame too.
-  f <- timeline_frame(pt_toy())
-  expect_identical(attr(f$.event_x, "label"), "Study day")
 })
 
 test_that("the subtitle does not name the sort", {
   expect_false(grepl("order_by", patient_timeline_subtitle()))
-  expect_false(grepl("order_by", timeline_subtitle()))
-  expect_false("order_by" %in% names(timeline_clauses()))
   b <- new_safety_timeline_block(
     subtitle = "{@layers} in study days, sorted by {@order_by}"
   )
   expect_identical(blockr.core::blockr_ser(b)$payload$subtitle,
                    "{@layers} in study days")
   expect_identical(timeline_subtitle_migrate("sorted by {@order_by}, x"), "x")
+})
+
+test_that("overlapping AE episodes stay on one bar, also on saved boards", {
+  lane <- patient_timeline_summaries("safety")
+  expect_null(lane[[length(lane)]]$inner_overlap)
+  lane[[length(lane)]]$inner_overlap <- "stack"
+  old <- new_safety_timeline_block(summaries = lane)
+  sv <- blockr.core::blockr_ser(old)$payload$summaries
+  expect_false(identical(sv[[length(sv)]]$inner_overlap, "stack"))
+})
+
+test_that("per-patient summaries group the records once", {
+  p <- aet_per_patient(c("B", "A", "B", "X", "B"), c("A", "B", "C"))
+  expect_identical(p$count(), c(A = 1, B = 3, C = 0))
+  expect_identical(p$sum(c(TRUE, FALSE, TRUE, TRUE, FALSE)),
+                   c(A = 0, B = 2, C = 0))
+  expect_identical(p$max(c(2L, NA, 5L, 9L, NA)), c(A = NA, B = 5, C = NA))
+  expect_identical(p$min(c(4, 1, 3, 0, 7)), c(A = 1, B = 3, C = NA))
 })

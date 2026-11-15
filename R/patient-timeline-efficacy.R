@@ -1,6 +1,5 @@
-# The swimmer's frame: ADaM tables in, one long frame out, which the
-# swimmer's spans column draws (new_swimmer_block()). One row per patient in
-# the table; in the frame, one record per thing drawn:
+# The patient timeline's response, drug lines and discontinuation reasons
+# (patient_timeline_frame()), written for the retired swimmer. Records:
 #
 #   response   ADRS overall response, a run of the same read from its first
 #              assessment to the next different one, on the main lane (lane
@@ -19,142 +18,7 @@
 # Time is the study day: day 1 is the first dose (ADSL TRTSDT), the day
 # before it day 0.
 
-#' Swimmer frame from ADaM
-#'
-#' Turns a study's ADaM tables into the long frame the swimmer block draws:
-#' study days, drugs ongoing to the cutoff, response periods, best overall
-#' response, the reason treatment stopped and the dose marks. It is the swimmer block's prepare step
-#' ([new_swimmer_block()]) and needs no prep of the inputs.
-#'
-#' @param data A `dm` (or a named list of data frames) with `adsl`, `adex`
-#'   and `adrs` and, optional, `adae` (serious AEs as events) and `adcm`
-#'   (con meds, with `con_meds = TRUE`). Names match case-insensitively.
-#'   SDTM-style names work as in the patient profile: `dm`, `ex`, `rs`, `ae`
-#'   and `cm`, and SDTM columns such as `EXSTDTC` or `RFXSTDTC`.
-#' @param doses How a drug lane shows its doses: `"Gaps"` (a skipped cycle
-#'   leaves a gap, a change of dose starts a new piece; late doses only in
-#'   the tooltip) or `"Plain"` (a drug in cycles as one bar). Either way the
-#'   line keeps one width and each piece's tooltip gives its own dose. The
-#'   old `"Gaps and cuts"`, `"Exceptions"` and `"Dots"` read as `"Gaps"`.
-#' @param dose_tags With `"Gaps"`, a small tag with the new dose where a
-#'   drug's dose changes.
-#' @param con_meds Draw con meds from `adcm` as lanes too.
-#' @param max_lanes Lanes per patient before drugs fold into one grey
-#'   "Other" lane, listed on hover. Study drugs (`adex`) keep theirs.
-#' @param parameter The ADRS parameter of the overall response per visit.
-#' @param cutoff The data cutoff. `NULL` or `NA`: the last date in the data.
-#'   Response visits, doses and deaths after it are left out.
-#' @param drugs The study drugs to draw, as [swimmer_drugs()] names them.
-#'   `NULL`: all.
-#' @param events The events drawn on the response bar: any of
-#'   `"Progression"`, `"Serious AE"`, `"Death"`. `NULL`: all. Serious AEs
-#'   are off by default.
-#' @param reasons Tag where the drug lines stop with the discontinuation
-#'   reason (ADSL `DCTREAS` and its stand-ins, see
-#'   [new_swimmer_block()]): "AE", "PD", "WD", ... ([swimmer_reason_tag()]).
-#' @return A data frame, one record per drawn piece; see the source for the
-#'   columns.
-#' @export
-swimmer_frame <- function(data, doses = "Gaps", dose_tags = FALSE,
-                          con_meds = FALSE,
-                          max_lanes = 4L, parameter = "OVR", cutoff = NULL,
-                          drugs = NULL,
-                          events = c("Progression", "Death"),
-                          reasons = TRUE) {
-  doses <- swimmer_doses_value(doses)
-  # One or more response parameters: the first is the main bar.
-  parameter <- as.character(parameter)
-  parameter <- unique(parameter[!is.na(parameter) & nzchar(parameter)])
-  if (!length(parameter)) parameter <- "OVR"
-  more <- parameter[-1L]
-  max_lanes <- max(1L, as.integer(max_lanes %||% 4L))
-  if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- NULL
-  tb <- swimmer_tables(data)
-  sl <- swimmer_subjects(tb$adsl)
-  rs <- swimmer_response(tb$adrs, parameter[[1L]])
-  ra <- lapply(more, function(p) swimmer_response(tb$adrs, p))
-  # Without a cutoff set, the study's own data cutoff when ADSL has one.
-  if (is.null(cutoff) && any(!is.na(sl$DCUTDT))) {
-    cutoff <- max(sl$DCUTDT, na.rm = TRUE)
-  }
-  if (!is.null(cutoff)) {
-    cutoff <- as.Date(cutoff)
-    rs <- rs[rs$ADT <= cutoff, , drop = FALSE]
-    ra <- lapply(ra, function(r) r[r$ADT <= cutoff, , drop = FALSE])
-    sl$DTHDT[!is.na(sl$DTHDT) & sl$DTHDT > cutoff] <- NA
-  }
-  # The response population: subjects with an assessment.
-  sl <- sl[sl$USUBJID %in% rs$USUBJID, , drop = FALSE]
-  # ADRS may hold patients ADSL does not (a population filter narrows ADSL
-  # only): they are not drawn.
-  rs <- rs[rs$USUBJID %in% sl$USUBJID, , drop = FALSE]
-  if (!nrow(sl)) {
-    stop("No subject has an overall response (ADRS PARAMCD \"",
-         parameter[[1L]], "\").", call. = FALSE)
-  }
-  ex <- swimmer_exposure(tb$adex, sl, role = "study")
-  if (!is.null(drugs)) {
-    ex <- ex[ex$drug %in% as.character(drugs), , drop = FALSE]
-  }
-  ex <- swimmer_close_study(ex, sl)
-  if (isTRUE(con_meds) && !is.null(tb$adcm)) {
-    ex <- rbind(ex, swimmer_exposure(swimmer_cm(tb$adcm), sl, role = "cm"))
-  }
-  cutoff <- swimmer_cutoff(cutoff, sl, ex[ex$role == "study", ], rs)
-  # Nothing after the cutoff: a drug given past it is ongoing at it.
-  ex <- ex[ex$start <= cutoff, , drop = FALSE]
-  ex$end[!is.na(ex$end) & ex$end > cutoff] <- NA
-  ex$open <- is.na(ex$end)
-  ex$end[ex$open] <- cutoff
-  t0 <- stats::setNames(sl$TRTSDT, sl$USUBJID)
-  # A patient with an end of treatment is on no study drug.
-  ex$on <- swimmer_ongoing(ex, cutoff) &
-    is.na(sl$TRTEDT[match(ex$USUBJID, sl$USUBJID)])
-  fu <- swimmer_follow_up(sl, ex, rs, cutoff)
-  ex <- swimmer_clip_cm(ex, t0, fu, cutoff)
-  ex <- swimmer_fold(ex, max_lanes, t0)
-
-  drug <- swimmer_drug_rows(ex, t0, doses, cutoff, isTRUE(dose_tags))
-  # With several parameters each is a full bar named by its PARAMCD, the
-  # first the main one, each with its own progression.
-  lane <- if (length(more)) parameter[[1L]] else NA_character_
-  resp <- lapply(seq_along(more), function(k) {
-    r <- ra[[k]][ra[[k]]$USUBJID %in% sl$USUBJID, , drop = FALSE]
-    if (!nrow(r)) return(NULL)
-    list(swimmer_resp_rows(r, fu, t0, more[[k]]),
-         swimmer_pd_rows(r, t0, more[[k]]))
-  })
-  parts <- c(
-    list(swimmer_resp_rows(rs, fu, t0, lane), drug,
-         swimmer_event_rows(rs, sl, tb$adae, t0, lane)),
-    unlist(resp, recursive = FALSE),
-    list(if (isTRUE(reasons)) swimmer_reason_rows(drug, sl, ex))
-  )
-  out <- list2DF(swimmer_bind(parts))
-  if (!is.null(events)) {
-    # The discontinuation reasons are no events: the setting leaves them.
-    out <- out[is.na(out$event) | !is.na(out$tag) |
-                 out$event %in% as.character(events), , drop = FALSE]
-  }
-  out <- swimmer_finish(out, sl, rs, ex, fu, cutoff, tb$adsl, parameter)
-  swimmer_bor_more(out, ra, more)
-}
-
-#' The response parameters in a swimmer's input
-#'
-#' The ADRS parameters whose values are overall responses (CR, PR, SD, PD,
-#' NE and their iRECIST forms), the choices for the swimmer's response bars.
-#' The usual investigator parameter comes first.
-#'
-#' @param data The swimmer's input dm.
-#' @return A character vector of PARAMCDs, `"OVR"` when none is found.
-#' @export
-swimmer_parameters <- function(data) {
-  tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
-  swimmer_parameters_of(tb$adrs)
-}
-
-# The response parameters of an ADRS table (swimmer_parameters()).
+# The response parameters of an ADRS table.
 swimmer_parameters_of <- function(adrs) {
   pc <- if (!is.null(adrs)) swimmer_col(adrs, "PARAMCD")
   if (is.null(pc)) return("OVR")
@@ -192,51 +56,7 @@ swimmer_bor_of <- function(rs, ids) {
   out
 }
 
-# The best response of the second and third parameter, as listing columns
-# labelled by their PARAMCD ("BOR OVRBICR"); empty when not drawn.
-swimmer_bor_more <- function(out, ra, more) {
-  ids <- unique(out$USUBJID)
-  for (k in 2:3) {
-    nm <- paste0("BOR_", k)
-    v <- rep(NA_character_, nrow(out))
-    if (k - 1L <= length(ra)) {
-      v <- swimmer_bor_of(ra[[k - 1L]], ids)[match(out$USUBJID, ids)]
-    }
-    out[[nm]] <- v
-    attr(out[[nm]], "label") <- if (k - 1L <= length(more)) {
-      paste("BOR", more[[k - 1L]])
-    } else {
-      paste0("BOR (response ", k, ")")
-    }
-  }
-  out
-}
-
 # --- inputs ----------------------------------------------------------------
-
-swimmer_tables <- function(data) {
-  tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
-  if (!is.list(tabs) || is.data.frame(tabs)) {
-    stop("The swimmer needs a dm with adsl, adex and adrs.", call. = FALSE)
-  }
-  names(tabs) <- tolower(names(tabs))
-  # The patient profile's names: SDTM-style tables (dm, ex, rs, ae, cm) and
-  # SDTM columns (EXSTDTC, RFXSTDTC, ...) as their ADaM counterparts.
-  tabs <- pp_normalize_tables(tabs)$tables
-  get <- function(nm) {
-    x <- tabs[[nm]]
-    if (!is.null(x)) as.data.frame(x)
-  }
-  out <- list(adsl = get("adsl"), adex = get("adex"), adrs = get("adrs"),
-              adae = get("adae"), adcm = get("adcm"))
-  miss <- c("adsl", "adex", "adrs")[vapply(out[c("adsl", "adex", "adrs")],
-                                            is.null, NA)]
-  if (length(miss)) {
-    stop("The swimmer needs ", paste(miss, collapse = ", "),
-         " in its input dm.", call. = FALSE)
-  }
-  out
-}
 
 swimmer_col <- function(df, nms) {
   hit <- intersect(nms, names(df))
@@ -326,23 +146,6 @@ swimmer_exposure <- function(adex, sl, role) {
   out[order(out$USUBJID, out$drug, out$start), , drop = FALSE]
 }
 
-#' The study drugs of a swimmer's input
-#'
-#' The drug names in ADEX as the swimmer draws them, for the drugs setting.
-#'
-#' @param data The swimmer's input dm.
-#' @return A character vector, sorted.
-#' @export
-swimmer_drugs <- function(data) {
-  tb <- tryCatch(swimmer_tables(data), error = function(e) NULL)
-  if (is.null(tb)) return(character())
-  ex <- tb$adex
-  pc <- swimmer_col(ex, "PARAMCD")
-  if (!is.null(pc) && "DOSE" %in% pc) ex <- ex[pc %in% "DOSE", , drop = FALSE]
-  d <- swimmer_drug_name(as.character(swimmer_col(ex, c("EXTRT", "CMDECOD"))))
-  sort(unique(d[!is.na(d)]))
-}
-
 # "XANOMELINE" reads as "Xanomeline"; mixed case stays. Each name once:
 # toTitleCase() is slow, and a con med table repeats its names many times.
 swimmer_drug_name <- function(x) {
@@ -351,14 +154,6 @@ swimmer_drug_name <- function(x) {
   up <- !is.na(lv) & lv == toupper(lv)
   nm[up] <- tools::toTitleCase(tolower(lv[up]))
   nm[match(x, lv)]
-}
-
-swimmer_cm <- function(adcm) {
-  dec <- as.character(swimmer_col(adcm, c("CMDECOD", "CMTRT")))
-  adcm <- adcm[!is.na(dec) & dec != "UNCODED", , drop = FALSE]
-  adcm$CMDECOD <- as.character(swimmer_col(adcm, c("CMDECOD", "CMTRT")))
-  # Ongoing con meds have no end.
-  adcm
 }
 
 # A study drug record without an end stops at the patient's end of
@@ -370,33 +165,6 @@ swimmer_close_study <- function(ex, sl) {
   ex$end[fix] <- as.Date(pmax(as.numeric(ex$start[fix]), as.numeric(te[fix])),
                          origin = "1970-01-01")
   ex
-}
-
-swimmer_cutoff <- function(cutoff, sl, ex, rs) {
-  if (!is.null(cutoff)) return(as.Date(cutoff))
-  d <- c(ex$start, ex$end, rs$ADT, sl$LSTALVDT, sl$DTHDT)
-  max(d, na.rm = TRUE)
-}
-
-# Each patient's end of follow-up: death, the cutoff while any study drug
-# runs, else the end of treatment or the last assessment, whichever is
-# later (the last alive date only when neither is known).
-swimmer_follow_up <- function(sl, ex, rs, cutoff) {
-  ids <- sl$USUBJID
-  n <- length(ids)
-  study <- ex$role == "study"
-  on <- tabulate(match(ex$USUBJID[study & ex$on], ids), n) > 0L
-  seen <- pmax(as.numeric(sl$TRTEDT),
-               swimmer_grp_max(match(rs$USUBJID, ids), as.numeric(rs$ADT), n),
-               swimmer_grp_max(match(ex$USUBJID[study], ids),
-                               as.numeric(ex$end[study]), n),
-               na.rm = TRUE)
-  alive <- as.numeric(sl$LSTALVDT)
-  alive[is.na(alive)] <- -Inf
-  seen[is.na(seen)] <- alive[is.na(seen)]
-  out <- ifelse(!is.na(sl$DTHDT), as.numeric(sl$DTHDT),
-                ifelse(on, as.numeric(cutoff), seen))
-  stats::setNames(out, ids)
 }
 
 # Whether each record's drug is still given at the cutoff: its last period
@@ -474,24 +242,6 @@ swimmer_every <- function(s, end, open, gr) {
   every
 }
 
-# Con meds within follow-up: from four weeks before the first dose to the
-# end of follow-up, open only when that is the cutoff.
-swimmer_clip_cm <- function(ex, t0, fu, cutoff) {
-  cm <- which(ex$role == "cm")
-  if (!length(cm)) return(ex)
-  lo <- as.numeric(t0[ex$USUBJID[cm]]) - 28
-  hi <- fu[ex$USUBJID[cm]]
-  keep <- as.numeric(ex$end[cm]) >= lo & as.numeric(ex$start[cm]) <= hi
-  past <- as.numeric(ex$end[cm]) > hi
-  ex$start[cm] <- as.Date(pmax(as.numeric(ex$start[cm]), lo),
-                          origin = "1970-01-01")
-  ex$end[cm] <- as.Date(pmin(as.numeric(ex$end[cm]), hi),
-                        origin = "1970-01-01")
-  ex$open[cm] <- ex$open[cm] & past & hi >= as.numeric(cutoff)
-  drop <- cm[!keep]
-  if (length(drop)) ex[-drop, , drop = FALSE] else ex
-}
-
 # When a patient has more than `max_lanes` drugs, the con meds fold into
 # one "Other" lane; study drugs always keep theirs. The rule is the same for
 # every patient, so a drug keeps its place down the column. Lanes run study
@@ -526,7 +276,7 @@ SWIMMER_NA_ROW <- list(
 )
 
 # Records as a list of columns, every column present. swimmer_bind() joins
-# such lists and swimmer_frame() makes the data frame once at the end: a
+# such lists and the caller makes the data frame once at the end: a
 # data frame per drug and patient, bound with rbind(), took half the time.
 swimmer_rows <- function(USUBJID, ...) {
   n <- length(USUBJID)
@@ -618,30 +368,6 @@ swimmer_pd_rows <- function(rs, t0, lane = NA_character_) {
   swimmer_rows(pd$USUBJID, event_day = x, event = "Progression", lane = lane,
                tip = paste0("Progression", who, " \u00b7 ",
                             swimmer_day_txt(x)))
-}
-
-# First progression and death on the response lane; serious AEs when ADAE
-# is there. `lane`: the main bar's parameter with several, else NA.
-swimmer_event_rows <- function(rs, sl, adae, t0, lane = NA_character_) {
-  ev <- function(ids, d, what) {
-    x <- swimmer_x(d, t0[ids])
-    swimmer_rows(ids, event_day = x, event = what,
-                 tip = paste0(what, " \u00b7 ", swimmer_day_txt(x)))
-  }
-  out <- list(swimmer_pd_rows(rs, t0, lane))
-  if (!is.null(adae) && "AESER" %in% names(adae)) {
-    ae <- adae[adae$AESER %in% "Y" & as.character(adae$USUBJID) %in% sl$USUBJID,
-               , drop = FALSE]
-    d <- swimmer_date(swimmer_col(ae, "ASTDT"))
-    ok <- !is.na(d)
-    if (any(ok)) {
-      ids <- as.character(ae$USUBJID[ok])
-      out <- c(out, list(ev(ids, d[ok], "Serious AE")))
-    }
-  }
-  dth <- sl[!is.na(sl$DTHDT), , drop = FALSE]
-  out <- c(out, list(ev(dth$USUBJID, dth$DTHDT, "Death")))
-  swimmer_bind(out)
 }
 
 # A dose with its unit, "" without a dose. Each value is formatted on its
@@ -904,43 +630,10 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff,
   )
 }
 
-# The discontinuation reason as a tag where the patient's drug lines stop,
-# one event level per category (swimmer_reason_category()), which the legend
-# lists with its tag; the tooltip says the category and the exact reason.
-# A death needs none: the death mark is there. `drug`: swimmer_drug_rows().
-swimmer_reason_rows <- function(drug, sl, ex) {
-  if (is.null(drug)) return(NULL)
-  ids <- sl$USUBJID
-  study <- ex$role == "study"
-  on <- tabulate(match(ex$USUBJID[study & ex$on], ids), length(ids)) > 0L
-  why <- sl$reason
-  why[on] <- NA_character_
-  cat <- swimmer_reason_category(why)
-  keep <- !is.na(cat$tag)
-  if (!any(keep)) return(NULL)
-  lanes <- unique(as.character(ex$lane[study]))
-  r <- which(drug$lane %in% lanes & !is.na(drug$end) &
-               drug$USUBJID %in% ids[keep])
-  if (!length(r)) return(NULL)
-  r <- r[order(drug$USUBJID[r], -drug$end[r], method = "radix")]
-  r <- r[!duplicated(drug$USUBJID[r])]
-  at <- match(drug$USUBJID[r], ids)
-  x <- drug$end[r]
-  # The exact reason after the category, unless it says no more.
-  raw <- why[at]
-  same <- tolower(raw) == tolower(cat$name[at])
-  swimmer_rows(
-    drug$USUBJID[r], event_day = x, event = cat$name[at],
-    lane = drug$lane[r], tag = cat$tag[at],
-    tip = paste0("Discontinued, ", tolower(swimmer_day_txt(x)), " \u00b7 ",
-                 cat$name[at], ifelse(same, "", paste0(" \u00b7 ", raw)))
-  )
-}
-
 #' Categories of discontinuation reasons
 #'
-#' The standard categories the swimmer sorts a study's discontinuation
-#' reasons into, after the CDISC completion terms: a reason belongs to the
+#' The standard categories the patient timeline sorts a study's
+#' discontinuation reasons into, after the CDISC completion terms: a reason belongs to the
 #' first category whose pattern its words match (case ignored), so the
 #' three wordings of a withdrawal share one tag. A death has none (the death
 #' mark is there); a reason no pattern matches is "Other".
@@ -990,15 +683,6 @@ swimmer_reason_category <- function(x,
   list(tag = tag, name = name)
 }
 
-#' Two letters for a discontinuation reason
-#'
-#' The tag of a reason's category ([swimmer_reason_category()]).
-#'
-#' @param x Reasons, character.
-#' @return A character vector of tags, `NA` for none.
-#' @export
-swimmer_reason_tag <- function(x) swimmer_reason_category(x)$tag
-
 # --- finish ----------------------------------------------------------------
 
 SWIMMER_RESPONSE <- c("Not assessed" = "#e4e7ec", CR = "#1d7a55",
@@ -1010,124 +694,3 @@ SWIMMER_DRUGS <- c("#3f63a6", "#2a9686", "#a8649a", "#c08a3e", "#7d8b4a",
                    "#5f8fa8", "#b0707a", "#8a7bb0")
 SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
 
-# What each colour level stands for in the data, for the board's scale map
-# (see timeline_frame()): a response is its ADRS `AVALC`, a drug its ADEX
-# `EXTRT` and a con med its `CMDECOD`. swimmer_drug_name() titled names that
-# were all capitals, so a drug is keyed as written and in capitals. A study
-# map may carry the response vocabulary as BEST_OVERALL_RESPONSE or as a
-# `response` column instead; the first the map binds wins.
-swimmer_scale_keys <- function(lv, resp, drugs, cm) {
-  key <- function(x, vars) {
-    x <- intersect(x, lv)
-    x <- setdiff(x, "Other")
-    do.call(rbind, lapply(vars, function(var) {
-      data.frame(level = c(x, x), var = rep(var, 2L * length(x)),
-                 key = c(x, toupper(x)), stringsAsFactors = FALSE)
-    }))
-  }
-  k <- rbind(key(resp, TL_SCALE_VARS$response), key(drugs, "EXTRT"),
-             key(cm, "CMDECOD"))
-  k[!duplicated(k), , drop = FALSE]
-}
-
-# The listing columns, the colour and lane levels with their colours, and
-# the labels the tooltips print.
-SWIMMER_EVENTS <- c("Progression", "Serious AE", "Death")
-
-swimmer_finish <- function(out, sl, rs, ex, fu, cutoff, adsl = NULL,
-                           parameter = NULL) {
-  ids <- sl$USUBJID
-  n <- length(ids)
-  # Best response: the best read of the main parameter.
-  bor <- swimmer_bor_of(rs, ids)
-  study <- ex[ex$role == "study", , drop = FALSE]
-  at <- match(study$USUBJID, ids)
-  has <- tabulate(at, n) > 0L
-  on <- tabulate(at[study$on], n) > 0L
-  # Days on treatment: to the cutoff while a study drug runs, else to the end
-  # of treatment (the last dose without one), first and last day counted.
-  end <- ifelse(on, as.numeric(cutoff),
-                ifelse(!is.na(sl$TRTEDT), as.numeric(sl$TRTEDT),
-                       swimmer_grp_max(at, as.numeric(study$end), n)))
-  dur <- swimmer_x(end, sl$TRTSDT)
-  dur[!has & is.na(sl$TRTEDT)] <- NA_real_
-  status <- ifelse(!is.na(sl$DTHDT), "Died",
-                   ifelse(on, "On treatment", "Off treatment"))
-  # The reason only for a patient off treatment.
-  reason <- sl$reason
-  reason[on] <- NA_character_
-  m <- match(out$USUBJID, ids)
-  out$ARM <- sl$ARM[m]
-  out$BOR <- bor[m]
-  out$duration <- dur[m]
-  out$status <- status[m]
-  out$reason <- reason[m]
-  # Columns the listing offers besides (age, sex, the first study dose).
-  ids <- as.character(adsl$USUBJID)
-  at <- match(out$USUBJID, ids)
-  out$AGE <- swimmer_col(adsl, "AGE")[at] %||% rep(NA_real_, nrow(out))
-  out$SEX <- as.character(swimmer_col(adsl, "SEX")[at] %||%
-                            rep(NA_character_, nrow(out)))
-  first <- study[order(study$USUBJID, study$start), , drop = FALSE]
-  first <- first[!duplicated(first$USUBJID), , drop = FALSE]
-  lvl <- stats::setNames(swimmer_fmt_dose(first$dose, first$unit), first$USUBJID)
-  out$dose_level <- unname(lvl[out$USUBJID])
-  out <- swimmer_adsl_groups(out, adsl)
-
-  drugs <- levels(ex$lane)
-  dcol <- stats::setNames(rep_len(SWIMMER_DRUGS, length(drugs)), drugs)
-  dcol[grepl("placebo", drugs, ignore.case = TRUE)] <- "#8f9bb3"
-  dcol[drugs == "Other"] <- "#a3a9b4"
-  cm <- setdiff(unique(ex$drug), drugs)
-  cols <- c(SWIMMER_RESPONSE, dcol,
-            stats::setNames(rep("#a3a9b4", length(cm)), cm))
-  lv <- unique(c(names(SWIMMER_RESPONSE), drugs, cm))
-  lv <- lv[lv %in% out$colour]
-  out$colour <- factor(out$colour, levels = lv)
-  attr(out$colour, "blockr_colors") <- cols[lv]
-  attr(out$colour, "blockr_scale_keys") <- swimmer_scale_keys(
-    lv, setdiff(names(SWIMMER_RESPONSE), "Not assessed"), drugs, cm
-  )
-  # Drug lanes, then with several parameters their full bars in bar order.
-  bars <- if (length(parameter) > 1L) parameter else character()
-  out$lane <- factor(out$lane, levels = unique(c(drugs, bars)))
-  out$full <- out$full %in% TRUE
-  # The discontinuation reasons after the events, the most frequent first.
-  why <- as.character(out$event[!is.na(out$tag)])
-  lv <- sort(unique(why))
-  why <- lv[order(-tabulate(match(why, lv), length(lv)), lv)]
-  # A category is never also an event level (it would be one legend entry).
-  why <- setdiff(why, SWIMMER_EVENTS)
-  out$event <- factor(out$event, levels = c(SWIMMER_EVENTS, why))
-  labels <- c(start = "Start, study day", end = "End, study day",
-              colour = "Response / drug",
-              lane = "Drug", mark = "Dose style", label = "Label",
-              full = "Response bar",
-              tag = "Tag", tip = "Tooltip",
-              event_day = "Study day", event = "Event", ongoing = "Ongoing",
-              BOR = "Best response",
-              duration = "Days on treatment", status = "Status",
-              reason = "Discontinuation reason", ARM = "Arm",
-              USUBJID = "Subject", AGE = "Age", SEX = "Sex",
-              dose_level = "First dose")
-  for (nm in names(labels)) attr(out[[nm]], "label") <- labels[[nm]]
-  rownames(out) <- NULL
-  out
-}
-
-# ADSL's grouping columns on every record (TRT, RACE, a region ...), so the
-# rows can be grouped by any of them: character, factor or logical columns
-# with at most 50 values, besides those the frame already has.
-swimmer_adsl_groups <- function(out, adsl) {
-  if (is.null(adsl) || !nrow(adsl)) return(out)
-  at <- match(out$USUBJID, as.character(adsl$USUBJID))
-  for (nm in setdiff(names(adsl), names(out))) {
-    x <- adsl[[nm]]
-    if (!(is.character(x) || is.factor(x) || is.logical(x))) next
-    if (length(unique(x)) > 50L) next
-    v <- x[at]
-    attr(v, "label") <- attr(x, "label", exact = TRUE)
-    out[[nm]] <- v
-  }
-  out
-}

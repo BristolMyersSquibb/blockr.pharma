@@ -1,6 +1,7 @@
-# The patient timeline's frame: the timeline's frame (timeline_frame()) with
-# the swimmer's layers added. One long frame, one record per thing drawn, for
-# the spans column of new_patient_timeline_block():
+# The patient timeline's frame: one long frame, one record per thing drawn,
+# for the spans column of new_patient_timeline_block(). The AE, con-med and
+# dose-bar records come from R/patient-timeline-events.R, the response and
+# drug lines from R/patient-timeline-efficacy.R.
 #
 # Treatment and the response draw on the patient row only (no row of their
 # own); AEs and con meds open into a row per term, under a section title.
@@ -77,7 +78,36 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   and `"subject"`.
 #' @param roles The study's roles, as [patient_timeline_roles()] reads them
 #'   from the board. `NULL`: none declared.
-#' @inheritParams timeline_frame
+#' @param ae_records `"treatment-emergent"` (`TRTEMFL`) or `"all"`.
+#' @param ae_show `"all AEs"`, `"serious AEs"` or `"ongoing AEs"`.
+#' @param ae_lanes One row per `"preferred term"`, `"reported term"` or
+#'   `"body system"` when a patient is opened.
+#' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
+#' @param cm_records `"active on treatment"` (ends on or after the first dose,
+#'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
+#' @param cm_colour The field that colours the con meds: a column of ADCM
+#'   (`"CMCLAS"`, `"CMINDC"`, `"CMROUTE"`), `"before or on treatment"` or
+#'   `"one colour"`. A column keeps its most common levels and folds the
+#'   rest into "Other", so the colours stay within what a legend can show.
+#'   `"class"` and `"indication"` still work.
+#' @param cm_lanes One row per `"coded name"`, `"reported name"` or
+#'   `"class"`.
+#' @param cm_prior Con meds that start before the axis: `"clipped at the
+#'   start"` or `"hidden"`.
+#' @param trt_colour With bars by dose: `"dose level"` (more than five doses
+#'   fall into dose ranges), `"drug"` (more than five fold into "Other drug")
+#'   or `"one colour"`.
+#' @param origin Day 1 is the `"first dose"` (`TRTSDT`) or `"randomisation"`
+#'   (`RANDDT`).
+#' @param cutoff The data cutoff, a date. `NULL` or `NA`: the last date in
+#'   the data.
+#' @param ongoing A record without an end runs to `"last contact"`
+#'   (`LSTALVDT`, else the last dose) or the `"data cutoff"`.
+#' @details Time is in study days. The colour column holds at most 15 levels
+#'   over all layers, the most the table draws. Each level carries its
+#'   default colour (`blockr_colors`) and the data variable and value it
+#'   stands for (`blockr_scale_keys`, e.g. `ASEV` `"MILD"`, `CMCLAS`,
+#'   `EXTRT`), so a colour the board's scale map sets for that value wins.
 #' @return A data frame, one record per drawn piece.
 #' @examples
 #' if (requireNamespace("pharmaverseadam", quietly = TRUE)) {

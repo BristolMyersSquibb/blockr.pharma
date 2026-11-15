@@ -227,10 +227,6 @@ register_pharma_blocks <- function() {
   # groups layout); new_ae_heatmap_block() only builds one, so it has no
   # registry entry of its own.
   #
-  # The old swimmer (new_swimmer_block()) and timeline (new_timeline_block())
-  # have no menu entry: the efficacy and safety timelines replace them. Saved
-  # boards still restore them through their constructors.
-  #
   # The patient timeline's two presets, each a class and an entry of its own
   # (see new_patient_timeline_block()).
   pt_args <- list(c(

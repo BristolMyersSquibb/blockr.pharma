@@ -1,7 +1,7 @@
-// Gear rows of the pharma blocks (the swimmer, the timeline), registered as
+// Gear rows of the patient timeline, registered as
 // blockr.viz gear editors (core/gear/profile.js):
 //   mapping     the Tables row: what the block found in its input (R's
-//               swimmer_mapping() or timeline_mapping(), sent as
+//               patient_timeline_mapping(), sent as
 //               derived.gear.info); with `parameters` it says when the
 //               picked response parameter is not in ADRS (the pick itself is
 //               the prepare script's `parameter` row)

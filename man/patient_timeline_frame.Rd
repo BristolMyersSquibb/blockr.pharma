@@ -91,8 +91,9 @@ gives its own dose. The old \code{"Gaps and cuts"} reads as \code{"Gaps"}.}
 \item{dose_tags}{With lines per drug and \code{"Gaps"}, a small tag with the
 new dose where a drug's dose changes.}
 
-\item{trt_colour}{\code{"dose level"} (more than five doses fall into dose
-ranges), \code{"drug"} (more than five fold into "Other drug") or \code{"one colour"}.}
+\item{trt_colour}{With bars by dose: \code{"dose level"} (more than five doses
+fall into dose ranges), \code{"drug"} (more than five fold into "Other drug")
+or \code{"one colour"}.}
 
 \item{origin}{Day 1 is the \code{"first dose"} (\code{TRTSDT}) or \code{"randomisation"}
 (\code{RANDDT}).}
@@ -121,6 +122,13 @@ Turns ADSL, ADRS, ADEX, ADAE and ADCM into the long frame the patient
 timeline block draws (\code{\link[=new_patient_timeline_block]{new_patient_timeline_block()}}). It is that block's
 prepare step and needs no prep of its inputs. Tables and columns may be
 named as the patient profile allows.
+}
+\details{
+Time is in study days. The colour column holds at most 15 levels
+over all layers, the most the table draws. Each level carries its
+default colour (\code{blockr_colors}) and the data variable and value it
+stands for (\code{blockr_scale_keys}, e.g. \code{ASEV} \code{"MILD"}, \code{CMCLAS},
+\code{EXTRT}), so a colour the board's scale map sets for that value wins.
 }
 \examples{
 if (requireNamespace("pharmaverseadam", quietly = TRUE)) {

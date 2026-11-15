@@ -77,22 +77,19 @@ test_that("each track lists the fields the data has, by their labels", {
 })
 
 test_that("a column colours by its values, in their known order, worst last", {
-  for (fr in list(function(...) timeline_frame(cb_toy(), ...),
-                  function(...) patient_timeline_frame(cb_toy(), ...))) {
-    f <- fr(ae_colour = "AEACNA")
-    ae <- f[f$.lane %in% "Adverse events" & is.finite(f$Start), ]
-    expect_setequal(as.character(ae$Colour),
-                    c("Dose not changed", "Drug withdrawn", "Drug interrupted"))
-    # The legend order: the known order, so the withdrawal is the worst.
-    lv <- levels(droplevels(ae$Colour))
-    expect_identical(lv, c("Dose not changed", "Drug interrupted",
-                           "Drug withdrawn"))
-    # The scale map binds the column under its own name.
-    keys <- attr(f$Colour, "blockr_scale_keys")
-    expect_true(all(c("AEACNA") %in% keys$var))
-    expect_identical(keys$key[keys$level == "Drug withdrawn" &
-                                keys$var == "AEACNA"], "DRUG WITHDRAWN")
-  }
+  f <- patient_timeline_frame(cb_toy(), ae_colour = "AEACNA")
+  ae <- f[f$.lane %in% "Adverse events" & is.finite(f$Start), ]
+  expect_setequal(as.character(ae$Colour),
+                  c("Dose not changed", "Drug withdrawn", "Drug interrupted"))
+  # The legend order: the known order, so the withdrawal is the worst.
+  lv <- levels(droplevels(ae$Colour))
+  expect_identical(lv, c("Dose not changed", "Drug interrupted",
+                         "Drug withdrawn"))
+  # The scale map binds the column under its own name.
+  keys <- attr(f$Colour, "blockr_scale_keys")
+  expect_true(all(c("AEACNA") %in% keys$var))
+  expect_identical(keys$key[keys$level == "Drug withdrawn" &
+                              keys$var == "AEACNA"], "DRUG WITHDRAWN")
 })
 
 test_that("the scale map's pins order the levels", {
@@ -101,21 +98,25 @@ test_that("the scale map's pins order the levels", {
                         "DRUG INTERRUPTED" = "#111111",
                         "DOSE NOT CHANGED" = "#222222")
   ))
-  f <- timeline_frame(cb_toy(), ae_colour = "AEACNA", scale_map = map)
+  f <- patient_timeline_frame(cb_toy(), ae_colour = "AEACNA",
+                              scale_map = map)
   lv <- levels(droplevels(f$Colour[f$.lane %in% "Adverse events"]))
   expect_identical(lv, c("Drug withdrawn", "Drug interrupted",
                          "Dose not changed"))
 })
 
 test_that("con meds colour by a column, the response by its parameter", {
-  f <- timeline_frame(cb_toy(), show = "Con meds", cm_colour = "CMROUTE")
+  f <- patient_timeline_frame(cb_toy(), layers = "Con meds",
+                              cm_colour = "CMROUTE")
   expect_identical(unique(as.character(f$Colour[f$.lane %in% "Con meds"])),
                    "Oral")
-  f <- timeline_frame(cb_toy(), show = "Con meds", cm_colour = "CMCLAS")
+  f <- patient_timeline_frame(cb_toy(), layers = "Con meds",
+                              cm_colour = "CMCLAS")
   expect_setequal(as.character(f$Colour[f$.lane %in% "Con meds"]),
                   c("Analgesics", "Nsaids"))
   # A column the data lacks: before or on treatment.
-  f <- timeline_frame(cb_toy(), show = "Con meds", cm_colour = "CMINDC")
+  f <- patient_timeline_frame(cb_toy(), layers = "Con meds",
+                              cm_colour = "CMINDC")
   expect_true(all(grepl("^Started", f$Colour[f$.lane %in% "Con meds"])))
   r <- patient_timeline_frame(cb_toy(), layers = "Response",
                               response = "OVRIRC")
@@ -131,7 +132,7 @@ test_that("the old colour words restore as the fields they meant", {
     cm_colour = "class, else before or on treatment"
   ))$cm_colour, "before or on treatment")
   # The frames still read them.
-  g <- timeline_frame(cb_toy(), ae_colour = "grade")
+  g <- patient_timeline_frame(cb_toy(), ae_colour = "grade")
   expect_true("Grade 3" %in% g$Colour)
 })
 

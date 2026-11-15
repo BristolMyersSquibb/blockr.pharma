@@ -1,7 +1,7 @@
-# The timeline's frame: ADSL, ADAE, ADCM and ADEX in, one long frame out,
-# which the spans column of new_timeline_block() draws. The table has a row
-# per patient that opens into a row per lane (an AE term, a con med, a drug);
-# in the frame, one record per thing drawn:
+# The patient timeline's AE, con-med and dose-bar records
+# (patient_timeline_frame()), written for the retired AE and con-med
+# timeline. The table has a row per patient that opens into a row per lane
+# (an AE term, a con med); one record per thing drawn:
 #
 #   AE          a bar from onset to resolution, coloured by grade or severity
 #   con med     a bar from start to end, coloured by whether it started before
@@ -18,174 +18,18 @@
 #
 # Every step works on whole columns: no subsetting per patient.
 
-#' Timeline frame from ADaM
-#'
-#' Turns ADSL, ADAE, ADCM and ADEX into the long frame the timeline block
-#' draws ([new_timeline_block()]). It is that block's prepare step and needs
-#' no prep of its inputs. Tables and columns may be named as the patient
-#' profile allows (`dm`, `ae`, `cm`, `ex`; SDTM columns such as `AESTDTC`).
-#'
-#' @param data A `dm` (or a named list of data frames) with `adsl` and the
-#'   tables of what is shown; or the ADAE data frame alone.
-#' @param show What to draw, any of `"Adverse events"`, `"Con meds"` and
-#'   `"Treatment"`.
-#' @param ae_records `"treatment-emergent"` (`TRTEMFL`) or `"all"`.
-#' @param ae_show `"all AEs"`, `"serious AEs"` or `"ongoing AEs"`.
-#' @param ae_colour The field that colours the AEs, a column of ADAE as
-#'   [timeline_colour_fields()] lists them (`"AETOXGR"`, `"AESEV"`,
-#'   `"AEACNA"`, ...), or `"one colour"`. A column the data lacks falls back
-#'   to the study's severity. The words of earlier versions (`"grade or
-#'   severity"`, `"grade"`, `"severity"`) still work.
-#' @param ae_lanes One row per `"preferred term"`, `"reported term"` or
-#'   `"body system"` when a patient is opened.
-#' @param serious `"outlined"`, `"marked at onset"` or `"unmarked"`.
-#' @param death Mark death with a cross.
-#' @param cm_records `"active on treatment"` (ends on or after the first dose,
-#'   or ongoing) or `"all"` (the axis then starts 28 days before day 1).
-#' @param cm_colour The field that colours the con meds: a column of ADCM
-#'   (`"CMCLAS"`, `"CMINDC"`, `"CMROUTE"`), `"before or on treatment"` or
-#'   `"one colour"`. A column keeps its most common levels and folds the
-#'   rest into "Other", so the colours stay within what a legend can show.
-#'   `"class"` and `"indication"` still work.
-#' @param cm_lanes One row per `"coded name"`, `"reported name"` or
-#'   `"class"`.
-#' @param cm_prior Con meds that start before the axis: `"clipped at the
-#'   start"` or `"hidden"`.
-#' @param trt_colour `"dose level"` (more than five doses fall into dose
-#'   ranges), `"drug"` (more than five fold into "Other drug") or `"one
-#'   colour"`.
-#' @param origin Day 1 is the `"first dose"` (`TRTSDT`) or `"randomisation"`
-#'   (`RANDDT`).
-#' @param cutoff The data cutoff, a date. `NULL` or `NA`: the last date in
-#'   the data.
-#' @param ongoing A record without an end runs to `"last contact"`
-#'   (`LSTALVDT`, else the last dose) or the `"data cutoff"`.
-#' @param order_by Patient order: `"number of events"` (AEs and con meds
-#'   shown), `"number of AEs"`, `"worst AE"`,
-#'   `"ongoing AEs"`, `"first onset"`, `"number of con meds"` or
-#'   `"subject"`.
-#' @param group The patient column shown as the arm, e.g. `"TRT01A"`.
-#' @param scale_map The board's scale map ([timeline_scale_map()]): a
-#'   colour field's levels draw in the order it pins them, the last the
-#'   worst. `NULL`: their known order.
-#' @details Time is in study days. The colour column holds at most 15 levels
-#'   over all sources, the most the table draws: AEs take theirs (at most
-#'   five grades), treatment at most five, con meds what is left, at most
-#'   eight. Each level carries its default colour (`blockr_colors`) and the
-#'   data variable and value it stands for (`blockr_scale_keys`, e.g. `ASEV`
-#'   `"MILD"`, `CMCLAS`, `EXTRT`), so a colour the board's scale map sets for
-#'   that value wins.
-#' @return A data frame, one record per drawn piece; see the source for the
-#'   columns.
-#' @examples
-#' if (requireNamespace("pharmaverseadam", quietly = TRUE)) {
-#'   d <- list(adsl = pharmaverseadam::adsl, adae = pharmaverseadam::adae,
-#'             adex = pharmaverseadam::adex)
-#'   head(timeline_frame(d))
-#' }
-#' @export
-timeline_frame <- function(data,
-                           show = c("Adverse events", "Treatment"),
-                           ae_records = "treatment-emergent",
-                           ae_show = "all AEs",
-                           ae_colour = "grade or severity",
-                           ae_lanes = "preferred term",
-                           serious = "outlined",
-                           death = TRUE,
-                           cm_records = "active on treatment",
-                           cm_colour = "before or on treatment",
-                           cm_lanes = "coded name",
-                           cm_prior = "clipped at the start",
-                           trt_colour = "dose level",
-                           origin = "first dose",
-                           cutoff = NULL,
-                           ongoing = "last contact",
-                           order_by = "number of events",
-                           group = "TRT01A",
-                           scale_map = NULL) {
-  show <- intersect(TL_SHOW, as.character(unlist(show)))
-  if (!length(show)) stop("Pick at least one thing to show.", call. = FALSE)
-  arg <- function(x, choices) match.arg(as.character(x)[1L], choices)
-  opt <- list(
-    ae_records = arg(ae_records, TL_AE_RECORDS),
-    ae_show = arg(ae_show, TL_AE_SHOW),
-    ae_colour = as.character(unlist(ae_colour))[1L],
-    ae_lanes = arg(ae_lanes, names(TL_AE_LANES)),
-    serious = arg(serious, TL_SERIOUS),
-    death = isTRUE(as.logical(death)),
-    cm_records = arg(cm_records, TL_CM_RECORDS),
-    cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
-    cm_lanes = arg(cm_lanes, names(TL_CM_LANES)),
-    cm_prior = arg(cm_prior, TL_CM_PRIOR),
-    trt_colour = arg(trt_colour, TL_TRT_COLOUR),
-    origin = arg(origin, TL_ORIGIN),
-    ongoing = arg(ongoing, c("last contact", "data cutoff")),
-    order_by = arg(order_by, TL_ORDER)
-  )
-  group <- as.character(unlist(group %||% character()))
-  group <- group[!is.na(group) & nzchar(group)]
-  group <- if (length(group)) group[[1L]]
-
-  tb <- tl_tables(data, show)
-  opt$scale_map <- scale_map
-  if (!is.null(tb$adae)) opt$ae_field <- tl_ae_field(tb$adae, ae_colour)
-  opt$cmfield <- tl_cm_field(tb$adcm, tl_cm_colour_value(cm_colour))
-  sl <- tl_subjects(tb, group, opt$origin)
-  cutoff <- aet_date(cutoff)
-  if (!length(cutoff) || is.na(cutoff[[1L]])) cutoff <- tl_cutoff(tb, sl)
-  cutoff <- cutoff[[1L]]
-  sl <- aet_cap_at(sl, cutoff)
-
-  parts <- list()
-  if ("Adverse events" %in% show && !is.null(tb$adae)) {
-    parts$ae <- tl_ae(tb$adae, sl, opt, cutoff)
-  }
-  if ("Treatment" %in% show) parts$trt <- tl_treatment(tb$adex, sl, opt, cutoff)
-  lo <- tl_axis_start(parts)
-  if ("Con meds" %in% show && !is.null(tb$adcm)) {
-    # All con meds, prior-only ones included: the axis starts 28 days
-    # before day 1, as the swimmer's con meds do.
-    if (identical(opt$cm_records, "all")) lo <- min(lo, 1 - 28)
-    parts$cm <- tl_cm(tb$adcm, sl, opt, cutoff, lo)
-  }
-  parts <- Filter(function(p) !is.null(p) && length(p$USUBJID), parts)
-  if (!length(parts)) stop("Nothing to draw.", call. = FALSE)
-  # Field orders and colours travel as attributes, which tl_keep() drops.
-  opt$field_palettes <- tl_field_palettes(parts)
-  # Patients with an event (an AE or a con med) shown; treatment alone draws
-  # every patient it has.
-  ev <- unique(unlist(lapply(parts[intersect(c("ae", "cm"), names(parts))],
-                             `[[`, "USUBJID")))
-  ids <- if (length(ev)) ev else unique(parts$trt$USUBJID)
-  pcols <- attr(sl, "pcols")
-  sl <- sl[sl$USUBJID %in% ids, , drop = FALSE]
-  attr(sl, "pcols") <- pcols
-  parts <- lapply(parts, function(p) tl_keep(p, p$USUBJID %in% sl$USUBJID))
-  parts <- tl_unique_rows(parts)
-  rec <- tl_bind(parts)
-  out <- tl_bind(list(rec, tl_event_rows(rec, sl, opt),
-                      tl_patient_rows(sl, opt)))
-  tl_finish(out, sl, opt, group)
-}
-
 TL_SHOW <- c("Adverse events", "Con meds", "Treatment")
 TL_AE_RECORDS <- c("treatment-emergent", "all")
 TL_AE_SHOW <- c("all AEs", "serious AEs", "ongoing AEs")
-TL_AE_COLOUR <- c("grade or severity", "severity", "grade", "one colour")
 TL_AE_LANES <- c("preferred term" = "AEDECOD", "reported term" = "AETERM",
                  "body system" = "AEBODSYS")
 TL_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 TL_CM_RECORDS <- c("active on treatment", "all")
-TL_CM_COLOUR <- c("before or on treatment", "class", "indication",
-                  "one colour")
 TL_CM_LANES <- c("coded name" = "CMDECOD", "reported name" = "CMTRT",
                  "class" = "CMCLAS")
 TL_CM_PRIOR <- c("clipped at the start", "hidden")
 TL_TRT_COLOUR <- c("dose level", "drug", "one colour")
 TL_ORIGIN <- c("first dose", "randomisation")
-TL_ORDER <- c("number of events", "number of AEs", "worst AE",
-              "ongoing AEs", "first onset", "number of con meds", "subject")
-
 # The most colour levels the table draws (blockr.viz's groups limit), and
 # what treatment and con meds take of them at most.
 TL_MAX_COLOURS <- 15L
@@ -233,36 +77,6 @@ TL_CM_BLUES <- c("#1f4e8c", "#3f6fb0", "#6b93c9", "#9db8de", "#2f7f9e",
 TL_TRT_GREYS <- c("#c4c9d0", "#9aa1ab", "#6b7280", "#4b5361", "#2f3540")
 
 # --- inputs ----------------------------------------------------------------
-
-# The tables, normalised as the patient profile does (pp_normalize_tables()):
-# SDTM table names and columns read as their ADaM counterparts.
-tl_tables <- function(data, show = TL_SHOW) {
-  if (is.data.frame(data)) data <- list(adae = data)
-  tabs <- if (inherits(data, "dm")) dm::dm_get_tables(data) else data
-  if (!is.list(tabs)) {
-    stop("The timeline needs a dm with adsl and adae, adcm or adex.",
-         call. = FALSE)
-  }
-  names(tabs) <- tolower(names(tabs))
-  tabs <- pp_normalize_tables(tabs)$tables
-  get <- function(nm) {
-    x <- tabs[[nm]]
-    if (!is.null(x)) as.data.frame(x)
-  }
-  out <- list(adsl = get("adsl"), adae = get("adae"), adcm = get("adcm"),
-              adex = get("adex"))
-  need <- c("Adverse events" = "adae", "Con meds" = "adcm")
-  need <- need[names(need) %in% show]
-  if (length(need) && all(vapply(out[need], is.null, NA)) &&
-        !"Treatment" %in% show) {
-    stop("The timeline needs ", paste(need, collapse = " or "),
-         " in its input.", call. = FALSE)
-  }
-  if (is.null(out$adsl) && is.null(out$adae)) {
-    stop("The timeline needs adsl in its input.", call. = FALSE)
-  }
-  out
-}
 
 # One row per patient: day 1, last dose, last contact, death and the patient
 # columns. From ADSL, else the first ADAE row of each patient. `all_cols`:

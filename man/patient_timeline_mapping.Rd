@@ -10,7 +10,8 @@ patient_timeline_mapping(data)
 \item{data}{The block's input dm.}
 }
 \value{
-A list: \code{roles} and \code{note}, as \code{\link[=timeline_mapping]{timeline_mapping()}}.
+A list: \code{roles} (role, table, found, columns, missing, need)
+and \code{note}.
 }
 \description{
 What the patient timeline finds in its input

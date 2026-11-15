@@ -1,7 +1,6 @@
-# What colours each track of the timeline and the patient timeline: a column
-# of the track's table (ADAE, ADCM), a parameter (ADRS) or a fixed choice
-# (ADEX). The choices come from the data, as the swimmer's response
-# parameter does: a column the study lacks is not offered. The prepare
+# What colours each layer of the patient timeline: a column of the layer's
+# table (ADAE, ADCM), a parameter (ADRS) or a fixed choice (ADEX). The
+# choices come from the data: a column the study lacks is not offered. The prepare
 # script's select shows each field's label and stores its name.
 #
 # A field's levels draw in the order the board's scale map pins them (the

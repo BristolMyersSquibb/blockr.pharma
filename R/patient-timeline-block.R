@@ -1,12 +1,13 @@
-# The patient timeline: one block for what the swimmer and the timeline
-# draw, built from blockr.viz's table block as both are.
+# The patient timeline, built from blockr.viz's table block. It replaces the
+# swimmer and the old AE and con-med timeline; boards saved with those open
+# as this block (R/retired-blocks.R).
 #
 # One row per patient with a stripe per layer drawn (response, treatment,
 # AEs, con meds; discontinuation and death as marks); a click opens the
 # patient into a row per AE term and con med, on the same axis, each layer
 # under a small title. Treatment and the response do not open: their detail
-# is in the tooltips. The table block's prepare step, patient_timeline_frame(), reads the
-# ADaM tables from the input dm.
+# is in the tooltips. The table block's prepare step,
+# patient_timeline_frame(), reads the ADaM tables from the input dm.
 #
 # Two presets build it: "efficacy" (response, treatment, discontinuation and
 # death, longest on treatment first) and "safety" (AEs, discontinuation and
@@ -209,6 +210,30 @@ PT_PRESETS <- list(
   )
 )
 
+# Settings since removed, which saved boards may still carry: the dose labels
+# on the treatment bars and the row cap before "Other con meds".
+TL_RETIRED <- c("dose_labels", "max_lanes")
+
+# Saved listing columns and swimlane without what the swimlane no longer
+# reads (the dose labels' `bar_label`).
+tl_summaries_migrate <- function(summaries) {
+  if (!is.list(summaries)) return(summaries)
+  lapply(summaries, function(s) {
+    # Overlapping episodes of one term no longer stack on two bars; the AE
+    # records under the table icon list them.
+    if (is.list(s)) s[c("bar_label", "inner_overlap")] <- NULL
+    s
+  })
+}
+
+# A saved subtitle without its sort clause: the table sorts by a click on a
+# column header, so the order is not a word on the face.
+timeline_subtitle_migrate <- function(subtitle) {
+  if (!is.character(subtitle) || length(subtitle) != 1L) return(subtitle)
+  out <- sub("^ *sorted by \\{@order_by\\},? *", "", subtitle)
+  gsub(",? *sorted by \\{@order_by\\}", "", out)
+}
+
 #' The patient timeline's prepare script
 #'
 #' Declares the settings, which the gear shows as rows, then calls
@@ -219,8 +244,8 @@ PT_PRESETS <- list(
 #' @export
 patient_timeline_script <- function() {
   sel <- function(name, value, levels, label, multiple = FALSE) {
-    paste0(name, " <- factor(", swimmer_levels(value), ", levels = ",
-           swimmer_levels(levels), ")  #| select(label = \"", label, "\"",
+    paste0(name, " <- factor(", chr_code(value), ", levels = ",
+           chr_code(levels), ")  #| select(label = \"", label, "\"",
            if (multiple) ", multiple = TRUE", "", ")")
   }
   flag <- function(name, value, label) {
@@ -273,6 +298,11 @@ patient_timeline_script <- function() {
     "blockr.pharma::patient_timeline_sort(frame, sort_col)",
     sep = "\n"
   )
+}
+
+# A character vector as R code: c("a", "b").
+chr_code <- function(x) {
+  paste0("c(", paste0("\"", x, "\"", collapse = ", "), ")")
 }
 
 #' The patient timeline's sentence under the title
@@ -374,32 +404,41 @@ patient_timeline_summaries <- function(preset = c("safety", "efficacy")) {
   }, on, names(on))), list(patient_timeline_lane()))
 }
 
-# The timeline's lane, with reason tags, the drugs as the swimmer's 5px lines
-# and the response, AE and con-med stripes as full bars under them.
+# The spans column: a stripe per layer on the patient row, cut to the worst
+# level where records overlap, reason tags, the drugs as thin lines and the
+# response, AE and con-med stripes as full bars under them.
 patient_timeline_lane <- function() {
-  l <- timeline_lane()
-  l$event_tag <- ".tag"
-  l$lane_full <- ".full"
-  l$lane_size <- "md"
-  l$x_unit <- "Day"
-  l
+  list(type = "spans", name = "Study time", x = "Start", xend = "End",
+       color = "Colour", label = ".label",
+       tooltip = c("Type", "Details", "Days"), lane = ".lane",
+       open = ".open", seg_style = ".style",
+       event_x = ".event_x", event_shape = "Event", overlap = "worst",
+       parent_lanes = TRUE, event_tag = ".tag", lane_full = ".full",
+       lane_size = "md", x_unit = "Day")
 }
 
-# What the patient timeline reads, per role (see pharma_mapping()). A
-# function: the timeline's roles are defined in a file collated later.
-pt_roles <- function() {
-  c(TIMELINE_ROLES,
-    list(list(role = "Response", table = "adrs", need = FALSE,
-              cols = list("USUBJID", "PARAMCD", "AVALC", c("ADT", "ADTM")))))
-}
+# What the patient timeline reads, per role (see pharma_mapping()).
+PT_ROLES <- list(
+  list(role = "Patients", table = "adsl", need = TRUE,
+       cols = list("USUBJID", "TRTSDT", "TRTEDT")),
+  list(role = "Adverse events", table = "adae", need = FALSE,
+       cols = list("USUBJID", c("AEDECOD", "AETERM"), c("ASTDY", "ASTDT"))),
+  list(role = "Con meds", table = "adcm", need = FALSE,
+       cols = list("USUBJID", c("CMDECOD", "CMTRT"), c("ASTDY", "ASTDT"))),
+  list(role = "Treatment", table = "adex", need = FALSE,
+       cols = list("USUBJID", "EXTRT", c("ASTDT", "ASTDY"))),
+  list(role = "Response", table = "adrs", need = FALSE,
+       cols = list("USUBJID", "PARAMCD", "AVALC", c("ADT", "ADTM")))
+)
 
 #' What the patient timeline finds in its input
 #'
 #' @param data The block's input dm.
-#' @return A list: `roles` and `note`, as [timeline_mapping()].
+#' @return A list: `roles` (role, table, found, columns, missing, need)
+#'   and `note`.
 #' @export
 patient_timeline_mapping <- function(data) {
-  list(roles = pharma_mapping(data, pt_roles()),
+  list(roles = pharma_mapping(data, PT_ROLES),
        note = paste("Names match without case. The AE severity column and",
                     "the arm come from the board's study roles when it",
                     "declares them."))
