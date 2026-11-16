@@ -234,7 +234,8 @@ test_that("treatment draws a line per drug, or bars by dose", {
   d <- f[f$.lane %in% "Drug", ]
   # One line from the first dose, cut from 54 to 81 mg: a step up, so solid.
   expect_identical(unique(d$USUBJID), c("A", "C"))
-  expect_identical(levels(f$.lane)[1:2], c("Drug", "Placebo"))
+  # The study lane (the end-of-study tag) heads the drugs.
+  expect_identical(levels(f$.lane)[1:3], c("Study", "Drug", "Placebo"))
   expect_false(any(f$.full[f$.lane %in% c("Drug", "Placebo")]))
   expect_true(all(f$.full[f$.lane %in% "Response"]))
   # The swimmer's drug colours.

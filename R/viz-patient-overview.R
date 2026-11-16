@@ -534,7 +534,7 @@ patient_overview_viz <- new_pp_viz(
       why <- pp_disc_reason(sl)
       if (!is.null(why)) {
         milestone_data <- c(milestone_data, list(list(
-          value = list(trt_end, ms_lane, "tag", why$tag),
+          value = list(trt_end, ms_lane, "tag", why$tag, 0L, 0L),
           tip = pp_tip_event(
             why$name, color = PP_EV_INK, type = "Discontinuation",
             details = why$reason,
@@ -547,11 +547,28 @@ patient_overview_viz <- new_pp_viz(
       if (!is.null(eos)) {
         milestone_data <- c(milestone_data, list(list(
           value = list(pp_xval(eos$date, ref_ms, mode), ms_lane, "eos",
-                       eos$tag),
+                       eos$tag, 0L, 0L),
           tip = pp_tip_event(
             eos$name, color = PP_EV_INK, type = "End of study",
             details = eos$reason,
             days = pp_tip_day(pp_tip_when(eos$date, NA, ref_ms, mode))
+          )
+        )))
+      }
+
+      # Each drug's own reason (DS names the drug) at the end of its line,
+      # in its slot, as the patient timeline tags it on the drug's lane.
+      dr <- if (has_adex) {
+        pp_drug_reason_marks(tbls, sl, ex_drugs, ex_src, ex_use_day,
+                             trt_end, ref_ms, mode)
+      }
+      for (i in seq_len(NROW(dr))) {
+        milestone_data <- c(milestone_data, list(list(
+          value = list(dr$x[[i]], ms_lane, "tag", dr$tag[[i]],
+                       length(ex_drugs), match(dr$drug[[i]], ex_drugs) - 1L),
+          tip = pp_tip_event(
+            dr$name[[i]], color = PP_EV_INK, type = "Discontinuation",
+            details = c(swimmer_drug_name(dr$drug[[i]]), dr$reason[[i]])
           )
         )))
       }
@@ -564,7 +581,7 @@ patient_overview_viz <- new_pp_viz(
           ref_ms, mode
         )
         milestone_data <- c(milestone_data, list(list(
-          value = list(dth_x, ms_lane, "death", ""),
+          value = list(dth_x, ms_lane, "death", "", 0L, 0L),
           tip = pp_tip_event("Death", color = PP_EV_INK,
                              days = pp_tip_day(
                                pp_tip_when(dth$date, dth$day, ref_ms, mode)
@@ -579,6 +596,15 @@ patient_overview_viz <- new_pp_viz(
           function(params, api) {
             var p = api.coord([api.value(0), api.value(1)]);
             var x = p[0], y = p[1];
+            // A drug's own reason sits in the drug's slot, on its line
+            // (the exposure series' geometry).
+            var n = +api.value(4) || 0;
+            if (n > 0) {
+              var band = api.size([0, 1])[1] * 0.9;
+              var slot = band / n;
+              y = p[1] - band / 2 + slot * ((+api.value(5) || 0) + 0.5);
+              if (slot >= 16) y += 4;
+            }
             var ink = PatientProfile.ink('--blockr-grey-600') || '%s';
             var ring = PatientProfile.ink('--blockr-color-bg-surface');
             // A tag: outlined for the treatment reason, inverted (ink box,

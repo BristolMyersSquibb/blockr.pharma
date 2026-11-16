@@ -114,7 +114,9 @@ the data.}
 \item{disc_show}{The discontinuation reasons tagged: \code{"both"},
 \code{"treatment"} (ADSL \code{DCTREAS}, at the last dose) or \code{"end of study"}
 (\code{DCSREAS}, at \code{EOSDT}, else \code{RFENDT}). Each is read from its own
-column, or a column labelled as that reason.}
+column, or a column labelled as that reason. With treatment drawn,
+a drug that DS (or ADDS) names in \code{DSSCAT} also gets its own reason at
+the end of its line.}
 
 \item{order_by}{Patient order, one of \code{"days on treatment"}, \code{"number of AEs"}, \code{"number of events"}, \code{"worst AE"}, \code{"best response"}, \code{"first progression"}, \code{"ongoing AEs"}, \code{"first onset"}, \code{"number of con meds"}
 and \code{"subject"}.}

@@ -1125,6 +1125,21 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
       label = eos$tag, stringsAsFactors = FALSE
     )
   }
+  # Each drug's own reason at the end of its line, in its slot.
+  dr <- if (has_adex) {
+    pp_drug_reason_marks(tbls, sl, ex_drugs, ex_src, ex_use_day, trt_end,
+                         ref_ms, mode)
+  }
+  if (!is.null(dr)) {
+    n_slot <- max(length(ex_drugs), 1L)
+    k <- match(dr$drug, ex_drugs) - 1L
+    ms[[length(ms) + 1L]] <- data.frame(
+      x = dr$x,
+      y = if (n_slot == 1L) lane_y("TRT") else
+        lane_y("TRT") + 0.9 / 2 - 0.9 / n_slot * (k + 0.5),
+      kind = "tag", label = dr$tag, stringsAsFactors = FALSE
+    )
+  }
   dth <- pp_death_at(sl, adae_raw)
   if (!is.null(dth)) {
     ms[[length(ms) + 1L]] <- data.frame(

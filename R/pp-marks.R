@@ -85,6 +85,96 @@ pp_disc_reason <- function(sl, col = "DCTREAS") {
   list(tag = cat$tag[[1L]], name = cat$name[[1L]], reason = why)
 }
 
+#' Each drug's own discontinuation reason, from DS
+#'
+#' The disposition events of SDTM DS (or ADaM ADDS) whose `DSSCAT` names a
+#' drug: `DSCAT` "DISPOSITION EVENT" when the table has `DSCAT`. The reason
+#' is `DSDECOD`, else `DSTERM`, in the patient timeline's categories
+#' ([swimmer_reason_category()]); a completed or ongoing disposition, or a
+#' death, gives none. A record naming no drug of the study is matched by
+#' nothing downstream, so nothing is guessed.
+#'
+#' @param ds DS or ADDS, a data frame, or `NULL`.
+#' @return A data frame, one row per patient and drug: `USUBJID`, `key`
+#'   (the lowercased `DSSCAT`, to match ADEX `EXTRT`), `date` (`ASTDT`, else
+#'   `DSSTDTC`, `NA` without), `tag`, `name` and `reason`. `NULL` without
+#'   any.
+#' @noRd
+pp_ds_drug_reasons <- function(ds) {
+  if (is.null(ds) || !nrow(ds)) return(NULL)
+  ds <- as.data.frame(ds)
+  scat <- aet_col(ds, "DSSCAT")
+  raw <- aet_col(ds, c("DSDECOD", "DSTERM"))
+  if (is.null(scat) || is.null(raw) || is.null(ds$USUBJID)) return(NULL)
+  scat <- trimws(as.character(scat))
+  ok <- !is.na(scat) & nzchar(scat)
+  dcat <- aet_col(ds, "DSCAT")
+  if (!is.null(dcat)) {
+    ok <- ok & toupper(trimws(as.character(dcat))) %in% "DISPOSITION EVENT"
+  }
+  why <- swimmer_reason(raw)
+  cat <- swimmer_reason_category(why)
+  ok <- ok & !is.na(cat$tag)
+  dt <- aet_col(ds, c("ASTDT", "DSSTDTC"))
+  dt <- if (is.null(dt)) rep(as.Date(NA), nrow(ds)) else pp_as_date(dt)
+  out <- data.frame(
+    USUBJID = as.character(ds$USUBJID), key = tolower(scat), date = dt,
+    tag = cat$tag, name = cat$name, reason = why, stringsAsFactors = FALSE
+  )[ok, , drop = FALSE]
+  out <- out[!duplicated(out[c("USUBJID", "key")]), , drop = FALSE]
+  if (!nrow(out)) return(NULL)
+  rownames(out) <- NULL
+  out
+}
+
+#' The profile's per-drug reason tags
+#'
+#' One patient's [pp_ds_drug_reasons()] at the end of each drug's line, as
+#' the treatment lane draws the lines: the last end of the drug's ADEX
+#' records, a record without an end stopping at the last dose. A tag that
+#' repeats the ADSL treatment reason ([pp_disc_reason()]) at the last dose is
+#' left out, as on the patient timeline.
+#'
+#' @param tbls The profile's tables.
+#' @param sl The patient's ADSL row.
+#' @param drugs The drugs with a slot (ADEX `EXTRT`, trimmed).
+#' @param src,use_day ADEX's start column and whether it is a study day.
+#' @param trt_end The last dose's x.
+#' @return A data frame: `drug`, `x`, `tag`, `name`, `reason`; `NULL`
+#'   without any.
+#' @noRd
+pp_drug_reason_marks <- function(tbls, sl, drugs, src, use_day, trt_end,
+                                 ref_ms, mode) {
+  if (!length(drugs)) return(NULL)
+  ds <- tbls[["adds"]] %||% tbls[["ds"]]
+  r <- pp_ds_drug_reasons(ds)
+  if (is.null(r)) return(NULL)
+  r <- r[r$USUBJID %in% as.character(sl$USUBJID[[1L]]) &
+           r$key %in% tolower(drugs), , drop = FALSE]
+  ex <- as.data.frame(tbls[["adex"]])
+  if (!nrow(r) || !src %in% names(ex)) return(NULL)
+  ex <- ex[!is.na(ex[[src]]), , drop = FALSE]
+  end_col <- if (use_day) "AENDY" else "AENDT"
+  x_of <- function(v) {
+    pp_xval_pref_day(if (use_day) NULL else v, if (use_day) v else NULL,
+                     ref_ms, mode)
+  }
+  x <- vapply(seq_len(nrow(ex)), function(i) {
+    x0 <- x_of(ex[[src]][i])
+    e <- if (end_col %in% names(ex)) ex[[end_col]][i] else NA
+    if (is.na(e)) max(trt_end, x0) else x_of(e)
+  }, 0)
+  key <- tolower(trimws(as.character(ex$EXTRT)))
+  r$drug <- drugs[match(r$key, tolower(drugs))]
+  r$x <- vapply(r$key, function(k) max(x[key %in% k]), 0, USE.NAMES = FALSE)
+  trt <- pp_disc_reason(sl)
+  if (!is.null(trt)) {
+    r <- r[!(r$tag == trt$tag & r$x == trt_end), , drop = FALSE]
+  }
+  if (!nrow(r)) return(NULL)
+  r[c("drug", "x", "tag", "name", "reason")]
+}
+
 #' Why the patient left the study
 #'
 #' ADSL `DCSREAS` (or `DCDECOD`, `DSDECOD`, a column labelled as the study

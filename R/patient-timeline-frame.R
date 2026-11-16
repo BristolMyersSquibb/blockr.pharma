@@ -112,7 +112,9 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #' @param disc_show The discontinuation reasons tagged: `"both"`,
 #'   `"treatment"` (ADSL `DCTREAS`, at the last dose) or `"end of study"`
 #'   (`DCSREAS`, at `EOSDT`, else `RFENDT`). Each is read from its own
-#'   column, or a column labelled as that reason.
+#'   column, or a column labelled as that reason. With treatment drawn,
+#'   a drug that DS (or ADDS) names in `DSSCAT` also gets its own reason at
+#'   the end of its line.
 #' @details Time is in study days. The colour column holds at most 15 levels
 #'   over all layers, the most the table draws. Each level carries its
 #'   default colour (`blockr_colors`) and the data variable and value it
@@ -216,7 +218,9 @@ patient_timeline_frame <- function(data,
           !is.null(aet_col(tb$adex, c("EXTRT", "CMDECOD")))) {
       parts$trt <- pt_drug_pick(parts$trt, drugs)
     }
-    opt$sub_lanes <- attr(parts$trt, "pt_lanes")
+    # The study lane (the end-of-study tag) heads the drugs' lanes.
+    lanes <- attr(parts$trt, "pt_lanes")
+    opt$sub_lanes <- c(if (length(lanes)) PT_STUDY_LANE, lanes)
     opt$trt_palette <- attr(parts$trt, "pt_palette")
   }
   lo <- tl_axis_start(parts)
@@ -267,7 +271,7 @@ patient_timeline_frame <- function(data,
       tl_keep(trt_events, trt_events$USUBJID %in% sl$USUBJID)
     },
     if (opt$death) {
-      pt_disc_rows(tb$adsl, sl, parts$trt, opt$disc_show, cutoff)
+      pt_disc_rows(tb$adsl, sl, parts$trt, opt$disc_show, cutoff, tb$ds)
     },
     pt_patient_rows(sl, opt, resp_bor)
   )
@@ -312,7 +316,8 @@ pt_tables <- function(data, layers) {
     if (!is.null(x)) as.data.frame(x)
   }
   out <- list(adsl = get("adsl"), adae = get("adae"), adcm = get("adcm"),
-              adex = get("adex"), adrs = get("adrs"))
+              adex = get("adex"), adrs = get("adrs"),
+              ds = get("adds") %||% get("ds"))
   if (is.null(out$adsl) && is.null(out$adae)) {
     stop("The patient timeline needs adsl in its input.", call. = FALSE)
   }
@@ -564,10 +569,13 @@ tl_response <- function(adrs, sl, opt, cutoff) {
 # the end of study (EOSDT, else RFENDT). Each is read from its own column.
 # A completed or ongoing disposition, or a death, has no tag; an end-of-study
 # tag that repeats the treatment reason's category is left out. With
-# treatment drawn, the tags sit on the lane of the drug that ended last, as
-# on the swimmer. `show` is one of PT_DISC_SHOW.
+# treatment drawn, the treatment reason sits on the lane of the drug that
+# ended last, as on the swimmer, and the end-of-study reason on the study
+# lane above the drugs. A drug's own reason, when DS names the drug, tags
+# the end of its line (pt_drug_reason_rows()). `show` is one of
+# PT_DISC_SHOW.
 pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
-                         cutoff = NA) {
+                         cutoff = NA, ds = NULL) {
   at <- match(sl$USUBJID, as.character(adsl$USUBJID))
   one <- function(col, date, kind) {
     raw <- aet_col(adsl, col)
@@ -601,15 +609,71 @@ pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
     same[is.na(same)] <- FALSE
     out$eos <- if (all(same)) NULL else lapply(e, `[`, !same)
   }
+  last <- pt_last_lane(trt, sl$USUBJID)
+  if (!is.null(out$trt)) {
+    out$trt$.lane_at <- last[match(out$trt$USUBJID, sl$USUBJID)]
+  }
+  if (!is.null(out$eos)) {
+    at_eos <- last[match(out$eos$USUBJID, sl$USUBJID)]
+    out$eos$.lane_at <- ifelse(is.na(at_eos), NA_character_, PT_STUDY_LANE)
+  }
+  if (show %in% c("both", "treatment")) {
+    out$drug <- pt_drug_reason_rows(ds, sl, trt, cutoff, out$trt)
+  }
   out <- Filter(Negate(is.null), out)
   if (!length(out)) return(NULL)
-  rows <- lapply(names(out[[1L]]), function(nm) {
+  nms <- names(out[[1L]])
+  rows <- lapply(nms, function(nm) {
     unlist(lapply(out, `[[`, nm), use.names = FALSE)
   })
-  rows <- stats::setNames(rows, names(out[[1L]]))
-  rows$.lane_at <- pt_last_lane(trt, rows$USUBJID)
+  stats::setNames(rows, nms)
+}
+
+# A drug's own discontinuation reason: a DS (or ADaM ADDS) disposition event
+# whose DSSCAT names the drug as ADEX does (case aside), tagged at the end of
+# that drug's line, on its lane (pp_ds_drug_reasons() reads DS). Only
+# drugs drawn (and picked) have a line, so a DSSCAT that names none, or a
+# drug still on, tags nothing. A tag that repeats `adsl_trt` (the ADSL
+# reason, same patient, lane, day and category) is left out.
+pt_drug_reason_rows <- function(ds, sl, trt, cutoff = NA, adsl_trt = NULL) {
+  if (is.null(trt) || !length(trt$USUBJID)) return(NULL)
+  r <- pp_ds_drug_reasons(ds)
+  if (is.null(r)) return(NULL)
+  r <- r[r$USUBJID %in% sl$USUBJID, , drop = FALSE]
+  if (!is.na(cutoff)) r <- r[is.na(r$date) | r$date <= cutoff, , drop = FALSE]
+  # Each drug's line end, by patient and lowercased lane; a drug with an
+  # open record is still on.
+  lane <- as.character(trt$.lane_at)
+  key <- paste(trt$USUBJID, tolower(lane), sep = "\r")
+  end <- tapply(trt$End, key, max, na.rm = TRUE)
+  op <- trt$.open %||% rep(FALSE, length(lane))
+  on <- tapply(op %in% TRUE, key, any)
+  lane_of <- tapply(lane, key, `[[`, 1L)
+  k <- paste(r$USUBJID, r$key, sep = "\r")
+  keep <- k %in% names(end)
+  keep[keep] <- !on[k[keep]] & is.finite(end[k[keep]])
+  if (!any(keep)) return(NULL)
+  r <- r[keep, , drop = FALSE]
+  k <- k[keep]
+  rows <- list(
+    USUBJID = r$USUBJID, .event_x = unname(end[k]),
+    .event = pt_disc_level(r$name, "trt"), .tag = r$tag,
+    Type = rep(PT_DISC_TYPE[["trt"]], nrow(r)),
+    .tag_group = rep(PT_DISC_TYPE[["trt"]], nrow(r)),
+    Details = r$reason, .lane_at = unname(lane_of[k])
+  )
+  if (!is.null(adsl_trt)) {
+    a <- paste(adsl_trt$USUBJID, adsl_trt$.lane_at, adsl_trt$.event_x,
+               adsl_trt$.tag)
+    b <- paste(rows$USUBJID, rows$.lane_at, rows$.event_x, rows$.tag)
+    rows <- lapply(rows, `[`, !b %in% a)
+    if (!length(rows$USUBJID)) return(NULL)
+  }
   rows
 }
+
+# The lane above the drugs that carries the end-of-study tag.
+PT_STUDY_LANE <- "Study"
 
 # Which discontinuation reasons the timeline tags.
 PT_DISC_SHOW <- c("both", "treatment", "end of study")
