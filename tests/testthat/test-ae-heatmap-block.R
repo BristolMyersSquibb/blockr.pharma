@@ -1,5 +1,5 @@
-# new_ae_heatmap_block() is not exported and stays only so boards saved with
-# it restore, as blockr.viz table blocks. New boards build the table block
+# new_ae_heatmap_block() is deprecated: boards saved with it restore as
+# blockr.viz table blocks, and code that calls it gets a warning. New boards build the table block
 # with ae_heatmap_script() and ae_heatmap_subtitle(); heatmap_table() below
 # is that call.
 
@@ -22,11 +22,16 @@ heatmap_table <- function(...) {
   )
 }
 
-test_that("the old constructor is not exported but restores", {
-  expect_false("new_ae_heatmap_block" %in%
-                 getNamespaceExports("blockr.pharma"))
-  expect_true(is.function(get0("new_ae_heatmap_block",
-                               asNamespace("blockr.pharma"))))
+test_that("the old constructor is exported and warns when code calls it", {
+  expect_true("new_ae_heatmap_block" %in%
+                getNamespaceExports("blockr.pharma"))
+  expect_warning(blk <- blockr.pharma::new_ae_heatmap_block(),
+                 class = "deprecatedWarning")
+  expect_s3_class(blk, "table_block")
+  expect_no_warning(
+    new_ae_heatmap_block(ctor = "new_ae_heatmap_block",
+                         ctor_pkg = "blockr.pharma")
+  )
 })
 
 test_that("a restore gives the table a board builds by hand", {
@@ -192,7 +197,7 @@ test_that("only a restored heatmap tells the user it is deprecated", {
     notify = function(msg, ...) said <<- c(said, msg),
     .package = "blockr.core"
   )
-  new_ae_heatmap_block()
+  suppressWarnings(new_ae_heatmap_block())
   expect_length(said, 0L)
   new_ae_heatmap_block(ctor = "new_ae_heatmap_block", ctor_pkg = "blockr.pharma")
   expect_length(said, 1L)

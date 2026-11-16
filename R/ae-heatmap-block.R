@@ -1,25 +1,45 @@
 # The AE heatmap, built from blockr.viz's table block.
 #
-# Not exported. It exists only so boards saved between 2026-08-30 and
-# 2026-10-26, which name this constructor, still restore: blockr.core finds a
-# saved constructor in the namespace. A restore builds a table block, which
-# saves as one, and tells the user to save the board. New boards call
-# blockr.viz::new_table_block() with ae_heatmap_script() and
+# Deprecated. Boards saved between 2026-08-30 and 2026-10-26 name this
+# constructor, and blockr.core finds a saved constructor in the namespace: a
+# restore builds a table block, which saves as one, and tells the user to
+# save the board. Code that calls it gets a deprecation warning. New boards
+# call blockr.viz::new_table_block() with ae_heatmap_script() and
 # ae_heatmap_subtitle() (see `inst/examples/clinical-explorer.R`).
 #
 # A heatmap of subjects by terms is a table block in the groups layout: one
 # row per subject (grouped by arm), one column per term (a summary's
 # `facet`), each cell a count drawn as a square tile painted by the worst
 # grade (`fill`), in the compact look (`look = "compact"`).
-#
-# Arguments, as the old block saved them: `row`, `col` (the term), `color`
-# (worst level paints the cell; empty paints by count), `group` (rows),
-# `cell_numbers`, `download`, `title`, `subtitle`, `caption`, `script` (NULL
-# builds ae_heatmap_script(col)) and `values`. `top_n` restores as the
-# script's `top_terms`. `drill`, `filter_*`, `max_height`, `ctrl_*` and
-# `locked_roles` are accepted and ignored, except `ctrl_target` and
-# `ctrl_table`, which become the drill target. `...` goes to
-# blockr.viz::new_table_block().
+
+#' AE heatmap (deprecated)
+#'
+#' Deprecated: build the table block directly with
+#' [blockr.viz::new_table_block()], [ae_heatmap_script()] and
+#' [ae_heatmap_subtitle()] (see the clinical explorer example,
+#' `inst/examples/clinical-explorer.R`). Called from code it still returns
+#' that table block, with a deprecation warning. Boards saved with it restore
+#' as table blocks and save as one from then on.
+#'
+#' @param row Column identifying a matrix row. Default `"USUBJID"`.
+#' @param col Column identifying a matrix column. Default `"AEDECOD"`.
+#' @param color Column whose worst level per cell paints it. Default
+#'   `"AETOXGR"`. Empty: cells are painted by their count.
+#' @param group Optional column grouping the rows, e.g. the treatment arm.
+#' @param top_n Restores as the prepare script's `top_terms` value.
+#' @param cell_numbers Show the count in each cell.
+#' @param download Offer the table for download.
+#' @param title,subtitle,caption Text above and below the matrix.
+#' @param script The prepare script. `NULL` builds the top-n script for `col`
+#'   ([ae_heatmap_script()]).
+#' @param values The prepare script's values.
+#' @param drill,filter_column,filter_values,max_height,ctrl_target,ctrl_table,locked_roles
+#'   Accepted so saved boards restore. `ctrl_target` and `ctrl_table` become
+#'   the drill target; the others are ignored.
+#' @param ... Forwarded to [blockr.viz::new_table_block()].
+#' @return A table block (class `table_block`).
+#' @keywords internal
+#' @export
 new_ae_heatmap_block <- function(row = "USUBJID",
                                  col = "AEDECOD",
                                  color = "AETOXGR",
@@ -126,9 +146,20 @@ new_ae_heatmap_block <- function(row = "USUBJID",
     list(ctor = "new_table_block", ctor_pkg = "blockr.viz")
   ))
   for (nm in names(extra)) attr(blk, nm) <- extra[[nm]]
-  # Deprecated: tell the board user, not only the log. Only when a saved
-  # board brings it back in the app, so a board that still builds it in code
-  # shows nothing. Goes with this constructor.
+  # Deprecated. Code that calls it gets a warning; a saved board that brings
+  # it back in the app tells the board user instead. Goes with this
+  # constructor.
+  if (!restore) {
+    warning(warningCondition(
+      paste0(
+        "new_ae_heatmap_block() is deprecated. Use ",
+        "blockr.viz::new_table_block() with ae_heatmap_script() and ",
+        "ae_heatmap_subtitle(), see inst/examples/clinical-explorer.R."
+      ),
+      class = c("deprecatedWarning", "lifecycle_warning_deprecated"),
+      call = NULL
+    ))
+  }
   if (restore && !is.null(blockr.core::get_session())) {
     blockr.core::notify(
       "This board has an AE heatmap from an older version. Save the board to keep it.",
