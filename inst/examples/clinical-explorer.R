@@ -31,7 +31,6 @@ blockr_pkgs <- c(
   # block browser and within the assistant's reach.
   "blockr.dplyr",
   "blockr.io",
-  "blockr.extra",
   "blockr.viz",       # charts, summary tables, table renderer
   "blockr.dm",        # the dm, the crossfilter, the value filters
   "blockr.pharma",    # patient profile, AE heatmap, the study roles option
