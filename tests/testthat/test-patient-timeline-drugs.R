@@ -75,3 +75,12 @@ test_that("a restored timeline keeps its drug pick", {
   expect_identical(as.character(unlist(rt$restored$script_values$drugs)),
                    "Placebo")
 })
+
+test_that("a saved default subtitle gains the drug word, an edited one stays", {
+  old <- "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]"
+  sub_of <- function(b) blockr.core::blockr_ser(b)$payload$subtitle
+  expect_identical(sub_of(new_timeline_block(subtitle = old)),
+                   patient_timeline_subtitle())
+  expect_identical(sub_of(new_timeline_block(subtitle = "My own words")),
+                   "My own words")
+})

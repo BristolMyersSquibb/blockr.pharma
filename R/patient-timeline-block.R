@@ -70,6 +70,13 @@ new_timeline_block <- function(summaries = NULL,
   if (!is.null(sv$layers)) {
     sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
   }
+  # A saved board keeps the subtitle it was saved with; an untouched
+  # default of an earlier version becomes this version's, so new words
+  # (the drugs) reach it. An edited subtitle stays as it is.
+  if (is.character(subtitle) && length(subtitle) == 1L &&
+        subtitle %in% PT_OLD_SUBTITLES) {
+    subtitle <- patient_timeline_subtitle()
+  }
   if (is.null(summaries)) summaries <- patient_timeline_summaries()
   summaries <- pt_columns_clean(summaries)
   # An empty "Group by" is the default, the first choice.
@@ -206,6 +213,12 @@ patient_timeline_script <- function() {
 chr_code <- function(x) {
   paste0("c(", paste0("\"", x, "\"", collapse = ", "), ")")
 }
+
+# The default subtitles of earlier versions, replaced on restore.
+PT_OLD_SUBTITLES <- c(
+  "{@layers} in study days",
+  "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]"
+)
 
 #' The timeline's sentence under the title
 #'
