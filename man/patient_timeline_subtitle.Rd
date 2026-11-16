@@ -10,6 +10,6 @@ patient_timeline_subtitle()
 A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_chart_block()}}.
 }
 \description{
-The layers, then the level the AEs and con meds open into, each only
-while that layer is drawn. Each is a word to click.
+The layers, then the level the AEs and con meds open into and the drugs
+drawn, each only while that layer is drawn. Each is a word to click.
 }

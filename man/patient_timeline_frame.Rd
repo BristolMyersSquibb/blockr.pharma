@@ -21,6 +21,7 @@ patient_timeline_frame(
   cm_terms = NULL,
   cm_prior = "clipped at the start",
   treatment_as = "lines per drug",
+  drugs = NULL,
   doses = "Gaps",
   dose_tags = FALSE,
   trt_colour = "dose level",
@@ -86,6 +87,9 @@ rest into "Other", so the colours stay within what a legend can show.
 colour, as the swimmer draws it. \code{"bars by dose"}: each drug's dose
 records as bars coloured by \code{trt_colour}, as the timeline draws them.
 Either way each drug has a lane of its own.}
+
+\item{drugs}{The drugs drawn, as \code{\link[=timeline_drug_choices]{timeline_drug_choices()}} offers them.
+\code{NULL}: all. The others' lines, dose tags and legend entries go.}
 
 \item{doses}{With lines per drug: \code{"Gaps"} shows skipped cycles as gaps,
 \code{"Plain"} a drug in cycles as one bar. Either way each piece's tooltip

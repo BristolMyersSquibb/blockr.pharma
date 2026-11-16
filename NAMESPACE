@@ -41,6 +41,7 @@ export(stamp_source)
 export(swimmer_reason_categories)
 export(swimmer_reason_category)
 export(timeline_colour_fields)
+export(timeline_drug_choices)
 export(timeline_lane_choices)
 export(timeline_scale_map)
 importFrom(blockr.core,

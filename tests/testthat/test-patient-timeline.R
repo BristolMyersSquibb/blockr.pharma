@@ -146,7 +146,7 @@ test_that("the subtitle names the term level of the layers drawn", {
           "Organ Class, con meds by Standardized Medication Name")
   )
   expect_identical(word(c("Response", "Treatment")),
-                   "Response, Treatment in study days")
+                   "Response, Treatment in study days, drugs: all")
 })
 
 test_that("the term levels are the columns the data has", {

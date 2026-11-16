@@ -113,7 +113,7 @@ new_timeline_block <- function(summaries = NULL,
 PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
-  "cm_lanes", "cm_prior", "treatment_as", "doses", "dose_tags",
+  "cm_lanes", "cm_prior", "treatment_as", "drugs", "doses", "dose_tags",
   "trt_colour", "disc_show", "origin", "cutoff", "ongoing", "sort_col"
 )
 
@@ -181,6 +181,9 @@ patient_timeline_script <- function() {
         "Started before the axis", on = "cm_on"),
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as",
         on = "trt_on"),
+    "drv <- blockr.pharma::timeline_drug_choices(data)",
+    paste0("drugs <- factor(drv, levels = drv)  #| select(label = \"Drugs\", ",
+           "multiple = TRUE, when = \"trt_on\")"),
     sel("doses", "Gaps", PT_DOSES, "Doses shown as", on = "trt_on"),
     flag("dose_tags", "FALSE", "Tag dose changes", on = "trt_on"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by", on = "trt_on"),
@@ -206,13 +209,14 @@ chr_code <- function(x) {
 
 #' The timeline's sentence under the title
 #'
-#' The layers, then the level the AEs and con meds open into, each only
-#' while that layer is drawn. Each is a word to click.
+#' The layers, then the level the AEs and con meds open into and the drugs
+#' drawn, each only while that layer is drawn. Each is a word to click.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 patient_timeline_subtitle <- function() {
-  "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]"
+  paste0("{@layers} in study days[, AEs by {@ae_lanes}]",
+         "[, con meds by {@cm_lanes}][, drugs: {@drugs}]")
 }
 
 #' The timeline's gear
@@ -233,7 +237,8 @@ patient_timeline_gear <- function() {
       Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(
         Response = "response",
-        Treatment = c("treatment_as", "doses", "dose_tags", "trt_colour"),
+        Treatment = c("treatment_as", "drugs", "doses", "dose_tags",
+                      "trt_colour"),
         `Discontinuation and death` = "disc_show",
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),

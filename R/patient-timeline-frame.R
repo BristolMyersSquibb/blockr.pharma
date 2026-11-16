@@ -66,6 +66,8 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   colour, as the swimmer draws it. `"bars by dose"`: each drug's dose
 #'   records as bars coloured by `trt_colour`, as the timeline draws them.
 #'   Either way each drug has a lane of its own.
+#' @param drugs The drugs drawn, as [timeline_drug_choices()] offers them.
+#'   `NULL`: all. The others' lines, dose tags and legend entries go.
 #' @param doses With lines per drug: `"Gaps"` shows skipped cycles as gaps,
 #'   `"Plain"` a drug in cycles as one bar. Either way each piece's tooltip
 #'   gives its own dose. The old `"Gaps and cuts"` reads as `"Gaps"`.
@@ -140,6 +142,7 @@ patient_timeline_frame <- function(data,
                                    cm_terms = NULL,
                                    cm_prior = "clipped at the start",
                                    treatment_as = "lines per drug",
+                                   drugs = NULL,
                                    doses = "Gaps", dose_tags = FALSE,
                                    trt_colour = "dose level",
                                    origin = "first dose",
@@ -208,6 +211,10 @@ patient_timeline_frame <- function(data,
       pt_drug_lines(tb, sl, opt, cutoff)
     } else {
       pt_dose_bars(tb$adex, sl, opt, cutoff)
+    }
+    if (!is.null(drugs) &&
+          !is.null(aet_col(tb$adex, c("EXTRT", "CMDECOD")))) {
+      parts$trt <- pt_drug_pick(parts$trt, drugs)
     }
     opt$sub_lanes <- attr(parts$trt, "pt_lanes")
     opt$trt_palette <- attr(parts$trt, "pt_palette")
@@ -467,6 +474,22 @@ timeline_lane_choices <- function(data, what = c("ae", "cm")) {
   out
 }
 
+#' The drugs a patient timeline can narrow its treatment to
+#'
+#' Each drug ADEX names (`EXTRT`), as the drug lines name it: the choices of
+#' the block's "Drugs" row.
+#'
+#' @param data The block's input dm.
+#' @return A character vector, sorted; one placeholder without ADEX or drugs.
+#' @export
+timeline_drug_choices <- function(data) {
+  tb <- tryCatch(pt_tables(data, character()), error = function(e) NULL)
+  raw <- if (!is.null(tb$adex)) aet_col(tb$adex, c("EXTRT", "CMDECOD"))
+  out <- unique(swimmer_drug_name(as.character(raw)))
+  out <- sort(out[!is.na(out) & nzchar(out)])
+  if (length(out)) out else "No drugs in the data"
+}
+
 # Term choices back to find picks: "Body system: Cardiac disorders" is
 # list(col = "AEBODSYS", value = "Cardiac disorders").
 pt_picks <- function(terms, levels) {
@@ -695,6 +718,27 @@ pt_drug_palette <- function(drugs) {
   col[grepl("placebo", drugs, ignore.case = TRUE)] <- "#8f9bb3"
   col[drugs == "Other"] <- "#a3a9b4"
   col
+}
+
+# The treatment part with the picked drugs only (ADEX names, as
+# timeline_drug_choices() offers them): the others' lines or bars, dose
+# changes, lanes and colours go. The picked keep the colours they have among
+# all drugs.
+pt_drug_pick <- function(p, drugs) {
+  if (is.null(p)) return(NULL)
+  keep <- swimmer_drug_name(as.character(unlist(drugs)))
+  ev <- attr(p, "pt_events")
+  lanes <- attr(p, "pt_lanes")
+  pal <- attr(p, "pt_palette")
+  p <- tl_keep(p, p$.lane_at %in% keep)
+  if (!is.null(ev)) {
+    ev <- tl_keep(ev, ev$.lane_at %in% keep)
+    if (!length(ev$USUBJID)) ev <- NULL
+  }
+  attr(p, "pt_events") <- ev
+  attr(p, "pt_lanes") <- lanes[lanes %in% keep]
+  attr(p, "pt_palette") <- pal[names(pal) %in% keep]
+  p
 }
 
 # The timeline's dose bars (tl_treatment()), each drug on a lane of its own.
