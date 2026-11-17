@@ -20,7 +20,8 @@ it. \code{NULL} never nests.}
 \value{
 \code{list(variable = , levels = )}, plus \verb{pools = } for overlapping
 groups or a \code{total} column and an unnamed \code{composer::by()} call for the
-subgroup.
+subgroup. \code{NULL} when \code{col} is \code{NA} in every row, the ungrouped board of
+\code{\link[=dm_stamp_none]{dm_stamp_none()}}: the table then gets no \code{colgroup()}.
 }
 \description{
 What a table script passes to \code{composer::by()} so its columns follow the

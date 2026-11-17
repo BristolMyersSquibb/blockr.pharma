@@ -67,19 +67,7 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
     return(data)
   }
 
-  # The parent first: with a star schema that is the subject table, which is
-  # where a stratifier lives. Falling back to the first carrier keeps a
-  # keyless dm working rather than silently doing nothing.
-  fks <- dm::dm_get_all_fks(data)
-  target <- carriers[[1L]]
-  if (nrow(fks) > 0) {
-    counts <- table(as.character(fks$parent_table))
-    parents <- names(sort(counts, decreasing = TRUE))
-    hit <- intersect(parents, carriers)
-    if (length(hit)) {
-      target <- hit[[1L]]
-    }
-  }
+  target <- stamp_target(data, carriers)
 
   # do.call rather than the tidyselect / `:=` spellings: the table and the new
   # column name are values here, not literals, and passing symbols through
@@ -106,6 +94,56 @@ dm_stamp_group <- function(data, col, as = "Group", groups = NULL) {
     dm::dm_update_zoomed(zoomed), as, pool_clause(data[[target]][[col]], groups)
   )
   mark_group_kind(out, as)
+}
+
+# The table a stamp goes on: the parent first. With a star schema that is the
+# subject table, which is where a stratifier lives. Falling back to the first
+# candidate keeps a keyless dm working rather than silently doing nothing.
+stamp_target <- function(data, candidates) {
+  fks <- dm::dm_get_all_fks(data)
+  if (nrow(fks) > 0) {
+    counts <- table(as.character(fks$parent_table))
+    parents <- names(sort(counts, decreasing = TRUE))
+    hit <- intersect(parents, candidates)
+    if (length(hit)) {
+      return(hit[[1L]])
+    }
+  }
+  candidates[[1L]]
+}
+
+#' Stamp an ungrouped board's group column
+#'
+#' What the population filter writes when its Group by select is set to
+#' "(none)": the column `as`, `NA` in every row, on the parent table of `data`.
+#' The exhibits keep the column they bind by name, and read a column that is
+#' `NA` in every row as no split: a chart draws one panel, one colour and one
+#' box, a table block does not group by it, and [group_by_args()] returns
+#' `NULL`, so a composer table shows no group columns. Leaving the column out
+#' instead would not do: a table script falls back to the study arm when
+#' `Group` is missing.
+#'
+#' @param data A [dm][dm::dm()] or a data frame.
+#' @param as Name of the column.
+#'
+#' @return `data`, with the column added.
+#' @export
+dm_stamp_none <- function(data, as = "Group") {
+  if (is.data.frame(data)) {
+    data[[as]] <- rep(NA_character_, nrow(data))
+    return(mark_group_kind(data, as))
+  }
+  tbls <- names(dm::dm_get_tables(data))
+  if (!length(tbls)) {
+    return(data)
+  }
+  target <- stamp_target(data, tbls)
+  zoomed <- do.call(dm::dm_zoom_to, list(data, as.symbol(target)))
+  zoomed <- do.call(
+    dplyr::mutate,
+    c(list(zoomed), stats::setNames(list(NA_character_), as))
+  )
+  mark_group_kind(dm::dm_update_zoomed(zoomed), as)
 }
 
 # The pools of a definition as one trail clause: one pool per line.
@@ -316,12 +354,19 @@ group_columns <- function(groups, levels) {
 #'
 #' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
 #'   groups or a `total` column and an unnamed `composer::by()` call for the
-#'   subgroup.
+#'   subgroup. `NULL` when `col` is `NA` in every row, the ungrouped board of
+#'   [dm_stamp_none()]: the table then gets no `colgroup()`.
 #' @export
 group_by_args <- function(data, col = "Group", sub = "Subgroup",
                           total = NULL) {
   x <- data[[col]]
   def <- attr(x, "blockr_groups", exact = TRUE)
+
+  # An ungrouped board (dm_stamp_none()): no group columns. composer refuses
+  # a by() with no levels, so the caller skips its colgroup().
+  if (is.null(def) && length(x) && all(is.na(x))) {
+    return(NULL)
+  }
 
   args <- if (is.null(def)) {
     x <- as.character(x)
@@ -567,8 +612,11 @@ expr_server.population_filter_block <- function(x, data, ...) {
   out[["expr"]] <- shiny::reactive({
     inner <- inner_expr()
     pin <- pinned()
+    # No group ("(none)" in the Group by select, or a board that pins
+    # nothing): the column is still there, NA in every row. See
+    # dm_stamp_none() for why it is not left out.
     if (is.null(pin) || !length(pin) || is.na(pin[[1L]]) || !nzchar(pin[[1L]])) {
-      return(inner)
+      return(bquote(blockr.pharma::dm_stamp_none(.(inner), .(stamp_as))))
     }
     def <- stamp_groups_arg(pinned_group_entry(groups(), pin[[1L]]))
     # Self-qualified: the expression is also what a report or an export shows,
