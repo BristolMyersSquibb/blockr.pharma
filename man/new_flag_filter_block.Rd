@@ -2,6 +2,8 @@
 % Please edit documentation in R/flag-filter-block.R
 \name{new_flag_filter_block}
 \alias{new_flag_filter_block}
+\alias{block_ui.flag_filter_block}
+\alias{block_output.flag_filter_block}
 \title{Flag filter block}
 \usage{
 new_flag_filter_block(
@@ -11,6 +13,10 @@ new_flag_filter_block(
   table = NULL,
   ...
 )
+
+\method{block_ui}{flag_filter_block}(id, x, ...)
+
+\method{block_output}{flag_filter_block}(x, result, session)
 }
 \arguments{
 \item{columns}{Character vector of flag column names. All of them union.
@@ -23,13 +29,21 @@ Defaults to none, which passes every row through.}
 by column name, e.g. \code{c(TRTEMFL = "Treatment-emergent (AEs ...)")}. A
 flag without an entry reads as its label in the filter trail.}
 
-\item{table}{Name of a table in an incoming \code{dm} to filter, or \code{NULL} (the
-default) to filter the data frame the block is handed. Naming a table
-makes the block dm-in, dm-out: that table is narrowed and every other
-one passes through with its rows and keys intact. One table per block;
-chain a second to narrow another.}
+\item{table}{Name of a table in an incoming \code{dm} to filter. With a dm the
+block is dm-in, dm-out: that table is narrowed and every other one
+passes through with its rows and keys intact. One table per block; chain
+a second to narrow another. \code{NULL} (the default) filters a data frame,
+or, handed a dm, starts on the default table.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}.}
+
+\item{id}{Namespace ID.}
+
+\item{x}{The block.}
+
+\item{result}{Evaluation result.}
+
+\item{session}{Shiny session object.}
 }
 \description{
 Filters rows on a family of ADaM-style indicator columns. Each chosen
@@ -61,6 +75,11 @@ not do is reduce the cohort: getting rid of the non-treatment-emergent AEs
 is the point, getting rid of the patients who have none is a bug. That
 rules out \code{dm::dm_filter()}, whose FK cascade does exactly that -- see
 \code{flag_zoom_expr()}.
+
+Handed a dm, the gear shows a Table select over the dm's tables that carry
+a Y/N flag column. A block added from the UI starts on \code{adae} when the dm
+has it, else on the first such table. Changing the table clears the ticks
+and lists the new table's flags. The table is saved with the board.
 
 In dm mode the block previews as blockr.dm's dm diagram, click a table to
 page through it, because the table preview cannot render a dm. The clause

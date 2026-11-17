@@ -27,6 +27,9 @@
       this.total = null;      // rows in the upstream
       this.choices = [];      // every upstream column as {value, label}
       this.footnotes = {};    // name -> footnote text, non-empty only
+      this.isDm = false;      // input is a dm: show the Table select
+      this.table = null;      // the dm table the flags come from
+      this.tables = [];       // dm tables with a flag column
       this._fnFields = {};    // name -> {input, commit}
       this._fnKey = null;     // column set the footnote rows were built for
       this._submitted = false;
@@ -60,15 +63,42 @@
       this.band = document.createElement('div');
       this.band.className = 'ffb-settings';
       this.band.style.display = 'none';
+
+      // Table select, shown only when the input is a dm.
+      this.tableRow = document.createElement('div');
+      this.tableRow.className = 'blockr-popover-row ffb-table-row';
+      this.tableRow.style.display = 'none';
+      const tlab = document.createElement('label');
+      tlab.className = 'blockr-popover-label';
+      tlab.textContent = 'Table';
+      this.tableRow.appendChild(tlab);
+      const tcol = document.createElement('div');
+      tcol.className = 'ffb-field';
+      this.tableWrap = document.createElement('div');
+      this.tableWrap.className = 'blockr-popover-select-wrap';
+      tcol.appendChild(this.tableWrap);
+      this.tableHint = document.createElement('div');
+      this.tableHint.className = 'ffb-hint';
+      tcol.appendChild(this.tableHint);
+      this.tableRow.appendChild(tcol);
+      this.band.appendChild(this.tableRow);
+
       const row = document.createElement('div');
       row.className = 'blockr-popover-row';
       const lab = document.createElement('label');
       lab.className = 'blockr-popover-label';
       lab.textContent = 'Flags';
       row.appendChild(lab);
+      const pcol = document.createElement('div');
+      pcol.className = 'ffb-field';
       this.pickWrap = document.createElement('div');
       this.pickWrap.className = 'blockr-popover-select-wrap';
-      row.appendChild(this.pickWrap);
+      pcol.appendChild(this.pickWrap);
+      this.pickHint = document.createElement('div');
+      this.pickHint.className = 'ffb-hint';
+      this.pickHint.style.display = 'none';
+      pcol.appendChild(this.pickHint);
+      row.appendChild(pcol);
       this.band.appendChild(row);
 
       this.notesRow = document.createElement('div');
@@ -97,6 +127,33 @@
       this.band.style.display = this._popoverOpen ? 'block' : 'none';
       this.gearBtn.classList.toggle('blockr-gear-active', this._popoverOpen);
       Object.values(this._fnFields).forEach((f) => this._fitNote(f.input));
+    }
+
+    // Picking a table drops the ticks, which belong to the old table. The
+    // server answers with the new table's flags.
+    _rebuildTableSelect() {
+      this.tableRow.style.display = this.isDm ? '' : 'none';
+      this.pickHint.style.display = (this.isDm && this.table) ? '' : 'none';
+      this.pickHint.textContent = this.table ? 'Columns of ' + this.table : '';
+      if (!this.isDm) return;
+      this.tableHint.textContent = this.tables.length
+        ? 'Tables with flag columns: ' + this.tables.join(', ')
+        : 'No table of this dm has a Y/N flag column';
+      this.tableWrap.innerHTML = '';
+      Blockr.Select.single(this.tableWrap, {
+        options: this.tables.map((t) => ({ value: t, label: '' })),
+        selected: this.table || '',
+        placeholder: 'Select table…',
+        onChange: (t) => {
+          if (!t || t === this.table) return;
+          this.table = String(t);
+          this.selected = {};
+          this.matched = null;
+          this.pickHint.textContent = 'Columns of ' + this.table;
+          this._renderReadout();
+          this._submit();
+        }
+      });
     }
 
     _rebuildPicker() {
@@ -269,23 +326,34 @@
     // here would double-count a row carrying two flags and could print more
     // rows than the table has. Until it arrives, say nothing rather than
     // guess.
+    //
+    // In dm mode the readout names the table, so it is clear the rest of the
+    // dm passes through.
     _renderReadout() {
       const ticked = this.columns.filter((n) => this.selected[n]);
       const total = this.total;
+      let text;
       if (ticked.length === 0) {
-        this.readout.textContent = total == null
+        text = total == null
           ? 'No filter'
           : 'No filter · ' + total + ' of ' + total + ' rows';
-        return;
+      } else if (this.matched == null) {
+        text = ticked.length + ' of ' + this.columns.length +
+          ' flags · counting…';
+      } else {
+        text = total == null
+          ? this.matched + ' rows'
+          : this.matched + ' of ' + total + ' rows';
       }
-      if (this.matched == null) {
-        this.readout.textContent = ticked.length + ' of ' +
-          this.columns.length + ' flags · counting…';
-        return;
+      this.readout.innerHTML = '';
+      if (this.isDm && this.table) {
+        const b = document.createElement('b');
+        b.textContent = this.table;
+        this.readout.appendChild(b);
+        this.readout.appendChild(document.createTextNode(': '));
+        text += ' · other tables unchanged';
       }
-      this.readout.textContent = total == null
-        ? this.matched + ' rows'
-        : this.matched + ' of ' + total + ' rows';
+      this.readout.appendChild(document.createTextNode(text));
     }
 
     updateCounts(payload) {
@@ -307,6 +375,11 @@
         return c.name;
       });
       this.meta = meta;
+      // `tables` is null for a data frame, a list (maybe empty) for a dm.
+      this.isDm = Array.isArray(payload && payload.tables);
+      this.tables = this.isDm ? payload.tables.map(String) : [];
+      this.table = (this.isDm && payload.table != null)
+        ? String(payload.table) : null;
       // Labels and counts for a column set the client picked itself. Touching
       // the picker or the ticks here would fight the click that caused it.
       if (payload && payload.meta_only) {
@@ -315,6 +388,7 @@
         return;
       }
       this.columns = names;
+      this._rebuildTableSelect();
       // {value, label} options, so the picker prints the ADaM label beside
       // the column name. A bare string is still accepted.
       this.choices = ((payload && payload.choices) || []).map((c) =>
@@ -344,7 +418,8 @@
       return {
         columns: this.columns.slice(),
         selected: this.columns.filter((n) => this.selected[n]),
-        footnotes: footnotes
+        footnotes: footnotes,
+        table: this.isDm ? this.table : null
       };
     }
 

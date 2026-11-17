@@ -255,40 +255,202 @@ test_that("the block reads flags from the named table, not the dm", {
   expect_null(flag_target_df(d, "advs"))
 })
 
-test_that("the block rejects the input that cannot answer", {
-  blk <- new_flag_filter_block(columns = "TRTEMFL", table = "adae")
-  expect_s3_class(blk, "flag_filter_block")
-  valid <- environment(blk[["dat_valid"]])
-  expect_error(blk[["dat_valid"]](flag_df()), "must be a dm")
-  expect_error(blk[["dat_valid"]](flag_dm() |> dm::dm_select_tbl(adsl)),
-               "no table")
-  expect_silent(blk[["dat_valid"]](flag_dm()))
-
-  # and without `table` it still wants a frame
-  expect_error(new_flag_filter_block()[["dat_valid"]](flag_dm()),
-               "data frame")
+test_that("the block rejects only inputs no mode can read", {
+  # The table is picked at runtime, so dat_valid cannot know the mode. The
+  # table checks run in the server, against the live table.
+  for (blk in list(new_flag_filter_block(),
+                   new_flag_filter_block(table = "adae"))) {
+    expect_silent(blk[["dat_valid"]](flag_df()))
+    expect_silent(blk[["dat_valid"]](flag_dm()))
+    expect_error(blk[["dat_valid"]](1:3), "data frame or a dm")
+  }
+  expect_silent(flag_check_input(flag_df(), NULL))
+  expect_silent(flag_check_input(flag_dm(), "adae"))
+  expect_error(flag_check_input(flag_dm(), "advs"), "no table \"advs\"")
+  expect_error(flag_check_input(dm::dm_select_tbl(flag_dm(), adsl), NULL),
+               "no table with Y/N flag")
 })
 
-test_that("dm mode previews as a dm, frame mode as a table", {
+test_that("the preview follows the result, not the constructor", {
   # A dm cannot go through the table preview -- nrow(<dm>) is NULL and the
-  # preview's slice arithmetic ends in `if (NA)`. The `dm_block` class routes
-  # dm mode to blockr.dm's diagram instead; frame mode must NOT pick it up, or
-  # it loses the ordinary table preview.
-  expect_s3_class(new_flag_filter_block(table = "adae"), "dm_block")
-  expect_false(inherits(new_flag_filter_block(), "dm_block"))
-  # `table = ""` is frame mode too (flag_validate_table() folds it to NULL)
-  expect_false(inherits(new_flag_filter_block(table = ""), "dm_block"))
+  # preview's slice arithmetic ends in `if (NA)`. The table is picked at
+  # runtime, so the class cannot settle it: block_output dispatches on the
+  # result, and the container is a uiOutput in both modes.
+  expect_false(inherits(new_flag_filter_block(table = "adae"), "dm_block"))
+  blk <- new_flag_filter_block()
+  ui <- as.character(blockr.core::block_ui("b", blk))
+  expect_match(ui, "shiny-html-output")
+  expect_true(is.function(
+    utils::getS3method("block_output", "dm_block",
+                       envir = asNamespace("blockr.dm"))
+  ))
 
-  # the three methods that class buys, all of which must be present: a
-  # block_output without the matching block_ui sends a renderUI payload into
-  # a DT container and takes down the Shiny message batch it rides in
-  for (gen in c("block_output", "block_ui", "block_render_trigger")) {
-    expect_true(
-      is.function(
-        utils::getS3method(gen, "dm_block", envir = asNamespace("blockr.dm"))
-      )
-    )
+  shiny::testServer(function(id) {
+    shiny::moduleServer(id, function(input, output, session) {})
+  }, {
+    out_dm <- blockr.core::block_output(blk, flag_dm(), session)
+    expect_s3_class(out_dm, "shiny.render.function")
+    out_df <- blockr.core::block_output(blk, flag_df(), session)
+    expect_s3_class(out_df, "shiny.render.function")
+  })
+})
+
+# --- Picking the table at runtime --------------------------------------------
+
+period_dm <- function() {
+  dm::dm(
+    adsl = data.frame(USUBJID = c("A", "B", "C"), SAFFL = c("Y", "Y", "N"),
+                      AGE = c(61, 74, 55), stringsAsFactors = FALSE),
+    adae = data.frame(USUBJID = c("A", "A", "B", "B"),
+                      PREFL   = c("Y", "", "", ""),
+                      TRTEMFL = c("", "Y", "Y", ""),
+                      FUPFL   = c("", "", "", "Y"),
+                      AEDECOD = c("Headache", "Rash", "Nausea", "Cough"),
+                      stringsAsFactors = FALSE),
+    adcm = data.frame(USUBJID = "A", ONTRTFL = "Y", CMDECOD = "Aspirin",
+                      stringsAsFactors = FALSE),
+    advs = data.frame(USUBJID = "A", AVAL = 120, PARAMCD = "SYSBP",
+                      stringsAsFactors = FALSE)
+  ) |>
+    dm::dm_add_pk(adsl, USUBJID) |>
+    dm::dm_add_fk(adae, USUBJID, adsl) |>
+    dm::dm_add_fk(adcm, USUBJID, adsl)
+}
+
+# The block's server, flushed, with the state and the evaluated result.
+flag_live <- function(blk, data, code = NULL) {
+  input <- data
+  res <- NULL
+  shiny::testServer(
+    blockr.core:::block_expr_server(blk),
+    args = list(data = shiny::reactive(input)),
+    {
+      session$flushReact()
+      if (!is.null(code)) code(session)
+      session$flushReact()
+      ret <- session$getReturned()
+      st <- lapply(ret$state, function(x) shiny::isolate(x()))
+      e <- shiny::isolate(ret$expr())
+      res <<- list(state = st, expr = e)
+    }
+  )
+  # Outside testServer, whose mask binds `data` to the reactive.
+  res$out <- flag_eval(res$expr, input)
+  res
+}
+
+test_that("a flag column is logical or holds only Y/N/U", {
+  expect_true(flag_is_flag_col(c(TRUE, NA)))
+  expect_true(flag_is_flag_col(c("Y", "", NA)))
+  expect_true(flag_is_flag_col(c("N", "n", "U")))
+  expect_true(flag_is_flag_col(factor(c("Y", "N"))))
+  expect_false(flag_is_flag_col(c("Y", "Headache")))
+  expect_false(flag_is_flag_col(c("", NA)))
+  expect_false(flag_is_flag_col(1:3))
+  # a value past the first rows still disqualifies
+  expect_false(flag_is_flag_col(c(rep("Y", 2000), "Rash")))
+  expect_identical(flag_flag_columns(flag_df()),
+                   c("PREFL", "TRTEMFL", "FUPFL", "AESER"))
+})
+
+test_that("the Table select offers the tables with flags, adae first pick", {
+  d <- period_dm()
+  expect_identical(flag_tables(d), c("adsl", "adae", "adcm"))
+  expect_identical(flag_default_table(d), "adae")
+  # without adae, the first table with a flag
+  expect_identical(flag_default_table(dm::dm_select_tbl(d, -adae)), "adsl")
+  expect_null(flag_default_table(dm::dm_select_tbl(d, advs)))
+  # a saved table without flags stays listed, so the select can show it
+  expect_identical(flag_tables(d, "advs"), c("advs", "adsl", "adae", "adcm"))
+})
+
+test_that("handed a dm without a table, the block settles on adae", {
+  res <- flag_live(new_flag_filter_block(), period_dm())
+  expect_identical(res$state$table, "adae")
+  expect_identical(res$state$columns, c("PREFL", "TRTEMFL", "FUPFL"))
+  expect_identical(res$state$selected, character())
+  expect_s3_class(res$out, "dm")
+})
+
+test_that("dm in with a table narrows that table only", {
+  d <- period_dm()
+  res <- flag_live(
+    new_flag_filter_block(columns = c("PREFL", "TRTEMFL", "FUPFL"),
+                          selected = "TRTEMFL", table = "adae"),
+    d
+  )
+  tbls <- dm::dm_get_tables(res$out)
+  expect_identical(nrow(tbls$adae), 2L)
+  for (t in c("adsl", "adcm", "advs")) {
+    expect_identical(tbls[[t]], dm::dm_get_tables(d)[[t]])
   }
+  expect_identical(dm::dm_get_all_pks(res$out), dm::dm_get_all_pks(d))
+  expect_identical(dm::dm_get_all_fks(res$out), dm::dm_get_all_fks(d))
+  expect_length(blockr.dm::filter_trail(res$out, tables = "adsl"), 0L)
+  expect_length(blockr.dm::filter_trail(res$out, tables = "adae"), 1L)
+})
+
+test_that("frame in is unchanged: no table, the frame filtered", {
+  res <- flag_live(
+    new_flag_filter_block(columns = c("PREFL", "TRTEMFL"),
+                          selected = "TRTEMFL"),
+    flag_df()
+  )
+  expect_null(res$state$table)
+  expect_identical(res$state$columns, c("PREFL", "TRTEMFL"))
+  expect_identical(res$out$USUBJID, c("2", "3"))
+})
+
+test_that("handed a frame after a dm, the block drops the table", {
+  res <- flag_live(
+    new_flag_filter_block(columns = "TRTEMFL", selected = "TRTEMFL",
+                          table = "adae"),
+    flag_df()
+  )
+  expect_null(res$state$table)
+  expect_identical(res$state$selected, "TRTEMFL")
+  expect_identical(res$out$USUBJID, c("2", "3"))
+})
+
+test_that("picking another table clears the ticks and lists its flags", {
+  res <- flag_live(
+    new_flag_filter_block(columns = c("PREFL", "TRTEMFL", "FUPFL"),
+                          selected = "TRTEMFL", table = "adae"),
+    period_dm(),
+    function(session) {
+      session$setInputs(flags = list(
+        columns = list("PREFL", "TRTEMFL", "FUPFL"),
+        selected = list(), footnotes = list(), table = "adcm"
+      ))
+    }
+  )
+  expect_identical(res$state$table, "adcm")
+  expect_identical(res$state$columns, "ONTRTFL")
+  expect_identical(res$state$selected, character())
+  # nothing ticked: every table as it came in
+  expect_identical(nrow(dm::dm_get_tables(res$out)$adae), 4L)
+})
+
+test_that("the table survives a save, and a code board restores on it", {
+  d <- period_dm()
+  rt <- board_round_trip(
+    new_flag_filter_block(columns = c("PREFL", "TRTEMFL", "FUPFL"),
+                          selected = "TRTEMFL", table = "adae"),
+    d
+  )
+  expect_identical(rt$saved$table, "adae")
+  expect_identical(rt$restored$table, "adae")
+  expect_identical(rt$restored$selected, "TRTEMFL")
+
+  # A block added from the UI saves the table it settled on.
+  rt2 <- board_round_trip(new_flag_filter_block(), d)
+  expect_identical(rt2$saved$table, "adae")
+  expect_identical(rt2$restored$table, "adae")
+
+  # And a frame block saves no table.
+  rt3 <- board_round_trip(new_flag_filter_block(columns = "TRTEMFL"),
+                          flag_df())
+  expect_null(rt3$restored$table)
 })
 
 test_that("the block records what it filtered, and nothing when it filters nothing", {

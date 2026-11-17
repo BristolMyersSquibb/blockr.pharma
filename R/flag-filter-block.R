@@ -50,6 +50,11 @@
 #' rules out `dm::dm_filter()`, whose FK cascade does exactly that -- see
 #' `flag_zoom_expr()`.
 #'
+#' Handed a dm, the gear shows a Table select over the dm's tables that carry
+#' a Y/N flag column. A block added from the UI starts on `adae` when the dm
+#' has it, else on the first such table. Changing the table clears the ticks
+#' and lists the new table's flags. The table is saved with the board.
+#'
 #' In dm mode the block previews as blockr.dm's dm diagram, click a table to
 #' page through it, because the table preview cannot render a dm. The clause
 #' the block writes to the filter trail goes on `table` only, so a branch
@@ -82,11 +87,11 @@
 #' @param footnotes Named character vector (or list) of footnote text keyed
 #'   by column name, e.g. `c(TRTEMFL = "Treatment-emergent (AEs ...)")`. A
 #'   flag without an entry reads as its label in the filter trail.
-#' @param table Name of a table in an incoming `dm` to filter, or `NULL` (the
-#'   default) to filter the data frame the block is handed. Naming a table
-#'   makes the block dm-in, dm-out: that table is narrowed and every other
-#'   one passes through with its rows and keys intact. One table per block;
-#'   chain a second to narrow another.
+#' @param table Name of a table in an incoming `dm` to filter. With a dm the
+#'   block is dm-in, dm-out: that table is narrowed and every other one
+#'   passes through with its rows and keys intact. One table per block; chain
+#'   a second to narrow another. `NULL` (the default) filters a data frame,
+#'   or, handed a dm, starts on the default table.
 #' @param ... Forwarded to [blockr.core::new_transform_block()].
 #'
 #' @examples
@@ -122,23 +127,30 @@ new_flag_filter_block <- function(columns = character(),
         r_cols <- shiny::reactiveVal(columns)
         r_sel <- shiny::reactiveVal(selected)
         r_notes <- shiny::reactiveVal(footnotes)
+        r_table <- shiny::reactiveVal(table)
 
         # Echo guard: a state change that came FROM the client must not be
         # pushed back, or the widget fights the user mid-click.
         self_write <- new.env(parent = emptyenv())
         self_write$active <- FALSE
 
-        # `meta_only` carries the labels and counts WITHOUT the column set:
-        # the client already has that set, having just picked it, and echoing
-        # it back would rebuild the picker under the user's cursor.
+        input_data <- function() tryCatch(data(), error = function(e) NULL)
+
         # Everything that INSPECTS the input goes through here, so dm mode
         # and frame mode differ in exactly one place.
         target <- function() {
-          flag_target_df(tryCatch(data(), error = function(e) NULL), table)
+          d <- input_data()
+          flag_target_df(d, flag_resolve_table(d, r_table()))
         }
 
+        # `meta_only` carries the labels and counts WITHOUT the column set:
+        # the client already has that set, having just picked it, and echoing
+        # it back would rebuild the picker under the user's cursor.
+        # `tables` is NULL for a data frame, which hides the Table select.
         push_meta <- function(meta_only = FALSE) {
-          d <- target()
+          raw <- input_data()
+          d <- flag_target_df(raw, flag_resolve_table(raw, r_table()))
+          is_dm <- inherits(raw, "dm")
           session$sendCustomMessage(
             "pharma-flag-meta",
             list(
@@ -147,10 +159,35 @@ new_flag_filter_block <- function(columns = character(),
               choices   = flag_choice_meta(d),
               selected  = as.list(r_sel()),
               footnotes = r_notes(),
+              table     = if (is_dm) r_table(),
+              tables    = if (is_dm) as.list(flag_tables(raw, r_table())),
               meta_only = meta_only
             )
           )
         }
+
+        # Point the block at another table of the dm. The ticks belong to the
+        # old table, so they go, and the flags listed are the new table's.
+        # Going back to a data frame keeps the columns: `table = NULL` is
+        # frame mode, and a frame has no Table select to set it back with.
+        switch_table <- function(tbl) {
+          old <- r_table()
+          if (identical(tbl, old)) return(invisible(FALSE))
+          r_table(tbl)
+          if (!is.null(tbl) && (!is.null(old) || !length(r_cols()))) {
+            r_cols(flag_flag_columns(flag_target_df(input_data(), tbl)))
+            r_sel(character())
+          }
+          invisible(TRUE)
+        }
+
+        # A block added from the UI starts with `table = NULL`; handed a dm it
+        # settles on the default table, handed a frame after a dm it drops
+        # the table. A saved table the dm no longer carries is kept, so the
+        # error says which one is gone and the select can repoint it.
+        shiny::observeEvent(data(), {
+          switch_table(flag_resolve_table(input_data(), r_table()))
+        }, priority = 10)
 
         # The TRUE union count, not the client's sum of per-flag counts: a
         # row carrying two flags is one row, so summing overshoots and can
@@ -174,7 +211,8 @@ new_flag_filter_block <- function(columns = character(),
           push_counts()
         })
 
-        shiny::observeEvent(r_sel(), push_counts(), ignoreInit = TRUE)
+        shiny::observeEvent(list(r_sel(), r_table()), push_counts(),
+                            ignoreInit = TRUE)
 
         # The binding announces itself on every (re)bind. In a deferred dock
         # panel the block's script arrives WITH the panel on first visit, so
@@ -186,6 +224,17 @@ new_flag_filter_block <- function(columns = character(),
 
         shiny::observeEvent(input$flags, {
           incoming <- input$flags
+          # A table picked in the gear resets columns and ticks server-side,
+          # so the rest of this payload, which describes the old table, is
+          # ignored. The full metadata push rebuilds the client.
+          tbl <- flag_validate_table(incoming$table)
+          if (!is.null(tbl) && !identical(tbl, r_table()) &&
+                inherits(input_data(), "dm")) {
+            self_write$active <- FALSE
+            switch_table(tbl)
+            push_meta()
+            return()
+          }
           cols <- as.character(unlist(incoming$columns %||% list()))
           sel <- as.character(unlist(incoming$selected %||% list()))
           # Text only, so it is not part of the echo guard below: nothing is
@@ -200,7 +249,7 @@ new_flag_filter_block <- function(columns = character(),
           r_sel(sel)
         })
 
-        shiny::observeEvent(list(r_cols(), r_sel()), {
+        shiny::observeEvent(list(r_cols(), r_sel(), r_table()), {
           if (self_write$active) {
             self_write$active <- FALSE
             # A column the user just added through the gear has no label and
@@ -219,13 +268,20 @@ new_flag_filter_block <- function(columns = character(),
         # bquote() allocates a fresh call tree on every read, so an `expr`
         # that touched data() would re-run the whole chain on every spurious
         # upstream invalidation. Same discipline as blockr.dm's value filter.
+        #
+        # The table is resolved here from the data, not read from `r_table`
+        # alone, so the expression never pairs a frame with a table (or a dm
+        # with none) in the flush before the data observer above catches up.
         shape_rv <- shiny::reactiveVal(NULL)
         shiny::observe({
           shape_rv(
-            tryCatch(
-              list(ok = TRUE, shape = flag_input_shape(target())),
-              error = function(e) list(ok = FALSE, cond = e)
-            )
+            tryCatch({
+              d <- input_data()
+              tbl <- flag_resolve_table(d, r_table())
+              flag_check_input(d, tbl)
+              list(ok = TRUE, table = tbl,
+                   shape = flag_input_shape(flag_target_df(d, tbl)))
+            }, error = function(e) list(ok = FALSE, cond = e))
           )
         })
 
@@ -234,15 +290,13 @@ new_flag_filter_block <- function(columns = character(),
             derived <- shape_rv()
             shiny::req(derived)
             if (!isTRUE(derived$ok)) stop(derived$cond)
-            make_flag_filter_expr(r_sel(), derived$shape, table,
+            make_flag_filter_expr(r_sel(), derived$shape, derived$table,
                                   trail_key(session), r_notes())
           }),
-          # `table` is configuration, not a control: nothing in the UI edits
-          # it, but it must round-trip or a saved board comes back filtering
-          # a data frame it is no longer being handed.
+          # `table` is state so a saved board comes back on the same table.
+          # NULL is frame mode.
           state = list(columns = r_cols, selected = r_sel,
-                       footnotes = r_notes,
-                       table = shiny::reactiveVal(table))
+                       footnotes = r_notes, table = r_table)
         )
       })
     },
@@ -258,42 +312,19 @@ new_flag_filter_block <- function(columns = character(),
         )
       )
     },
+    # The table is picked at runtime, so this sees neither the table nor the
+    # mode; it only rules out inputs no mode can read. The table checks are
+    # in flag_check_input(), which the server runs against the live table.
     dat_valid = function(data) {
-      if (is.null(table)) {
-        if (!is.data.frame(data)) {
-          stop("Input must be a data frame. Flatten a dm first, or set ",
-               "`table` to filter one table of a dm.")
-        }
-        return(invisible(NULL))
+      if (!is.data.frame(data) && !inherits(data, "dm")) {
+        stop("Input must be a data frame or a dm.")
       }
-      if (!inherits(data, "dm")) {
-        stop("`table = \"", table, "\"` filters one table of a dm, so the ",
-             "input must be a dm. Drop `table` to filter a data frame.")
-      }
-      if (!table %in% names(dm::dm_get_tables(data))) {
-        stop("The dm carries no table \"", table, "\".")
-      }
+      invisible(NULL)
     },
-    # With `table` set the block is dm-in, dm-out, and a dm cannot go
-    # through the table preview: nrow(<dm>) is NULL, so the preview's slice
-    # arithmetic ends in `if (NA)` and the block shows "Error rendering
-    # table: missing value where TRUE/FALSE needed" instead of a result.
-    # Carrying `dm_block` picks up blockr.dm's three paired methods (the
-    # unused importFrom on this function's doc block is what loads that
-    # namespace, so the methods are registered by the time we dispatch) --
-    # block_output (the diagram + click-to-preview), block_ui (the uiOutput
-    # the renderUI needs; a DT container would bind the payload as an
-    # htmlwidget and take down the whole Shiny message batch) and a NULL
-    # block_render_trigger. blockr.dm's own dual-mode blocks (value filter,
-    # crossfilter) branch on `inherits(result, "dm")` at render time because
-    # their mode follows the incoming data; here `table` settles it at
-    # construction, so the class does it, and frame mode keeps the ordinary
-    # table preview.
-    class = if (is.null(table)) {
-      "flag_filter_block"
-    } else {
-      c("flag_filter_block", "dm_block")
-    },
+    # The preview follows the result, as in blockr.dm's dual-mode blocks: a
+    # dm draws blockr.dm's diagram, a frame the ordinary table. See
+    # block_output.flag_filter_block().
+    class = "flag_filter_block",
     expr_type = "bquoted",
     allow_empty_state = c("columns", "selected", "footnotes", "table"),
     ...
@@ -576,6 +607,96 @@ flag_validate_table <- function(table) {
   table
 }
 
+#' Is this column a Y/N flag?
+#'
+#' A logical column, or a text column whose recorded values are all Y, N or
+#' U (any case). Blanks and NA are not-recorded and do not count either way,
+#' but a column with nothing recorded is not a flag. Used to list a dm's
+#' tables and a table's flags when the block is pointed at it; the gear's
+#' picker still offers every column.
+#'
+#' Most text columns fail on their first values, so those are checked first
+#' and the full column only when they pass.
+#' @noRd
+flag_is_flag_col <- function(col) {
+  if (is.logical(col)) return(TRUE)
+  if (is.factor(col)) col <- levels(col)
+  if (!is.character(col)) return(FALSE)
+  ok <- function(v) {
+    v <- unique(v)
+    v <- v[!is.na(v) & nzchar(v)]
+    if (!length(v)) NA else all(toupper(v) %in% FLAG_VOCABULARY)
+  }
+  head_ok <- ok(utils::head(col, 1000L))
+  if (isFALSE(head_ok)) return(FALSE)
+  isTRUE(ok(col))
+}
+
+FLAG_VOCABULARY <- c("Y", "N", "U")  # nolint: object_name_linter.
+
+#' Names of the flag columns of a frame
+#' @noRd
+flag_flag_columns <- function(data) {
+  if (!is.data.frame(data)) return(character())
+  names(data)[vapply(data, flag_is_flag_col, logical(1L))]
+}
+
+#' Tables of a dm the Table select offers: those with a flag column
+#'
+#' `current` is kept in the list even without flags, so a restored board
+#' shows the table it was saved on. Lazy tables (a dm on a database) are not
+#' read.
+#' @noRd
+flag_tables <- function(dm, current = NULL) {
+  if (!inherits(dm, "dm")) return(character())
+  tbls <- dm::dm_get_tables(dm)
+  has <- vapply(tbls, function(t) {
+    is.data.frame(t) && length(flag_flag_columns(as.data.frame(t))) > 0L
+  }, logical(1L))
+  out <- names(tbls)[has]
+  if (!is.null(current) && current %in% names(tbls) && !current %in% out) {
+    out <- c(current, out)
+  }
+  out
+}
+
+#' The table a dm opens on: adae when it has flags, else the first table
+#' that does, else NULL.
+#' @noRd
+flag_default_table <- function(dm) {
+  tbls <- flag_tables(dm)
+  if (!length(tbls)) return(NULL)
+  adae <- tbls[tolower(tbls) == "adae"]
+  if (length(adae)) adae[[1L]] else tbls[[1L]]
+}
+
+#' The table the block works on for this input
+#'
+#' A frame is always frame mode, so `NULL`. A dm keeps `current`, or gets
+#' the default table when there is none. Anything else (no data yet) keeps
+#' `current`, so a board restoring before its upstream has run does not lose
+#' its table.
+#' @noRd
+flag_resolve_table <- function(data, current = NULL) {
+  if (is.data.frame(data)) return(NULL)
+  if (!inherits(data, "dm")) return(current)
+  current %||% flag_default_table(data)
+}
+
+#' Raise the input errors the user can act on
+#' @noRd
+flag_check_input <- function(data, table) {
+  if (!inherits(data, "dm")) return(invisible(NULL))
+  if (is.null(table)) {
+    stop("The dm carries no table with Y/N flag columns.", call. = FALSE)
+  }
+  if (!table %in% names(dm::dm_get_tables(data))) {
+    stop("The dm carries no table \"", table, "\". Pick another in the gear.",
+         call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 #' The frame the block reads: the dm's table, or the input itself
 #'
 #' Returns `NULL` when there is nothing to read (no dm yet, or a dm without
@@ -589,6 +710,46 @@ flag_target_df <- function(data, table = NULL) {
   tbls <- dm::dm_get_tables(data)
   if (!table %in% names(tbls)) return(NULL)
   as.data.frame(tbls[[table]])
+}
+
+# The preview, chosen from the result at render time because the table, and
+# with it the mode, is picked at runtime. A dm cannot go through the table
+# preview: nrow(<dm>) is NULL, so the preview's slice arithmetic ends in
+# `if (NA)`. A dm goes to blockr.dm's diagram (click a table to page through
+# it), a frame to the board's table display, rendered as a nested output.
+# The container is a uiOutput in both modes: blockr.dm's renderUI payload in
+# a DT container would be bound as an htmlwidget and take down the whole
+# Shiny message batch it rides in.
+
+#' @rdname new_flag_filter_block
+#' @param id Namespace ID.
+#' @param x The block.
+#' @importFrom blockr.core block_ui
+#' @method block_ui flag_filter_block
+#' @export
+block_ui.flag_filter_block <- function(id, x, ...) {
+  shiny::tagList(shiny::uiOutput(shiny::NS(id, "result")))
+}
+
+#' @rdname new_flag_filter_block
+#' @param result Evaluation result.
+#' @param session Shiny session object.
+#' @importFrom blockr.core block_output
+#' @method block_output flag_filter_block
+#' @export
+block_output.flag_filter_block <- function(x, result, session) {
+  if (inherits(result, "dm")) {
+    dm_output <- utils::getS3method("block_output", "dm_block",
+                                    envir = asNamespace("blockr.dm"))
+    return(dm_output(x, result, session))
+  }
+  display <- blockr.core::tabular_display()
+  session$output$flag_table <- blockr.core::tabular_output(
+    display, result, x, session
+  )
+  shiny::renderUI(
+    blockr.core::tabular_ui(display, session$ns("flag_table"))
+  )
 }
 
 #' @noRd

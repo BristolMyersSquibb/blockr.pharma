@@ -136,3 +136,21 @@
   right: 6px;
   transform: none;
 }
+
+/* Under the Table and Flags selects in the gear: which tables have flags,
+   which table the flags come from. */
+.ffb-hint {
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-subtle, #9ca3af);
+  margin-top: 4px;
+}
+
+.ffb-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ffb-readout b {
+  font-weight: 500;
+  color: var(--blockr-color-text-primary, #111827);
+}
