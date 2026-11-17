@@ -229,7 +229,7 @@ patient_timeline_frame <- function(data,
           !is.null(aet_col(tb$adex, c("EXTRT", "CMDECOD")))) {
       parts$trt <- pt_drug_pick(parts$trt, drugs)
     }
-    # The study lane (the end-of-study tag) heads the drugs' lanes.
+    # The study lane (the ADSL reasons) heads the drugs' lanes.
     lanes <- attr(parts$trt, "pt_lanes")
     opt$sub_lanes <- c(if (length(lanes)) PT_STUDY_LANE, lanes)
     opt$trt_palette <- attr(parts$trt, "pt_palette")
@@ -598,11 +598,10 @@ tl_response <- function(adrs, sl, opt, cutoff) {
 # the end of study (EOSDT, else RFENDT). Each is read from its own column.
 # A completed or ongoing disposition, or a death, has no tag; an end-of-study
 # tag that repeats the treatment reason's category is left out. With
-# treatment drawn, the treatment reason sits on the lane of the drug that
-# ended last, as on the swimmer, and the end-of-study reason on the study
-# lane above the drugs. A drug's own reason, when DS names the drug, tags
-# the end of its line (pt_drug_reason_rows()). `show` is one of
-# PT_DISC_SHOW.
+# treatment drawn, both sit on the unnamed lane above the drugs: ADSL says
+# why treatment stopped, not which drug. A drug's own reason, when DS names
+# the drug, tags the end of its line (pt_drug_reason_rows()). `show` is one
+# of PT_DISC_SHOW.
 pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
                          cutoff = NA, ds = NULL) {
   at <- match(sl$USUBJID, as.character(adsl$USUBJID))
@@ -638,13 +637,12 @@ pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
     same[is.na(same)] <- FALSE
     out$eos <- if (all(same)) NULL else lapply(e, `[`, !same)
   }
-  last <- pt_last_lane(trt, sl$USUBJID)
-  if (!is.null(out$trt)) {
-    out$trt$.lane_at <- last[match(out$trt$USUBJID, sl$USUBJID)]
-  }
-  if (!is.null(out$eos)) {
-    at_eos <- last[match(out$eos$USUBJID, sl$USUBJID)]
-    out$eos$.lane_at <- ifelse(is.na(at_eos), NA_character_, PT_STUDY_LANE)
+  # A patient without drug lines keeps the tags on the main lane.
+  lined <- if (is.null(trt)) character() else unique(trt$USUBJID)
+  for (kind in intersect(c("trt", "eos"), names(out))) {
+    if (is.null(out[[kind]])) next
+    out[[kind]]$.lane_at <- ifelse(out[[kind]]$USUBJID %in% lined,
+                                   PT_STUDY_LANE, NA_character_)
   }
   if (show %in% c("both", "treatment")) {
     out$drug <- pt_drug_reason_rows(ds, sl, trt, cutoff, out$trt)
@@ -663,7 +661,7 @@ pt_disc_rows <- function(adsl, sl, trt = NULL, show = "both",
 # that drug's line, on its lane (pp_ds_drug_reasons() reads DS). Only
 # drugs drawn (and picked) have a line, so a DSSCAT that names none, or a
 # drug still on, tags nothing. A tag that repeats `adsl_trt` (the ADSL
-# reason, same patient, lane, day and category) is left out.
+# reason, same patient, day and category, on the lane above) is left out.
 pt_drug_reason_rows <- function(ds, sl, trt, cutoff = NA, adsl_trt = NULL) {
   if (is.null(trt) || !length(trt$USUBJID)) return(NULL)
   r <- pp_ds_drug_reasons(ds)
@@ -692,16 +690,17 @@ pt_drug_reason_rows <- function(ds, sl, trt, cutoff = NA, adsl_trt = NULL) {
     Details = r$reason, .lane_at = unname(lane_of[k])
   )
   if (!is.null(adsl_trt)) {
-    a <- paste(adsl_trt$USUBJID, adsl_trt$.lane_at, adsl_trt$.event_x,
-               adsl_trt$.tag)
-    b <- paste(rows$USUBJID, rows$.lane_at, rows$.event_x, rows$.tag)
+    a <- paste(adsl_trt$USUBJID, adsl_trt$.event_x, adsl_trt$.tag)
+    b <- paste(rows$USUBJID, rows$.event_x, rows$.tag)
     rows <- lapply(rows, `[`, !b %in% a)
     if (!length(rows$USUBJID)) return(NULL)
   }
   rows
 }
 
-# The lane above the drugs that carries the end-of-study tag.
+# The lane above the drugs that carries the ADSL reasons: why treatment
+# stopped and why the patient left the study. viz draws a thin lane without
+# its name, so this is a key only.
 PT_STUDY_LANE <- "Study"
 
 # Which discontinuation reasons the timeline tags.
@@ -713,17 +712,6 @@ PT_DISC_TYPE <- c(trt = "Treatment discontinuation", eos = "End of study")
 # alone, under its group.
 pt_disc_level <- function(name, kind) {
   if (identical(kind, "eos")) paste("End of study:", name) else name
-}
-
-# Per patient in `ids`, the lane of its treatment record that ends last; NA
-# without one.
-pt_last_lane <- function(trt, ids) {
-  if (is.null(trt) || !length(trt$USUBJID)) {
-    return(rep(NA_character_, length(ids)))
-  }
-  o <- order(trt$USUBJID, -trt$End)
-  first <- o[!duplicated(trt$USUBJID[o])]
-  trt$.lane_at[first][match(ids, trt$USUBJID[first])]
 }
 
 # --- treatment --------------------------------------------------------------

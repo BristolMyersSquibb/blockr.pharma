@@ -1102,20 +1102,40 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   # The overview's marks on the treatment lane (viz-patient-overview.R):
   # the treatment discontinuation reason as a tag at the last dose, the
   # end-of-study reason as an inverted tag at the end of study, death as a
-  # cross.
+  # cross. With drug lines the two tags sit just above the first drug's
+  # line; of two that would touch, the earlier one ends at its day instead
+  # of starting there.
   ms <- list()
   why <- pp_disc_reason(sl)
+  eos <- pp_eos_reason(sl)
+  top <- has_adex && length(ex_drugs) > 0L
+  n_top <- max(length(ex_drugs), 1L)
+  line0 <- lane_y("TRT") + if (n_top > 1L) 0.45 - 0.45 / n_top else 0
+  adsl_y <- if (top) line0 + 0.13 else lane_y("TRT")
+  why_x <- trt_end
+  eos_x <- if (!is.null(eos)) pp_xval(eos$date, ref_ms, mode)
+  left <- ""
+  if (top && !is.null(why) && !is.null(eos)) {
+    span <- if (all(is.finite(b))) diff(b) else NA
+    if (!is.finite(span)) {
+      span <- diff(range(c(rect_df$xmin, rect_df$xmax, trt_end, eos_x),
+                         na.rm = TRUE))
+    }
+    # A two-letter tag is about 4% of the plot's width.
+    if (is.finite(span) && abs(eos_x - why_x) < 0.045 * span) {
+      left <- if (why_x <= eos_x) "tag" else "eos"
+    }
+  }
   if (!is.null(why)) {
     ms[[length(ms) + 1L]] <- data.frame(
-      x = trt_end, y = lane_y("TRT"), kind = "tag", label = why$tag,
-      stringsAsFactors = FALSE
+      x = why_x, y = adsl_y, kind = "tag", label = why$tag,
+      hjust = if (left == "tag") 1.1 else -0.1, stringsAsFactors = FALSE
     )
   }
-  eos <- pp_eos_reason(sl)
   if (!is.null(eos)) {
     ms[[length(ms) + 1L]] <- data.frame(
-      x = pp_xval(eos$date, ref_ms, mode), y = lane_y("TRT"), kind = "eos",
-      label = eos$tag, stringsAsFactors = FALSE
+      x = eos_x, y = adsl_y, kind = "eos", label = eos$tag,
+      hjust = if (left == "eos") 1.1 else -0.1, stringsAsFactors = FALSE
     )
   }
   # Each drug's own reason at the end of its line, in its slot.
@@ -1130,7 +1150,7 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
       x = dr$x,
       y = if (n_slot == 1L) lane_y("TRT") else
         lane_y("TRT") + 0.9 / 2 - 0.9 / n_slot * (k + 0.5),
-      kind = "tag", label = dr$tag, stringsAsFactors = FALSE
+      kind = "tag", label = dr$tag, hjust = -0.1, stringsAsFactors = FALSE
     )
   }
   dth <- pp_death_at(sl, adae_raw)
@@ -1141,7 +1161,7 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
         if (is.na(dth$day)) NULL else dth$day,
         ref_ms, mode
       ),
-      y = lane_y("TRT"), kind = "death", label = "",
+      y = lane_y("TRT"), kind = "death", label = "", hjust = -0.1,
       stringsAsFactors = FALSE
     )
   }
@@ -1212,16 +1232,16 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     # End of study: the tag inverted, ink box with light text.
     if (nrow(eos)) {
       p <- p + ggplot2::geom_label(
-        data = eos, ggplot2::aes(x = x, y = y, label = label),
-        hjust = -0.1, size = 2.2, fontface = "bold", color = "white",
+        data = eos, ggplot2::aes(x = x, y = y, label = label, hjust = hjust),
+        size = 2.2, fontface = "bold", color = "white",
         fill = PP_EV_INK,
         label.padding = ggplot2::unit(0.08, "lines")
       )
     }
     if (nrow(tag)) {
       p <- p + ggplot2::geom_label(
-        data = tag, ggplot2::aes(x = x, y = y, label = label),
-        hjust = -0.1, size = 2.2, fontface = "bold", color = PP_EV_INK,
+        data = tag, ggplot2::aes(x = x, y = y, label = label, hjust = hjust),
+        size = 2.2, fontface = "bold", color = PP_EV_INK,
         fill = "white",
         label.padding = ggplot2::unit(0.08, "lines")
       )

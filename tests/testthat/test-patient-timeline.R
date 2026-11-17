@@ -47,8 +47,9 @@ test_that("any combination of layers works, colours stay within 15", {
       f <- patient_timeline_frame(pt_toy(), layers = set)
       expect_lte(nlevels(f$Colour), 15L)
       drawn <- levels(droplevels(f$.lane))
-      # Treatment draws a lane per drug.
+      # Treatment draws a lane per drug, and the reasons a lane above.
       drawn[drawn %in% c("Drug", "Placebo")] <- "Treatment"
+      drawn[drawn %in% "Study"] <- "Discontinuation and death"
       expect_true(all(drawn %in% set))
     }
   }
@@ -195,13 +196,13 @@ test_that("the table draws a stripe per layer and opens into rows", {
   spans <- length(m$cells$cols)
   cell <- m$cells$cols[[spans]]
   a <- which(r$.label == "A")
-  # The drug a thin lane, the AE and con-med stripes full bars under the
-  # response, which is the main lane.
+  # The reasons and the drug thin lanes, the AE and con-med stripes full
+  # bars under the response, which is the main lane.
   sl <- cell$sl[[a]]
   expect_identical(vapply(sl, function(l) l$n, ""),
-                   c("Drug", "Adverse events", "Con meds"))
+                   c("Study", "Drug", "Adverse events", "Con meds"))
   expect_identical(vapply(sl, function(l) isTRUE(l$f), NA),
-                   c(FALSE, TRUE, TRUE))
+                   c(FALSE, FALSE, TRUE, TRUE))
   expect_gt(length(cell$segs[[a]]), 0L)
   # Opened, AE terms and con meds only, each layer under its title.
   kids <- r$.label[!r$.is_parent & r$.parent == "A"]
@@ -237,7 +238,7 @@ test_that("treatment draws a line per drug, or bars by dose", {
   d <- f[f$.lane %in% "Drug", ]
   # One line from the first dose, cut from 54 to 81 mg: a step up, so solid.
   expect_identical(unique(d$USUBJID), c("A", "C"))
-  # The study lane (the end-of-study tag) heads the drugs.
+  # The study lane (the ADSL reasons) heads the drugs.
   expect_identical(levels(f$.lane)[1:3], c("Study", "Drug", "Placebo"))
   expect_false(any(f$.full[f$.lane %in% c("Drug", "Placebo")]))
   expect_true(all(f$.full[f$.lane %in% "Response"]))
@@ -256,11 +257,11 @@ test_that("treatment draws a line per drug, or bars by dose", {
                    c("Drug", "Placebo"))
 })
 
-test_that("the reason tag sits on the lane of the last drug", {
+test_that("the reason tag sits on the lane above the drugs", {
   f <- patient_timeline_frame(pt_toy(), layers = c("Treatment",
                                                    "Discontinuation and death"))
   tag <- f[!is.na(f$.tag) & !f$Event %in% "Dose change", ]
-  expect_identical(as.character(tag$.lane), "Drug")
+  expect_identical(as.character(tag$.lane), "Study")
   # Tagged on request, the drug's dose change is a tag on its lane too,
   # with the new dose.
   expect_false(any(f$Event %in% "Dose change"))

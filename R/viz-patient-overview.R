@@ -526,15 +526,24 @@ patient_overview_viz <- new_pp_viz(
       # dose, the end-of-study reason as an inverted tag at the end of
       # study, and death as a cross (ADSL DTHDT, else a fatal AE's end; a
       # death flag without a date has no position and is said in the header
-      # instead).
+      # instead). With drug lines the two ADSL tags sit in the row above
+      # the first drug's line (slot -1): ADSL says why treatment stopped,
+      # not which drug. Each carries the other's x, so of two that would
+      # touch the earlier one ends at its day instead of starting there.
       # ---------------------------------------------------------------
       ms_lane <- trt_lane
       milestone_data <- list()
 
       why <- pp_disc_reason(sl)
+      eos <- pp_eos_reason(sl)
+      top <- if (has_adex && length(ex_drugs)) -1L else 0L
+      n_drug <- if (top < 0L) length(ex_drugs) else 0L
+      why_x <- trt_end
+      eos_x <- if (!is.null(eos)) pp_xval(eos$date, ref_ms, mode)
       if (!is.null(why)) {
         milestone_data <- c(milestone_data, list(list(
-          value = list(trt_end, ms_lane, "tag", why$tag, 0L, 0L),
+          value = c(list(why_x, ms_lane, "tag", why$tag, top, n_drug),
+                    eos_x),
           tip = pp_tip_event(
             why$name, color = PP_EV_INK, type = "Discontinuation",
             details = why$reason,
@@ -543,11 +552,10 @@ patient_overview_viz <- new_pp_viz(
         )))
       }
 
-      eos <- pp_eos_reason(sl)
       if (!is.null(eos)) {
         milestone_data <- c(milestone_data, list(list(
-          value = list(pp_xval(eos$date, ref_ms, mode), ms_lane, "eos",
-                       eos$tag, 0L, 0L),
+          value = c(list(eos_x, ms_lane, "eos", eos$tag, top, n_drug),
+                    if (!is.null(why)) why_x),
           tip = pp_tip_event(
             eos$name, color = PP_EV_INK, type = "End of study",
             details = eos$reason,
@@ -599,6 +607,14 @@ patient_overview_viz <- new_pp_viz(
             // A drug's own reason sits in the drug's slot, on its line
             // (the exposure series' geometry).
             var n = +api.value(4) || 0;
+            // Slot -1: the row above the first drug's line, where its name
+            // sits at the left (the exposure series' geometry; the drug
+            // count rides in value 5).
+            if (n < 0) {
+              var bandT = api.size([0, 1])[1] * 0.9;
+              var slotT = bandT / Math.max(+api.value(5) || 1, 1);
+              y = p[1] - bandT / 2 + slotT / 2 + (slotT >= 16 ? 4 : 0) - 10;
+            }
             if (n > 0) {
               var band = api.size([0, 1])[1] * 0.9;
               var slot = band / n;
@@ -620,6 +636,15 @@ patient_overview_viz <- new_pp_viz(
               // At the right edge, the tag goes left of the last dose.
               var cs = params.coordSys;
               if (bx + bw > cs.x + cs.width) bx = x - 3 - bw;
+              // Two ADSL tags that would touch: the earlier one (on a tie,
+              // the treatment reason) ends at its day instead of starting
+              // there. The row has no room above or below.
+              var ox = +api.value(6);
+              if (n < 0 && isFinite(ox)) {
+                var q = api.coord([ox, api.value(1)])[0];
+                var earlier = x < q || (x === q && !inv);
+                if (earlier && q - x < bw + 8) bx = x - 3 - bw;
+              }
               return {
                 type: 'group',
                 children: [{
