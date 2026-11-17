@@ -139,14 +139,17 @@ test_that("the subtitle names the term level of the layers drawn", {
                                args)
   }
   expect_identical(word("Adverse events"),
-                   "Adverse events in study days, AEs by Dictionary-Derived Term")
+                   paste("Adverse events in study days first to last, AEs by",
+                         "Dictionary-Derived Term"))
   expect_identical(
     word(c("Adverse events", "Con meds"), list(ae_lanes = "AEBODSYS")),
-    paste("Adverse events, Con meds in study days, AEs by Body System or",
-          "Organ Class, con meds by Standardized Medication Name")
+    paste("Adverse events, Con meds in study days first to last, AEs by Body",
+          "System or Organ Class, con meds by Standardized Medication Name")
   )
   expect_identical(word(c("Response", "Treatment")),
-                   "Response, Treatment in study days, drugs: all")
+                   "Response, Treatment in study days first to last, drugs: all")
+  expect_identical(word("Response", list(day_from = 1, day_to = 180)),
+                   "Response in study days 1 to 180")
 })
 
 test_that("the term levels are the columns the data has", {

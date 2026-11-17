@@ -121,7 +121,8 @@ PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
   "cm_lanes", "cm_prior", "treatment_as", "drugs", "doses", "dose_tags",
-  "trt_colour", "disc_show", "origin", "cutoff", "ongoing", "sort_col"
+  "trt_colour", "disc_show", "origin", "cutoff", "day_from", "day_to",
+  "ongoing", "sort_col"
 )
 
 #' The patient timeline's prepare script
@@ -198,6 +199,10 @@ patient_timeline_script <- function() {
     sel("origin", "first dose", TL_ORIGIN, "Time from"),
     paste0("cutoff <- as.Date(NA)  #| date(label = \"Cutoff\", ",
            "placeholder = \"automatic\")"),
+    paste0("day_from <- NA_real_  #| number(label = \"From study day\", ",
+           "placeholder = \"first\")"),
+    paste0("day_to <- NA_real_  #| number(label = \"To study day\", ",
+           "placeholder = \"last\")"),
     sel("ongoing", "last contact", c("last contact", "data cutoff"),
         "No end runs to"),
     paste0("frame <- blockr.pharma::patient_timeline_frame(data, ",
@@ -217,19 +222,24 @@ chr_code <- function(x) {
 # The default subtitles of earlier versions, replaced on restore.
 PT_OLD_SUBTITLES <- c(
   "{@layers} in study days",
-  "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]"
+  "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]",
+  paste0("{@layers} in study days[, AEs by {@ae_lanes}]",
+         "[, con meds by {@cm_lanes}][, drugs: {@drugs}]")
 )
 
 #' The timeline's sentence under the title
 #'
-#' The layers, then the level the AEs and con meds open into and the drugs
-#' drawn, each only while that layer is drawn. Each is a word to click.
+#' The layers, the study days the axis runs over ("first" and "last" while
+#' they are the data's), then the level the AEs and con meds open into and
+#' the drugs drawn, each only while that layer is drawn. Each is a word to
+#' click.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 patient_timeline_subtitle <- function() {
-  paste0("{@layers} in study days[, AEs by {@ae_lanes}]",
-         "[, con meds by {@cm_lanes}][, drugs: {@drugs}]")
+  paste0("{@layers} in study days {@day_from} to {@day_to}",
+         "[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]",
+         "[, drugs: {@drugs}]")
 }
 
 #' The timeline's gear
@@ -245,7 +255,8 @@ patient_timeline_gear <- function() {
       # What to draw comes first; the Lanes tab shows the settings of the
       # layers drawn only (the script's `when` switches).
       Data = list(Layers = "layers",
-                  Time = c("origin", "cutoff", "ongoing"),
+                  Time = c("origin", "cutoff", "day_from", "day_to",
+                           "ongoing"),
                   Tables = "mapping"),
       Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(

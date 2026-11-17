@@ -63,10 +63,10 @@ test_that("the subtitle names the drugs drawn", {
     viz$resolve_title_template(patient_timeline_subtitle(), data.frame(),
                                args)
   }
-  expect_identical(word("Treatment"), "Treatment in study days, drugs: all")
+  expect_identical(word("Treatment"), "Treatment in study days first to last, drugs: all")
   expect_identical(word("Treatment", list(drugs = "Placebo")),
-                   "Treatment in study days, drugs: Placebo")
-  expect_identical(word("Response"), "Response in study days")
+                   "Treatment in study days first to last, drugs: Placebo")
+  expect_identical(word("Response"), "Response in study days first to last")
 })
 
 test_that("a restored timeline keeps its drug pick", {

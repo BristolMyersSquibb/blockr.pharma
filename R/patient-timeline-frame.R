@@ -117,6 +117,10 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   column, or a column labelled as that reason. With treatment drawn,
 #'   a drug that DS (or ADDS) names in `DSSCAT` also gets its own reason at
 #'   the end of its line.
+#' @param day_from,day_to The first and the last study day of the axis, as
+#'   the axis labels them (day 1 is "D1"). `NULL` or `NA`: the data's. A bar
+#'   across an end is cut there; what lies wholly outside is not drawn. The
+#'   listing columns still count every record.
 #' @details Time is in study days. The colour column holds at most 15 levels
 #'   over all layers, the most the table draws. Each level carries its
 #'   default colour (`blockr_colors`) and the data variable and value it
@@ -153,6 +157,7 @@ patient_timeline_frame <- function(data,
                                    cutoff = NULL,
                                    ongoing = "last contact",
                                    disc_show = "both",
+                                   day_from = NULL, day_to = NULL,
                                    order_by = "number of AEs",
                                    roles = NULL,
                                    scale_map = NULL) {
@@ -304,7 +309,22 @@ patient_timeline_frame <- function(data,
     lab <- attr(tb$adsl[[nm]], "label", exact = TRUE)
     if (!is.null(lab) && nm %in% names(out)) attr(out[[nm]], "label") <- lab
   }
-  pt_with_records(out, records, sl)
+  out <- pt_with_records(out, records, sl)
+  pt_day_range(out, day_from, day_to)
+}
+
+# The axis range the reader set (`day_from`, `day_to`, either NULL or NA for
+# the data's end), as the start column's `blockr_domain`: the timeline column
+# (blockr.viz's spans) cuts its axis there.
+pt_day_range <- function(frame, day_from = NULL, day_to = NULL) {
+  num <- function(x) {
+    x <- suppressWarnings(as.numeric(unlist(x)))[1L]
+    if (length(x) && is.finite(x)) x else NA_real_
+  }
+  lim <- c(num(day_from), num(day_to))
+  if (all(is.na(lim)) || !"Start" %in% names(frame)) return(frame)
+  attr(frame$Start, "blockr_domain") <- lim
+  frame
 }
 
 # --- inputs ----------------------------------------------------------------

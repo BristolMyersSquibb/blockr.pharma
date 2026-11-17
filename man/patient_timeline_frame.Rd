@@ -29,6 +29,8 @@ patient_timeline_frame(
   cutoff = NULL,
   ongoing = "last contact",
   disc_show = "both",
+  day_from = NULL,
+  day_to = NULL,
   order_by = "number of AEs",
   roles = NULL,
   scale_map = NULL
@@ -119,6 +121,11 @@ the data.}
 column, or a column labelled as that reason. With treatment drawn,
 a drug that DS (or ADDS) names in \code{DSSCAT} also gets its own reason at
 the end of its line.}
+
+\item{day_from, day_to}{The first and the last study day of the axis, as
+the axis labels them (day 1 is "D1"). \code{NULL} or \code{NA}: the data's. A bar
+across an end is cut there; what lies wholly outside is not drawn. The
+listing columns still count every record.}
 
 \item{order_by}{Patient order, one of \code{"days on treatment"}, \code{"number of AEs"}, \code{"number of events"}, \code{"worst AE"}, \code{"best response"}, \code{"first progression"}, \code{"ongoing AEs"}, \code{"first onset"}, \code{"number of con meds"}
 and \code{"subject"}.}
