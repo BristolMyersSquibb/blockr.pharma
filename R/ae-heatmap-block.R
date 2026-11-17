@@ -173,14 +173,15 @@ new_ae_heatmap_block <- function(row = "USUBJID",
 #'
 #' "Top 25 Dictionary-Derived Term, painted by worst Standard Toxicity
 #' Grade, by Actual Treatment": `{@top_terms}` is the prepare script's cap,
-#' `@parent` the column grouping the rows, and a bracketed clause leaves when
-#' its setting is empty.
+#' the column word offers the columns a board marks as the `level` kind
+#' (every column where none are marked), `@parent` is the column grouping
+#' the rows, and a bracketed clause leaves when its setting is empty.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 ae_heatmap_subtitle <- function() {
   paste0(
-    "[Top {@top_terms} ]{label(@facet)}",
+    "[Top {@top_terms} ]{label(@facet in level)}",
     "[, painted by worst {label(@fill)}]",
     "[, by {label(@parent)}]"
   )
@@ -188,8 +189,11 @@ ae_heatmap_subtitle <- function() {
 
 #' The AE heatmap's default prepare script
 #'
-#' Keeps the `top_terms` most frequent values of `col`, counted over the
-#' event rows. `top_terms` is declared at the top, so it becomes a setting.
+#' Keeps the `top_terms` most frequent values of the table's facet column,
+#' counted over the event rows. `top_terms` is declared at the top, so it
+#' becomes a setting. `facet` is the table's own (`#| setting`): when the
+#' reader switches the columns, the cap counts the new column. `col` is the
+#' value the line carries outside a table.
 #'
 #' @param col The column the matrix spreads across, e.g. `"AEDECOD"`.
 #' @param top_n The default cap.
@@ -200,13 +204,13 @@ ae_heatmap_script <- function(col = "AEDECOD", top_n = 25L) {
   if (!length(col) || !nzchar(col[[1L]])) {
     return("")
   }
-  sym <- deparse(as.name(col[[1L]]), backtick = TRUE)
   paste(
     paste0("top_terms <- ", as.integer(top_n),
            "  #| number(min = 1, max = 200, label = \"Top terms\")"),
-    paste0("top <- dplyr::count(data, ", sym, ", sort = TRUE)"),
-    paste0("dplyr::filter(data, ", sym, " %in% utils::head(top$", sym,
-           ", top_terms))"),
+    paste0("facet <- ", deparse(col[[1L]]), "  #| setting"),
+    paste0("top <- dplyr::count(data, dplyr::across(dplyr::all_of(facet)), ",
+           "sort = TRUE)"),
+    "dplyr::filter(data, .data[[facet]] %in% utils::head(top[[facet]], top_terms))",
     sep = "\n"
   )
 }

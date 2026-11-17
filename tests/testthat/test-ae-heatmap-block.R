@@ -130,20 +130,21 @@ test_that("a production board's heatmap restores with the dock's names", {
 test_that("the default script keeps the top_n values of the block's column", {
   sc <- ae_heatmap_script("CMDECOD")
   expect_match(sc, "top_terms <- 25", fixed = TRUE)
-  expect_match(sc, "dplyr::count(data, CMDECOD, sort = TRUE)", fixed = TRUE)
+  expect_match(sc, "facet <- \"CMDECOD\"  #| setting", fixed = TRUE)
   d <- data.frame(CMDECOD = c("A", "A", "B", "C"), USUBJID = c(1, 2, 1, 3))
   env <- new.env()
   env$data <- d
   out <- eval(parse(text = sub("top_terms <- 25[^\n]*", "top_terms <- 1", sc)),
               envir = env)
   expect_identical(unique(out$CMDECOD), "A")
-  # a name that is not syntactic is backticked, not broken
-  expect_match(ae_heatmap_script("AE Term"), "`AE Term`", fixed = TRUE)
+  # a name that is not syntactic is a string, not broken
+  expect_match(ae_heatmap_script("AE Term"), "facet <- \"AE Term\"",
+               fixed = TRUE)
   expect_identical(ae_heatmap_script(character()), "")
 })
 
 test_that("the sentence names the table's facet and fill", {
-  expect_match(ae_heatmap_subtitle(), "{label(@facet)}", fixed = TRUE)
+  expect_match(ae_heatmap_subtitle(), "{label(@facet in level)}", fixed = TRUE)
   expect_match(ae_heatmap_subtitle(), "painted by worst {label(@fill)}",
                fixed = TRUE)
 })
