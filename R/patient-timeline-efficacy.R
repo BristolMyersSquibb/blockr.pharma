@@ -450,7 +450,7 @@ swimmer_change_rows <- function(x, k, at, raw, txt, prev) {
   swimmer_rows(
     x$USUBJID[k], event_day = at, event = "Dose change", lane = x$lane[k],
     tag = num,
-    tip = paste0("Dose change, ", tolower(swimmer_day_txt(at)), " · ",
+    tip = paste0("Dose change, ", tolower(swimmer_day_txt(at)), " \u00b7 ",
                  x$drug[k], ", ", prev, " to ", txt)
   )
 }
@@ -465,7 +465,7 @@ swimmer_other_rows <- function(x, i, s, e, tt, gr) {
   swimmer_piece(swimmer_rows(
     x$USUBJID[i], start = st, end = en, colour = "Other", lane = "Other",
     label = x$drug[i], ongoing = gr$last[i] & open,
-    tip = paste0(x$drug[i], " · ", swimmer_day_txt(st), " to ",
+    tip = paste0(x$drug[i], " \u00b7 ", swimmer_day_txt(st), " to ",
                  sub("^Day ", "", swimmer_day_txt(en, open)))
   ), gr$g[i], 10L)
 }
@@ -500,7 +500,7 @@ swimmer_period_rows <- function(x, i, s, e, tt, dose, gr, doses,
   raw <- x$dose[k]
   fr <- swimmer_from(gk, raw, dose[k])
   tip <- paste0(x$drug[k], ifelse(nzchar(dose[k]), paste0(", ", dose[k]), ""),
-                ifelse(daily[gk], " daily", ""), " · ",
+                ifelse(daily[gk], " daily", ""), " \u00b7 ",
                 swimmer_day_txt(st), " to ",
                 sub("^Day ", "", swimmer_day_txt(en, last & open)), fr$txt)
   out <- swimmer_piece(swimmer_rows(
@@ -580,7 +580,7 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff,
     rng <- swimmer_dose_range(raw, dose, gi, ng)
     tip <- paste0(
       xi$drug[f], ifelse(nzchar(rng), paste0(", ", rng), ""),
-      " every ", every[f], " days · ", swimmer_day_txt(x0[f]), " to ",
+      " every ", every[f], " days \u00b7 ", swimmer_day_txt(x0[f]), " to ",
       sub("^Day ", "", swimmer_day_txt(xl, ongoing)), ", ", course
     )
     return(swimmer_piece(swimmer_rows(
@@ -608,11 +608,11 @@ swimmer_admin_rows <- function(x, i, s, tt, dose, gr, every, doses, cutoff,
   late_run <- tabulate(run[late > 0], length(rf))
   tip <- paste0(
     xi$drug[rf], ifelse(nzchar(dose[rf]), paste0(", ", dose[rf]), ""),
-    " every ", every[rf], " days · ", swimmer_day_txt(x0[rf]), " to ",
+    " every ", every[rf], " days \u00b7 ", swimmer_day_txt(x0[rf]), " to ",
     sub("^Day ", "", swimmer_day_txt(en, open)), ", ", n_run,
     ifelse(n_run > 1L, " doses", " dose"),
     ifelse(late_run > 0, paste0(", ", late_run, " late"), ""), fr$txt,
-    " · Course: day ", x0[f][gi[rf]], " to ",
+    " \u00b7 Course: day ", x0[f][gi[rf]], " to ",
     sub("^Day ", "", swimmer_day_txt(xl[gi[rf]], ongoing[gi[rf]])), ", ",
     course[gi[rf]]
   )
@@ -693,4 +693,3 @@ SWIMMER_RESPONSE <- c("Not assessed" = "#e4e7ec", CR = "#1d7a55",
 SWIMMER_DRUGS <- c("#3f63a6", "#2a9686", "#a8649a", "#c08a3e", "#7d8b4a",
                    "#5f8fa8", "#b0707a", "#8a7bb0")
 SWIMMER_BOR <- c("CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE")
-
