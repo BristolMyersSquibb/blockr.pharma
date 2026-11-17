@@ -123,6 +123,102 @@ join_population <- function(events, population, id = "USUBJID") {
   out
 }
 
+#' Restore the absent subjects, taking both tables from a dm
+#'
+#' The dm form of [join_population()]: takes the events table and the dm's
+#' subject-level table and joins them, so a board needs no pull or flatten in
+#' front of the join. Anything that filtered the dm upstream (a population
+#' filter, a flag on ADSL) reaches both the events and the denominator.
+#'
+#' @param data A [dm][dm::dm()].
+#' @param table Name of the events table. `NULL` takes `adae`, else `ae`,
+#'   else the first table with a foreign key to the population table.
+#' @param population Name of the subject-level table. `NULL` takes `adsl`,
+#'   else the table `table` points to by foreign key.
+#' @param id Subject identifier. `NULL` takes the foreign key between the two
+#'   tables, else `"USUBJID"`, else the first column they share.
+#'
+#' @return A data frame, as [join_population()].
+#'
+#' @examples
+#' adsl <- data.frame(USUBJID = c("S1", "S2", "S3"), TRT01A = "A")
+#' adae <- data.frame(USUBJID = c("S1", "S1", "S2"),
+#'                    AEDECOD = c("Diarrhoea", "Diarrhoea", "Nausea"))
+#' join_population_dm(dm::dm(adsl, adae), "adae")
+#'
+#' @export
+join_population_dm <- function(data, table = NULL, population = NULL,
+                               id = NULL) {
+
+  if (!inherits(data, "dm")) {
+    stop("`data` must be a dm.", call. = FALSE)
+  }
+  tbls <- dm::dm_get_tables(data)
+
+  population <- population %||% dm_population_table(data)
+  if (is.null(population) || !population %in% names(tbls)) {
+    stop("The dm has no subject-level table (adsl).", call. = FALSE)
+  }
+  table <- table %||% dm_events_default(data, population)
+  if (is.null(table) || !table %in% setdiff(names(tbls), population)) {
+    stop("The dm carries no events table \"", table %||% "", "\".",
+         call. = FALSE)
+  }
+
+  # A dm keeps the filter trail and provenance on each table, so both come
+  # along with the tables and join_population() merges them.
+  events <- tbls[[table]]
+  pop <- tbls[[population]]
+
+  id <- id %||% dm_population_id(data, table, population, events, pop)
+  join_population(events, pop, id = id)
+}
+
+# The subject-level table: adsl by name, else the one table every other
+# table's foreign keys point to.
+dm_population_table <- function(data, table = NULL) {
+  nms <- names(dm::dm_get_tables(data))
+  hit <- nms[tolower(nms) == "adsl"]
+  if (length(hit)) return(hit[[1L]])
+  fks <- dm::dm_get_all_fks(data)
+  if (!is.null(table)) fks <- fks[fks$child_table == table, , drop = FALSE]
+  parents <- unique(fks$parent_table)
+  if (length(parents) == 1L) parents else NULL
+}
+
+# The events table a fresh block starts on.
+dm_events_default <- function(data, population) {
+  nms <- setdiff(names(dm::dm_get_tables(data)), population)
+  for (cand in c("adae", "ae")) {
+    hit <- nms[tolower(nms) == cand]
+    if (length(hit)) return(hit[[1L]])
+  }
+  fks <- dm::dm_get_all_fks(data)
+  kids <- intersect(fks$child_table[fks$parent_table == population], nms)
+  if (length(kids)) return(kids[[1L]])
+  if (length(nms)) nms[[1L]] else NULL
+}
+
+# The identifier: the foreign key when it is one column of the same name on
+# both sides, else USUBJID, else the first shared column.
+dm_population_id <- function(data, table, population, events, pop) {
+  shared <- intersect(names(events), names(pop))
+  fks <- dm::dm_get_all_fks(data)
+  fk <- fks[fks$child_table == table & fks$parent_table == population, ,
+            drop = FALSE]
+  if (nrow(fk)) {
+    child <- fk$child_fk_cols[[1L]]
+    parent <- fk$parent_key_cols[[1L]]
+    if (length(child) == 1L && identical(child, parent) && child %in% shared) {
+      return(child)
+    }
+  }
+  if ("USUBJID" %in% shared) return("USUBJID")
+  if (length(shared)) return(shared[[1L]])
+  stop("Tables \"", table, "\" and \"", population,
+       "\" share no subject identifier.", call. = FALSE)
+}
+
 # The two inputs' trails as one, events first, each key once.
 join_trails <- function(events, population) {
   trail <- c(blockr.dm::filter_trail(events),
@@ -156,11 +252,18 @@ restore_population_column_attrs <- function(data, column_attrs) {
 
 #' Population join block
 #'
-#' Two inputs: `data`, the events, and `population`, the subject-level table
-#' they came from. Appends the subjects the events never mention, so a
-#' downstream chart or table can divide by the population rather than by
-#' whoever happens to appear in the event rows. See [join_population()] for the
-#' exact rule.
+#' Appends the subjects the events never mention, so a downstream chart or
+#' table can divide by the population rather than by whoever happens to appear
+#' in the event rows. See [join_population()] for the exact rule.
+#'
+#' # Two ways in
+#'
+#' * **A dm on `data`.** The block takes the events table named by `table`
+#'   and the dm's subject-level table itself ([join_population_dm()]), and
+#'   `population` stays unconnected. The panel shows an events table select;
+#'   the population table and the identifier come from the dm.
+#' * **Two data frames.** `data` is the events, `population` the
+#'   subject-level table they came from. The panel shows the identifier.
 #'
 #' # Where it goes
 #'
@@ -181,6 +284,9 @@ restore_population_column_attrs <- function(data, column_attrs) {
 #' Both give the same N, which is the point of defining it once per branch.
 #'
 #' @param id Subject identifier present in both inputs. Default `"USUBJID"`.
+#'   Used for two data frames; with a dm the identifier comes from the dm.
+#' @param table With a dm on `data`: the events table. `NULL` (default)
+#'   starts on `adae`, else `ae`. Ignored for data frames.
 #' @param ... Forwarded to [blockr.core::new_transform_block()].
 #'
 #' @examples
@@ -190,10 +296,14 @@ restore_population_column_attrs <- function(data, column_attrs) {
 #'     new_population_join_block(),
 #'     data = list(data = my_adae, population = my_adsl)
 #'   )
+#'   serve(
+#'     new_population_join_block(table = "adae"),
+#'     data = list(data = my_dm)
+#'   )
 #' }
 #'
 #' @export
-new_population_join_block <- function(id = "USUBJID", ...) {
+new_population_join_block <- function(id = "USUBJID", table = NULL, ...) {
 
   # NOT `id`: the server's first parameter is the MODULE id, so a formal of
   # the same name is shadowed the moment the closure is entered and the
@@ -204,6 +314,8 @@ new_population_join_block <- function(id = "USUBJID", ...) {
   # rather than in the signature.
   init_id <- as.character(id %||% "")[1L]
   if (is.na(init_id)) init_id <- ""
+  init_table <- as.character(table %||% "")[1L]
+  if (is.na(init_table)) init_table <- ""
 
   blockr.core::new_transform_block(
     server = function(id, data, population) {
@@ -222,6 +334,32 @@ new_population_join_block <- function(id = "USUBJID", ...) {
         # updateSelectInput() push -- see the renderUI below for why.
         r_choices <- shiny::reactiveVal(character())
 
+        # dm mode. `r_dm` says which form the input has, `r_table` is the
+        # events table and `r_tables` what its select offers. Held as
+        # reactiveVals for the same reason as `r_ok`: `expr` reads no data.
+        r_dm <- shiny::reactiveVal(FALSE)
+        r_table <- shiny::reactiveVal(init_table)
+        r_tables <- shiny::reactiveVal(character())
+
+        # Its own observer, on `data` alone: with a dm, `population` is
+        # unconnected and an event expression reading it would never fire.
+        shiny::observeEvent(data(), {
+          d <- tryCatch(data(), error = function(e) NULL)
+          is_dm <- inherits(d, "dm")
+          if (!identical(shiny::isolate(r_dm()), is_dm)) r_dm(is_dm)
+          if (!is_dm) return()
+          pop <- dm_population_table(d)
+          choices <- setdiff(names(dm::dm_get_tables(d)), pop)
+          if (!length(choices)) return()
+          r_tables(choices)
+          cur <- shiny::isolate(r_table())
+          if (!usable(cur, choices)) {
+            sel <- if (is.null(pop)) choices[[1L]] else
+              dm_events_default(d, pop)
+            r_table(sel)
+          }
+        })
+
         usable <- function(x, choices) {
           length(x) == 1L && !is.na(x) && nzchar(x) && x %in% choices
         }
@@ -233,6 +371,7 @@ new_population_join_block <- function(id = "USUBJID", ...) {
         shiny::observeEvent(list(data(), population()), {
           d <- tryCatch(data(), error = function(e) NULL)
           p <- tryCatch(population(), error = function(e) NULL)
+          if (inherits(d, "dm")) return()
           if (!is.data.frame(d) || !is.data.frame(p)) return()
           choices <- intersect(names(d), names(p))
           cur <- shiny::isolate(r_id())
@@ -265,6 +404,17 @@ new_population_join_block <- function(id = "USUBJID", ...) {
         # `isolate()` on the selection keeps the widget from being rebuilt
         # under the user's cursor on their own pick.
         output$control <- shiny::renderUI({
+          if (r_dm()) {
+            tables <- r_tables()
+            tbl <- shiny::isolate(r_table())
+            if (!length(tables) && nzchar(tbl)) tables <- tbl
+            return(shiny::selectInput(
+              inputId = session$ns("table"),
+              label = "Events table",
+              choices = tables,
+              selected = if (nzchar(tbl)) tbl
+            ))
+          }
           choices <- r_choices()
           sel <- shiny::isolate(r_id())
           # No data yet: show the identifier the block holds rather than an
@@ -294,8 +444,25 @@ new_population_join_block <- function(id = "USUBJID", ...) {
           r_ok(TRUE)
         })
 
+        # Same echo guard for the table select.
+        shiny::observeEvent(input$table, {
+          incoming <- as.character(input$table)[1L]
+          if (identical(incoming, shiny::isolate(r_table()))) return()
+          if (!usable(incoming, shiny::isolate(r_tables()))) return()
+          r_table(incoming)
+        })
+
         list(
           expr = shiny::reactive({
+            if (r_dm()) {
+              tbl <- r_table()
+              # An unset table is resolved by the helper, so a fresh block
+              # on a dm runs before anyone opens its panel.
+              return(bquote(
+                blockr.pharma::join_population_dm(.(d), table = .(tbl)),
+                list(d = data_slot(), tbl = if (nzchar(tbl)) tbl)
+              ))
+            }
             key <- r_id()
             # Both inputs go in as `.()` slots. A bare `population` symbol
             # works in the app (the eval env binds it) and breaks in EXPORTED
@@ -315,7 +482,7 @@ new_population_join_block <- function(id = "USUBJID", ...) {
               list(d = d, p = p, key = key)
             )
           }),
-          state = list(id = r_id)
+          state = list(id = r_id, table = r_table)
         )
       })
     },
@@ -327,9 +494,16 @@ new_population_join_block <- function(id = "USUBJID", ...) {
         )
       )
     },
-    dat_valid = function(data, population) {
+    dat_valid = function(data, population = NULL) {
+      if (inherits(data, "dm")) {
+        if (!is.null(population)) {
+          stop("With a dm on `data` the population comes from the dm. ",
+               "Disconnect the `population` input.")
+        }
+        return(invisible())
+      }
       if (!is.data.frame(data)) {
-        stop("`data` must be a data frame of events. Flatten a dm first.")
+        stop("`data` must be a data frame of events, or a dm.")
       }
       if (!is.data.frame(population)) {
         stop("`population` must be a subject-level data frame, e.g. ADSL.")
@@ -337,7 +511,7 @@ new_population_join_block <- function(id = "USUBJID", ...) {
     },
     class = "population_join_block",
     expr_type = "bquoted",
-    allow_empty_state = "id",
+    allow_empty_state = list(input = c("id", "table"), data = "population"),
     ...
   )
 }

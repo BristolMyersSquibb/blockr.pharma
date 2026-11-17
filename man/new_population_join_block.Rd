@@ -4,20 +4,33 @@
 \alias{new_population_join_block}
 \title{Population join block}
 \usage{
-new_population_join_block(id = "USUBJID", ...)
+new_population_join_block(id = "USUBJID", table = NULL, ...)
 }
 \arguments{
-\item{id}{Subject identifier present in both inputs. Default \code{"USUBJID"}.}
+\item{id}{Subject identifier present in both inputs. Default \code{"USUBJID"}.
+Used for two data frames; with a dm the identifier comes from the dm.}
+
+\item{table}{With a dm on \code{data}: the events table. \code{NULL} (default)
+starts on \code{adae}, else \code{ae}. Ignored for data frames.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}.}
 }
 \description{
-Two inputs: \code{data}, the events, and \code{population}, the subject-level table
-they came from. Appends the subjects the events never mention, so a
-downstream chart or table can divide by the population rather than by
-whoever happens to appear in the event rows. See \code{\link[=join_population]{join_population()}} for the
-exact rule.
+Appends the subjects the events never mention, so a downstream chart or
+table can divide by the population rather than by whoever happens to appear
+in the event rows. See \code{\link[=join_population]{join_population()}} for the exact rule.
 }
+\section{Two ways in}{
+\itemize{
+\item \strong{A dm on \code{data}.} The block takes the events table named by \code{table}
+and the dm's subject-level table itself (\code{\link[=join_population_dm]{join_population_dm()}}), and
+\code{population} stays unconnected. The panel shows an events table select;
+the population table and the identifier come from the dm.
+\item \strong{Two data frames.} \code{data} is the events, \code{population} the
+subject-level table they came from. The panel shows the identifier.
+}
+}
+
 \section{Where it goes}{
 \strong{Last in the branch, immediately before the consumer.} Everything that
 filters events -- the flag filter, value filters, a term cut -- belongs
@@ -44,6 +57,10 @@ if (interactive()) {
   serve(
     new_population_join_block(),
     data = list(data = my_adae, population = my_adsl)
+  )
+  serve(
+    new_population_join_block(table = "adae"),
+    data = list(data = my_dm)
   )
 }
 

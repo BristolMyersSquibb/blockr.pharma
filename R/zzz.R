@@ -302,9 +302,13 @@ register_pharma_blocks <- function() {
     category = "transform",
     icon = "people",
     guidance = paste0(
-      "Two inputs: `data` is the events (ADAE, ADCM, ...), `population` is ",
-      "the subject-level table they came from (ADSL, usually restricted to a ",
-      "population flag such as SAFFL). It appends one row per subject the ",
+      "Two ways in. A dm on `data`, with `table` naming the events table ",
+      "(ADAE, ADCM, ...): the block takes that table and the dm's ",
+      "subject-level table (ADSL) itself, so no pull or flatten is needed ",
+      "upstream and `population` stays unconnected. Or two data frames: ",
+      "`data` is the events, `population` the subject-level table they came ",
+      "from (ADSL, usually restricted to a population flag such as SAFFL). ",
+      "It appends one row per subject the ",
       "events do not mention, carrying the population's columns and NA for ",
       "everything event-level. ",
       "USE IT when a view shows a PERCENTAGE OF SUBJECTS. Subjects with no ",
@@ -332,6 +336,15 @@ register_pharma_blocks <- function() {
             "column the two share, normally USUBJID."
           ),
           example = "USUBJID",
+          type = arg_string()
+        ),
+        table = new_arg_spec(
+          paste0(
+            "With a dm on `data`: the events table to join to the dm's ",
+            "subject-level table. Defaults to adae, else ae. Ignored for a ",
+            "data frame."
+          ),
+          example = "adae",
           type = arg_string()
         )
       )
