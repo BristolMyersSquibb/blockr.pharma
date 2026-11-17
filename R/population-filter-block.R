@@ -540,6 +540,11 @@ stamp_source <- function(x, col) {
 #'   = , pools = list(list(name = , members = , custom = ))))`. Edited under
 #'   `Group by` and `Subgroup by`; see [stamp_group()] for what it does to
 #'   `Group` and `Subgroup`.
+#' @param group_none Whether `Group by` offers "(none)". Picked, the board
+#'   is ungrouped: `Group` is NA in every row ([dm_stamp_none()]), which
+#'   charts read as no split and tables as the total only. Off (the default),
+#'   a board with no pick carries no `Group` column, as before. Set in the
+#'   gear.
 #' @param ... Forwarded to [blockr.dm::new_crossfilter_block()]. Pass
 #'   `stamp_as` here to write the pick to a column other than `Group`, or
 #'   `stamp_as = NULL` for no stamp at all, which leaves the plain
@@ -552,6 +557,7 @@ new_population_filter_block <- function(featured = character(),
                                         pinned = NULL,
                                         groups = list(),
                                         subgroup = NULL,
+                                        group_none = FALSE,
                                         ...) {
   # Serialization identity and class, both set AT CONSTRUCTION. The framework
   # injects ctor / ctor_pkg itself on a restore, and block metadata is looked
@@ -586,7 +592,7 @@ new_population_filter_block <- function(featured = character(),
     blockr.dm::new_crossfilter_block,
     c(
       list(featured = featured, pinned = pinned, groups = groups,
-           subgroup = subgroup),
+           subgroup = subgroup, group_none = group_none),
       args
     )
   )
@@ -608,15 +614,19 @@ expr_server.population_filter_block <- function(x, data, ...) {
   pinned <- out[["state"]][["pinned"]]
   groups <- out[["state"]][["groups"]]
   subgroup <- out[["state"]][["subgroup"]]
+  group_none <- out[["state"]][["group_none"]]
 
   out[["expr"]] <- shiny::reactive({
     inner <- inner_expr()
     pin <- pinned()
-    # No group ("(none)" in the Group by select, or a board that pins
-    # nothing): the column is still there, NA in every row. See
-    # dm_stamp_none() for why it is not left out.
+    # No group. With "(none)" offered (the gear's switch), the column is
+    # still there, NA in every row; see dm_stamp_none() for why it is not
+    # left out. Without it, a board that pins nothing carries no column.
     if (is.null(pin) || !length(pin) || is.na(pin[[1L]]) || !nzchar(pin[[1L]])) {
-      return(bquote(blockr.pharma::dm_stamp_none(.(inner), .(stamp_as))))
+      if (is.function(group_none) && isTRUE(group_none())) {
+        return(bquote(blockr.pharma::dm_stamp_none(.(inner), .(stamp_as))))
+      }
+      return(inner)
     }
     def <- stamp_groups_arg(pinned_group_entry(groups(), pin[[1L]]))
     # Self-qualified: the expression is also what a report or an export shows,

@@ -9,6 +9,7 @@ new_population_filter_block(
   pinned = NULL,
   groups = list(),
   subgroup = NULL,
+  group_none = FALSE,
   ...
 )
 }
@@ -27,6 +28,12 @@ the board's groups and subgroups, keyed by column: \code{list(TRT = list(show = 
 \code{Subgroup} when set: tables nest it under the group, charts facet by it.
 \code{NULL} (the default) stamps nothing, and a chart faceted by \code{Subgroup}
 then draws one panel.}
+
+\item{group_none}{Whether \verb{Group by} offers "(none)". Picked, the board
+is ungrouped: \code{Group} is NA in every row (\code{\link[=dm_stamp_none]{dm_stamp_none()}}), which
+charts read as no split and tables as the total only. Off (the default),
+a board with no pick carries no \code{Group} column, as before. Set in the
+gear.}
 
 \item{...}{Forwarded to \code{\link[blockr.dm:new_crossfilter_block]{blockr.dm::new_crossfilter_block()}}. Pass
 \code{stamp_as} here to write the pick to a column other than \code{Group}, or
