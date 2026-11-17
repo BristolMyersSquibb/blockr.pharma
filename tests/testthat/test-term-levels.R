@@ -75,3 +75,20 @@ test_that("the profile's lanes word offers the levels the data has", {
   expect_identical(pp_lane_column(pt_toy()$adae, PP_AE_LANES, "AEHLGT",
                                   "AEDECOD"), "AEDECOD")
 })
+
+test_that("the term filters name a level by the data's label", {
+  d <- pt_toy()
+  attr(d$adae$AEBODSYS, "label") <- "Body System or Organ Class"
+  terms <- patient_timeline_terms(d, "ae")
+  expect_true("Body System or Organ Class: Gastrointestinal disorders" %in%
+                terms)
+  f <- patient_timeline_frame(
+    d, ae_terms = "Body System or Organ Class: Gastrointestinal disorders"
+  )
+  expect_identical(unique(f[f$.lane %in% "Adverse events", ]$Row), "Nausea")
+  # The profile's own name still reads.
+  f <- patient_timeline_frame(
+    d, ae_terms = "System organ class: Gastrointestinal disorders"
+  )
+  expect_identical(unique(f[f$.lane %in% "Adverse events", ]$Row), "Nausea")
+})

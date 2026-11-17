@@ -16,7 +16,8 @@ A character vector; one placeholder when the table is missing.
 }
 \description{
 Every value of each coding level the study carries, coarsest first, as
-"System organ class: Cardiac disorders" or "Preferred term: Nausea": the choices
-of the block's "Only these AEs" and "Only these con meds" rows. The
-levels are the patient profile's find box levels.
+"Body System or Organ Class: Cardiac disorders": the choices of the
+block's "Only these AEs" and "Only these con meds" rows. The levels are the
+patient profile's find box levels, each named by the data's label for its
+column, else as the profile names it ("System organ class").
 }

@@ -257,7 +257,8 @@ pp_find_word <- function(viz, viz_id, param, ctrl, dm_obj, settings) {
       # Column -> label, so the menu can name the level of a pick that is not
       # on the lanes column.
       `data-levels` = as.character(jsonlite::toJSON(
-        as.list(ctrl$levels %||% list()), auto_unbox = TRUE
+        as.list(pp_level_names(tbl, ctrl$levels) %||% list()),
+        auto_unbox = TRUE
       ))
     )),
     # How many of this patient's records the filter leaves, so an emptied

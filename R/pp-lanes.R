@@ -179,6 +179,23 @@ pp_level_labels <- function(tbl, ladder) {
   stats::setNames(unname(ladder), labs)
 }
 
+#' Find levels labelled by the data
+#'
+#' The find box and the timeline's term filters name each level, as
+#' column -> label. Like the lanes (pp_level_labels()), a level whose column
+#' carries a label of its own reads as that label.
+#'
+#' @param tbl A data frame, or `NULL`.
+#' @param levels Named character vector, column -> label.
+#' @return `levels`, relabelled.
+#' @noRd
+pp_level_names <- function(tbl, levels) {
+  if (!is.data.frame(tbl) || !length(levels)) return(levels)
+  flip <- pp_level_labels(tbl, stats::setNames(names(levels),
+                                               unname(levels)))
+  stats::setNames(names(flip), unname(flip))
+}
+
 #' The "Lanes" pill control for a gantt viz
 #'
 #' Declared identically by both gantts; the control UI drops the choices the
@@ -190,8 +207,8 @@ pp_level_labels <- function(tbl, ladder) {
 #' High-level term | Body system`) crowd a panel header that also carries the
 #' title, the severity legend and the panel actions, in a column the profile
 #' does not get to widen. The pill obeys the label rule the same doc sets --
-#' it names the current setting ("System organ class"), never the mechanism -- and
-#' the group label names the dimension.
+#' it names the current setting ("System organ class"), never the mechanism
+#' -- and the group label names the dimension.
 #'
 #' The cost is that the other rungs are invisible until you walk them, and
 #' that walking is one-directional. That is the right trade for a control

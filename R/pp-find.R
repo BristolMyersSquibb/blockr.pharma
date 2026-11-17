@@ -300,6 +300,7 @@ pp_find_vocab <- function(tbl, levels, max_options = 400L) {
   if (is.null(tbl) || !nrow(tbl) || !length(levels %||% character())) {
     return(list())
   }
+  levels <- pp_level_names(tbl, levels)
   cols <- names(levels) %||% unname(levels)
   ids <- if ("USUBJID" %in% colnames(tbl)) {
     as.character(tbl$USUBJID)

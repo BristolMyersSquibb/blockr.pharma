@@ -12,7 +12,8 @@ A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_ch
 \description{
 "Top 25 Dictionary-Derived Term, painted by worst Standard Toxicity
 Grade, by Actual Treatment": \verb{\{@top_terms\}} is the prepare script's cap,
-the column word offers the columns a board marks as the \code{level} kind
-(every column where none are marked), \verb{@parent} is the column grouping
-the rows, and a bracketed clause leaves when its setting is empty.
+the column word offers the term columns, \verb{@parent} is the column grouping
+the rows, and a bracketed clause leaves when its setting is empty. A board
+that wants a shorter menu writes its own sentence, with
+\verb{\{label(@facet in AETERM, AEDECOD)\}}.
 }

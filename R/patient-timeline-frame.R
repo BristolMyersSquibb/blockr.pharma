@@ -214,7 +214,7 @@ patient_timeline_frame <- function(data,
   if ("Adverse events" %in% layers && !is.null(tb$adae)) {
     ae <- tb$adae
     opt$ae_field <- tl_ae_field(ae, ae_colour, roles)
-    ae <- ae[pp_find_match(ae, pt_picks(ae_terms, PP_AE_LEVELS),
+    ae <- ae[pp_find_match(ae, pt_picks(ae_terms, PP_AE_LEVELS, ae),
                            PP_AE_SEARCH), , drop = FALSE]
     parts$ae <- tl_ae(ae, sl, opt, cutoff)
     records <- pt_ae_records(ae, opt, roles)
@@ -238,7 +238,7 @@ patient_timeline_frame <- function(data,
   if ("Con meds" %in% layers && !is.null(tb$adcm)) {
     if (identical(opt$cm_records, "all")) lo <- min(lo, -30)
     cm <- tb$adcm
-    cm <- cm[pp_find_match(cm, pt_picks(cm_terms, PP_CM_LEVELS),
+    cm <- cm[pp_find_match(cm, pt_picks(cm_terms, PP_CM_LEVELS, cm),
                            PP_CM_SEARCH), , drop = FALSE]
     if (nrow(cm)) parts$cm <- tl_cm(cm, sl, opt, cutoff, lo)
   }
@@ -453,9 +453,10 @@ pt_ae_palette <- function() {
 #' The terms a patient timeline can narrow its AEs or con meds to
 #'
 #' Every value of each coding level the study carries, coarsest first, as
-#' "System organ class: Cardiac disorders" or "Preferred term: Nausea": the
-#' choices of the block's "Only these AEs" and "Only these con meds" rows. The
-#' levels are the patient profile's find box levels.
+#' "Body System or Organ Class: Cardiac disorders": the choices of the
+#' block's "Only these AEs" and "Only these con meds" rows. The levels are the
+#' patient profile's find box levels, each named by the data's label for its
+#' column, else as the profile names it ("System organ class").
 #'
 #' @param data The block's input dm.
 #' @param what `"ae"` or `"cm"`.
@@ -531,9 +532,11 @@ timeline_drug_choices <- function(data) {
   if (length(out)) out else "No drugs in the data"
 }
 
-# Term choices back to find picks: "System organ class: Cardiac disorders" is
-# list(col = "AEBODSYS", value = "Cardiac disorders").
-pt_picks <- function(terms, levels) {
+# Term choices back to find picks: "Body System or Organ Class: Cardiac
+# disorders" is list(col = "AEBODSYS", value = "Cardiac disorders"). A level
+# reads as the data's label for its column (`tbl`), else as `levels` names it.
+pt_picks <- function(terms, levels, tbl = NULL) {
+  levels <- c(pp_level_names(tbl, levels), levels)
   terms <- as.character(unlist(terms))
   terms <- terms[!is.na(terms) & nzchar(terms)]
   if (!length(terms)) return(list())
