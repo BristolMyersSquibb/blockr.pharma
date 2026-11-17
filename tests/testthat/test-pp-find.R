@@ -136,7 +136,7 @@ test_that("the picker is offered the coding levels, coarsest first", {
   opts <- pp_find_options(find_tbl(), PP_AE_LEVELS)
   expect_identical(vapply(opts, `[[`, character(1), "col"),
                    c("AEBODSYS", "AEHLT", "AEDECOD"))
-  expect_identical(opts[[1]]$label, "Body system")
+  expect_identical(opts[[1]]$label, "System organ class")
 
   # Counts are this patient's records, which is what the popover answers
   # "which of my events are these" with before anything redraws.

@@ -95,10 +95,10 @@ find_word <- function(out) {
 test_that("a panel's sentence names what it draws, each setting a live word", {
   out <- html(pp_controls_ui(cm_gantt_viz, "cm_gantt", cm_ctrl_dm(), list()))
   expect_match(out, '<span class="pp-chart-sentence">1 medication by <button')
-  expect_match(out, '>coded name</button>, showing <button', fixed = TRUE)
+  expect_match(out, '>standardized name</button>, showing <button', fixed = TRUE)
   # The lanes word lists every level the data has, labels first in the menu.
   expect_match(out, 'data-title="Lanes"', fixed = TRUE)
-  expect_match(out, "Drug class", fixed = TRUE)
+  expect_match(out, "&quot;Class&quot;", fixed = TRUE)
 })
 
 test_that("the filter's word carries this patient's terms at the lanes' level", {

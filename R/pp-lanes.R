@@ -18,28 +18,33 @@
 
 #' The lane ladder for adverse events
 #'
-#' Label -> column, most granular first. `AETERM` is the verbatim report,
-#' `AEDECOD` the coded preferred term (the default, and the only rung the
-#' viz requires), then the MedDRA group levels a study may or may not carry
-#' on its ADAE. `AEBODSYS` is canonical here: [pp_normalize_dm()] has
-#' already folded `AESOC` into it.
+#' Label -> column, most granular first: the verbatim report, the MedDRA
+#' lowest level and preferred term (`AEDECOD`, the default, and the only rung
+#' the viz requires), then the group levels a study may or may not carry on
+#' its ADAE. `AEBODSYS` is canonical here: [pp_normalize_dm()] has already
+#' folded `AESOC` into it. The names are the labels a column without one of
+#' its own reads as (pp_level_labels()).
 #' @noRd
 PP_AE_LANES <- c(
   "Reported term" = "AETERM",
+  "Lowest level term" = "AELLT",
   "Preferred term" = "AEDECOD",
-  "High-level term" = "AEHLT",
-  "Body system" = "AEBODSYS"
+  "High level term" = "AEHLT",
+  "High level group term" = "AEHLGT",
+  "System organ class" = "AEBODSYS"
 )
 
 #' The lane ladder for concomitant medications
 #'
-#' `CMTRT` is the reported name (required by the viz), `CMDECOD` the coded
-#' name (the default when present), `CMCLAS` the drug class.
+#' `CMTRT` is the reported name (required by the viz), `CMDECOD` the
+#' standardized name (the default when present), `CMCLAS` the drug class, or
+#' `CMGRPID` where a study keeps the class there.
 #' @noRd
 PP_CM_LANES <- c(
   "Reported name" = "CMTRT",
-  "Coded name" = "CMDECOD",
-  "Drug class" = "CMCLAS"
+  "Standardized name" = "CMDECOD",
+  "Class" = "CMCLAS",
+  "Class" = "CMGRPID"
 )
 
 #' Lane label for rows whose every ladder rung is blank
@@ -91,7 +96,6 @@ pp_filled_columns <- function(dm_obj, tables) {
 #' @return A single column name, or `NULL` when the table carries no rung.
 #' @noRd
 pp_lane_column <- function(tbl, ladder, requested = NULL, default = NULL) {
-  ladder <- pp_level_choices(tbl, ladder)
   present <- unname(ladder[vapply(
     ladder,
     function(col) col %in% colnames(tbl) && pp_has_values(tbl[[col]]),
@@ -146,43 +150,33 @@ pp_ctrl_present_choices <- function(choices, ctrl, dm_obj, tables) {
   if (isTRUE(ctrl$choices_level)) {
     tbls <- dm::dm_get_tables(dm_obj)
     tbl <- tbls[intersect(tables, names(tbls))][1L][[1L]]
-    if (!is.null(tbl)) choices <- pp_level_choices(tbl, choices)
+    if (!is.null(tbl)) choices <- pp_level_labels(tbl, choices)
   }
   choices[choices %in% pp_filled_columns(dm_obj, tables)]
 }
 
-#' The term columns a table marks as levels
+#' A ladder labelled by the data
 #'
-#' A board marks the columns that code the same thing at different detail
-#' once, at the head of its chain, as the `level` kind
-#' (`blockr.viz::mark_column_kinds()`), from specific to broad. Where a table
-#' carries such marks, its lanes are those columns, in that order, labelled
-#' by the data's own column labels. Without marks, `fallback` (the viz's own
-#' ladder).
-#'
-#' `AESOC` is read as `AEBODSYS`: pp_normalize_dm() folds the one into the
-#' other, so a mark on `AESOC` names a column the normalized table calls
-#' `AEBODSYS`.
+#' A board sets the label of each term column once, where it reads the data,
+#' so every menu names a level the same way. A rung whose column carries a
+#' label of its own reads as that label; otherwise as the ladder's name.
 #'
 #' @param tbl A data frame.
-#' @param fallback Named character vector, label -> column.
-#' @return Named character vector, label -> column.
+#' @param ladder Named character vector, label -> column.
+#' @return `ladder`, relabelled.
 #' @noRd
-pp_level_choices <- function(tbl, fallback) {
-  kinds <- attr(tbl, "blockr_kinds", exact = TRUE)
-  cols <- names(kinds)[as.character(kinds) == "level"]
-  cols[cols == "AESOC" & !"AESOC" %in% colnames(tbl)] <- "AEBODSYS"
-  cols <- unique(cols[cols %in% colnames(tbl)])
-  if (!length(cols)) return(fallback)
-  labs <- vapply(cols, function(col) {
-    lab <- attr(tbl[[col]], "label", exact = TRUE)
-    if (is.character(lab) && length(lab) == 1L && !is.na(lab) && nzchar(lab)) {
+pp_level_labels <- function(tbl, ladder) {
+  labs <- vapply(seq_along(ladder), function(i) {
+    col <- unname(ladder[[i]])
+    lab <- if (col %in% colnames(tbl)) attr(tbl[[col]], "label", exact = TRUE)
+    if (is.character(lab) && length(lab) == 1L && !is.na(lab) &&
+          nzchar(lab) && !identical(lab, col)) {
       lab
     } else {
-      col
+      names(ladder)[[i]]
     }
   }, character(1L))
-  stats::setNames(cols, labs)
+  stats::setNames(unname(ladder), labs)
 }
 
 #' The "Lanes" pill control for a gantt viz
@@ -196,7 +190,7 @@ pp_level_choices <- function(tbl, fallback) {
 #' High-level term | Body system`) crowd a panel header that also carries the
 #' title, the severity legend and the panel actions, in a column the profile
 #' does not get to widen. The pill obeys the label rule the same doc sets --
-#' it names the current setting ("Body system"), never the mechanism -- and
+#' it names the current setting ("System organ class"), never the mechanism -- and
 #' the group label names the dimension.
 #'
 #' The cost is that the other rungs are invisible until you walk them, and
@@ -216,7 +210,7 @@ pp_lane_control <- function(ladder, default) {
     choices = ladder,
     # Choice values are column names: offer only the levels the data has.
     choices_present = TRUE,
-    # A table that marks its level columns offers those instead.
+    # The menu names the levels by the data's labels (pp_level_labels()).
     choices_level = TRUE
   ))
 }

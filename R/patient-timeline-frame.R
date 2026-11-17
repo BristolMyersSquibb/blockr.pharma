@@ -73,7 +73,7 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #' @param dose_tags With lines per drug, a small tag with the new dose where
 #'   a drug's dose changes.
 #' @param ae_terms,cm_terms Only the AEs or con meds matching any of these,
-#'   as [patient_timeline_terms()] offers them ("Body system: Cardiac
+#'   as [patient_timeline_terms()] offers them ("System organ class: Cardiac
 #'   disorders"). Empty: all.
 #' @param order_by Patient order, one of `"days on treatment"`, `"number of
 #'   AEs"`, `"number of events"`, `"worst AE"`, `"best response"`, `"first
@@ -453,8 +453,8 @@ pt_ae_palette <- function() {
 #' The terms a patient timeline can narrow its AEs or con meds to
 #'
 #' Every value of each coding level the study carries, coarsest first, as
-#' "Body system: Cardiac disorders" or "Preferred term: Nausea": the choices
-#' of the block's "Only these AEs" and "Only these con meds" rows. The
+#' "System organ class: Cardiac disorders" or "Preferred term: Nausea": the
+#' choices of the block's "Only these AEs" and "Only these con meds" rows. The
 #' levels are the patient profile's find box levels.
 #'
 #' @param data The block's input dm.
@@ -477,12 +477,11 @@ patient_timeline_terms <- function(data, what = c("ae", "cm")) {
 
 #' The term columns a timeline's opened patients can take a row per
 #'
-#' The choices of the timeline's "Open into one row per" rows: the columns
-#' the table marks as the `level` kind (`blockr.viz::mark_column_kinds()`),
-#' in the order marked, labelled by the data. A table without such marks
-#' offers, for AEs, the levels the AE tables offer ([ae_term_choices()]),
-#' system organ class down to the reported term; for con meds the coded and
-#' reported name and the class. Only the columns the data has are offered.
+#' The choices of the timeline's "Open into one row per" word: for AEs the
+#' reported term up to the system organ class, for con meds the reported and
+#' standardized name and the class, specific to broad. Only the columns the
+#' data has values in are offered, labelled by the data's own column labels
+#' where it has them.
 #'
 #' @param data The block's input dm.
 #' @param what `"ae"` or `"cm"`.
@@ -493,15 +492,23 @@ patient_timeline_terms <- function(data, what = c("ae", "cm")) {
 #' @export
 timeline_lane_choices <- function(data, what = c("ae", "cm")) {
   what <- match.arg(what)
-  all <- if (identical(what, "ae")) TL_AE_LANES else TL_CM_LANES
+  # The profile's lanes (pp-lanes.R), with AESOC for a table without
+  # AEBODSYS: the timeline reads the dm as it comes.
+  all <- if (identical(what, "ae")) {
+    c(PP_AE_LANES, "System organ class" = "AESOC")
+  } else {
+    PP_CM_LANES
+  }
   tb <- tryCatch(pt_tables(data, character()), error = function(e) NULL)
   tbl <- if (identical(what, "ae")) tb$adae else tb$adcm
   out <- all
   if (is.data.frame(tbl)) {
-    # A table that marks its level columns offers those (pp_level_choices()).
-    all <- pp_level_choices(tbl, all)
-    have <- all[toupper(all) %in% toupper(names(tbl))]
-    if (length(have)) out <- have
+    names(tbl) <- toupper(names(tbl))
+    have <- all[all %in% names(tbl)]
+    have <- have[vapply(have, function(col) pp_has_values(tbl[[col]]),
+                        logical(1L))]
+    if (all(c("AEBODSYS", "AESOC") %in% have)) have <- have[have != "AESOC"]
+    if (length(have)) out <- pp_level_labels(tbl, have)
   }
   at <- match(if (identical(what, "ae")) "AEDECOD" else "CMDECOD", out)
   attr(out, "default") <- if (is.na(at)) 1L else at
@@ -524,7 +531,7 @@ timeline_drug_choices <- function(data) {
   if (length(out)) out else "No drugs in the data"
 }
 
-# Term choices back to find picks: "Body system: Cardiac disorders" is
+# Term choices back to find picks: "System organ class: Cardiac disorders" is
 # list(col = "AEBODSYS", value = "Cardiac disorders").
 pt_picks <- function(terms, levels) {
   terms <- as.character(unlist(terms))

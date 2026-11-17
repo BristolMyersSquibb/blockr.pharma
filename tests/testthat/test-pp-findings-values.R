@@ -404,7 +404,7 @@ test_that("the lanes word takes its place in the sentence", {
   html <- as.character(pp_controls_ui(viz, "x", dm_obj, list()))
   # "By", capitalised: the word starts the sentence.
   expect_match(html, 'By <button', fixed = TRUE)
-  expect_match(html, ">coded name</button>", fixed = TRUE)
+  expect_match(html, ">standardized name</button>", fixed = TRUE)
   expect_match(html, 'data-title="Lanes"', fixed = TRUE)
 })
 

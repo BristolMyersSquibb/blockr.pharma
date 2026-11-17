@@ -71,15 +71,15 @@ test_that("the study's severity column and arm win", {
 
 test_that("AEs and con meds narrow to picked terms at any coding level", {
   terms <- patient_timeline_terms(pt_toy(), "ae")
-  expect_true(all(c("Body system: Gastrointestinal disorders",
+  expect_true(all(c("System organ class: Gastrointestinal disorders",
                     "Preferred term: Headache") %in% terms))
   f <- patient_timeline_frame(
-    pt_toy(), ae_terms = "Body system: Gastrointestinal disorders"
+    pt_toy(), ae_terms = "System organ class: Gastrointestinal disorders"
   )
   ae <- f[f$.lane %in% "Adverse events", ]
   expect_identical(unique(ae$Row), "Nausea")
   f <- patient_timeline_frame(pt_toy(), layers = "Con meds",
-                              cm_terms = "Drug class: Analgesics")
+                              cm_terms = "Class: Analgesics")
   expect_identical(unique(f$Row[!is.na(f$Row)]), "Paracetamol")
   expect_match(patient_timeline_terms(list(adsl = pt_toy()$adsl), "cm"),
                "No con med terms")
@@ -141,11 +141,11 @@ test_that("the subtitle names the term level of the layers drawn", {
   }
   expect_identical(word("Adverse events"),
                    paste("Adverse events in study days first to last, AEs by",
-                         "Dictionary-Derived Term"))
+                         "Preferred term"))
   expect_identical(
     word(c("Adverse events", "Con meds"), list(ae_lanes = "AEBODSYS")),
-    paste("Adverse events, Con meds in study days first to last, AEs by Body",
-          "System or Organ Class, con meds by Standardized Medication Name")
+    paste("Adverse events, Con meds in study days first to last, AEs by",
+          "System organ class, con meds by Standardized name")
   )
   expect_identical(word(c("Response", "Treatment")),
                    "Response, Treatment in study days first to last, drugs: all")
@@ -157,11 +157,11 @@ test_that("the term levels are the columns the data has", {
   ch <- timeline_lane_choices(pt_toy(), "ae")
   expect_true(all(ch %in% names(pt_toy()$adae)))
   expect_identical(unname(ch[attr(ch, "default")]), "AEDECOD")
-  expect_true("Dictionary-Derived Term" %in% names(ch))
+  expect_true("Preferred term" %in% names(ch))
   cm <- timeline_lane_choices(pt_toy(), "cm")
   expect_identical(unname(cm[attr(cm, "default")]), "CMDECOD")
   expect_identical(names(timeline_lane_choices(list(), "cm")),
-                   names(TL_CM_LANES))
+                   names(PP_CM_LANES))
   f <- patient_timeline_frame(pt_toy(), ae_lanes = "AEBODSYS")
   ae_rows <- unique(f$Row[f$.section %in% "Adverse events"])
   expect_true(all(toupper(ae_rows) %in% toupper(pt_toy()$adae$AEBODSYS)))

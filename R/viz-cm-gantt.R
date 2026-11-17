@@ -42,8 +42,8 @@ PP_CM_SEARCH <- c("CMTRT", "CMDECOD", "CMCLAS")
 # The levels the picker offers, coarsest first. CMTRT is the verbatim report
 # and is left out for the reason PP_AE_LEVELS leaves out AETERM.
 PP_CM_LEVELS <- c(
-  CMCLAS = "Drug class",
-  CMDECOD = "Standardised name"
+  CMCLAS = "Class",
+  CMDECOD = "Standardized name"
 )
 
 cm_gantt_viz <- new_pp_viz(

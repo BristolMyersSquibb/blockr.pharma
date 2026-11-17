@@ -65,7 +65,7 @@ board's "study_roles" option, else the first of \code{ASEV}, \code{AESEV},
 the data lacks falls back to \code{AEDECOD}, then \code{AETERM}.}
 
 \item{ae_terms, cm_terms}{Only the AEs or con meds matching any of these,
-as \code{\link[=patient_timeline_terms]{patient_timeline_terms()}} offers them ("Body system: Cardiac
+as \code{\link[=patient_timeline_terms]{patient_timeline_terms()}} offers them ("System organ class: Cardiac
 disorders"). Empty: all.}
 
 \item{serious}{\code{"outlined"}, \code{"marked at onset"} or \code{"unmarked"}.}

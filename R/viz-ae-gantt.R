@@ -43,7 +43,7 @@ PP_AE_SEARCH <- c("AETERM", "AEDECOD", "AEHLT", "AEBODSYS")
 
 # The coding levels the picker offers as rows, coarsest first.
 PP_AE_LEVELS <- c(
-  AEBODSYS = "Body system",
+  AEBODSYS = "System organ class",
   AEHLT = "High level term",
   AEDECOD = "Preferred term"
 )

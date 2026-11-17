@@ -21,15 +21,8 @@
 TL_SHOW <- c("Adverse events", "Con meds", "Treatment")
 TL_AE_RECORDS <- c("treatment-emergent", "all")
 TL_AE_SHOW <- c("all AEs", "serious AEs", "ongoing AEs")
-# The term columns an opened patient's AEs and con meds can take a row per,
-# labelled as the AE tables label them (AE_TERM_LEVELS) and as ADCM labels
-# its columns.
-TL_AE_LANES <- c(AE_TERM_LEVELS$high, AE_TERM_LEVELS$low)
 TL_SERIOUS <- c("outlined", "marked at onset", "unmarked")
 TL_CM_RECORDS <- c("active on treatment", "all")
-TL_CM_LANES <- c("Standardized Medication Name" = "CMDECOD",
-                 "Reported Name of Drug, Med, or Therapy" = "CMTRT",
-                 "Medication Class" = "CMCLAS")
 TL_CM_PRIOR <- c("clipped at the start", "hidden")
 TL_TRT_COLOUR <- c("dose level", "drug", "one colour")
 TL_ORIGIN <- c("first dose", "randomisation")

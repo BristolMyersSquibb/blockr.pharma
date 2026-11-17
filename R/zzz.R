@@ -250,7 +250,7 @@ register_pharma_blocks <- function() {
       layers = paste("What to draw: any of \"Response\", \"Treatment\",",
                      "\"Discontinuation and death\", \"Adverse events\",",
                      "\"Con meds\"."),
-      ae_terms = paste("Only these AEs, as \"Body system: Cardiac",
+      ae_terms = paste("Only these AEs, as \"System organ class: Cardiac",
                        "disorders\" or \"Preferred term: Nausea\"."),
       ae_lanes = paste("ADAE column an opened patient has one row per:",
                        "AEDECOD (default), AEBODSYS, AETERM, ..."),

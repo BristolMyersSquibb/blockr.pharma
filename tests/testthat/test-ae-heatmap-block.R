@@ -144,7 +144,7 @@ test_that("the default script keeps the top_n values of the block's column", {
 })
 
 test_that("the sentence names the table's facet and fill", {
-  expect_match(ae_heatmap_subtitle(), "{label(@facet in level)}", fixed = TRUE)
+  expect_match(ae_heatmap_subtitle(), "{label(@facet)}", fixed = TRUE)
   expect_match(ae_heatmap_subtitle(), "painted by worst {label(@fill)}",
                fixed = TRUE)
 })
