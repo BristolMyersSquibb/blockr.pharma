@@ -18,8 +18,10 @@ with a \code{"default"} attribute: the position of the coded name
 all of them.
 }
 \description{
-The choices of the timeline's "Open into one row per" rows: for AEs the
-levels the AE tables offer (\code{\link[=ae_term_choices]{ae_term_choices()}}), system organ class down
-to the reported term; for con meds the coded and reported name and the
-class. Only the columns the data has are offered.
+The choices of the timeline's "Open into one row per" rows: the columns
+the table marks as the \code{level} kind (\code{blockr.viz::mark_column_kinds()}),
+in the order marked, labelled by the data. A table without such marks
+offers, for AEs, the levels the AE tables offer (\code{\link[=ae_term_choices]{ae_term_choices()}}),
+system organ class down to the reported term; for con meds the coded and
+reported name and the class. Only the columns the data has are offered.
 }

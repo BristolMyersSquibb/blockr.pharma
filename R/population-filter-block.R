@@ -140,8 +140,9 @@ mark_group_kind <- function(data, col) {
     if (!length(kinds) || col %in% names(kinds)) {
       return(x)
     }
-    kinds <- c(kinds, stats::setNames("group", col))
-    attr(x, "blockr_kinds") <- kinds[order(names(kinds))]
+    # Appended: the marks keep their order, which is the order a kind's
+    # columns are offered in.
+    attr(x, "blockr_kinds") <- c(kinds, stats::setNames("group", col))
     x
   }
 

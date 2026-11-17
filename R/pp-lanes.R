@@ -91,6 +91,7 @@ pp_filled_columns <- function(dm_obj, tables) {
 #' @return A single column name, or `NULL` when the table carries no rung.
 #' @noRd
 pp_lane_column <- function(tbl, ladder, requested = NULL, default = NULL) {
+  ladder <- pp_level_choices(tbl, ladder)
   present <- unname(ladder[vapply(
     ladder,
     function(col) col %in% colnames(tbl) && pp_has_values(tbl[[col]]),
@@ -142,7 +143,46 @@ pp_lane_values <- function(tbl, col, fallback) {
 #' @noRd
 pp_ctrl_present_choices <- function(choices, ctrl, dm_obj, tables) {
   if (!isTRUE(ctrl$choices_present)) return(choices)
+  if (isTRUE(ctrl$choices_level)) {
+    tbls <- dm::dm_get_tables(dm_obj)
+    tbl <- tbls[intersect(tables, names(tbls))][1L][[1L]]
+    if (!is.null(tbl)) choices <- pp_level_choices(tbl, choices)
+  }
   choices[choices %in% pp_filled_columns(dm_obj, tables)]
+}
+
+#' The term columns a table marks as levels
+#'
+#' A board marks the columns that code the same thing at different detail
+#' once, at the head of its chain, as the `level` kind
+#' (`blockr.viz::mark_column_kinds()`), from specific to broad. Where a table
+#' carries such marks, its lanes are those columns, in that order, labelled
+#' by the data's own column labels. Without marks, `fallback` (the viz's own
+#' ladder).
+#'
+#' `AESOC` is read as `AEBODSYS`: pp_normalize_dm() folds the one into the
+#' other, so a mark on `AESOC` names a column the normalized table calls
+#' `AEBODSYS`.
+#'
+#' @param tbl A data frame.
+#' @param fallback Named character vector, label -> column.
+#' @return Named character vector, label -> column.
+#' @noRd
+pp_level_choices <- function(tbl, fallback) {
+  kinds <- attr(tbl, "blockr_kinds", exact = TRUE)
+  cols <- names(kinds)[as.character(kinds) == "level"]
+  cols[cols == "AESOC" & !"AESOC" %in% colnames(tbl)] <- "AEBODSYS"
+  cols <- unique(cols[cols %in% colnames(tbl)])
+  if (!length(cols)) return(fallback)
+  labs <- vapply(cols, function(col) {
+    lab <- attr(tbl[[col]], "label", exact = TRUE)
+    if (is.character(lab) && length(lab) == 1L && !is.na(lab) && nzchar(lab)) {
+      lab
+    } else {
+      col
+    }
+  }, character(1L))
+  stats::setNames(cols, labs)
 }
 
 #' The "Lanes" pill control for a gantt viz
@@ -175,6 +215,8 @@ pp_lane_control <- function(ladder, default) {
     default = default,
     choices = ladder,
     # Choice values are column names: offer only the levels the data has.
-    choices_present = TRUE
+    choices_present = TRUE,
+    # A table that marks its level columns offers those instead.
+    choices_level = TRUE
   ))
 }

@@ -159,7 +159,7 @@ test_that("the term levels are the columns the data has", {
   expect_identical(names(timeline_lane_choices(list(), "cm")),
                    names(TL_CM_LANES))
   f <- patient_timeline_frame(pt_toy(), ae_lanes = "AEBODSYS")
-  ae_rows <- unique(f$Row[f$.src %in% "AE"])
+  ae_rows <- unique(f$Row[f$.section %in% "Adverse events"])
   expect_true(all(toupper(ae_rows) %in% toupper(pt_toy()$adae$AEBODSYS)))
 })
 

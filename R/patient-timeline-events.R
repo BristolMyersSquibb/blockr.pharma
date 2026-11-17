@@ -312,7 +312,10 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
                 CMDECOD = name,
                 CMTRT = swimmer_drug_name(ifelse(is.na(reported), coded,
                                                  reported)),
-                CMCLAS = aet_title(cls))
+                CMCLAS = aet_title(cls),
+                # Any other column, e.g. an ATC level a board marks: its
+                # values, else the coded name.
+                aet_title(chr(c(opt$cm_lanes, "CMDECOD", "CMTRT"))))
   row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
   # Day 1 of the patient's treatment, in the timeline's days.
   d1 <- aet_day(sl$TRTSDT[i], sl$T0[i])

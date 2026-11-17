@@ -97,7 +97,9 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   rest into "Other", so the colours stay within what a legend can show.
 #'   `"class"` and `"indication"` still work.
 #' @param cm_lanes The ADCM column an opened patient has one row per:
-#'   `"CMDECOD"` (the reported name where uncoded), `"CMTRT"` or `"CMCLAS"`.
+#'   `"CMDECOD"` (the reported name where uncoded), `"CMTRT"`, `"CMCLAS"` or
+#'   any column [timeline_lane_choices()] offers. A column the data lacks
+#'   falls back to `CMDECOD`.
 #' @param cm_prior Con meds that start before the axis: `"clipped at the
 #'   start"` or `"hidden"`.
 #' @param trt_colour With bars by dose: `"dose level"` (more than five doses
@@ -157,18 +159,24 @@ patient_timeline_frame <- function(data,
   layers <- intersect(PT_LAYERS, as.character(unlist(layers)))
   if (!length(layers)) stop("Pick at least one layer.", call. = FALSE)
   arg <- function(x, choices) match.arg(as.character(x)[1L], choices)
+  # A lane column is any column (timeline_lane_choices() offers the level
+  # columns a table marks); one the table lacks falls back in the frame.
+  col <- function(x, default) {
+    x <- as.character(unlist(x))[1L]
+    if (length(x) && !is.na(x) && nzchar(x)) x else default
+  }
   roles <- roles %||% list()
   opt <- list(
     ae_records = arg(ae_records, TL_AE_RECORDS),
     ae_show = arg(ae_show, TL_AE_SHOW),
     ae_colour = as.character(unlist(ae_colour))[1L],
-    ae_lanes = arg(ae_lanes, unname(TL_AE_LANES)),
+    ae_lanes = col(ae_lanes, "AEDECOD"),
     serious = arg(serious, TL_SERIOUS),
     death = "Discontinuation and death" %in% layers,
     disc_show = arg(disc_show, PT_DISC_SHOW),
     cm_records = arg(cm_records, TL_CM_RECORDS),
     cm_colour = tl_cm_word(tl_cm_colour_value(cm_colour)),
-    cm_lanes = arg(cm_lanes, unname(TL_CM_LANES)),
+    cm_lanes = col(cm_lanes, "CMDECOD"),
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
     treatment_as = arg(treatment_as, PT_TRT_DRAW),
@@ -451,10 +459,12 @@ patient_timeline_terms <- function(data, what = c("ae", "cm")) {
 
 #' The term columns a timeline's opened patients can take a row per
 #'
-#' The choices of the timeline's "Open into one row per" rows: for AEs the
-#' levels the AE tables offer ([ae_term_choices()]), system organ class down
-#' to the reported term; for con meds the coded and reported name and the
-#' class. Only the columns the data has are offered.
+#' The choices of the timeline's "Open into one row per" rows: the columns
+#' the table marks as the `level` kind (`blockr.viz::mark_column_kinds()`),
+#' in the order marked, labelled by the data. A table without such marks
+#' offers, for AEs, the levels the AE tables offer ([ae_term_choices()]),
+#' system organ class down to the reported term; for con meds the coded and
+#' reported name and the class. Only the columns the data has are offered.
 #'
 #' @param data The block's input dm.
 #' @param what `"ae"` or `"cm"`.
@@ -470,11 +480,12 @@ timeline_lane_choices <- function(data, what = c("ae", "cm")) {
   tbl <- if (identical(what, "ae")) tb$adae else tb$adcm
   out <- all
   if (is.data.frame(tbl)) {
+    # A table that marks its level columns offers those (pp_level_choices()).
+    all <- pp_level_choices(tbl, all)
     have <- all[toupper(all) %in% toupper(names(tbl))]
     if (length(have)) out <- have
   }
-  at <- match(all[[if (identical(what, "ae")) "Dictionary-Derived Term" else
-    "Standardized Medication Name"]], out)
+  at <- match(if (identical(what, "ae")) "AEDECOD" else "CMDECOD", out)
   attr(out, "default") <- if (is.na(at)) 1L else at
   out
 }

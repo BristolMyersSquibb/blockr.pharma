@@ -116,6 +116,11 @@ join_population <- function(events, population, id = "USUBJID") {
   attr(out, "blockr_provenance") <-
     attr(input, "blockr_provenance", exact = TRUE) %||%
     attr(population, "blockr_provenance", exact = TRUE)
+  # And the column kinds (blockr.viz::mark_column_kinds()), which decide what
+  # a block's menus offer. Both inputs' marks, the events' first and in their
+  # order, which is the order a kind's columns are offered in.
+  kinds <- join_kinds(input, population)
+  if (length(kinds)) attr(out, "blockr_kinds") <- kinds
   trail <- join_trails(input, population)
   for (key in names(trail)) {
     out <- blockr.dm::add_filter_trail(out, key, trail[[key]])
@@ -217,6 +222,14 @@ dm_population_id <- function(data, table, population, events, pop) {
   if (length(shared)) return(shared[[1L]])
   stop("Tables \"", table, "\" and \"", population,
        "\" share no subject identifier.", call. = FALSE)
+}
+
+# The two inputs' column kinds as one, events first, each column once.
+join_kinds <- function(events, population) {
+  kinds <- c(attr(events, "blockr_kinds", exact = TRUE),
+             attr(population, "blockr_kinds", exact = TRUE))
+  if (!length(kinds) || is.null(names(kinds))) return(NULL)
+  kinds[!duplicated(names(kinds))]
 }
 
 # The two inputs' trails as one, events first, each key once.

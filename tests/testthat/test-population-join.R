@@ -215,3 +215,17 @@ test_that("column labels survive the join", {
   expect_identical(attr(out$TRT, "label"), "Actual Treatment")
   expect_identical(levels(out$TRT), c("A", "B"))
 })
+
+test_that("the column kinds survive the join, in their order", {
+  ev_k <- ev
+  attr(ev_k, "blockr_kinds") <- c(AEDECOD = "level", AESEV = "group",
+                                  USUBJID = "id")
+  pop_k <- pop
+  attr(pop_k, "blockr_kinds") <- c(TRT01A = "group", USUBJID = "id")
+  out <- join_population(ev_k, pop_k)
+  expect_equal(attr(out, "blockr_kinds"),
+               c(AEDECOD = "level", AESEV = "group", USUBJID = "id",
+                 TRT01A = "group"))
+  # Inputs without marks give a frame without marks.
+  expect_null(attr(join_population(ev, pop), "blockr_kinds"))
+})

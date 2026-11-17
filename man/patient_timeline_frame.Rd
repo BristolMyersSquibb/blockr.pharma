@@ -79,7 +79,9 @@ rest into "Other", so the colours stay within what a legend can show.
 \code{"class"} and \code{"indication"} still work.}
 
 \item{cm_lanes}{The ADCM column an opened patient has one row per:
-\code{"CMDECOD"} (the reported name where uncoded), \code{"CMTRT"} or \code{"CMCLAS"}.}
+\code{"CMDECOD"} (the reported name where uncoded), \code{"CMTRT"}, \code{"CMCLAS"} or
+any column \code{\link[=timeline_lane_choices]{timeline_lane_choices()}} offers. A column the data lacks
+falls back to \code{CMDECOD}.}
 
 \item{cm_prior}{Con meds that start before the axis: \code{"clipped at the start"} or \code{"hidden"}.}
 
