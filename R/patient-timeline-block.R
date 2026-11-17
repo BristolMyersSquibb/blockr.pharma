@@ -61,11 +61,12 @@ new_timeline_block <- function(summaries = NULL,
                                download = TRUE,
                                ...) {
   dots <- table_state_drop(list(...), new_timeline_block)
+  dots$doses <- NULL
   own <- intersect(names(dots), PT_SETTINGS)
   script_values[own] <- dots[own]
-  if (!is.null(script_values$doses)) {
-    script_values$doses <- swimmer_doses_value(script_values$doses)
-  }
+  # Drug lines draw the records as they are; the old choice of how to show
+  # cycles has nothing left to choose.
+  script_values$doses <- NULL
   sv <- tl_colour_values_migrate(script_values)
   if (!is.null(sv$layers)) {
     sv$layers <- intersect(PT_LAYERS, as.character(unlist(sv$layers)))
@@ -120,7 +121,7 @@ new_timeline_block <- function(summaries = NULL,
 PT_SETTINGS <- c(
   "layers", "group", "response", "ae_terms", "ae_records", "ae_show",
   "ae_colour", "ae_lanes", "serious", "cm_terms", "cm_records", "cm_colour",
-  "cm_lanes", "cm_prior", "treatment_as", "drugs", "doses", "dose_tags",
+  "cm_lanes", "cm_prior", "treatment_as", "drugs", "dose_tags",
   "trt_colour", "disc_show", "origin", "cutoff", "day_from", "day_to",
   "ongoing", "sort_col"
 )
@@ -192,7 +193,6 @@ patient_timeline_script <- function() {
     "drv <- blockr.pharma::timeline_drug_choices(data)",
     paste0("drugs <- factor(drv, levels = drv)  #| select(label = \"Drugs\", ",
            "multiple = TRUE, when = \"trt_on\")"),
-    sel("doses", "Gaps", PT_DOSES, "Doses shown as", on = "trt_on"),
     flag("dose_tags", "FALSE", "Tag dose changes", on = "trt_on"),
     sel("trt_colour", "dose level", TL_TRT_COLOUR, "Colour by", on = "trt_on"),
     sel("disc_show", "both", PT_DISC_SHOW, "Reasons tagged", on = "dth_on"),
@@ -261,7 +261,7 @@ patient_timeline_gear <- function() {
       Patients = list(Rows = "group", Columns = "columns"),
       Lanes = list(
         Response = "response",
-        Treatment = c("treatment_as", "drugs", "doses", "dose_tags",
+        Treatment = c("treatment_as", "drugs", "dose_tags",
                       "trt_colour"),
         `Discontinuation and death` = "disc_show",
         `Adverse events` = c("ae_terms", "ae_records", "ae_show",

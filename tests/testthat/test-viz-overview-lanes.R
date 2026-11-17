@@ -36,7 +36,7 @@ ov_exposure <- function(chart) {
 }
 
 # A drug bar's value: x0, x1, lane, slots, slot, colour, name (on the drug's
-# first bar only), open.
+# first bar only), open, one day (drawn as a ring).
 ex_val <- function(d, k) d$value[[k]]
 ex_tip_rows <- function(d) {
   stats::setNames(vapply(d$tip$rows, function(r) r$value, ""),

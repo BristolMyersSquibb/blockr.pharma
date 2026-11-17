@@ -95,12 +95,12 @@ Either way each drug has a lane of its own.}
 \item{drugs}{The drugs drawn, as \code{\link[=timeline_drug_choices]{timeline_drug_choices()}} offers them.
 \code{NULL}: all. The others' lines, dose tags and legend entries go.}
 
-\item{doses}{With lines per drug: \code{"Gaps"} shows skipped cycles as gaps,
-\code{"Plain"} a drug in cycles as one bar. Either way each piece's tooltip
-gives its own dose. The old \code{"Gaps and cuts"} reads as \code{"Gaps"}.}
+\item{doses}{Ignored. Drug lines draw the ADEX records as they are (a
+one-day record a ring), so there is no choice of how to show cycles.
+Kept so saved boards and old calls still run.}
 
-\item{dose_tags}{With lines per drug and \code{"Gaps"}, a small tag with the
-new dose where a drug's dose changes.}
+\item{dose_tags}{With lines per drug, a small tag with the new dose where
+a drug's dose changes.}
 
 \item{trt_colour}{With bars by dose: \code{"dose level"} (more than five doses
 fall into dose ranges), \code{"drug"} (more than five fold into "Other drug")

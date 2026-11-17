@@ -961,31 +961,12 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
 
   # Exposure -- the treatment lane's real content when adex exists: a thin
   # line per drug in its colour, a slot each, as on screen.
+  ex_dots <- list()
   if (has_adex) {
-    adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
-    ex_has_end <- if (ex_use_day) "AENDY" %in% colnames(adex) else
-      "AENDT" %in% colnames(adex)
-    opt_chr <- function(df, col, i) {
-      if (col %in% colnames(df)) {
-        v <- df[[col]][i]
-        if (is.na(v)) "" else as.character(v)
-      } else {
-        ""
-      }
-    }
-    ex_end <- function(i) if (ex_use_day) adex$AENDY[i] else adex$AENDT[i]
-    ex_x <- function(v) {
-      pp_xval_pref_day(
-        if (ex_use_day) NULL else v,
-        if (ex_use_day) v else NULL, ref_ms, mode
-      )
-    }
-    drug_of <- function(i) trimws(opt_chr(adex, "EXTRT", i))
-    key <- vapply(seq_len(nrow(adex)), function(i) {
-      paste(drug_of(i), adex[[ex_src]][i],
-            if (ex_has_end) ex_end(i) else "")
-    }, character(1L))
-    groups <- split(seq_len(nrow(adex)), factor(key, levels = unique(key)))
+    # The records as the live lane draws them (pp_drug_lines()).
+    pieces <- pp_drug_lines(
+      adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE], sl, ex_use_day
+    )
     n_slot <- max(length(ex_drugs), 1L)
     slot_of <- function(drug) {
       if (!length(ex_drugs) || !nzchar(drug)) return(0L)
@@ -995,28 +976,33 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
     slot_h <- band / n_slot
     half_h <- 0.05
     drug_col <- pt_drug_palette(ex_drugs)
-    for (rows in groups) {
-      i <- rows[[1L]]
-      x0 <- ex_x(adex[[ex_src]][i])
-      # Without an end, a dose stops at the last dose, as on the live lane.
-      x1 <- if (ex_has_end && !is.na(ex_end(i))) {
-        ex_x(ex_end(i))
+    for (g in seq_len(NROW(pieces))) {
+      p <- pieces[g, , drop = FALSE]
+      x0 <- pp_drug_line_x(p$u0, ex_use_day, ref_ms, mode)
+      x1 <- if (p$open) {
+        pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
       } else {
-        max(trt_end, x0)
+        pp_drug_line_x(p$u1, ex_use_day, ref_ms, mode)
       }
-      k <- slot_of(drug_of(i))
+      k <- slot_of(p$drug)
       yc <- if (n_slot == 1L) {
         lane_y("TRT")
       } else {
         lane_y("TRT") + band / 2 - slot_h * (k + 0.5)
       }
-      d <- drug_of(i)
-      hex <- if (d %in% names(drug_col)) {
-        unname(drug_col[[d]])
+      hex <- if (p$drug %in% names(drug_col)) {
+        unname(drug_col[[p$drug]])
       } else {
         SWIMMER_DRUGS[[1L]]
       }
-      add_rect(x0, x1, yc, half_h, hex, NA, 0)
+      if (p$dot) {
+        # One administration: a ring on its day.
+        ex_dots[[length(ex_dots) + 1L]] <- data.frame(
+          x = x0, y = yc, color = hex, stringsAsFactors = FALSE
+        )
+      } else {
+        add_rect(x0, x1, yc, half_h, hex, NA, 0)
+      }
     }
   }
 
@@ -1099,6 +1085,13 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
   }
 
   rect_df <- do.call(rbind, acc$rects)
+  # A lane of one-day doses alone draws rings and no rectangle.
+  if (is.null(rect_df)) {
+    rect_df <- data.frame(xmin = numeric(), xmax = numeric(),
+                          ymin = numeric(), ymax = numeric(),
+                          fill = character(), color = character(),
+                          lwd = numeric())
+  }
 
   # Points are clipped to the window explicitly, the way echarts clips them
   # silently: a mark past the axis must drop without a ggplot warning.
@@ -1190,6 +1183,13 @@ pp_static_overview <- function(dm_obj, time_range, settings = list(),
       axis.text.y = ggplot2::element_text(face = "bold", size = 8)
     )
 
+  if (length(ex_dots)) {
+    p <- p + ggplot2::geom_point(
+      data = do.call(rbind, ex_dots),
+      ggplot2::aes(x = x, y = y, color = I(color)),
+      shape = 21, fill = "white", size = 1.4, stroke = 0.6
+    )
+  }
   if (length(texts)) {
     txt_df <- do.call(rbind, texts)
     p <- p + ggplot2::geom_text(

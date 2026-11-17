@@ -666,52 +666,12 @@ patient_overview_viz <- new_pp_viz(
       if (has_adex) {
         adex <- adex_raw[!is.na(adex_raw[[ex_src]]), , drop = FALSE]
         ex_lane <- trt_lane
-        ex_has_end <- if (ex_use_day) {
-          "AENDY" %in% colnames(adex)
-        } else {
-          "AENDT" %in% colnames(adex)
-        }
-        opt_chr <- function(df, col, i) {
-          if (col %in% colnames(df)) {
-            v <- df[[col]][i]
-            if (is.na(v)) "" else as.character(v)
-          } else {
-            ""
-          }
-        }
-        ex_end <- function(i) if (ex_use_day) adex$AENDY[i] else adex$AENDT[i]
-        ex_x <- function(v) {
-          pp_xval_pref_day(
-            if (ex_use_day) NULL else v,
-            if (ex_use_day) v else NULL,
-            ref_ms, mode
-          )
-        }
         day_unit <- if (identical(mode, "rday")) 1 else 86400000
 
-        # The dose, in the study's own words. SDTM/ADaM keeps the amount and
-        # its unit in two columns, and a study dosing on a per-weight
-        # regimen ships that unit here -- so a record carrying "10 mg/kg"
-        # reaches the tooltip by being read, never by this viz dividing a
-        # dose by a weight it was not given.
-        # A zero dose (placebo) is no dose to show.
-        dose_of <- function(i) {
-          amt <- suppressWarnings(as.numeric(opt_chr(adex, "EXDOSE", i)))
-          if (!is.na(amt) && amt == 0) return("")
-          trimws(paste(opt_chr(adex, "EXDOSE", i), opt_chr(adex, "EXDOSU", i)))
-        }
-        drug_of <- function(i) trimws(opt_chr(adex, "EXTRT", i))
-
-        # ADaM adex is parameterized (one row per PARAMCD per period), so the
-        # lane wants each administration once -- but ONCE PER DRUG. Keying on
-        # (start, end, dose) alone, as this did, made a combination regimen's
-        # two same-day infusions one bar whenever their dose strings matched,
-        # and stacked them where they did not.
-        key <- vapply(seq_len(nrow(adex)), function(i) {
-          paste(drug_of(i), adex[[ex_src]][i],
-                if (ex_has_end) ex_end(i) else "")
-        }, character(1L))
-        groups <- split(seq_len(nrow(adex)), factor(key, levels = unique(key)))
+        # The records as the patient timeline draws them (pp_drug_lines()):
+        # a line per record, records of one dose that touch joined, a
+        # one-day record a ring on its day.
+        pieces <- pp_drug_lines(adex, sl, ex_use_day)
 
         # Which slot of the treatment lane a drug draws in. Unnamed doses
         # (no EXTRT) all share the single slot they had before.
@@ -725,69 +685,36 @@ patient_overview_viz <- new_pp_viz(
         # treatment: the timeline's drug palette (pt_drug_palette()) and its
         # names (swimmer_drug_name()).
         drug_col <- pt_drug_palette(ex_drugs)
-        # Its dose before, for the tooltip, where the dose changed.
-        g_drug <- vapply(groups, function(r) drug_of(r[[1L]]), "")
-        g_start <- vapply(groups, function(r) {
-          as.numeric(ex_x(adex[[ex_src]][r[[1L]]]))
-        }, 0)
-        g_dose <- vapply(groups, function(r) {
-          d <- unique(vapply(r, dose_of, character(1L)))
-          paste(d[nzchar(d)], collapse = " · ")
-        }, "")
-        prev_dose <- rep("", length(groups))
-        first_of_drug <- rep(FALSE, length(groups))
-        for (d in unique(g_drug)) {
-          k <- which(g_drug == d)
-          k <- k[order(g_start[k])]
-          first_of_drug[k[[1L]]] <- TRUE
-          if (length(k) > 1L) {
-            prev <- g_dose[k[-length(k)]]
-            chg <- prev != g_dose[k[-1L]]
-            prev_dose[k[-1L]][chg] <- prev[chg]
-          }
-        }
+        first_of_drug <- !duplicated(pieces$drug)
 
-        ex_data <- lapply(seq_along(groups), function(g) {
-          rows <- groups[[g]]
-          i <- rows[[1L]]
-          x0 <- ex_x(adex[[ex_src]][i])
-          # A dose record without an end stops at the last dose (TRTEDT),
-          # and stays open only while the patient has none, as the patient
-          # timeline closes it (swimmer_close_study()).
-          ex_open <- !(ex_has_end && !is.na(ex_end(i))) &&
-            is.na(sl$TRTEDT[1])
-          x1 <- if (ex_has_end && !is.na(ex_end(i))) {
-            ex_x(ex_end(i))
-          } else if (!ex_open) {
-            max(trt_end, x0)
-          } else {
+        ex_data <- lapply(seq_len(NROW(pieces)), function(g) {
+          p <- pieces[g, , drop = FALSE]
+          x0 <- pp_drug_line_x(p$u0, ex_use_day, ref_ms, mode)
+          x1 <- if (p$open) {
             pp_gantt_open_end(x0, time_range, ref_ms, mode, day_unit)
+          } else {
+            pp_drug_line_x(p$u1, ex_use_day, ref_ms, mode)
           }
-          at <- function(nm) if (nm %in% colnames(adex)) adex[[nm]][i] else NA
-          drug <- drug_of(i)
-          name <- if (nzchar(drug)) swimmer_drug_name(drug) else "Exposure"
-          col <- if (nzchar(drug) && drug %in% names(drug_col)) {
-            unname(drug_col[[drug]])
+          col <- if (p$drug %in% names(drug_col)) {
+            unname(drug_col[[p$drug]])
           } else {
             SWIMMER_DRUGS[[1L]]
           }
           list(
             value = list(
-              x0, x1, ex_lane, n_slot, slot_of(drug), col,
-              if (first_of_drug[[g]]) name else "", ex_open
+              x0, x1, ex_lane, n_slot, slot_of(p$drug), col,
+              if (first_of_drug[[g]]) p$name else "", p$open, p$dot
             ),
             # As the timeline's drug lines read: the drug and its dose, the
             # days with the dose before where it changed.
             tip = pp_tip_event(
-              name, color = col, type = "Treatment",
-              details = c(name, g_dose[[g]]),
+              p$name, color = col, type = "Treatment",
+              details = p$details,
               days = pp_tip_span(
-                pp_tip_when(at("ASTDT"), at("ASTDY"), ref_ms, mode),
-                pp_tip_when(at("AENDT"), at("AENDY"), ref_ms, mode),
-                open = ex_open,
-                after = if (nzchar(prev_dose[[g]])) {
-                  paste("from", prev_dose[[g]])
-                }
+                pp_drug_line_when(p$u0, ex_use_day, ref_ms, mode),
+                pp_drug_line_when(p$u1, ex_use_day, ref_ms, mode),
+                open = p$open,
+                after = if (nzchar(p$after)) p$after
               )
             )
           )
@@ -815,8 +742,17 @@ patient_overview_viz <- new_pp_viz(
               var named = slot >= 16;
               var h     = %d;
               var y     = named ? yc + 4 : yc;
+              var dot   = !!api.value(8);
               var barW  = Math.max(end[0] - start[0], 2);
-              var children = [{
+              // A one-day record is one administration: a ring on its day,
+              // as the patient timeline draws it.
+              var children = [dot ? {
+                type: 'circle',
+                shape: { cx: start[0], cy: y, r: 2.5 },
+                style: { fill: PatientProfile.ink('--blockr-color-bg-surface') ||
+                               '#ffffff',
+                         stroke: col, lineWidth: 1.2 }
+              } : {
                 type: 'rect',
                 shape: { x: start[0], y: y - h / 2, width: barW, height: h },
                 style: { fill: col }

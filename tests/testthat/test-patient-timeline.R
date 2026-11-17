@@ -120,7 +120,7 @@ test_that("the lane settings show only while their layer is drawn", {
   off <- specs("Adverse events")
   expect_false(any(off[c("ae_terms", "ae_lanes", "ae_colour", "serious")]))
   expect_true(all(off[c("cm_lanes", "cm_colour", "response", "trt_colour",
-                        "doses")]))
+                        "dose_tags")]))
   expect_false(any(off[c("layers", "group", "origin", "cutoff")]))
   off <- specs(c("Response", "Con meds"))
   expect_true(all(off[c("ae_lanes", "trt_colour")]))

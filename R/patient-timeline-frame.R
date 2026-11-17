@@ -29,7 +29,6 @@
 PT_LAYERS <- c("Response", "Treatment", "Discontinuation and death",
                "Adverse events", "Con meds")
 PT_TRT_DRAW <- c("lines per drug", "bars by dose")
-PT_DOSES <- c("Gaps", "Plain")
 # The layers drawn as full bars under the drug lanes, the first the main one.
 PT_FULL_LANES <- c("Response", "Adverse events", "Con meds")
 PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
@@ -68,11 +67,11 @@ PT_ORDER <- c("days on treatment", "number of AEs", "number of events",
 #'   Either way each drug has a lane of its own.
 #' @param drugs The drugs drawn, as [timeline_drug_choices()] offers them.
 #'   `NULL`: all. The others' lines, dose tags and legend entries go.
-#' @param doses With lines per drug: `"Gaps"` shows skipped cycles as gaps,
-#'   `"Plain"` a drug in cycles as one bar. Either way each piece's tooltip
-#'   gives its own dose. The old `"Gaps and cuts"` reads as `"Gaps"`.
-#' @param dose_tags With lines per drug and `"Gaps"`, a small tag with the
-#'   new dose where a drug's dose changes.
+#' @param doses Ignored. Drug lines draw the ADEX records as they are (a
+#'   one-day record a ring), so there is no choice of how to show cycles.
+#'   Kept so saved boards and old calls still run.
+#' @param dose_tags With lines per drug, a small tag with the new dose where
+#'   a drug's dose changes.
 #' @param ae_terms,cm_terms Only the AEs or con meds matching any of these,
 #'   as [patient_timeline_terms()] offers them ("Body system: Cardiac
 #'   disorders"). Empty: all.
@@ -185,7 +184,6 @@ patient_timeline_frame <- function(data,
     cm_prior = arg(cm_prior, TL_CM_PRIOR),
     trt_colour = arg(trt_colour, TL_TRT_COLOUR),
     treatment_as = arg(treatment_as, PT_TRT_DRAW),
-    doses = swimmer_doses_value(doses),
     dose_tags = isTRUE(as.logical(dose_tags)[1L]),
     origin = arg(origin, TL_ORIGIN),
     ongoing = arg(ongoing, c("last contact", "data cutoff")),
@@ -730,10 +728,10 @@ pt_last_lane <- function(trt, ids) {
 
 # --- treatment --------------------------------------------------------------
 
-# A thin line per drug, as the swimmer draws it: ADEX through the swimmer's
-# exposure, folding and drug rows (swimmer_drug_rows()), moved from the
-# swimmer's days (from the first dose) to the timeline's (from `opt$origin`).
-# The drugs' order and colours travel as attributes.
+# A thin line per drug: its ADEX records as the patient profile draws them
+# (pp_ex_runs()), a one-day record a ring, moved from the days from the
+# first dose to the timeline's (from `opt$origin`). Nothing is inferred from
+# the gaps between doses. The drugs' order and colours travel as attributes.
 pt_drug_lines <- function(tb, sl, opt, cutoff) {
   if (is.null(tb$adex)) return(NULL)
   ss <- swimmer_subjects(tb$adsl)
@@ -749,34 +747,40 @@ pt_drug_lines <- function(tb, sl, opt, cutoff) {
   ex$open <- is.na(ex$end)
   ex$end[ex$open] <- if (is.na(cutoff)) ex$start[ex$open] else cutoff
   t0 <- stats::setNames(ss$TRTSDT, ss$USUBJID)
-  on_at <- if (is.na(cutoff)) max(ex$end, na.rm = TRUE) else cutoff
-  ex$on <- swimmer_ongoing(ex, on_at) &
-    is.na(ss$TRTEDT[match(ex$USUBJID, ss$USUBJID)])
   # Every drug has its lane: swimmer_fold() only orders study drugs.
   ex <- swimmer_fold(ex, Inf, t0)
-  d <- swimmer_drug_rows(ex, t0, opt$doses, on_at, opt$dose_tags)
-  if (is.null(d) || !length(d$USUBJID)) return(NULL)
-  # Swimmer day 1 is the first dose; the timeline's day 1 is the origin.
+  r <- pp_ex_runs(data.frame(
+    USUBJID = ex$USUBJID, drug = ex$drug, start = as.numeric(ex$start),
+    end = as.numeric(ex$end), dose = ex$dose, unit = ex$unit,
+    open = ex$open, stringsAsFactors = FALSE
+  ))
+  if (is.null(r)) return(NULL)
+  # Day 1 is the first dose here; the timeline's day 1 is the origin.
   shift_of <- function(ids) {
     aet_day(t0[ids], sl$T0[match(ids, sl$USUBJID)]) - 1
   }
-  ch <- tl_keep(d, !is.na(d$event_day))
-  d <- tl_keep(d, !is.na(d$start))
-  shift <- shift_of(d$USUBJID)
-  lane <- as.character(d$lane)
-  tip <- as.character(d$tip)
-  n <- length(d$USUBJID)
+  tt <- as.numeric(t0[r$USUBJID])
+  st <- swimmer_x(r$start, tt)
+  en <- swimmer_x(r$end, tt)
+  shift <- shift_of(r$USUBJID)
+  lane <- r$drug
+  n <- nrow(r)
+  dose <- ifelse(nzchar(r$txt), paste0(", ", r$txt), "")
+  days <- ifelse(
+    r$dot, swimmer_day_txt(st),
+    paste0(swimmer_day_txt(st), " to ",
+           sub("^Day ", "", swimmer_day_txt(en, r$open)))
+  )
   raw <- unique(as.character(aet_col(tb$adex, c("EXTRT", "CMDECOD"))))
   k <- match(lane, swimmer_drug_name(raw))
   p <- list(
-    USUBJID = d$USUBJID, Row = lane, .src = rep("Treatment", n),
-    Start = d$start + shift, End = d$end + shift,
-    .open = d$ongoing %in% TRUE, .colour = lane,
-    .style = as.character(d$mark), .label = lane,
+    USUBJID = r$USUBJID, Row = lane, .src = rep("Treatment", n),
+    Start = st + shift, End = en + shift,
+    .open = r$open, .colour = lane,
+    .style = ifelse(r$dot, "dot", NA_character_), .label = lane,
     Type = rep("Treatment", n),
-    Details = sub(" · .*$", "", tip),
-    Days = ifelse(grepl(" · ", tip), sub("^.*? · ", "", tip),
-                  NA_character_),
+    Details = paste0(lane, dose, ifelse(r$daily, " daily", "")),
+    Days = paste0(days, ifelse(r$changed, paste0(", from ", r$prev), "")),
     .svar = ifelse(is.na(k), NA_character_, "drug"), .skey = raw[k],
     .lane_at = lane
   )
@@ -784,12 +788,21 @@ pt_drug_lines <- function(tb, sl, opt, cutoff) {
   drugs <- drugs[drugs %in% lane]
   attr(p, "pt_lanes") <- drugs
   attr(p, "pt_palette") <- pt_drug_palette(drugs)
-  attr(p, "pt_events") <- pt_change_events(ch, shift_of(ch$USUBJID))
+  ch <- if (isTRUE(opt$dose_tags)) which(r$changed) else integer()
+  attr(p, "pt_events") <- if (length(ch)) {
+    x <- st[ch]
+    pt_change_events(list(
+      USUBJID = r$USUBJID[ch], event_day = x,
+      event = rep("Dose change", length(ch)),
+      tag = sub(" .*$", "", r$txt[ch]), lane = lane[ch],
+      tip = paste0("Dose change, ", tolower(swimmer_day_txt(x)),
+                   " \u00b7 ", lane[ch], ", ", r$prev[ch], " to ", r$txt[ch])
+    ), shift[ch])
+  }
   p
 }
 
-# The swimmer's dose changes (tagged events on a drug's lane) as the
-# timeline's events, moved by `shift` days. NULL without any.
+# Dose changes (tagged events on a drug's lane) as the timeline's events, moved by `shift` days. NULL without any.
 pt_change_events <- function(ch, shift) {
   m <- length(ch$USUBJID)
   if (!m) return(NULL)
