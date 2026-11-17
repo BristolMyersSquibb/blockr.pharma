@@ -23,7 +23,7 @@ utils::globalVariables(c(
   "..x", "..y", "..panel", "..series", "..total", "..derived", "..pt_col",
   ".data", "AVAL", "xmin", "xmax", "ymin", "ymax", "y", "lo", "hi",
   "outlined", "position", "value", "visit", "param", "item", "x",
-  "color", "fill", "label", "lwd", "series"
+  "color", "fill", "label", "lwd", "series", "hjust"
 ))
 
 #' Assert ggplot2 (and stats helpers) are available for static rendering
