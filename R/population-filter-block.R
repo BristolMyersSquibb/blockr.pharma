@@ -516,6 +516,53 @@ stamp_source <- function(x, col) {
   x
 }
 
+#' Label subjects by SUBJID wherever they are shown
+#'
+#' Marks every `USUBJID` column of `data` with a `blockr_display` attribute
+#' naming `SUBJID`. blockr.viz reads it: a chart with one bar or lane per
+#' patient groups, sorts and drills on USUBJID and prints the SUBJID of each
+#' (see `R/display-labels.R` in blockr.viz). Saved charts keep their
+#' `category = "USUBJID"`; only the text changes.
+#'
+#' Every table is marked, not only the subject table: a flatten keeps the key
+#' column of the table it starts from. A study without SUBJID is left alone,
+#' and its charts print USUBJID.
+#'
+#' @param data A [dm][dm::dm()] or a data frame.
+#'
+#' @return `data`, its USUBJID columns marked.
+#' @export
+dm_label_subjects <- function(data) {
+  mark <- function(tbl) {
+    if (!"USUBJID" %in% colnames(tbl) ||
+          identical(attr(tbl$USUBJID, "blockr_display", exact = TRUE),
+                    "SUBJID")) {
+      return(tbl)
+    }
+    attr(tbl$USUBJID, "blockr_display") <- "SUBJID"
+    tbl
+  }
+  if (is.data.frame(data)) {
+    return(if ("SUBJID" %in% names(data)) mark(data) else data)
+  }
+  tbls <- dm::dm_get_tables(data)
+  has <- function(col) {
+    vapply(tbls, function(tb) col %in% colnames(tb), logical(1L))
+  }
+  if (!any(has("SUBJID"))) {
+    return(data)
+  }
+  changed <- Filter(Negate(is.null), lapply(names(tbls)[has("USUBJID")],
+                                            function(nm) {
+    marked <- mark(tbls[[nm]])
+    if (identical(marked, tbls[[nm]])) NULL else stats::setNames(list(marked), nm)
+  }))
+  if (!length(changed)) {
+    return(data)
+  }
+  do.call(dm::dm_mutate_tbl, c(list(data), unlist(changed, recursive = FALSE)))
+}
+
 #' Population filter block
 #'
 #' The crossfilter block with the two conventions a clinical board runs on: the
@@ -612,13 +659,21 @@ expr_server.population_filter_block <- function(x, data, ...) {
   out <- NextMethod()
   stamp_as <- attr(x, "stamp_as") %||% "Group"
 
+  # Hold the inherited reactives in their own names: reading them back out of
+  # `out` inside the wrapper would make the wrapper call itself.
+  filtered <- out[["expr"]]
+  # Charts downstream print SUBJID for USUBJID (dm_label_subjects()). A
+  # reactive of its own, so an unchanged filter keeps handing back the same
+  # expression object.
+  inner_expr <- shiny::reactive(
+    bquote(blockr.pharma::dm_label_subjects(.(filtered())))
+  )
+
   if (is.null(stamp_as) || !nzchar(stamp_as)) {
+    out[["expr"]] <- inner_expr
     return(out)
   }
 
-  # Hold the inherited reactives in their own names: reading them back out of
-  # `out` inside the wrapper would make the wrapper call itself.
-  inner_expr <- out[["expr"]]
   pinned <- out[["state"]][["pinned"]]
   groups <- out[["state"]][["groups"]]
   subgroup <- out[["state"]][["subgroup"]]
