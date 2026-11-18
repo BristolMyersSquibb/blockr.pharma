@@ -167,9 +167,6 @@ patient_timeline_script <- function() {
     "pv <- blockr.pharma::timeline_colour_fields(data, \"rs\")",
     paste0("response <- factor(pv[1], levels = pv)  #| select(label = ",
            "\"Colour by\", labels = names(pv), when = \"rs_on\")"),
-    "aet <- blockr.pharma::patient_timeline_terms(data, \"ae\")",
-    paste0("ae_terms <- factor(character(), levels = aet)  #| select(",
-           "label = \"Only these AEs\", multiple = TRUE, when = \"ae_on\")"),
     sel("ae_records", "treatment-emergent", TL_AE_RECORDS, "Which records",
         on = "ae_on"),
     sel("ae_show", "all AEs", TL_AE_SHOW, "Show", on = "ae_on"),
@@ -177,17 +174,17 @@ patient_timeline_script <- function() {
     pt_colour_line("ae_colour", "aef[1]", "aef", "ae_on"),
     "ael <- blockr.pharma::timeline_lane_choices(data, \"ae\")",
     pt_lane_line("ae_lanes", "ael", "ae_on"),
+    "aet <- blockr.pharma::patient_timeline_terms(data, \"ae\", ae_lanes)",
+    pt_terms_line("ae_terms", "aet", "ae_on"),
     sel("serious", "outlined", TL_SERIOUS, "Serious AEs", on = "ae_on"),
-    "cmt <- blockr.pharma::patient_timeline_terms(data, \"cm\")",
-    paste0("cm_terms <- factor(character(), levels = cmt)  #| select(",
-           "label = \"Only these con meds\", multiple = TRUE, ",
-           "when = \"cm_on\")"),
     sel("cm_records", "active on treatment", TL_CM_RECORDS, "Which records",
         on = "cm_on"),
     "cmf <- blockr.pharma::timeline_colour_fields(data, \"cm\")",
     pt_colour_line("cm_colour", "\"before or on treatment\"", "cmf", "cm_on"),
     "cml <- blockr.pharma::timeline_lane_choices(data, \"cm\")",
     pt_lane_line("cm_lanes", "cml", "cm_on"),
+    "cmt <- blockr.pharma::patient_timeline_terms(data, \"cm\", cm_lanes)",
+    pt_terms_line("cm_terms", "cmt", "cm_on"),
     sel("cm_prior", "clipped at the start", TL_CM_PRIOR,
         "Started before the axis", on = "cm_on"),
     sel("treatment_as", "lines per drug", PT_TRT_DRAW, "Draw as",
@@ -226,21 +223,25 @@ PT_OLD_SUBTITLES <- c(
   "{@layers} in study days",
   "{@layers} in study days[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]",
   paste0("{@layers} in study days[, AEs by {@ae_lanes}]",
-         "[, con meds by {@cm_lanes}][, drugs: {@drugs}]")
+         "[, con meds by {@cm_lanes}][, drugs: {@drugs}]"),
+  paste0("{@layers} in study days {@day_from} to {@day_to}",
+         "[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]",
+         "[, drugs: {@drugs}]")
 )
 
 #' The timeline's sentence under the title
 #'
 #' The layers, the study days the axis runs over ("first" and "last" while
-#' they are the data's), then the level the AEs and con meds open into and
-#' the drugs drawn, each only while that layer is drawn. Each is a word to
-#' click.
+#' they are the data's), then the level the AEs and con meds open into, the
+#' terms of that level shown ("all", or the picks), and the drugs drawn, each
+#' only while that layer is drawn. Each is a word to click.
 #'
 #' @return A title template, see [blockr.viz::new_chart_block()].
 #' @export
 patient_timeline_subtitle <- function() {
   paste0("{@layers} in study days {@day_from} to {@day_to}",
-         "[, AEs by {@ae_lanes}][, con meds by {@cm_lanes}]",
+         "[, AEs by {@ae_lanes}, showing {@ae_terms}]",
+         "[, con meds by {@cm_lanes}, showing {@cm_terms}]",
          "[, drugs: {@drugs}]")
 }
 
@@ -266,9 +267,9 @@ patient_timeline_gear <- function() {
         Treatment = c("treatment_as", "drugs", "dose_tags",
                       "trt_colour"),
         `Discontinuation and death` = "disc_show",
-        `Adverse events` = c("ae_terms", "ae_records", "ae_show",
+        `Adverse events` = c("ae_records", "ae_show",
                              "ae_colour", "ae_lanes", "serious"),
-        `Con meds` = c("cm_terms", "cm_records", "cm_colour", "cm_lanes",
+        `Con meds` = c("cm_records", "cm_colour", "cm_lanes",
                        "cm_prior"),
         `Open rows` = "open_rows",
         Timeline = c("lane_width", "lane_track")
@@ -379,6 +380,16 @@ pt_colour_line <- function(name, value, pool, on) {
   paste0(name, " <- factor(", value, ", levels = ", pool, ")  #| select(",
          "label = \"Colour by\", labels = names(", pool, "), when = \"", on,
          "\")")
+}
+
+# A track's "showing" word: several of the terms of the level its rows open
+# into (patient_timeline_terms() with a level), each with its patient count
+# in the menu. Nothing picked reads "all".
+pt_terms_line <- function(name, pool, on) {
+  paste0(name, " <- factor(character(), levels = ", pool, ")  #| select(",
+         "label = \"Showing\", multiple = TRUE, labels = attr(", pool,
+         ", \"labels\"), notes = attr(", pool, ", \"notes\"), ",
+         "placeholder = \"all\", when = \"", on, "\")")
 }
 
 # A track's "Open into one row per" row: a select of the term columns `pool`

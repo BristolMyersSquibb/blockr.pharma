@@ -11,7 +11,7 @@ A title template, see \code{\link[blockr.viz:new_chart_block]{blockr.viz::new_ch
 }
 \description{
 The layers, the study days the axis runs over ("first" and "last" while
-they are the data's), then the level the AEs and con meds open into and
-the drugs drawn, each only while that layer is drawn. Each is a word to
-click.
+they are the data's), then the level the AEs and con meds open into, the
+terms of that level shown ("all", or the picks), and the drugs drawn, each
+only while that layer is drawn. Each is a word to click.
 }

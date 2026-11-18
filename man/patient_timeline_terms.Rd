@@ -4,20 +4,29 @@
 \alias{patient_timeline_terms}
 \title{The terms a patient timeline can narrow its AEs or con meds to}
 \usage{
-patient_timeline_terms(data, what = c("ae", "cm"))
+patient_timeline_terms(data, what = c("ae", "cm"), level = NULL)
 }
 \arguments{
 \item{data}{The block's input dm.}
 
 \item{what}{\code{"ae"} or \code{"cm"}.}
+
+\item{level}{A term column, as \code{\link[=timeline_lane_choices]{timeline_lane_choices()}} offers them, or
+\code{NULL} for every level.}
 }
 \value{
 A character vector; one placeholder when the table is missing.
 }
 \description{
 Every value of each coding level the study carries, coarsest first, as
-"Body System or Organ Class: Cardiac disorders": the choices of the
-block's "Only these AEs" and "Only these con meds" rows. The levels are the
+"Body System or Organ Class: Cardiac disorders". The levels are the
 patient profile's find box levels, each named by the data's label for its
 column, else as the profile names it ("System organ class").
+}
+\details{
+With \code{level}, the values of that one column only: the choices of the
+subtitle's "showing" word, which offers the terms of the level the rows
+open into. They come most patients first, and carry two attributes for
+the word's menu: \code{labels}, the terms alone ("Cardiac disorders"), and
+\code{notes}, how many patients have each ("12 patients").
 }

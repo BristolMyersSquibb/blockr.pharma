@@ -66,7 +66,10 @@ the data lacks falls back to \code{AEDECOD}, then \code{AETERM}.}
 
 \item{ae_terms, cm_terms}{Only the AEs or con meds matching any of these,
 as \code{\link[=patient_timeline_terms]{patient_timeline_terms()}} offers them ("System organ class: Cardiac
-disorders"). Empty: all.}
+disorders"), and only the patients who have one. Picked in both, a
+patient needs one of each. Empty: all. A patient left with one row of
+AEs or con meds, and no treatment or response drawn, has its records on
+the patient row, which then does not open.}
 
 \item{serious}{\code{"outlined"}, \code{"marked at onset"} or \code{"unmarked"}.}
 

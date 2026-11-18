@@ -44,17 +44,21 @@ test_that("AESOC beside AEBODSYS is not offered twice", {
 })
 
 test_that("the timeline draws a row per value of the picked level", {
-  f <- patient_timeline_frame(pt_toy_levels(), ae_lanes = "AEHLGT")
+  # With treatment drawn, a patient with one AE keeps its row.
+  trt <- c("Adverse events", "Treatment")
+  f <- patient_timeline_frame(pt_toy_levels(), layers = trt,
+                              ae_lanes = "AEHLGT")
   rows <- unique(f$Row[f$.section %in% "Adverse events"])
   expect_setequal(toupper(rows), c("HEADACHES", "GI SIGNS", "INJURIES"))
 })
 
 test_that("a saved pick the data lacks falls back to the preferred term", {
-  f <- patient_timeline_frame(pt_toy(), ae_lanes = "AEHLGT")
+  trt <- c("Adverse events", "Treatment")
+  f <- patient_timeline_frame(pt_toy(), layers = trt, ae_lanes = "AEHLGT")
   rows <- unique(f$Row[f$.section %in% "Adverse events"])
   expect_setequal(toupper(rows), toupper(pt_toy()$adae$AEDECOD))
   # An old board's pick still draws as before.
-  f <- patient_timeline_frame(pt_toy(), ae_lanes = "AEBODSYS")
+  f <- patient_timeline_frame(pt_toy(), layers = trt, ae_lanes = "AEBODSYS")
   rows <- unique(f$Row[f$.section %in% "Adverse events"])
   expect_true(all(toupper(rows) %in% toupper(pt_toy()$adae$AEBODSYS)))
 })
@@ -82,13 +86,15 @@ test_that("the term filters name a level by the data's label", {
   terms <- patient_timeline_terms(d, "ae")
   expect_true("Body System or Organ Class: Gastrointestinal disorders" %in%
                 terms)
+  trt <- c("Adverse events", "Treatment")
   f <- patient_timeline_frame(
-    d, ae_terms = "Body System or Organ Class: Gastrointestinal disorders"
+    d, layers = trt,
+    ae_terms = "Body System or Organ Class: Gastrointestinal disorders"
   )
   expect_identical(unique(f[f$.lane %in% "Adverse events", ]$Row), "Nausea")
   # The profile's own name still reads.
   f <- patient_timeline_frame(
-    d, ae_terms = "System organ class: Gastrointestinal disorders"
+    d, layers = trt, ae_terms = "System organ class: Gastrointestinal disorders"
   )
   expect_identical(unique(f[f$.lane %in% "Adverse events", ]$Row), "Nausea")
 })
