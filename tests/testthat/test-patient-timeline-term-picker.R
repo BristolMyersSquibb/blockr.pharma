@@ -103,3 +103,42 @@ test_that("the terms are the rows drawn, from the records drawn", {
                               cm_terms = as.character(cm))
   expect_setequal(unique(f$USUBJID), c("A", "B"))
 })
+
+test_that("a new level leaves the picks of the old one behind", {
+  viz <- asNamespace("blockr.viz")
+  d <- pt_toy()
+  parsed <- viz$cb_parse(patient_timeline_script())
+  run <- function(values) {
+    values <- c(list(layers = c("Adverse events", "Con meds")), values)
+    specs <- viz$cb_specs(parsed, d, values)
+    f <- viz$dd_prepare_run(d, parsed, specs, values)$data
+    words <- viz$script_title_args(list(), specs, values)
+    list(ids = sort(unique(f$USUBJID)), ae = words$ae_terms,
+         cm = words$cm_terms)
+  }
+  # Nausea picked: A alone, and the word says so.
+  r <- run(list(ae_terms = "Preferred term: Nausea"))
+  expect_identical(r$ids, "A")
+  expect_identical(r$ae, "Nausea")
+  # Rows by body system with the pick still stored (a saved board, or a
+  # level changed): the word reads all, and so do the rows.
+  r <- run(list(ae_lanes = "AEBODSYS", ae_terms = "Preferred term: Nausea"))
+  expect_identical(r$ae, "all")
+  expect_identical(r$ids, c("A", "B"))
+  # The same for con meds.
+  cm <- list(cm_lanes = "CMTRT", cm_terms = "Standardized name: Paracetamol")
+  r <- run(cm)
+  expect_identical(r$cm, "all")
+  expect_identical(r$ids, c("A", "B"))
+  # The level set from the word clears the pick.
+  state <- list(script = shiny::reactiveVal(patient_timeline_script()),
+                script_values = shiny::reactiveVal(list()))
+  src <- viz$viz_script_sources(shiny::reactive(d), state)
+  out <- src$settle(list(layers = c("Adverse events", "Con meds"),
+                         ae_lanes = "AEBODSYS",
+                         ae_terms = "Preferred term: Nausea",
+                         cm_lanes = "CMTRT",
+                         cm_terms = "Standardized name: Paracetamol"))
+  expect_length(out$ae_terms, 0L)
+  expect_length(out$cm_terms, 0L)
+})
