@@ -127,7 +127,7 @@ test_that("the gear has Group by and the several-picks columns", {
   expect_identical(pat$title, "Patients")
   expect_identical(unlist(lapply(pat$sections, `[[`, "keys")),
                    c("group", "columns"))
-  expect_identical(g$pick_by, "USUBJID")
+  expect_identical(g$pick_by, "SUBJID")
   expect_identical(g$sort_value, "sort_col")
   nm <- vapply(g$columns, `[[`, "", "name")
   expect_false(any(c("Arm", "Age", "Sex") %in% nm))

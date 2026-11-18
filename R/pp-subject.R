@@ -2,9 +2,51 @@
 #
 # pp_arm_column()       — which ADSL column holds the treatment/arm label
 # pp_subject_ids()      — USUBJIDs present in a dm's adsl, cheap, no reqs
-# pp_subject_choices()  — ids + human labels ("01-701-1015 · Placebo · 63F")
+# pp_subject_label()    — the id a reader sees: SUBJID, else USUBJID
+# pp_subject_choices()  — ids + human labels ("1015 · Placebo · 63F")
 # pp_validate_subject() — ctor-side normalization of the `subject` argument
 # pp_resolve_subject()  — which USUBJID the profile should render, if any
+
+#' The id a reader sees for each subject
+#'
+#' Everything joins, filters and drills on USUBJID. Everything a reader sees
+#' names the patient by SUBJID, which is the number clinicians use: "1015",
+#' not "01-701-1015". The data preview is the one place the full id stays,
+#' because it prints the columns as they are.
+#'
+#' SUBJID is unique only within a study. A board pooling two studies could
+#' show two patients under one label; boards hold one study today, so that
+#' is accepted rather than worked around. A study without SUBJID, or a
+#' subject whose SUBJID is missing, shows its USUBJID.
+#'
+#' @param adsl The subject table, with `USUBJID` and optionally `SUBJID`.
+#' @param ids USUBJIDs to label.
+#' @return A character vector the length of `ids`.
+#' @noRd
+pp_subject_label <- function(adsl, ids) {
+  ids <- as.character(ids)
+  if (!"SUBJID" %in% colnames(adsl)) {
+    return(ids)
+  }
+  lab <- as.character(adsl$SUBJID)[match(ids, as.character(adsl$USUBJID))]
+  bad <- is.na(lab) | !nzchar(trimws(lab))
+  lab[bad] <- ids[bad]
+  lab
+}
+
+#' Order subject labels as a reader counts them
+#'
+#' SUBJIDs are usually numbers stored as text, and "99" comes before "1015".
+#' Labels that are not numbers sort as text after the numeric ones.
+#'
+#' @param lab Labels from [pp_subject_label()].
+#' @return An integer index vector.
+#' @noRd
+pp_subject_label_order <- function(lab) {
+  lab <- as.character(lab)
+  num <- suppressWarnings(as.numeric(lab))
+  order(num, lab, na.last = TRUE)
+}
 
 #' Resolve the ADSL column holding the treatment / arm label
 #'
@@ -248,7 +290,8 @@ pp_subject_choices <- function(dm_obj, arm_col = NULL) {
     paste(bits[nzchar(bits)], collapse = " \u00b7 ")
   }, character(1L))
 
-  labels <- ifelse(nzchar(meta), paste0(ids, " \u00b7 ", meta), ids)
+  shown <- pp_subject_label(adsl, ids)
+  labels <- ifelse(nzchar(meta), paste0(shown, " \u00b7 ", meta), shown)
 
   list(ids = ids, labels = labels, meta = meta)
 }

@@ -264,7 +264,7 @@ reference_rows <- function(frame, ord, disp, marks, color, arm_col,
     shiny::div(
       class = paste("pp-pt", if (identical(id, picked)) "is-selected"),
       `data-usubjid` = id,
-      `data-search-text` = tolower(paste(id, demo, arm, code)),
+      `data-search-text` = tolower(paste(id, disp$short[[i]], demo, arm, code)),
       `data-band` = band$band, `data-eot` = band$eot,
       shiny::div(class = "pp-pt-line",
         shiny::span(class = "pp-pt-id", disp$short[[i]]),
@@ -832,4 +832,28 @@ test_that("the medications strip colours started before or on treatment", {
   expect_identical(s1, unname(PP_CM_STARTED))
   s2 <- pp_cohort_band_geom(m$subjects[["S-2"]], m, col)$fill
   expect_true(all(s2 == PP_CM_STARTED[["Started on treatment"]]))
+})
+
+test_that("patients are shown by SUBJID, keyed by USUBJID", {
+  adsl <- data.frame(USUBJID = c("01-701-1015", "01-703-99", "01-701-1023"),
+                     SUBJID = c("1015", "99", NA))
+  expect_identical(
+    pp_subject_label(adsl, c("01-701-1015", "01-703-99", "01-701-1023", "x")),
+    c("1015", "99", "01-701-1023", "x")
+  )
+  # No SUBJID column: the USUBJID is the label
+  expect_identical(pp_subject_label(adsl["USUBJID"], "01-701-1015"),
+                   "01-701-1015")
+  # Counted as numbers: 99 before 1015, text after numbers
+  expect_identical(pp_subject_label_order(c("1015", "99", "A2")), c(2L, 1L, 3L))
+})
+
+test_that("the cohort frame carries SUBJID and sorts by it", {
+  adsl <- test_adsl()
+  adsl$SUBJID <- c("30", "4", "200")[seq_len(nrow(adsl))]
+  d <- cohort_dm(adsl, test_adae())
+  frame <- pp_cohort_frame(d, pp_resolve_roles(d, list(arm = "ACTARM")))
+  expect_identical(frame$SUBJID, adsl$SUBJID[match(frame$USUBJID, adsl$USUBJID)])
+  expect_identical(frame$SUBJID[pp_cohort_order(frame, "id")],
+                   as.character(sort(as.numeric(adsl$SUBJID))))
 })

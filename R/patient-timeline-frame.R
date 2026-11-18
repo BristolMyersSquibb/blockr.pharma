@@ -307,6 +307,10 @@ patient_timeline_frame <- function(data,
     lab <- attr(tb$adsl[[nm]], "label", exact = TRUE)
     if (!is.null(lab) && nm %in% names(out)) attr(out[[nm]], "label") <- lab
   }
+  # The rows name patients by SUBJID (pp_subject_label()); the block groups
+  # by it. USUBJID stays in the frame as the key clicks and records match on.
+  out$SUBJID <- pp_subject_label(tb$adsl, out$USUBJID)
+  attr(out$SUBJID, "label") <- "Patient"
   out <- pt_with_records(out, records, sl)
   pt_day_range(out, day_from, day_to)
 }

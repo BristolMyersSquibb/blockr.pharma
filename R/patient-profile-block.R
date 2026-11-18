@@ -970,12 +970,12 @@ new_patient_profile_block <- function(selected = NULL,
 
             ord <- pp_cohort_order(frame, r_cohort_sort(), marks)
 
-            # A prod USUBJID is ~20 characters and most of them are the study
-            # id, which is the same on every row of the board. The rows leave
-            # the shared prefix out and keep every character that
-            # distinguishes one patient from another; the full id stays in
-            # the tooltip, the click payload, the download and the title.
-            disp <- pp_cohort_id_display(frame$USUBJID)
+            # The rows name patients by SUBJID (pp_subject_label()). A study
+            # without SUBJID falls back to USUBJID, ~20 characters of which
+            # most are the study id shared by every row, so the shared prefix
+            # is left out there. A SUBJID carries no such prefix and comes
+            # through whole. The click payload stays the USUBJID.
+            disp <- pp_cohort_id_display(frame$SUBJID)
 
             # The rows are built as HTML rather than as a tag tree, and the
             # escaping that costs is done there. See pp_cohort_rows_html().
@@ -1039,8 +1039,18 @@ new_patient_profile_block <- function(selected = NULL,
           # no room for. Reads the cohort FRAME, which already carries every
           # one of them (SEX, AGE, TRTDURD, AE_N, AE_WORST) plus the arm --
           # so the header costs a lookup, not a derivation.
+          # The id a reader sees for a USUBJID: its SUBJID, from the cohort
+          # frame (pp_subject_label()). Titles and file names use it; the
+          # pick itself stays the USUBJID.
+          subject_label <- function(id) {
+            if (length(id) != 1L || !nzchar(id)) return(id)
+            frame <- r_cohort_frame()
+            lab <- frame$SUBJID[match(id, frame$USUBJID)]
+            if (length(lab) != 1L || is.na(lab)) id else lab
+          }
+
           output$subject_title <- shiny::renderUI({
-            pp_subject_title_ui(r_subject())
+            pp_subject_title_ui(subject_label(r_subject()))
           })
 
           output$subject_facts <- shiny::renderUI({
@@ -1332,7 +1342,7 @@ new_patient_profile_block <- function(selected = NULL,
               roles = r_declared(),
               scale_map = r_scale_map(),
               title = if (identical(scope, "patient")) {
-                paste("Patient", scoped$picked)
+                paste("Patient", subject_label(scoped$picked))
               }
             )
             shiny::req(!is.null(ex))
@@ -1343,7 +1353,8 @@ new_patient_profile_block <- function(selected = NULL,
             scoped <- r_scoped_dm()
             if (identical(scope, "patient") && isTRUE(scoped$single)) {
               paste0("patient-profile-",
-                     gsub("[^A-Za-z0-9_-]+", "-", scoped$picked))
+                     gsub("[^A-Za-z0-9_-]+", "-",
+                          subject_label(scoped$picked)))
             } else {
               "patient-profiles"
             }
@@ -1373,6 +1384,10 @@ new_patient_profile_block <- function(selected = NULL,
               frame <- frame[pp_cohort_order(frame, r_cohort_sort(),
                                              r_cohort_marks()), ,
                              drop = FALSE]
+              # The list names patients by SUBJID, and so does the file. The
+              # USUBJID is a key, not something a reader looks up.
+              frame <- frame[c("SUBJID",
+                               setdiff(names(frame), c("USUBJID", "SUBJID")))]
               blockr.viz::write_annotated_xlsx(frame, file)
             }
           )
@@ -1394,7 +1409,7 @@ new_patient_profile_block <- function(selected = NULL,
             content = function(file) {
               blockr.viz::write_exhibit_html(
                 build_profile_exhibit("patient"), file,
-                title = paste("Patient", r_scoped_dm()$picked)
+                title = paste("Patient", subject_label(r_scoped_dm()$picked))
               )
             }
           )

@@ -528,6 +528,10 @@ stamp_source <- function(x, col) {
 #' in the pinned card's picker. Everything else stays reachable through the
 #' gear.
 #'
+#' `SUBJID` is always added at the end, so every board has a chip that picks
+#' single patients, by the id clinicians use. A study without `SUBJID` gets
+#' no such chip: the crossfilter drops a featured column no table carries.
+#'
 #' @param featured Columns worth showing up front, e.g.
 #'   `c("TRT", "SEX", "RACE", "AETOXGR")`.
 #' @param pinned The column the board is split by at start, one of `featured`.
@@ -566,6 +570,10 @@ new_population_filter_block <- function(featured = character(),
   # rides in `...` rather than as a formal: constructor formals are read back
   # out of the SERVER's environment for the initial state, and the server
   # belongs to blockr.dm, which knows nothing about stamping.
+  # The patient chip, on every board. Appended rather than replacing, and
+  # deduplicated, because a restored board passes its saved `featured` back
+  # in, chip included.
+  featured <- unique(c(as.character(unlist(featured)), "SUBJID"))
   args <- list(...)
   if (!"ctor" %in% names(args)) {
     args$ctor <- "new_population_filter_block"

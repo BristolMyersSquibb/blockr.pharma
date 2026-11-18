@@ -62,7 +62,7 @@ TL_PATIENT_COLS <- c("TRT01A", "TRT01P", "ARM", "ACTARM", "SEX", "AGE",
 
 # The frame's own columns, which a patient column of the same name would
 # overwrite: those of tl_finish() and the dates tl_subjects() reads.
-TL_FRAME_OWN <- c("USUBJID", "Row", "Start", "End", "Colour", "Type",
+TL_FRAME_OWN <- c("USUBJID", "SUBJID", "Row", "Start", "End", "Colour", "Type",
                   "Details", "Days", "Event", "TRTSDT", "TRTEDT", "LSTALVDT",
                   "DTHDT", "RANDDT", "T0")
 
