@@ -197,25 +197,30 @@
       this.columns.forEach((name) => {
         const m = this.meta[name] || {};
         const rowEl = document.createElement('label');
-        rowEl.className = 'blockr-checkbox ffb-row';
+        rowEl.className = 'ffb-row';
 
+        // The tick, as Blockr.Select's multi list draws it: in a slot every
+        // row keeps, so the names stay in line. The input stays for the
+        // keyboard and screen readers.
         const input = document.createElement('input');
         input.type = 'checkbox';
+        input.className = 'ffb-input';
         input.checked = !!this.selected[name];
+        const box = document.createElement('span');
+        box.className = 'ffb-tick';
+        box.setAttribute('aria-hidden', 'true');
+        const drawTick = () => {
+          box.innerHTML = input.checked ? Blockr.icons.confirm : '';
+        };
+        drawTick();
         input.addEventListener('change', () => {
           if (input.checked) this.selected[name] = true;
           else delete this.selected[name];
+          drawTick();
           this.matched = null;   // stale until the server recounts
           this._renderReadout();
           this._submit();
         });
-        const box = document.createElement('span');
-        box.className = 'blockr-checkbox__box';
-        box.innerHTML =
-          '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">' +
-          '<path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 ' +
-          '0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 ' +
-          '0 1 .708 0"/></svg>';
 
         const nm = document.createElement('span');
         nm.className = 'ffb-name';

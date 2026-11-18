@@ -28,13 +28,50 @@
   padding: 6px 0;
 }
 
+/* A row reads as a row of Blockr.Select's multi list: the tick's slot, the
+   name, the hover wash. */
 .ffb-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 0; /* row padding */
+  padding: 5px 10px; /* row padding */
+  margin: 0 -10px;
+  border-radius: var(--blockr-radius-sm, 4px);
   cursor: pointer;
   min-width: 0;
+  position: relative;
+  margin-bottom: 0; /* neutralize bootstrap label margin */
+  font-weight: var(--blockr-font-weight-normal, 400);
+  user-select: none;
+}
+
+.ffb-row:hover {
+  background: var(--blockr-color-bg-hover, #f3f4f6);
+}
+
+.ffb-row:has(.ffb-input:focus-visible) {
+  outline: var(--blockr-focus-outline);
+  outline-offset: -2px;
+}
+
+.ffb-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+/* The tick, as the multi-select draws it: 14px in the accent. */
+.ffb-tick {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--blockr-color-text-accent, #2563eb);
+}
+
+.ffb-tick svg {
+  display: block;
 }
 
 .ffb-name {
