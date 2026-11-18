@@ -4,7 +4,7 @@
 \alias{patient_timeline_terms}
 \title{The terms a patient timeline can narrow its AEs or con meds to}
 \usage{
-patient_timeline_terms(data, what = c("ae", "cm"), level = NULL)
+patient_timeline_terms(data, what = c("ae", "cm"), level = NULL, ...)
 }
 \arguments{
 \item{data}{The block's input dm.}
@@ -13,6 +13,9 @@ patient_timeline_terms(data, what = c("ae", "cm"), level = NULL)
 
 \item{level}{A term column, as \code{\link[=timeline_lane_choices]{timeline_lane_choices()}} offers them, or
 \code{NULL} for every level.}
+
+\item{...}{With \code{level}, settings of \code{\link[=patient_timeline_frame]{patient_timeline_frame()}} that
+decide which records are drawn.}
 }
 \value{
 A character vector; one placeholder when the table is missing.
@@ -24,9 +27,11 @@ patient profile's find box levels, each named by the data's label for its
 column, else as the profile names it ("System organ class").
 }
 \details{
-With \code{level}, the values of that one column only: the choices of the
-subtitle's "showing" word, which offers the terms of the level the rows
-open into. They come most patients first, and carry two attributes for
-the word's menu: \code{labels}, the terms alone ("Cardiac disorders"), and
-\code{notes}, how many patients have each ("12 patients").
+With \code{level}, the rows the timeline draws at that level, from the records
+it draws: the block's input as filtered upstream, its own patients, and
+the record settings passed in \code{...} (\code{ae_records}, \code{ae_show},
+\code{cm_records}). These are the choices of the subtitle's "showing" word.
+They come most patients first, and carry two attributes for the word's
+menu: \code{labels}, the terms alone ("Cardiac disorders"), and \code{notes}, how
+many patients have each ("12 patients").
 }

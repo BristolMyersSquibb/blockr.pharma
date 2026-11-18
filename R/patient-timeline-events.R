@@ -223,8 +223,7 @@ tl_ae <- function(ae, sl, opt, cutoff) {
     if (is.null(v)) rep(FALSE, n) else aet_flag(v)
   }
   term <- aet_title(chr(c("AEDECOD", "AETERM")))
-  row <- aet_title(chr(c(opt$ae_lanes, "AEDECOD", "AETERM")))
-  row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
+  row <- pt_ae_row(ae, opt$ae_lanes)
   ser <- flag("AESER")
   # The field that colours the bars (tl_ae_field()): grade or severity as
   # always, one colour, or any other column by its values.
@@ -260,6 +259,7 @@ tl_ae <- function(ae, sl, opt, cutoff) {
     Start = days$start, End = days$end, .colour = colour,
     .label = term, Type = rep("Adverse event", n), Details = det,
     .ae = rep(1, n), .ae_ser = as.numeric(ser),
+    .rid = ae$.pt_rid %||% seq_len(n),
     .worst = as.character(worst), .fatal = flag("AESDTH"),
     .svar = rep(svar, n), .skey = skey
   )
@@ -282,6 +282,41 @@ tl_ae <- function(ae, sl, opt, cutoff) {
   p
 }
 
+# The row an AE is drawn on: its value of the lane column, else its
+# preferred or reported term, in the timeline's casing.
+pt_ae_row <- function(ae, lanes) {
+  n <- nrow(ae)
+  v <- aet_col(ae, c(lanes, "AEDECOD", "AETERM"))
+  row <- if (is.null(v)) rep(NA_character_, n) else aet_title(as.character(v))
+  row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
+  row
+}
+
+# The row a con med is drawn on. By its standardized name, an uncoded one
+# takes its reported name, as the bars name it.
+pt_cm_row <- function(cm, lanes) {
+  n <- nrow(cm)
+  chr <- function(nms) {
+    v <- aet_col(cm, nms)
+    if (is.null(v)) rep(NA_character_, n) else as.character(v)
+  }
+  coded <- chr("CMDECOD")
+  reported <- chr("CMTRT")
+  uncoded <- is.na(coded) | !nzchar(coded) | toupper(coded) == "UNCODED"
+  cls <- chr("CMCLAS")
+  cls[!is.na(cls) & toupper(cls) == "UNCODED"] <- NA_character_
+  row <- switch(lanes,
+                CMDECOD = swimmer_drug_name(ifelse(uncoded, reported, coded)),
+                CMTRT = swimmer_drug_name(ifelse(is.na(reported), coded,
+                                                 reported)),
+                CMCLAS = aet_title(cls),
+                # Any other column, e.g. an ATC level a board marks: its
+                # values, else the coded name.
+                aet_title(chr(c(lanes, "CMDECOD", "CMTRT"))))
+  row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
+  row
+}
+
 tl_cm <- function(cm, sl, opt, cutoff, lo) {
   i <- match(as.character(cm$USUBJID), sl$USUBJID)
   cm <- cm[!is.na(i), , drop = FALSE]
@@ -301,15 +336,7 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
   name <- swimmer_drug_name(ifelse(uncoded, reported, coded))
   cls <- chr("CMCLAS")
   cls[!is.na(cls) & toupper(cls) == "UNCODED"] <- NA_character_
-  row <- switch(opt$cm_lanes,
-                CMDECOD = name,
-                CMTRT = swimmer_drug_name(ifelse(is.na(reported), coded,
-                                                 reported)),
-                CMCLAS = aet_title(cls),
-                # Any other column, e.g. an ATC level a board marks: its
-                # values, else the coded name.
-                aet_title(chr(c(opt$cm_lanes, "CMDECOD", "CMTRT"))))
-  row[is.na(row) | !nzchar(row)] <- PP_LANE_UNCODED
+  row <- pt_cm_row(cm, opt$cm_lanes)
   # Day 1 of the patient's treatment, in the timeline's days.
   d1 <- aet_day(sl$TRTSDT[i], sl$T0[i])
   d1[!is.finite(d1)] <- 1
@@ -321,7 +348,7 @@ tl_cm <- function(cm, sl, opt, cutoff, lo) {
     Details = paste0(ifelse(is.na(ind), "", paste0("For ", tolower(ind))),
                      ifelse(is.na(cls), "", paste0(
                        ifelse(is.na(ind), "", ", "), aet_title(cls)))),
-    .cm = rep(1, n), .d1 = d1, .cls = aet_title(cls), .ind = ind,
+    .cm = rep(1, n), .rid = cm$.pt_rid %||% seq_len(n), .d1 = d1, .cls = aet_title(cls), .ind = ind,
     .cls_raw = cls, .ind_raw = chr("CMINDC"),
     .fld_raw = if (is.null(opt$cmfield)) rep(NA_character_, n) else
       chr(opt$cmfield)

@@ -25,8 +25,11 @@ test_that("picks keep only the patients who have them, in each layer", {
   expect_identical(unique(f$USUBJID), "A")
   # Picks in both layers: the patients with both, and the block says so
   # when none has.
+  d <- pt_toy()
+  d$adcm <- rbind(d$adcm, transform(d$adcm, USUBJID = "B",
+                                    CMDECOD = "IBUPROFEN", CMTRT = "Advil"))
   expect_error(
-    patient_timeline_frame(pt_toy(), layers = c("Adverse events", "Con meds"),
+    patient_timeline_frame(d, layers = c("Adverse events", "Con meds"),
                            ae_terms = "Preferred term: Fall",
                            cm_terms = "Standardized name: Paracetamol"),
     "No patient has the picked terms"
@@ -77,4 +80,26 @@ test_that("the showing word offers the lane level's terms and reads all", {
   # The term rows are no longer in the gear: the word is their control.
   lanes <- unlist(patient_timeline_gear()$tabs$Lanes)
   expect_false(any(c("ae_terms", "cm_terms") %in% lanes))
+})
+
+test_that("the terms are the rows drawn, from the records drawn", {
+  d <- pt_toy()
+  # Nausea is not treatment-emergent: offered only with all records.
+  d$adae$TRTEMFL <- c("Y", "N", "Y")
+  te <- patient_timeline_terms(d, "ae", "AEDECOD")
+  expect_identical(attr(te, "labels"), c("Fall", "Headache"))
+  all <- patient_timeline_terms(d, "ae", "AEDECOD", ae_records = "all")
+  expect_setequal(attr(all, "labels"), c("Fall", "Headache", "Nausea"))
+  # An uncoded con med is offered, and picked, by its reported name.
+  d$adcm <- rbind(d$adcm, transform(d$adcm, USUBJID = "B",
+                                    CMDECOD = "UNCODED", CMTRT = "Advil"))
+  cm <- patient_timeline_terms(d, "cm", "CMDECOD")
+  expect_setequal(attr(cm, "labels"), c("Paracetamol", "Advil"))
+  f <- patient_timeline_frame(d, layers = "Con meds",
+                              cm_terms = "Standardized name: Advil")
+  expect_identical(unique(f$USUBJID), "B")
+  # Every term picked is no pick: all patients stay.
+  f <- patient_timeline_frame(d, layers = "Con meds",
+                              cm_terms = as.character(cm))
+  expect_setequal(unique(f$USUBJID), c("A", "B"))
 })

@@ -211,15 +211,23 @@ patient_timeline_frame <- function(data,
 
   parts <- list()
   records <- NULL
+  # The layers whose picks narrow what is drawn.
+  picked <- list(ae = FALSE, cm = FALSE)
   if ("Response" %in% layers && !is.null(tb$adrs)) {
     parts$resp <- tl_response(tb$adrs, sl, opt, cutoff)
   }
   if ("Adverse events" %in% layers && !is.null(tb$adae)) {
     ae <- tb$adae
     opt$ae_field <- tl_ae_field(ae, ae_colour, roles)
-    ae <- ae[pp_find_match(ae, pt_picks(ae_terms, "ae", ae),
-                           PP_AE_SEARCH), , drop = FALSE]
+    ae$.pt_rid <- seq_len(nrow(ae))
     parts$ae <- tl_ae(ae, sl, opt, cutoff)
+    keep <- pt_pick_keep(ae, ae_terms, "ae", opt$ae_lanes, parts$ae$Row)
+    if (!is.null(keep)) {
+      parts$ae <- tl_keep(parts$ae, keep[parts$ae$.rid])
+      ae <- ae[keep, , drop = FALSE]
+      picked$ae <- TRUE
+    }
+    ae$.pt_rid <- NULL
     records <- pt_ae_records(ae, opt, roles)
   }
   if ("Treatment" %in% layers) {
@@ -241,9 +249,15 @@ patient_timeline_frame <- function(data,
   if ("Con meds" %in% layers && !is.null(tb$adcm)) {
     if (identical(opt$cm_records, "all")) lo <- min(lo, -30)
     cm <- tb$adcm
-    cm <- cm[pp_find_match(cm, pt_picks(cm_terms, "cm", cm),
-                           PP_CM_SEARCH), , drop = FALSE]
+    cm$.pt_rid <- seq_len(nrow(cm))
     if (nrow(cm)) parts$cm <- tl_cm(cm, sl, opt, cutoff, lo)
+    keep <- pt_pick_keep(cm, cm_terms, "cm", opt$cm_lanes, parts$cm$Row)
+    if (!is.null(keep)) {
+      if (!is.null(parts$cm)) {
+        parts$cm <- tl_keep(parts$cm, keep[parts$cm$.rid])
+      }
+      picked$cm <- TRUE
+    }
   }
   parts <- Filter(function(p) !is.null(p) && length(p$USUBJID), parts)
   opt$field_palettes <- tl_field_palettes(parts)
@@ -265,18 +279,11 @@ patient_timeline_frame <- function(data,
     sl$USUBJID
   }
   # Picked terms keep the patients who have them, in each layer picked in.
-  picked <- list(
-    if (length(pt_picks(ae_terms, "ae", tb$adae)) &&
-          "Adverse events" %in% layers) {
-      as.character(parts$ae$USUBJID)
-    },
-    if (length(pt_picks(cm_terms, "cm", tb$adcm)) && "Con meds" %in% layers) {
-      as.character(parts$cm$USUBJID)
-    }
-  )
-  picked <- Filter(Negate(is.null), picked)
-  if (length(picked)) {
-    ids <- Reduce(intersect, picked, unique(as.character(ids)))
+  have <- lapply(names(picked)[unlist(picked)], function(nm) {
+    as.character(parts[[nm]]$USUBJID)
+  })
+  if (length(have)) {
+    ids <- Reduce(intersect, have, unique(as.character(ids)))
     if (!length(ids)) {
       stop("No patient has the picked terms.", call. = FALSE)
     }
@@ -286,6 +293,9 @@ patient_timeline_frame <- function(data,
   sl <- sl[sl$USUBJID %in% ids, , drop = FALSE]
   attr(sl, "pcols") <- pcols
   parts <- lapply(parts, function(p) tl_keep(p, p$USUBJID %in% sl$USUBJID))
+  # The terms drawn, per patient, before a row goes flat: what the
+  # subtitle's "showing" words offer (patient_timeline_terms()).
+  seen <- pt_terms_seen(parts)
   parts <- tl_unique_rows(parts)
   parts <- pt_flat_rows(parts)
   # Treatment and the response draw on the patient row only: an opened
@@ -329,7 +339,9 @@ patient_timeline_frame <- function(data,
     if (!is.null(lab) && nm %in% names(out)) attr(out[[nm]], "label") <- lab
   }
   out <- pt_with_records(out, records, sl)
-  pt_day_range(out, day_from, day_to)
+  out <- pt_day_range(out, day_from, day_to)
+  attr(out, "pt_terms") <- seen
+  out
 }
 
 # The axis range the reader set (`day_from`, `day_to`, either NULL or NA for
@@ -478,19 +490,24 @@ pt_ae_palette <- function() {
 #' patient profile's find box levels, each named by the data's label for its
 #' column, else as the profile names it ("System organ class").
 #'
-#' With `level`, the values of that one column only: the choices of the
-#' subtitle's "showing" word, which offers the terms of the level the rows
-#' open into. They come most patients first, and carry two attributes for
-#' the word's menu: `labels`, the terms alone ("Cardiac disorders"), and
-#' `notes`, how many patients have each ("12 patients").
+#' With `level`, the rows the timeline draws at that level, from the records
+#' it draws: the block's input as filtered upstream, its own patients, and
+#' the record settings passed in `...` (`ae_records`, `ae_show`,
+#' `cm_records`). These are the choices of the subtitle's "showing" word.
+#' They come most patients first, and carry two attributes for the word's
+#' menu: `labels`, the terms alone ("Cardiac disorders"), and `notes`, how
+#' many patients have each ("12 patients").
 #'
 #' @param data The block's input dm.
 #' @param what `"ae"` or `"cm"`.
 #' @param level A term column, as [timeline_lane_choices()] offers them, or
 #'   `NULL` for every level.
+#' @param ... With `level`, settings of [patient_timeline_frame()] that
+#'   decide which records are drawn.
 #' @return A character vector; one placeholder when the table is missing.
 #' @export
-patient_timeline_terms <- function(data, what = c("ae", "cm"), level = NULL) {
+patient_timeline_terms <- function(data, what = c("ae", "cm"), level = NULL,
+                                   ...) {
   what <- match.arg(what)
   tb <- tryCatch(pt_tables(data, character()), error = function(e) NULL)
   tbl <- if (identical(what, "ae")) tb$adae else tb$adcm
@@ -498,7 +515,8 @@ patient_timeline_terms <- function(data, what = c("ae", "cm"), level = NULL) {
                 "terms in the data")
   level <- as.character(unlist(level))
   if (length(level)) {
-    return(pt_level_terms(tbl, toupper(level[[1L]]), what) %||% none)
+    return(pt_level_terms(data, tbl, toupper(level[[1L]]), what, ...) %||%
+             none)
   }
   levels <- if (identical(what, "ae")) PP_AE_LEVELS else PP_CM_LEVELS
   groups <- if (!is.null(tbl)) pp_find_vocab(tbl, levels)
@@ -509,28 +527,30 @@ patient_timeline_terms <- function(data, what = c("ae", "cm"), level = NULL) {
   if (length(out)) out else none
 }
 
-# The terms of one column, most patients first, as "Label: term" with the
-# terms alone and their patient counts as attributes. NULL without values.
-pt_level_terms <- function(tbl, col, what) {
+# The rows the timeline draws at one level, most patients first, as "Label:
+# term" with the terms alone and their patient counts as attributes. Read
+# off the frame of that one layer. NULL with nothing drawn.
+pt_level_terms <- function(data, tbl, col, what, ...) {
   if (!is.data.frame(tbl) || !nrow(tbl)) return(NULL)
-  names(tbl) <- toupper(names(tbl))
-  if (!col %in% names(tbl)) return(NULL)
-  v <- aet_title(trimws(as.character(tbl[[col]])))
-  ids <- if ("USUBJID" %in% names(tbl)) {
-    as.character(tbl$USUBJID)
-  } else {
-    seq_len(nrow(tbl))
-  }
-  keep <- !is.na(v) & nzchar(v)
-  if (!any(keep)) return(NULL)
-  pairs <- unique(data.frame(v = v[keep], id = ids[keep],
-                             stringsAsFactors = FALSE))
-  n <- table(pairs$v)
+  # A column the table lacks would draw the preferred terms instead.
+  if (!col %in% toupper(names(tbl))) return(NULL)
+  layer <- if (identical(what, "ae")) "Adverse events" else "Con meds"
+  args <- c(list(data, layers = layer), list(...))
+  args[[paste0(what, "_lanes")]] <- col
+  args[c("ae_terms", "cm_terms")] <- NULL
+  f <- tryCatch(do.call(patient_timeline_frame, args),
+                error = function(e) NULL)
+  seen <- attr(f, "pt_terms")
+  seen <- seen[seen$what %in% what & !seen$term %in% PP_LANE_UNCODED, ,
+               drop = FALSE]
+  if (!nrow(seen)) return(NULL)
+  n <- table(seen$term)
   ord <- order(-as.integer(n), names(n))
   terms <- names(n)[ord]
   n <- as.integer(n)[ord]
-  label <- names(pt_term_levels(tbl, what))[
-    match(col, pt_term_levels(tbl, what))]
+  names(tbl) <- toupper(names(tbl))
+  levels <- pt_term_levels(tbl, what)
+  label <- names(levels)[match(col, levels)]
   if (is.na(label)) label <- col
   out <- paste0(label, ": ", terms)
   attr(out, "labels") <- terms
@@ -631,6 +651,39 @@ pt_picks <- function(terms, what, tbl = NULL) {
   col <- unname(levels)[match(lab, names(levels))]
   keep <- !is.na(col)
   unname(Map(function(c, v) list(col = c, value = v), col[keep], val[keep]))
+}
+
+# Which records of `tbl` the picks keep, or NULL when they keep all. A pick
+# at the level the rows open into names a row as drawn (an uncoded con med
+# by its reported name); one at another level a value of its column. Every
+# drawn row picked is no pick: the reader ticked All.
+pt_pick_keep <- function(tbl, terms, what, lane, drawn) {
+  picks <- pt_picks(terms, what, tbl)
+  if (!length(picks) || !is.data.frame(tbl)) return(NULL)
+  at_lane <- vapply(picks, function(p) identical(p$col, lane), NA)
+  vals <- toupper(vapply(picks[at_lane], `[[`, "", "value"))
+  drawn <- unique(toupper(as.character(drawn)))
+  if (all(at_lane) && length(drawn) && all(drawn %in% vals)) return(NULL)
+  row <- if (identical(what, "ae")) pt_ae_row else pt_cm_row
+  keep <- rep(FALSE, nrow(tbl))
+  if (any(at_lane)) keep <- keep | toupper(row(tbl, lane)) %in% vals
+  if (!all(at_lane)) {
+    search <- if (identical(what, "ae")) PP_AE_SEARCH else PP_CM_SEARCH
+    keep <- keep | pp_find_match(tbl, picks[!at_lane], search)
+  }
+  keep
+}
+
+# The AE and con med rows drawn, one record per patient and row.
+pt_terms_seen <- function(parts) {
+  out <- lapply(intersect(c("ae", "cm"), names(parts)), function(nm) {
+    p <- parts[[nm]]
+    unique(data.frame(what = rep(nm, length(p$USUBJID)),
+                      USUBJID = as.character(p$USUBJID),
+                      term = as.character(p$Row),
+                      stringsAsFactors = FALSE))
+  })
+  do.call(rbind, out)
 }
 
 # A patient whose AEs or con meds all sit on one row, with nothing else of
