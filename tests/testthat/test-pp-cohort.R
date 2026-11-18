@@ -189,11 +189,8 @@ test_that("the band draws one span per event, in adae order", {
 })
 
 test_that("a severe event does not repaint the mild ones underneath it", {
-  # The band used to paint each bin with the WORST severity active that day.
-  # A patient whose events are mostly grade 1 and 2 then came out almost
-  # entirely grade-3 amber, while the profile's AE lane -- which draws one
-  # bar per event in row order -- showed the same patient as mostly teal.
-  # Two different-looking patients from one set of records.
+  # One span per event: the band does not bin the axis and paint each bin
+  # with the worst severity, so the mild events keep their own spans.
   adae <- data.frame(
     USUBJID = rep("S-1", 4),
     AEDECOD = c("Long severe", "Mild a", "Mild b", "Mild c"),
@@ -211,6 +208,32 @@ test_that("a severe event does not repaint the mild ones underneath it", {
   expect_length(fills, 4L)
   mild <- sum(grepl(pp_sev_fallback_color("MILD"), fills, fixed = TRUE))
   expect_identical(mild, 3L)
+})
+
+test_that("a severity band paints the worst grade last, as the overview does", {
+  # The overview's AE lane draws the worst grade last. A strip that painted in
+  # table order buried a long grade 3 under the grade 1 events listed after
+  # it, so the cohort row read green where the panel read orange.
+  adae <- data.frame(
+    USUBJID = rep("S-1", 4),
+    AEDECOD = c("Long grade 3", "Grade 1 a", "Grade 2", "Grade 1 b"),
+    ASTDY = c(2, 10, 40, 90), AENDY = c(170, 30, 70, 130),
+    AETOXGR = c("3", "1", "2", "1"),
+    stringsAsFactors = FALSE
+  )
+  d <- cohort_dm(test_adsl(), adae)
+  roles <- pp_resolve_roles(d, list(arm = "ACTARM", severity = "AETOXGR"))
+  m <- pp_cohort_marks(d, roles)
+  ev <- m$subjects[["S-1"]]$events
+  expect_identical(ev$value, c("1", "1", "2", "3"))
+  # equal grades keep the table's order
+  expect_identical(ev$start, c(10, 90, 40, 2))
+
+  svg <- pp_cohort_band_svg(m$subjects[["S-1"]], m,
+                            pp_cohort_sev_color(NULL))
+  fills <- regmatches(svg, gregexpr('fill="#[0-9A-Fa-f]{6}', svg))[[1]]
+  expect_match(fills[[length(fills)]], pp_sev_fallback_color("3"),
+               fixed = TRUE)
 })
 
 # The row builder htmltools would have written, kept as the reference the

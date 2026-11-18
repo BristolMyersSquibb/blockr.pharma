@@ -690,6 +690,13 @@ pp_cohort_span_events <- function(tbls, band, color_col = NULL, ref = NULL,
   }
 
   keep <- !is.na(start)
+  # Severity paints worst last, as the overview's AE lane draws it, so a
+  # grade 3 is not buried under the milder events the table lists after it.
+  # A stable order: equal grades keep the table's order.
+  if (identical(band$color, "severity")) {
+    keep <- which(keep)
+    keep <- keep[order(pp_sev_rank(value[keep]))]
+  }
   list(subject = as.character(adae$USUBJID)[keep], start = start[keep],
        end = end[keep], value = value[keep], open = open[keep])
 }
@@ -889,22 +896,13 @@ pp_cohort_series_marks <- function(tbls, band, ids, trt_end, ref = NULL,
 }
 
 # ---------------------------------------------------------------------------
-# Drawing. The band paints one span per event, in the order adae carries them,
-# later over earlier -- because that is exactly what the patient overview's AE
-# lane does, and the two have to look alike.
+# Drawing. The band paints one span per event, later over earlier. A severity
+# band is ordered worst last (pp_cohort_span_events()), because the patient
+# overview's AE lane draws it that way, and the two have to look alike. Other
+# bands keep the order the source table carries.
 #
-# It used to bin the axis and paint each bin with the WORST severity active
-# that day, on the claim that this "is what the AE lane already looks like once
-# the events overlap". That claim was wrong, and visibly so. The lane draws
-# every AE as its own bar at 0.7 alpha in row order, so a patient whose events
-# are mostly grade 1 and 2 reads as teal with a couple of amber ticks. Under
-# worst-wins the same patient came out almost entirely amber: one long grade-3
-# event repainted every day it spanned, burying a dozen milder ones underneath
-# it. Side by side the sidebar and the panel were different colours for the
-# same patient, which is worse than either rule being wrong on its own.
-#
-# The picket-fence worry the binning was meant to solve does not arise: these
-# are spans, not ticks, so overlapping events overwrite rather than stripe.
+# These are spans, not ticks, so overlapping events overwrite rather than
+# stripe, and no binning of the axis is needed.
 # ---------------------------------------------------------------------------
 
 #' Severity colour resolver for the cohort band
@@ -992,9 +990,9 @@ pp_cohort_band_color <- function(band, roles, map, dm_obj) {
 #' caller outside the sidebar gets. Dispatches on the band's kind: spans are
 #' painted one rect per event, a series as one path.
 #'
-#' Spans are drawn in the order the source table carries them, later over
-#' earlier -- the patient overview's AE lane rule, so the strip and the panel
-#' agree.
+#' Spans are drawn in the order [pp_cohort_span_events()] returns them, later
+#' over earlier (severity worst last, the patient overview's AE lane rule), so
+#' the strip and the panel agree.
 #'
 #' @param sub One entry of [pp_cohort_marks()]`$subjects`.
 #' @param marks The [pp_cohort_marks()] result `sub` came from: it carries

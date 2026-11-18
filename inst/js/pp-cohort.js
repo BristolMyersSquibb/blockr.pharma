@@ -274,8 +274,8 @@ PatientProfile.part(function(ctx) {
     return e;
   }
 
-  // Spans: one rect per event, in the order the source table
-  // carries them, later over earlier.
+  // Spans: one rect per event, in the order the server sends them
+  // (severity worst last), later over earlier.
   function drawSpans(frag, spec, h, top) {
     spec.split(' ').forEach(function(s) {
       var f = s.split(',');
