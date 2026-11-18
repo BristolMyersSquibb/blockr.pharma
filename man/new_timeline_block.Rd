@@ -12,8 +12,8 @@ new_timeline_block(
   subtitle = patient_timeline_subtitle(),
   caption = getOption("blockr.viz.default_caption"),
   drill = "auto",
-  drill_target = "",
-  drill_table = "",
+  drill_target = "auto",
+  drill_table = "adsl",
   search = TRUE,
   download = TRUE,
   ...
@@ -31,8 +31,10 @@ new_timeline_block(
 \item{title, subtitle, caption}{Text above and below the block.}
 
 \item{drill, drill_target, drill_table}{A click on a patient selects it, which
-narrows the AE records under the table icon, or filters another block;
-see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}. \code{NULL}: clicks do nothing.}
+filters the board's drill filter on ADSL by default. \code{drill_target = ""}
+keeps the click on the block, where it narrows the AE records under the
+table icon; see \code{\link[blockr.viz:new_table_block]{blockr.viz::new_table_block()}}. \code{drill = NULL}: clicks
+do nothing.}
 
 \item{search, download}{The search field and the download button.}
 

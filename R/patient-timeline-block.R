@@ -36,8 +36,10 @@
 #'   [patient_timeline_frame()] for each.
 #' @param title,subtitle,caption Text above and below the block.
 #' @param drill,drill_target,drill_table A click on a patient selects it, which
-#'   narrows the AE records under the table icon, or filters another block;
-#'   see [blockr.viz::new_table_block()]. `NULL`: clicks do nothing.
+#'   filters the board's drill filter on ADSL by default. `drill_target = ""`
+#'   keeps the click on the block, where it narrows the AE records under the
+#'   table icon; see [blockr.viz::new_table_block()]. `drill = NULL`: clicks
+#'   do nothing.
 #' @param search,download The search field and the download button.
 #' @param ... The settings by name, as in `script_values` (`layers`,
 #'   `ae_terms`, `ae_colour`, ...), and arguments for
@@ -55,8 +57,8 @@ new_timeline_block <- function(summaries = NULL,
                                  "blockr.viz.default_caption"
                                ),
                                drill = "auto",
-                               drill_target = "",
-                               drill_table = "",
+                               drill_target = "auto",
+                               drill_table = "adsl",
                                search = TRUE,
                                download = TRUE,
                                ...) {

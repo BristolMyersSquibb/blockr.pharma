@@ -80,7 +80,8 @@ test_that("without the AE layer there are no records", {
 })
 
 test_that("a click on a patient narrows the block's records view", {
-  blk <- new_timeline_block(ae_records = "all")
+  # Without a drill target the click stays on the block.
+  blk <- new_timeline_block(ae_records = "all", drill_target = "")
   dat <- shiny::reactive(dm::dm(adsl = ptr_toy()$adsl,
                                 adae = ptr_toy()$adae))
   shiny::testServer(
@@ -111,4 +112,10 @@ test_that("a click on a patient narrows the block's records view", {
     },
     args = list(x = blk, data = list(data = dat))
   )
+})
+
+test_that("a click goes to the board's drill filter on ADSL by default", {
+  st <- blockr.core:::initial_block_state(new_timeline_block())
+  expect_identical(st[c("drill_target", "drill_table")],
+                   list(drill_target = "auto", drill_table = "adsl"))
 })
