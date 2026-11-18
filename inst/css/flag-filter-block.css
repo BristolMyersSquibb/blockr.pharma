@@ -28,15 +28,21 @@
   padding: 6px 0;
 }
 
-/* A row reads as a row of Blockr.Select's multi list: the tick's slot, the
-   name, the hover wash. */
+/* A row is the crossfilter card's row: the tick's slot, then the name and
+   its label on one line, ending in "..." as in the select (the tooltip has
+   them in full), then the bar and its count under them. 14px on a 20px line,
+   the hover wash. */
 .ffb-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  row-gap: 3px;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px; /* row padding */
+  padding: 5px 10px 6px;
   margin: 0 -10px;
   border-radius: var(--blockr-radius-sm, 4px);
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  line-height: 20px;
+  color: var(--blockr-color-text-default, #111827);
   cursor: pointer;
   min-width: 0;
   position: relative;
@@ -64,7 +70,6 @@
 /* The tick, as the multi-select draws it: 14px in the accent. */
 .ffb-tick {
   display: inline-flex;
-  flex: 0 0 auto;
   width: 14px;
   height: 14px;
   color: var(--blockr-color-text-accent, #2563eb);
@@ -74,48 +79,74 @@
   display: block;
 }
 
-.ffb-name {
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  font-weight: 500;
-  color: var(--blockr-color-text-primary, #111827);
-  flex: 0 0 auto;
-}
-
-/* The label is the sublabel: it may be long, so it is the part that shrinks. */
-.ffb-label {
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--blockr-color-text-subtle, #9ca3af);
-  flex: 1 1 auto;
+.ffb-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.ffb-name {
+  font-weight: 500;
+}
+
+.ffb-label {
+  margin-left: 8px;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+/* Once a flag is ticked, the unticked ones turn muted, as in the
+   crossfilter card. */
+.ffb-body--picked .ffb-row:not(.ffb-row--on) .ffb-name {
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.ffb-body--picked .ffb-row:not(.ffb-row--on) .ffb-bar i {
+  opacity: 0.2;
+}
+
+/* The bar's line: the track, then the count at 11px in a right-aligned
+   slot, so the counts line up. */
+.ffb-bar-line {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 12px;
+  min-width: 0;
+}
+
 .ffb-bar {
-  flex: 0 0 auto;
-  width: 64px;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 4px;
-  border-radius: 2px; /* data mark, cosmetic */
-  background: var(--blockr-color-border, #e5e7eb);
-  margin-left: auto;
+  border-radius: 0 var(--blockr-mark-radius, 2px) var(--blockr-mark-radius, 2px) 0;
+  background: color-mix(in srgb, var(--blockr-color-text-default, #111827) 6%, transparent);
   overflow: hidden;
 }
 
 .ffb-bar i {
   display: block;
   height: 100%;
-  border-radius: 2px;
-  background: var(--blockr-color-primary, #2563eb);
+  border-radius: 0 var(--blockr-mark-radius, 2px) var(--blockr-mark-radius, 2px) 0;
+  background: var(--blockr-color-bg-accent, #2563eb);
+  opacity: var(--blockr-mark-weight-supporting, 0.6);
 }
 
 .ffb-count {
   flex: 0 0 auto;
-  min-width: 38px;
+  min-width: 28px;
   text-align: right;
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-color-text-subtle, #9ca3af);
+  font-size: 11px;
+  line-height: 12px;
+  color: var(--blockr-color-text-muted, #6b7280);
   font-variant-numeric: tabular-nums;
+}
+
+.ffb-row:hover .ffb-count,
+.ffb-row:hover .ffb-name {
+  color: var(--blockr-color-text-default, #111827);
 }
 
 .ffb-readout {

@@ -211,8 +211,10 @@
         box.setAttribute('aria-hidden', 'true');
         const drawTick = () => {
           box.innerHTML = input.checked ? Blockr.icons.confirm : '';
+          rowEl.classList.toggle('ffb-row--on', input.checked);
+          this.body.classList.toggle('ffb-body--picked',
+            Object.keys(this.selected).length > 0);
         };
-        drawTick();
         input.addEventListener('change', () => {
           if (input.checked) this.selected[name] = true;
           else delete this.selected[name];
@@ -222,36 +224,46 @@
           this._submit();
         });
 
+        // The crossfilter card's row: the name and its label on one line,
+        // ending in "…" (the tooltip has both in full), the bar and the count
+        // under them.
+        const text = document.createElement('span');
+        text.className = 'ffb-text';
         const nm = document.createElement('span');
         nm.className = 'ffb-name';
         nm.textContent = name;
-
-        rowEl.appendChild(input);
-        rowEl.appendChild(box);
-        rowEl.appendChild(nm);
-
+        text.appendChild(nm);
         if (m.label) {
           const lb = document.createElement('span');
           lb.className = 'ffb-label';
           lb.textContent = m.label;
-          rowEl.appendChild(lb);
+          text.appendChild(lb);
         }
+        rowEl.title = m.label ? name + ': ' + m.label : name;
+
+        rowEl.appendChild(input);
+        rowEl.appendChild(box);
+        rowEl.appendChild(text);
 
         if (typeof m.count === 'number') {
+          const line = document.createElement('span');
+          line.className = 'ffb-bar-line';
           const bar = document.createElement('span');
           bar.className = 'ffb-bar';
           const fill = document.createElement('i');
           fill.style.width = maxCount > 0
-            ? Math.max(2, Math.round((m.count / maxCount) * 100)) + '%'
+            ? (m.count / maxCount) * 100 + '%'
             : '0';
           bar.appendChild(fill);
-          rowEl.appendChild(bar);
+          line.appendChild(bar);
 
           const ct = document.createElement('span');
           ct.className = 'ffb-count';
           ct.textContent = String(m.count);
-          rowEl.appendChild(ct);
+          line.appendChild(ct);
+          rowEl.appendChild(line);
         }
+        drawTick();
 
         this.body.appendChild(rowEl);
       });
