@@ -54,4 +54,8 @@ by name. Switching the pick in the card header re-points the whole board.
 appear as one-click chips, and, for those on the subject table, the choices
 in the pinned card's picker. Everything else stays reachable through the
 gear.
+
+\code{SUBJID} is always added at the end, so every board has a chip that picks
+single patients, by the id clinicians use. A study without \code{SUBJID} gets
+no such chip: the crossfilter drops a featured column no table carries.
 }

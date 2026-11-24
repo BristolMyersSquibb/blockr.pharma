@@ -76,8 +76,17 @@ test_that("new_population_filter_block is a crossfilter block with a subclass", 
   expect_s3_class(blk, "crossfilter_block")
 
   state <- blockr.core:::initial_block_state(blk)
-  expect_equal(state$featured, c("TRT", "SEX"))
+  # SUBJID is appended on every board: the patient chip.
+  expect_equal(state$featured, c("TRT", "SEX", "SUBJID"))
   expect_equal(state$pinned, "TRT")
+})
+
+test_that("the SUBJID chip is added once, also on a restored board", {
+  blk <- new_population_filter_block(featured = c("TRT", "SUBJID", "SEX"))
+  state <- blockr.core:::initial_block_state(blk)
+  expect_equal(state$featured, c("TRT", "SUBJID", "SEX"))
+  blk <- new_population_filter_block()
+  expect_equal(blockr.core:::initial_block_state(blk)$featured, "SUBJID")
 })
 
 test_that("the block stamps Group into its expression", {

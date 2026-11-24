@@ -94,7 +94,7 @@ new_timeline_block <- function(summaries = NULL,
   do.call(blockr.viz::new_table_block, c(
     list(
       layout = "groups",
-      by = c("USUBJID", "Row"),
+      by = c("SUBJID", "Row"),
       group_rows = "summary",
       row_sections = ".section",
       row_groups = ".arm",
@@ -286,7 +286,7 @@ patient_timeline_gear <- function() {
     info = patient_timeline_mapping,
     open = "Data",
     deps = list(pharma_gear_dep()),
-    pick_by = "USUBJID",
+    pick_by = "SUBJID",
     pick_skip = TL_FRAME_OWN,
     sort_value = "sort_col",
     columns_note = paste(

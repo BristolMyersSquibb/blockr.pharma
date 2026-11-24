@@ -328,7 +328,10 @@ pp_exhibit_one_patient <- function(scoped, subj, catalog, selected,
   if (!length(plots)) {
     return(NULL)
   }
-  list(subject = subj, plots = plots, labels = labels)
+  tbls <- dm::dm_get_tables(scoped)
+  adsl <- as.data.frame(tbls[[pp_subject_tbl_name(names(tbls))]])
+  list(subject = subj, label = pp_subject_label(adsl, subj), plots = plots,
+       labels = labels)
 }
 
 #' Slide title for one visual of a profile exhibit
@@ -336,14 +339,16 @@ pp_exhibit_one_patient <- function(scoped, subj, catalog, selected,
 #' Single patient: the deck's title (or the exhibit's own, or "Patient
 #' <id>") prefixes the visual's label. Multiple patients: the patient
 #' identifies the slide -- a deck title repeated across thirty slides says
-#' nothing, where the USUBJID is the one thing a reviewer scans for.
+#' nothing, where the patient's id is the one thing a reviewer scans for.
+#' The id is the shown one, SUBJID (see [pp_subject_label()]).
 #' @noRd
 pp_exhibit_slide_title <- function(x, patient, i, title = NULL) {
   label <- unname(patient$labels[[i]])
+  who <- patient$label %||% patient$subject
   if (length(x$patients) > 1L) {
-    return(paste0("Patient ", patient$subject, ": ", label))
+    return(paste0("Patient ", who, ": ", label))
   }
-  base <- title %||% x$title %||% paste("Patient", patient$subject)
+  base <- title %||% x$title %||% paste("Patient", who)
   if (!nzchar(base)) {
     return(label)
   }

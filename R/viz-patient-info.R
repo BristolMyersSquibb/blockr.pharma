@@ -72,7 +72,7 @@ pp_patient_info_fields <- function(dm_obj, settings = list()) {
     pp_as_date(sl[[col]][1L])
   }
 
-  add("Subject", chr("USUBJID"))
+  add("Subject", pp_subject_label(sl, chr("USUBJID")))
 
   # Age with its unit, in the study's own words ("63 YEARS" -> "63 years").
   age <- num("AGE", 0L)

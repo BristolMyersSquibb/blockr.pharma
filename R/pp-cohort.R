@@ -64,7 +64,8 @@ pp_cohort_band_h_for <- function(kind, overview = FALSE) {
 #' This is the whole contract behind the sidebar list and the cohort
 #' download, so a study wanting different columns replaces this one function.
 #'
-#' Every column is optional except `USUBJID`. A study missing `AGE` gets a
+#' Every column is optional except `USUBJID` and `SUBJID` (the shown id, see
+#' [pp_subject_label()]). A study missing `AGE` gets a
 #' frame without an age column rather than a column of `NA`, so the download
 #' never implies data that is not there.
 #'
@@ -78,7 +79,8 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
 
   ids <- pp_subject_ids(dm_obj)
   if (!length(ids)) {
-    return(data.frame(USUBJID = character(), stringsAsFactors = FALSE))
+    return(data.frame(USUBJID = character(), SUBJID = character(),
+                      stringsAsFactors = FALSE))
   }
 
   tbls <- dm::dm_get_tables(dm_obj)
@@ -88,7 +90,10 @@ pp_cohort_frame <- function(dm_obj, roles = NULL) {
   # column against the ids (same guard as pp_subject_choices()).
   at <- match(ids, as.character(adsl$USUBJID))
 
-  out <- data.frame(USUBJID = ids, stringsAsFactors = FALSE)
+  # SUBJID is the id the list, the title and the download show; USUBJID is
+  # the key everything else matches on. See pp_subject_label().
+  out <- data.frame(USUBJID = ids, SUBJID = pp_subject_label(adsl, ids),
+                    stringsAsFactors = FALSE)
 
   take <- function(out, col, name = col) {
     if (is.null(col) || !col %in% colnames(adsl)) return(out)
@@ -1623,8 +1628,9 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
       # The selected class is stamped once here and MOVED by the
       # sync_subject message afterwards; the list never re-renders on a pick.
       '<div class="pp-pt%s" data-usubjid="%s"',
-      # Search matches the same text a reader sees, plus the arm, which is
-      # not printed in full anywhere in the row.
+      # Search matches the same text a reader sees, the full USUBJID (so a
+      # pasted id is found), and the arm, which is not printed in full
+      # anywhere in the row.
       ' data-search-text="%s" data-band="%s"%s%s%s%s%s%s%s', kind,
       '>',
       '<div class="pp-pt-line"><span class="pp-pt-id">%s</span>%s',
@@ -1639,7 +1645,7 @@ pp_cohort_rows_html <- function(frame, ord, disp, marks, color, arm_col,
     ),
     ifelse(id %in% picked, " is-selected", ""),
     esca(id),
-    esca(tolower(paste(id, demo, arm, code))),
+    esca(tolower(paste(id, shown, demo, arm, code))),
     esca(band),
     ifelse(nzchar(dot), sprintf(' data-dot="%s"', esca(dot)), ""),
     ifelse(nzchar(expo), sprintf(' data-expo="%s"', esca(expo)), ""),
@@ -1702,7 +1708,11 @@ pp_cohort_order <- function(frame, by = "id", marks = NULL) {
           else NULL,
     NULL
   )
-  ord %||% order(frame$USUBJID)
+  ord %||% if (has("SUBJID")) {
+    pp_subject_label_order(frame$SUBJID)
+  } else {
+    order(frame$USUBJID)
+  }
 }
 
 #' The sort keys the list offers, given what the strip is drawing
