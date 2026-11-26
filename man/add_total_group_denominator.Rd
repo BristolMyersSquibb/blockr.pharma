@@ -17,7 +17,8 @@ add_total_group_denominator(denominator, col = "Group", total = "All Patients")
 \code{denominator}, plus duplicated rows with \code{col} set to the synthetic
 group names. A pool with no members adds no rows. A factor \code{col} keeps its
 levels and gains the declared group and pool names, so a level with no
-rows still has a column.
+rows still has a column. Every column keeps its attributes, so the
+result can go through a second call for another column.
 }
 \description{
 \code{composer::by(pools = )} can create a total column from raw rows for a

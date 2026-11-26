@@ -442,7 +442,8 @@ composer_by_call <- function(variable, levels) {
 #' @return `denominator`, plus duplicated rows with `col` set to the synthetic
 #'   group names. A pool with no members adds no rows. A factor `col` keeps its
 #'   levels and gains the declared group and pool names, so a level with no
-#'   rows still has a column.
+#'   rows still has a column. Every column keeps its attributes, so the
+#'   result can go through a second call for another column.
 #' @export
 add_total_group_denominator <- function(denominator, col = "Group",
                                         total = "All Patients") {
@@ -477,7 +478,6 @@ add_total_group_denominator <- function(denominator, col = "Group",
   }
 
   attrs <- attributes(denominator)
-  col_attrs <- attributes(x)
   extra <- lapply(names(pools), function(nm) {
     rows <- denominator[x_chr %in% pools[[nm]], , drop = FALSE]
     rows[[col]] <- rep(nm, nrow(rows))
@@ -497,14 +497,25 @@ add_total_group_denominator <- function(denominator, col = "Group",
     lvls <- unique(c(levels(x), names(def$groups), names(pools)))
     out[[col]] <- factor(as.character(out[[col]]), levels = lvls)
   }
-  keep <- names(col_attrs)
-  if (is.factor(x)) {
+
+  # Subsetting and rbind() drop the attributes of plain columns, so every
+  # column gets its own back: a second call for the subgroup needs the
+  # definition on `Subgroup`, and the table needs the one on `Group`.
+  for (v in names(denominator)) {
+    out[[v]] <- restore_column_attrs(out[[v]], denominator[[v]])
+  }
+  out
+}
+
+restore_column_attrs <- function(new, old) {
+  keep <- setdiff(names(attributes(old)), c("names", "dim", "dimnames"))
+  if (is.factor(old) || is.factor(new)) {
     keep <- setdiff(keep, c("levels", "class"))
   }
   for (nm in keep) {
-    attr(out[[col]], nm) <- col_attrs[[nm]]
+    attr(new, nm) <- attr(old, nm, exact = TRUE)
   }
-  out
+  new
 }
 
 # The columns of the nested subgroup by(). A partition is already written into
