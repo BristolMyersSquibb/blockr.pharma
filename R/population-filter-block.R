@@ -350,7 +350,8 @@ group_columns <- function(groups, levels) {
 #' @param sub Name of the subgroup column, nested under `col` when `data` has
 #'   it. `NULL` never nests.
 #' @param total Name of a column over every subject, added last, for example
-#'   `"All Patients"`. `NULL` (the default) adds none.
+#'   `"All Patients"`. `NULL` (the default) adds none. Its pool is `NULL`
+#'   (composer's "all raw levels") when there are no members to list.
 #'
 #' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
 #'   groups or a `total` column and an unnamed `composer::by()` call for the
@@ -386,6 +387,10 @@ group_by_args <- function(data, col = "Group", sub = "Subgroup",
       unique(unlist(def$groups, use.names = FALSE))
     } else {
       args$levels
+    }
+    # composer reads a NULL pool as all raw levels and refuses character(0).
+    if (!length(total_members)) {
+      total_members <- NULL
     }
     args$levels <- c(args$levels, total)
     args$pools <- c(args$pools, stats::setNames(list(total_members), total))
@@ -435,7 +440,9 @@ composer_by_call <- function(variable, levels) {
 #' @param total Total level name. `NULL` returns `denominator` unchanged.
 #'
 #' @return `denominator`, plus duplicated rows with `col` set to the synthetic
-#'   group names.
+#'   group names. A pool with no members adds no rows. A factor `col` keeps its
+#'   levels and gains the declared group and pool names, so a level with no
+#'   rows still has a column.
 #' @export
 add_total_group_denominator <- function(denominator, col = "Group",
                                         total = "All Patients") {
@@ -473,7 +480,7 @@ add_total_group_denominator <- function(denominator, col = "Group",
   col_attrs <- attributes(x)
   extra <- lapply(names(pools), function(nm) {
     rows <- denominator[x_chr %in% pools[[nm]], , drop = FALSE]
-    rows[[col]] <- nm
+    rows[[col]] <- rep(nm, nrow(rows))
     rows
   })
   extra <- do.call(rbind, extra)
@@ -482,7 +489,19 @@ add_total_group_denominator <- function(denominator, col = "Group",
   for (nm in setdiff(names(attrs), c("names", "row.names"))) {
     attr(out, nm) <- attrs[[nm]]
   }
-  for (nm in names(col_attrs)) {
+
+  # A factor keeps its levels, the declared groups and the pools, so a level
+  # with no rows still has a column. Its own levels are not copied back: the
+  # pool rows would lose their codes.
+  if (is.factor(x)) {
+    lvls <- unique(c(levels(x), names(def$groups), names(pools)))
+    out[[col]] <- factor(as.character(out[[col]]), levels = lvls)
+  }
+  keep <- names(col_attrs)
+  if (is.factor(x)) {
+    keep <- setdiff(keep, c("levels", "class"))
+  }
+  for (nm in keep) {
     attr(out[[col]], nm) <- col_attrs[[nm]]
   }
   out

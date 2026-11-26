@@ -492,3 +492,80 @@ test_that("explicit block denominators can include the all-subjects pool", {
   expect_true("All Patients;:F" %in% names(d))
   expect_true("All Patients;:M" %in% names(d))
 })
+
+test_that("an empty total pool is NULL, never character(0)", {
+  empty <- data.frame(Group = character())
+  args <- group_by_args(empty, total = "All Patients")
+  expect_equal(args$levels, "All Patients")
+  expect_true("All Patients" %in% names(args$pools))
+  expect_null(args$pools[["All Patients"]])
+
+  df <- data.frame(Group = c("A", "B"))
+  expect_equal(
+    group_by_args(df, total = "All Patients")$pools[["All Patients"]],
+    c("A", "B")
+  )
+})
+
+test_that("declared group levels with no rows keep their columns", {
+  # Stamped on the full data, then filtered: Combo has no rows left.
+  df <- data.frame(USUBJID = 1:3)
+  df$Group <- structure(
+    c("Placebo", "Active", "Active"),
+    blockr_groups = list(
+      groups = list(Placebo = "Placebo", Active = "Low", Combo = "High"),
+      overlap = FALSE
+    )
+  )
+  args <- group_by_args(df, total = "All Patients")
+  expect_equal(args$levels, c("Placebo", "Active", "Combo", "All Patients"))
+  expect_equal(args$pools[["All Patients"]], c("Placebo", "Active", "Combo"))
+})
+
+test_that("a pool with no rows in the denominator adds none", {
+  denom <- data.frame(USUBJID = 1:3)
+  denom$Group <- structure(
+    c("Placebo", "Low", "Low"),
+    blockr_groups = list(
+      groups = list(Placebo = "Placebo", Low = "Low", POC = "High",
+                    Combo = c("Low", "High")),
+      overlap = TRUE
+    )
+  )
+  out <- add_total_group_denominator(denom)
+  expect_equal(sum(out$Group == "POC"), 0L)
+  expect_equal(sum(out$Group == "Combo"), 2L)
+  expect_equal(sum(out$Group == "All Patients"), 3L)
+  expect_identical(
+    attr(out$Group, "blockr_groups"), attr(denom$Group, "blockr_groups")
+  )
+
+  empty <- denom[0, , drop = FALSE]
+  attributes(empty$Group) <- attributes(denom$Group)
+  out <- add_total_group_denominator(empty)
+  expect_equal(nrow(out), 0L)
+  expect_identical(
+    attr(out$Group, "blockr_groups"), attr(denom$Group, "blockr_groups")
+  )
+})
+
+test_that("a factor column keeps declared levels in the denominator", {
+  denom <- data.frame(
+    USUBJID = 1:3,
+    Group = factor(c("A", "A", "B"), levels = c("A", "B", "POC"))
+  )
+  out <- add_total_group_denominator(denom)
+  expect_true(is.factor(out$Group))
+  expect_equal(levels(out$Group), c("A", "B", "POC", "All Patients"))
+  expect_false(anyNA(out$Group))
+  expect_equal(sum(out$Group == "All Patients"), 3L)
+  expect_equal(sum(out$Group == "POC"), 0L)
+
+  sub <- data.frame(
+    USUBJID = 1:2,
+    Subgroup = factor(c("F", "F"), levels = c("F", "M"))
+  )
+  out <- add_total_group_denominator(sub, col = "Subgroup", total = "Both")
+  expect_equal(levels(out$Subgroup), c("F", "M", "Both"))
+  expect_equal(sum(out$Subgroup == "Both"), 2L)
+})
