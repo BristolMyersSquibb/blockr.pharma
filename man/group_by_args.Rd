@@ -15,7 +15,8 @@ group_by_args(data, col = "Group", sub = "Subgroup", total = NULL)
 it. \code{NULL} never nests.}
 
 \item{total}{Name of a column over every subject, added last, for example
-\code{"All Patients"}. \code{NULL} (the default) adds none.}
+\code{"All Patients"}. \code{NULL} (the default) adds none. Its pool is \code{NULL}
+(composer's "all raw levels") when there are no members to list.}
 }
 \value{
 \code{list(variable = , levels = )}, plus \verb{pools = } for overlapping
