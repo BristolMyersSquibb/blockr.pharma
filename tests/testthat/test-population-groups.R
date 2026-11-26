@@ -569,3 +569,46 @@ test_that("a factor column keeps declared levels in the denominator", {
   expect_equal(levels(out$Subgroup), c("F", "M", "Both"))
   expect_equal(sum(out$Subgroup == "Both"), 2L)
 })
+
+test_that("repeated denominator calls keep every column's group definition", {
+  group <- structure(
+    c("Placebo", "Low", "Low"),
+    blockr_groups = list(
+      groups = list(Placebo = "Placebo", Low = "Low", POC = "High",
+                    Combo = c("Low", "High")),
+      overlap = TRUE
+    ),
+    blockr_source = "TRT"
+  )
+  sub <- structure(
+    c("F", "M", "F"),
+    blockr_groups = list(
+      groups = list(F = "F", M = "M", Both = c("F", "M")),
+      overlap = TRUE
+    ),
+    blockr_source = "SEX"
+  )
+
+  for (n in c(3L, 0L)) {
+    denom <- data.frame(USUBJID = seq_len(n))
+    denom$Group <- group[seq_len(n)]
+    attributes(denom$Group) <- attributes(group)
+    denom$Subgroup <- sub[seq_len(n)]
+    attributes(denom$Subgroup) <- attributes(sub)
+
+    once <- add_total_group_denominator(denom)
+    twice <- add_total_group_denominator(once, col = "Subgroup", total = NULL)
+
+    for (out in list(once, twice)) {
+      expect_identical(
+        attr(out$Group, "blockr_groups"), attr(group, "blockr_groups")
+      )
+      expect_identical(
+        attr(out$Subgroup, "blockr_groups"), attr(sub, "blockr_groups")
+      )
+      expect_identical(attr(out$Subgroup, "blockr_source"), "SEX")
+    }
+    expect_equal(sum(twice$Subgroup == "Both"), sum(once$Subgroup != "Both"))
+    expect_equal(sum(twice$Group == "POC"), 0L)
+  }
+})
