@@ -19,8 +19,8 @@ What the population filter writes when its Group by select is set to
 "(none)": the column \code{as}, \code{NA} in every row, on the parent table of \code{data}.
 The exhibits keep the column they bind by name, and read a column that is
 \code{NA} in every row as no split: a chart draws one panel, one colour and one
-box, a table block does not group by it, and \code{\link[=group_by_args]{group_by_args()}} returns
-\code{NULL}, so a composer table shows no group columns. Leaving the column out
+box, a table block does not group by it, and \code{\link[=group_by_args]{group_by_args()}} gives a
+composer table one column over every subject. Leaving the column out
 instead would not do: a table script falls back to the study arm when
 \code{Group} is missing.
 }

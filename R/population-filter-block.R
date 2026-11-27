@@ -118,8 +118,8 @@ stamp_target <- function(data, candidates) {
 #' "(none)": the column `as`, `NA` in every row, on the parent table of `data`.
 #' The exhibits keep the column they bind by name, and read a column that is
 #' `NA` in every row as no split: a chart draws one panel, one colour and one
-#' box, a table block does not group by it, and [group_by_args()] returns
-#' `NULL`, so a composer table shows no group columns. Leaving the column out
+#' box, a table block does not group by it, and [group_by_args()] gives a
+#' composer table one column over every subject. Leaving the column out
 #' instead would not do: a table script falls back to the study arm when
 #' `Group` is missing.
 #'
@@ -327,6 +327,8 @@ group_columns <- function(groups, levels) {
 #' * Overlapping groups: the group names, and `pools` for every group that is
 #'   not a raw level under its own name. composer builds each pool from the
 #'   raw rows, so a subject counts once per column it belongs to.
+#' * An ungrouped board (`Group` by "(none)", [dm_stamp_none()]): no group
+#'   columns, only the `total` column over every subject.
 #'
 #' When the board also has a subgroup (a `Subgroup` column, stamped only when
 #' one is picked), the result carries a nested `composer::by()` for it, as an
@@ -350,26 +352,33 @@ group_columns <- function(groups, levels) {
 #' @param sub Name of the subgroup column, nested under `col` when `data` has
 #'   it. `NULL` never nests.
 #' @param total Name of a column over every subject, added last, for example
-#'   `"All Patients"`. `NULL` (the default) adds none. Its pool is `NULL`
+#'   `"All Patients"`. `NULL` (the default) adds none, except on an ungrouped
+#'   board, which gets "All Patients" as its one column. Its pool is `NULL`
 #'   (composer's "all raw levels") when there are no members to list.
 #'
 #' @return `list(variable = , levels = )`, plus `pools = ` for overlapping
 #'   groups or a `total` column and an unnamed `composer::by()` call for the
-#'   subgroup. `NULL` when `col` is `NA` in every row, the ungrouped board of
-#'   [dm_stamp_none()]: the table then gets no `colgroup()`.
+#'   subgroup. When `col` is `NA` in every row, the ungrouped board of
+#'   [dm_stamp_none()], the one column is `total`, or "All Patients" when
+#'   `total` is `NULL`, over every subject.
 #' @export
 group_by_args <- function(data, col = "Group", sub = "Subgroup",
                           total = NULL) {
   x <- data[[col]]
   def <- attr(x, "blockr_groups", exact = TRUE)
 
-  # An ungrouped board (dm_stamp_none()): no group columns. composer refuses
-  # a by() with no levels, so the caller skips its colgroup().
-  if (is.null(def) && length(x) && all(is.na(x))) {
-    return(NULL)
+  # An ungrouped board (dm_stamp_none()): no group columns, only the column
+  # over every subject. composer refuses a table with no colgroup(), so the
+  # board gets one, named `total` or "All Patients". Its pool is NULL, which
+  # composer reads as every row.
+  ungrouped <- is.null(def) && length(x) && all(is.na(x))
+  if (ungrouped && is.null(total)) {
+    total <- "All Patients"
   }
 
-  args <- if (is.null(def)) {
+  args <- if (ungrouped) {
+    list(variable = col, levels = character())
+  } else if (is.null(def)) {
     x <- as.character(x)
     list(variable = col, levels = sort(unique(x[!is.na(x) & nzchar(x)])))
   } else if (!isTRUE(def$overlap)) {

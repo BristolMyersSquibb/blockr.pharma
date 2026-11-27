@@ -15,14 +15,16 @@ group_by_args(data, col = "Group", sub = "Subgroup", total = NULL)
 it. \code{NULL} never nests.}
 
 \item{total}{Name of a column over every subject, added last, for example
-\code{"All Patients"}. \code{NULL} (the default) adds none. Its pool is \code{NULL}
+\code{"All Patients"}. \code{NULL} (the default) adds none, except on an ungrouped
+board, which gets "All Patients" as its one column. Its pool is \code{NULL}
 (composer's "all raw levels") when there are no members to list.}
 }
 \value{
 \code{list(variable = , levels = )}, plus \verb{pools = } for overlapping
 groups or a \code{total} column and an unnamed \code{composer::by()} call for the
-subgroup. \code{NULL} when \code{col} is \code{NA} in every row, the ungrouped board of
-\code{\link[=dm_stamp_none]{dm_stamp_none()}}: the table then gets no \code{colgroup()}.
+subgroup. When \code{col} is \code{NA} in every row, the ungrouped board of
+\code{\link[=dm_stamp_none]{dm_stamp_none()}}, the one column is \code{total}, or "All Patients" when
+\code{total} is \code{NULL}, over every subject.
 }
 \description{
 What a table script passes to \code{composer::by()} so its columns follow the
@@ -37,6 +39,8 @@ always done it.
 \item Overlapping groups: the group names, and \code{pools} for every group that is
 not a raw level under its own name. composer builds each pool from the
 raw rows, so a subject counts once per column it belongs to.
+\item An ungrouped board (\code{Group} by "(none)", \code{\link[=dm_stamp_none]{dm_stamp_none()}}): no group
+columns, only the \code{total} column over every subject.
 }
 
 When the board also has a subgroup (a \code{Subgroup} column, stamped only when

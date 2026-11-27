@@ -12,9 +12,17 @@ test_that("an ungrouped board keeps Group, NA in every row, on the parent", {
   expect_identical(dm_stamp_none(adsl)$Group, rep(NA_character_, 3))
 })
 
-test_that("group_by_args() gives no columns for an all-NA group", {
+test_that("group_by_args() gives one all-subjects column for an all-NA group", {
   adsl <- data.frame(USUBJID = c("a", "b"), TRT = c("x", "y"))
-  expect_null(group_by_args(dm_stamp_none(adsl)))
+  none <- dm_stamp_none(adsl)
+  all_patients <- list(
+    variable = "Group", levels = "All Patients",
+    pools = list(`All Patients` = NULL)
+  )
+  expect_identical(group_by_args(none), all_patients)
+  expect_identical(group_by_args(none, total = "All Patients"), all_patients)
+  expect_identical(group_by_args(none, total = "Everyone")$levels, "Everyone")
+  expect_error(group_by_args(none, total = "Total"), "named \"Total\"")
   expect_identical(
     group_by_args(dm_stamp_group(adsl, "TRT"))$levels, c("x", "y")
   )
